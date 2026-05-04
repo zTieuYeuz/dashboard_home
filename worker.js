@@ -1,7 +1,7 @@
 const SERVICES = [
   { id: 'esxi',        name: 'VMware ESXi',    checkUrl: 'https://esxi.home-server.id.vn' },
   { id: 'n8n',         name: 'n8n Automation', checkUrl: 'https://n8n-home.home-server.id.vn' },
-  { id: 'casaos',      name: 'CasaOS',         checkUrl: null },
+  { id: 'casaos',      name: 'CasaOS',         checkUrl: 'https://casaos.home-server.id.vn' },
   { id: '9router',     name: '9Router',        checkUrl: 'https://9router.home-server.id.vn' },
   { id: 'uptime-kuma', name: 'Uptime Kuma',    checkUrl: null },
 ];
