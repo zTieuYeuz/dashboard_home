@@ -18,7 +18,7 @@ Một dashboard tập trung được host trên Cloudflare Workers dùng để t
   - `n8n.html`: Hiện workflows, executions, status của n8n (qua API Cloudflare worker `/api/n8n/overview`).
   - `9router.html`: Quản lý LoadBalancer API / AI Router.
   - `esxi.html`: Tương tự theo dõi máy chủ VMWare.
-  - `casaos.html`: Nhúng `iframe` của Dashboard CasaOS cục bộ (`192.168.110.21:4434`). Nếu truy cập qua WAN (HTTPS) sẽ chỉ cảnh báo lỗi LAN-only access kèm nút mở tab mới.
+  - `casaos.html`: Nhúng dashboard CasaOS qua Cloudflare Tunnel (`https://casaos.home-server.id.vn`). Không còn giới hạn LAN-only.
 
 ## Cài đặt cấu hình
 
@@ -32,3 +32,4 @@ Trang Home đã được tinh chỉnh UI theo phong cách hiện đại (`Inter`
 1. Thống kê số lượng service online.
 2. Danh sách service với trạng thái hiển thị rõ ràng.
 3. Thông tin IP LAN, Quick Links và trạng thái Worker phản hồi.
+4. Đo tốc độ mạng: Kết quả là tốc độ download từ trình duyệt của bạn đến Cloudflare (server gần nhất của Cloudflare, không phải tốc độ nội bộ LAN hay đến từng service riêng lẻ).
