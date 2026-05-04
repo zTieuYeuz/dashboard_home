@@ -12,110 +12,157 @@
   --green:#34d399;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;
   --green-dim:#052e16;--red-dim:#2d0a0a;--amber-dim:#2d1f00;--purple-dim:#2d1b69;
 }
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
 a{color:inherit;text-decoration:none}
 
-.header{background:var(--surface);border-bottom:0.5px solid var(--border);padding:0 1.5rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+/* Header */
+.header{background:var(--surface);border-bottom:0.5px solid var(--border);padding:0 1.5rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
 .header-left{display:flex;align-items:center;gap:12px}
-.back-btn{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);padding:5px 10px;border-radius:6px;border:0.5px solid var(--border);transition:all .15s;cursor:pointer}
+.back-btn{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);padding:5px 10px;border-radius:6px;border:0.5px solid var(--border);transition:all .15s}
 .back-btn:hover{color:var(--text);border-color:#3d4260;background:var(--card)}
 .svc-icon{width:30px;height:30px;background:#1a1f35;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px}
 .svc-name{font-size:15px;font-weight:600}
-.svc-url{font-size:12px;color:var(--muted)}
+.svc-url{font-size:11px;color:var(--muted)}
 .header-right{display:flex;align-items:center;gap:10px}
-.status-dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
-.status-dot.online{background:var(--green);box-shadow:0 0 6px var(--green)}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)}
 .status-label{font-size:12px;color:var(--muted)}
-.open-btn{font-size:12px;padding:5px 12px;border-radius:6px;border:0.5px solid var(--border);background:transparent;color:var(--accent);cursor:pointer;transition:all .15s}
-.open-btn:hover{background:#1e3a5f;border-color:var(--accent)}
-.refresh-btn{font-size:12px;padding:5px 12px;border-radius:6px;border:0.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
-.refresh-btn:hover{color:var(--text);border-color:#3d4260}
+.btn{font-size:12px;padding:5px 12px;border-radius:6px;border:0.5px solid var(--border);background:transparent;cursor:pointer;transition:all .15s}
+.btn-accent{color:var(--accent)}.btn-accent:hover{background:#1e3a5f;border-color:var(--accent)}
+.btn-muted{color:var(--muted)}.btn-muted:hover{color:var(--text);border-color:#3d4260}
+.container{max-width:1300px;margin:0 auto;padding:1.5rem}
 
-.container{max-width:1200px;margin:0 auto;padding:1.5rem}
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;margin-bottom:1.25rem}
+.stat{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:.65rem .875rem;text-align:center}
+.stat-value{font-size:22px;font-weight:700;line-height:1;margin-bottom:3px}
+.stat-label{font-size:10px;color:var(--muted)}
+.c-green{color:var(--green)}.c-red{color:var(--red)}.c-amber{color:var(--amber)}.c-blue{color:var(--accent)}.c-purple{color:var(--purple)}
 
-/* stats */
-.stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:1.5rem}
-.stat{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:.75rem 1rem;text-align:center}
-.stat-value{font-size:26px;font-weight:700;line-height:1;margin-bottom:4px}
-.stat-label{font-size:11px;color:var(--muted)}
-.stat-value.green{color:var(--green)}
-.stat-value.red{color:var(--red)}
-.stat-value.amber{color:var(--amber)}
-.stat-value.purple{color:var(--purple)}
-.stat-value.blue{color:var(--accent)}
+/* Tabs */
+.tabs{display:flex;gap:2px;margin-bottom:1rem;background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:4px;width:fit-content}
+.tab{font-size:13px;font-weight:500;padding:6px 16px;border-radius:7px;cursor:pointer;color:var(--muted);transition:all .15s;border:none;background:transparent}
+.tab.active{background:var(--card);color:var(--text);border:0.5px solid var(--border)}
+.tab:hover:not(.active){color:var(--text)}
+.tab-content{display:none}.tab-content.active{display:block}
 
-/* two-col */
-.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+/* Two col */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
+/* Panel */
 .panel{background:var(--card);border:0.5px solid var(--border);border-radius:12px;overflow:hidden}
-.panel-header{display:flex;align-items:center;justify-content:space-between;padding:.875rem 1.125rem;border-bottom:0.5px solid var(--border)}
+.panel-header{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;border-bottom:0.5px solid var(--border)}
 .panel-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
-.panel-count{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--surface);color:var(--muted);border:0.5px solid var(--border)}
-.panel-body{max-height:480px;overflow-y:auto}
+.count-badge{font-size:11px;padding:1px 7px;border-radius:20px;background:var(--surface);color:var(--muted);border:0.5px solid var(--border)}
 
-/* workflow list */
-.wf-item{display:flex;align-items:center;gap:10px;padding:.75rem 1.125rem;border-bottom:0.5px solid var(--border);transition:background .1s;cursor:default}
+/* Search */
+.search-wrap{padding:.625rem 1rem;border-bottom:0.5px solid var(--border);position:relative}
+.search-input{width:100%;font-size:12px;padding:6px 10px 6px 28px;border-radius:7px;border:0.5px solid var(--border);background:var(--surface);color:var(--text);outline:none;transition:border-color .15s}
+.search-input:focus{border-color:var(--accent)}
+.search-icon{position:absolute;left:18px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px;pointer-events:none}
+
+/* Filter row */
+.filter-row{display:flex;gap:5px;padding:.625rem 1rem;border-bottom:0.5px solid var(--border);flex-wrap:wrap}
+.filter-btn{font-size:11px;padding:3px 10px;border-radius:20px;border:0.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.filter-btn:hover:not(.active){border-color:#3d4260;color:var(--text)}
+
+/* List body */
+.list-body{max-height:460px;overflow-y:auto}
+
+/* Workflow item */
+.wf-item{display:flex;align-items:center;gap:8px;padding:.625rem 1rem;border-bottom:0.5px solid var(--border);cursor:pointer;transition:background .1s}
 .wf-item:last-child{border-bottom:none}
-.wf-item:hover{background:#1f2235}
+.wf-item:hover{background:#1e2238}
 .wf-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.wf-dot.active{background:var(--green)}
-.wf-dot.inactive{background:#475569}
+.wf-dot.active{background:var(--green)}.wf-dot.inactive{background:#475569}
 .wf-info{flex:1;min-width:0}
-.wf-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
-.wf-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.wf-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wf-meta{font-size:11px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.last-run{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:500}
+.last-run.success{background:var(--green-dim);color:var(--green)}
+.last-run.error,.last-run.failed{background:var(--red-dim);color:var(--red)}
+.last-run.running{background:var(--amber-dim);color:var(--amber)}
 .wf-badge{font-size:10px;padding:2px 7px;border-radius:20px;font-weight:500;flex-shrink:0}
 .wf-badge.active{background:var(--green-dim);color:var(--green)}
 .wf-badge.inactive{background:#1e293b;color:#475569}
+.id-badge{font-size:10px;font-family:monospace;color:var(--muted);background:var(--surface);padding:1px 5px;border-radius:4px;border:0.5px solid var(--border);flex-shrink:0}
+.open-link{font-size:11px;color:var(--accent);opacity:0;transition:opacity .15s;flex-shrink:0}
+.wf-item:hover .open-link,.ex-item:hover .open-link{opacity:1}
 
-/* execution list */
-.ex-item{display:flex;align-items:center;gap:10px;padding:.75rem 1.125rem;border-bottom:0.5px solid var(--border);transition:background .1s}
+/* Execution item */
+.ex-item{display:flex;align-items:center;gap:8px;padding:.625rem 1rem;border-bottom:0.5px solid var(--border);cursor:pointer;transition:background .1s;border-left:2px solid transparent}
 .ex-item:last-child{border-bottom:none}
-.ex-item:hover{background:#1f2235}
-.ex-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
-.ex-icon.success{background:var(--green-dim)}
-.ex-icon.error,.ex-icon.failed{background:var(--red-dim)}
-.ex-icon.running{background:var(--amber-dim)}
-.ex-icon.waiting{background:#1e293b}
+.ex-item:hover{background:#1e2238}
+.ex-item.is-error{border-left-color:var(--red)}
+.ex-item.is-running{border-left-color:var(--amber)}
+.ex-icon{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+.ex-icon.success{background:var(--green-dim);color:var(--green)}
+.ex-icon.error,.ex-icon.failed{background:var(--red-dim);color:var(--red)}
+.ex-icon.running{background:var(--amber-dim);color:var(--amber)}
+.ex-icon.waiting{background:#1e293b;color:#475569}
 .ex-info{flex:1;min-width:0}
-.ex-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
-.ex-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.ex-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ex-meta{font-size:11px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:5px}
 .ex-status{font-size:10px;padding:2px 7px;border-radius:20px;font-weight:500;flex-shrink:0}
 .ex-status.success{background:var(--green-dim);color:var(--green)}
 .ex-status.error,.ex-status.failed{background:var(--red-dim);color:var(--red)}
 .ex-status.running{background:var(--amber-dim);color:var(--amber)}
 .ex-status.waiting{background:#1e293b;color:#475569}
 
-/* filters */
-.filter-row{display:flex;gap:6px;padding:.75rem 1.125rem;border-bottom:0.5px solid var(--border)}
-.filter-btn{font-size:11px;padding:3px 10px;border-radius:20px;border:0.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
-.filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-.filter-btn:hover:not(.active){border-color:#3d4260;color:var(--text)}
+/* Credentials */
+.cred-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.cred-card{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:.875rem 1rem}
+.cred-icon{font-size:22px;margin-bottom:8px}
+.cred-name{font-size:13px;font-weight:600;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cred-type{font-size:11px;color:var(--muted);margin-bottom:6px}
+.cred-date{font-size:10px;color:var(--muted)}
 
-/* clickable rows */
-.wf-item.clickable,.ex-item.clickable{cursor:pointer}
-.wf-item.clickable:hover,.ex-item.clickable:hover{background:#1f2235}
-.ex-item.is-error{border-left:2px solid var(--red)}
-.ex-item.is-running{border-left:2px solid var(--amber)}
+/* Variables */
+.var-list{display:flex;flex-direction:column;gap:8px}
+.var-item{background:var(--card);border:0.5px solid var(--border);border-radius:8px;padding:.75rem 1rem;display:flex;align-items:center;gap:12px}
+.var-key{font-size:13px;font-weight:600;font-family:monospace;color:var(--accent);flex:0 0 200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.var-val{font-size:12px;font-family:monospace;color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.var-val.hidden{filter:blur(4px);user-select:none}
+.var-type{font-size:10px;padding:1px 6px;border-radius:4px;background:var(--purple-dim);color:var(--purple);flex-shrink:0}
 
-/* id badge */
-.id-badge{font-size:10px;font-family:monospace;color:var(--muted);background:var(--surface);padding:1px 5px;border-radius:4px;border:0.5px solid var(--border);flex-shrink:0}
+/* Tags */
+.tag-wrap{display:flex;flex-wrap:wrap;gap:8px}
+.tag-chip{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;background:var(--card);border:0.5px solid var(--border);font-size:12px}
+.tag-chip-name{color:var(--text);font-weight:500}
+.tag-chip-count{font-size:11px;color:var(--muted)}
 
-/* open link */
-.open-link{font-size:11px;color:var(--accent);opacity:0;transition:opacity .15s;white-space:nowrap;flex-shrink:0}
-.ex-item:hover .open-link,.wf-item:hover .open-link{opacity:1}
+/* Error drawer */
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;opacity:0;pointer-events:none;transition:opacity .2s}
+.drawer-overlay.open{opacity:1;pointer-events:all}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:520px;background:var(--surface);border-left:0.5px solid var(--border);z-index:301;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow:hidden}
+.drawer.open{transform:translateX(0)}
+.drawer-header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:0.5px solid var(--border);flex-shrink:0}
+.drawer-title{font-size:14px;font-weight:600}
+.drawer-close{font-size:18px;color:var(--muted);cursor:pointer;padding:4px 8px;border-radius:6px;border:none;background:transparent;transition:all .15s}
+.drawer-close:hover{color:var(--text);background:var(--card)}
+.drawer-body{flex:1;overflow-y:auto;padding:1.25rem}
+.drawer-section{margin-bottom:1.25rem}
+.drawer-section-title{font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+.drawer-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:1rem}
+.meta-item{background:var(--card);border:0.5px solid var(--border);border-radius:8px;padding:.625rem .875rem}
+.meta-label{font-size:10px;color:var(--muted);margin-bottom:3px}
+.meta-value{font-size:13px;font-weight:500}
+.meta-value.red{color:var(--red)}.meta-value.green{color:var(--green)}
+.error-box{background:var(--red-dim);border:0.5px solid #5a1a1a;border-radius:8px;padding:1rem}
+.error-msg{font-size:13px;color:var(--red);font-weight:500;margin-bottom:8px}
+.error-desc{font-size:12px;color:#f87171aa;margin-bottom:10px}
+.error-stack{font-size:11px;font-family:monospace;color:#f8717188;line-height:1.6;max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+.no-error{background:var(--green-dim);border:0.5px solid #0d4a25;border-radius:8px;padding:1rem;font-size:13px;color:var(--green);text-align:center}
 
-/* empty */
+/* Empty / Loading */
 .empty{padding:2rem;text-align:center;color:var(--muted);font-size:13px}
-
-/* loading */
-.loading{display:flex;align-items:center;justify-content:center;padding:3rem;color:var(--muted);font-size:13px;gap:8px}
+.loading{display:flex;align-items:center;justify-content:center;padding:2.5rem;color:var(--muted);font-size:13px;gap:8px}
 .spin{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+.err-banner{margin:1rem;background:var(--red-dim);border:0.5px solid #5a1a1a;border-radius:8px;padding:.875rem 1rem;font-size:13px;color:var(--red)}
 
-.error-box{margin:1.5rem;background:var(--red-dim);border:0.5px solid #5a1a1a;border-radius:10px;padding:1rem;font-size:13px;color:var(--red)}
-
-::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-@media(max-width:800px){.two-col{grid-template-columns:1fr}.stats{grid-template-columns:repeat(3,1fr)}}
+::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+@media(max-width:900px){.two-col{grid-template-columns:1fr}.stats{grid-template-columns:repeat(4,1fr)}.cred-grid{grid-template-columns:repeat(2,1fr)}.drawer{width:100%}}
 </style>
 </head>
 <body>
@@ -130,201 +177,423 @@ a{color:inherit;text-decoration:none}
     </div>
   </div>
   <div class="header-right">
-    <div class="status-dot online" id="statusDot"></div>
-    <span class="status-label" id="statusLabel">Online</span>
-    <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
-    <a class="open-btn" href="https://n8n-home.home-server.id.vn" target="_blank" rel="noopener">↗ Mở n8n</a>
+    <div class="status-dot" id="statusDot"></div>
+    <span class="status-label">Online</span>
+    <button class="btn btn-muted" onclick="loadData()">↻ Refresh</button>
+    <a class="btn btn-accent" href="https://n8n-home.home-server.id.vn" target="_blank" rel="noopener">↗ Mở n8n</a>
   </div>
 </header>
 
+<!-- Stats -->
 <div class="container">
+<div class="stats">
+  <div class="stat"><div class="stat-value c-blue"  id="st-total">—</div><div class="stat-label">Workflows</div></div>
+  <div class="stat"><div class="stat-value c-green" id="st-active">—</div><div class="stat-label">Active</div></div>
+  <div class="stat"><div class="stat-value"         id="st-inactive">—</div><div class="stat-label">Inactive</div></div>
+  <div class="stat"><div class="stat-value c-green" id="st-success">—</div><div class="stat-label">Runs OK</div></div>
+  <div class="stat"><div class="stat-value c-red"   id="st-failed">—</div><div class="stat-label">Runs Lỗi</div></div>
+  <div class="stat"><div class="stat-value c-amber" id="st-running">—</div><div class="stat-label">Running</div></div>
+  <div class="stat"><div class="stat-value c-purple"id="st-creds">—</div><div class="stat-label">Credentials</div></div>
+  <div class="stat"><div class="stat-value c-blue"  id="st-vars">—</div><div class="stat-label">Variables</div></div>
+</div>
 
-  <!-- Stats -->
-  <div class="stats" id="stats">
-    <div class="stat"><div class="stat-value blue" id="st-total">—</div><div class="stat-label">Workflows</div></div>
-    <div class="stat"><div class="stat-value green" id="st-active">—</div><div class="stat-label">Active</div></div>
-    <div class="stat"><div class="stat-value" id="st-inactive">—</div><div class="stat-label">Inactive</div></div>
-    <div class="stat"><div class="stat-value green" id="st-success">—</div><div class="stat-label">Runs OK</div></div>
-    <div class="stat"><div class="stat-value red" id="st-failed">—</div><div class="stat-label">Runs Failed</div></div>
-    <div class="stat"><div class="stat-value amber" id="st-running">—</div><div class="stat-label">Running</div></div>
-  </div>
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('workflows',this)">⚡ Workflows</button>
+  <button class="tab" onclick="switchTab('executions',this)">📋 Lịch sử chạy</button>
+  <button class="tab" onclick="switchTab('credentials',this)">🔑 Credentials</button>
+  <button class="tab" onclick="switchTab('variables',this)">📦 Variables</button>
+  <button class="tab" onclick="switchTab('tags',this)">🏷 Tags</button>
+</div>
 
+<!-- TAB: Workflows -->
+<div class="tab-content active" id="tab-workflows">
   <div class="two-col">
-
-    <!-- Workflows -->
     <div class="panel">
       <div class="panel-header">
-        <div class="panel-title">⚡ Workflows <span class="panel-count" id="wfCount">—</span></div>
+        <div class="panel-title">⚡ Workflows <span class="count-badge" id="wfCount">—</span></div>
       </div>
+      <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" id="wfSearch" placeholder="Tìm workflow..." oninput="renderWorkflows()"/></div>
       <div class="filter-row">
-        <button class="filter-btn active" onclick="filterWf('all',this)">Tất cả</button>
-        <button class="filter-btn" onclick="filterWf('active',this)">Active</button>
-        <button class="filter-btn" onclick="filterWf('inactive',this)">Inactive</button>
+        <button class="filter-btn active" onclick="setFilter('wf','all',this)">Tất cả</button>
+        <button class="filter-btn" onclick="setFilter('wf','active',this)">Active</button>
+        <button class="filter-btn" onclick="setFilter('wf','inactive',this)">Inactive</button>
       </div>
-      <div class="panel-body" id="wfList">
-        <div class="loading"><div class="spin"></div>Đang tải...</div>
+      <div class="list-body" id="wfList"><div class="loading"><div class="spin"></div>Đang tải...</div></div>
+    </div>
+    <div class="panel" style="background:var(--surface);border-color:var(--border)">
+      <div class="panel-header"><div class="panel-title">ℹ️ Chọn workflow để xem chi tiết</div></div>
+      <div id="wfDetail" style="padding:2rem;text-align:center;color:var(--muted);font-size:13px">
+        Click vào workflow bên trái để xem thông tin
       </div>
     </div>
+  </div>
+</div>
 
-    <!-- Executions -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">📋 Lịch sử chạy <span class="panel-count" id="exCount">—</span></div>
-      </div>
-      <div class="filter-row">
-        <button class="filter-btn active" onclick="filterEx('all',this)">Tất cả</button>
-        <button class="filter-btn" onclick="filterEx('success',this)">OK</button>
-        <button class="filter-btn" onclick="filterEx('error',this)">Lỗi</button>
-        <button class="filter-btn" onclick="filterEx('running',this)">Running</button>
-      </div>
-      <div class="panel-body" id="exList">
-        <div class="loading"><div class="spin"></div>Đang tải...</div>
-      </div>
+<!-- TAB: Executions -->
+<div class="tab-content" id="tab-executions">
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">📋 Lịch sử chạy <span class="count-badge" id="exCount">—</span></div>
+      <span style="font-size:11px;color:var(--muted)">Click hàng lỗi để xem chi tiết</span>
     </div>
+    <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" id="exSearch" placeholder="Tìm tên workflow..." oninput="renderExecutions()"/></div>
+    <div class="filter-row">
+      <button class="filter-btn active" onclick="setFilter('ex','all',this)">Tất cả</button>
+      <button class="filter-btn" onclick="setFilter('ex','success',this)">✓ OK</button>
+      <button class="filter-btn" onclick="setFilter('ex','error',this)">✗ Lỗi</button>
+      <button class="filter-btn" onclick="setFilter('ex','running',this)">⟳ Running</button>
+    </div>
+    <div class="list-body" style="max-height:560px" id="exList"><div class="loading"><div class="spin"></div>Đang tải...</div></div>
+  </div>
+</div>
 
+<!-- TAB: Credentials -->
+<div class="tab-content" id="tab-credentials">
+  <div class="panel" style="margin-bottom:12px">
+    <div class="panel-header"><div class="panel-title">🔑 Credentials <span class="count-badge" id="credCount">—</span></div></div>
+    <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" id="credSearch" placeholder="Tìm credential..." oninput="renderCredentials()"/></div>
+    <div style="padding:1rem"><div class="cred-grid" id="credList"><div class="loading"><div class="spin"></div>Đang tải...</div></div></div>
+  </div>
+</div>
+
+<!-- TAB: Variables -->
+<div class="tab-content" id="tab-variables">
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">📦 Variables <span class="count-badge" id="varCount">—</span></div>
+      <span style="font-size:11px;color:var(--muted)">Click giá trị để hiện/ẩn</span>
+    </div>
+    <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" id="varSearch" placeholder="Tìm biến..." oninput="renderVariables()"/></div>
+    <div style="padding:1rem"><div class="var-list" id="varList"><div class="loading"><div class="spin"></div>Đang tải...</div></div></div>
+  </div>
+</div>
+
+<!-- TAB: Tags -->
+<div class="tab-content" id="tab-tags">
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">🏷 Tags <span class="count-badge" id="tagCount">—</span></div></div>
+    <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" id="tagSearch" placeholder="Tìm tag..." oninput="renderTags()"/></div>
+    <div style="padding:1rem"><div class="tag-wrap" id="tagList"><div class="loading"><div class="spin"></div>Đang tải...</div></div></div>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<!-- Error Drawer -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <div class="drawer-title" id="drawerTitle">Chi tiết Execution</div>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body" id="drawerBody">
+    <div class="loading"><div class="spin"></div>Đang tải...</div>
   </div>
 </div>
 
 <script>
-var allWorkflows = [];
-var allExecutions = [];
-var wfFilter = 'all';
-var exFilter = 'all';
+var N8N_URL = 'https://n8n-home.home-server.id.vn';
+var allWf = [], allEx = [], allCreds = [], allVars = [], allTags = [], lastRun = {};
+var wfFilter = 'all', exFilter = 'all';
+var selectedWf = null;
 
+/* ── Tabs ── */
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(function(el){ el.classList.remove('active'); });
+  document.querySelectorAll('.tab').forEach(function(el){ el.classList.remove('active'); });
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ── Filters ── */
+function setFilter(type, val, btn) {
+  var row = btn.closest('.filter-row');
+  row.querySelectorAll('.filter-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  if (type==='wf'){ wfFilter=val; renderWorkflows(); }
+  else            { exFilter=val;  renderExecutions(); }
+}
+
+/* ── Helpers ── */
 function timeAgo(iso) {
   if (!iso) return '—';
   var diff = Date.now() - new Date(iso).getTime();
   var m = Math.floor(diff/60000);
   if (m < 1)  return 'vừa xong';
-  if (m < 60) return m + ' phút trước';
+  if (m < 60) return m + 'ph trước';
   var h = Math.floor(m/60);
-  if (h < 24) return h + ' giờ trước';
-  return Math.floor(h/24) + ' ngày trước';
+  if (h < 24) return h + 'h trước';
+  return Math.floor(h/24) + 'ng trước';
 }
-
-function duration(start, end) {
-  if (!start || !end) return '';
-  var ms = new Date(end) - new Date(start);
-  if (ms < 1000) return ms+'ms';
-  if (ms < 60000) return (ms/1000).toFixed(1)+'s';
+function dur(s, e) {
+  if (!s||!e) return '';
+  var ms = new Date(e)-new Date(s);
+  if (ms<1000) return ms+'ms';
+  if (ms<60000) return (ms/1000).toFixed(1)+'s';
   return Math.floor(ms/60000)+'m '+(Math.floor(ms/1000)%60)+'s';
 }
+function credIcon(type) {
+  var t = (type||'').toLowerCase();
+  if (t.includes('telegram')) return '✈️';
+  if (t.includes('slack'))    return '💬';
+  if (t.includes('google'))   return '🔵';
+  if (t.includes('github'))   return '🐙';
+  if (t.includes('http'))     return '🌐';
+  if (t.includes('oauth'))    return '🔐';
+  if (t.includes('sql')||t.includes('mysql')||t.includes('postgres')) return '🗄️';
+  if (t.includes('smtp')||t.includes('email')||t.includes('mail'))    return '📧';
+  if (t.includes('openai')||t.includes('ai'))  return '🤖';
+  if (t.includes('discord'))  return '🎮';
+  if (t.includes('aws'))      return '☁️';
+  return '🔑';
+}
 
+/* ── Render Workflows ── */
 function renderWorkflows() {
-  var list = allWorkflows.filter(function(w) {
-    if (wfFilter === 'active')   return w.active;
-    if (wfFilter === 'inactive') return !w.active;
-    return true;
+  var q = (document.getElementById('wfSearch').value||'').toLowerCase();
+  var list = allWf.filter(function(w){
+    if (wfFilter==='active'&&!w.active) return false;
+    if (wfFilter==='inactive'&&w.active) return false;
+    return !q || w.name.toLowerCase().includes(q) || w.id.toLowerCase().includes(q);
   });
-  document.getElementById('wfCount').textContent = list.length;
-  if (!list.length) { document.getElementById('wfList').innerHTML = '<div class="empty">Không có workflow nào</div>'; return; }
-  var n8nBase = 'https://n8n-home.home-server.id.vn';
-  document.getElementById('wfList').innerHTML = list.map(function(w) {
-    var cls = w.active ? 'active' : 'inactive';
-    var label = w.active ? 'Active' : 'Inactive';
-    var tags = (w.tags||[]).slice(0,2).map(function(t){ return '<span style="font-size:10px;padding:1px 5px;border-radius:4px;background:var(--surface);color:var(--muted);margin-right:3px">'+t+'</span>'; }).join('');
-    var wfUrl = n8nBase+'/workflow/'+w.id;
-    return '<div class="wf-item clickable" onclick="window.open(\''+wfUrl+'\',\'_blank\',\'noopener\')">'
+  document.getElementById('wfCount').textContent = list.length+'/'+allWf.length;
+  if (!list.length){ document.getElementById('wfList').innerHTML='<div class="empty">Không tìm thấy workflow</div>'; return; }
+
+  document.getElementById('wfList').innerHTML = list.map(function(w){
+    var cls = w.active?'active':'inactive';
+    var lr  = lastRun[w.id];
+    var lrHtml = lr ? '<span class="last-run '+(lr.status==='failed'?'error':lr.status)+'">'+lr.status+'</span>' : '';
+    var wfUrl = N8N_URL+'/workflow/'+w.id;
+    return '<div class="wf-item" onclick="showWfDetail(\''+w.id+'\')">'
       +'<div class="wf-dot '+cls+'"></div>'
       +'<div class="wf-info">'
         +'<div class="wf-name">'+w.name+'</div>'
-        +'<div class="wf-meta">'+tags+'Cập nhật '+timeAgo(w.updatedAt)+'</div>'
+        +'<div class="wf-meta">'+lrHtml+'<span>'+timeAgo(w.updatedAt)+'</span>'+(w.triggerCount?'<span>'+w.triggerCount+' trigger</span>':'')+'</div>'
       +'</div>'
-      +'<span class="id-badge">#'+w.id+'</span>'
-      +'<span class="wf-badge '+cls+'" style="margin-left:6px">'+label+'</span>'
-      +'<span class="open-link" style="margin-left:6px">↗</span>'
+      +'<span class="id-badge">#'+w.id.slice(0,8)+'</span>'
+      +'<span class="wf-badge '+cls+'" style="margin:0 4px">'+( w.active?'Active':'Off')+'</span>'
+      +'<a class="open-link" href="'+wfUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a>'
     +'</div>';
   }).join('');
 }
 
-function renderExecutions() {
-  var list = allExecutions.filter(function(e) {
-    if (exFilter === 'all') return true;
-    if (exFilter === 'error') return e.status === 'error' || e.status === 'failed';
-    return e.status === exFilter;
-  });
-  document.getElementById('exCount').textContent = list.length;
-  if (!list.length) { document.getElementById('exList').innerHTML = '<div class="empty">Không có execution nào</div>'; return; }
+/* ── Workflow Detail Panel ── */
+function showWfDetail(id) {
+  var w = allWf.find(function(x){ return x.id===id; });
+  if (!w) return;
+  var lr = lastRun[id];
+  var relExec = allEx.filter(function(e){ return e.workflowId===id; }).slice(0,8);
+  var wfUrl = N8N_URL+'/workflow/'+id;
 
-  var n8nBase = 'https://n8n-home.home-server.id.vn';
-  var icons = { success:'✓', error:'✗', failed:'✗', running:'…', waiting:'⏸' };
-  document.getElementById('exList').innerHTML = list.map(function(e) {
-    var st = (e.status === 'failed') ? 'error' : e.status;
-    var icon = icons[st] || '?';
-    var dur = duration(e.startedAt, e.stoppedAt);
-    var exUrl = n8nBase+'/workflow/'+e.workflowId+'/executions/'+e.id;
-    var borderCls = (st==='error') ? 'is-error' : (st==='running') ? 'is-running' : '';
-    var linkLabel = (st==='error') ? '↗ Xem lỗi' : '↗ Xem';
-    return '<div class="ex-item clickable '+borderCls+'" onclick="window.open(\''+exUrl+'\',\'_blank\',\'noopener\')">'
+  document.getElementById('wfDetail').innerHTML =
+    '<div style="padding:1rem;text-align:left">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+      +'<div style="font-size:14px;font-weight:600">'+w.name+'</div>'
+      +'<a href="'+wfUrl+'" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent)">↗ Mở</a>'
+    +'</div>'
+    +'<div class="drawer-meta" style="margin-bottom:12px">'
+      +'<div class="meta-item"><div class="meta-label">Status</div><div class="meta-value '+(w.active?'green':'')+'">'+( w.active?'Active':'Inactive')+'</div></div>'
+      +'<div class="meta-item"><div class="meta-label">Triggers</div><div class="meta-value">'+w.triggerCount+'</div></div>'
+      +'<div class="meta-item"><div class="meta-label">ID</div><div class="meta-value" style="font-family:monospace;font-size:11px">'+w.id+'</div></div>'
+      +'<div class="meta-item"><div class="meta-label">Cập nhật</div><div class="meta-value">'+timeAgo(w.updatedAt)+'</div></div>'
+      +(lr?'<div class="meta-item"><div class="meta-label">Last run</div><div class="meta-value '+(lr.status==='success'?'green':'red')+'">'+lr.status+'</div></div>':'')
+      +(lr?'<div class="meta-item"><div class="meta-label">Khi</div><div class="meta-value">'+timeAgo(lr.startedAt)+'</div></div>':'')
+    +'</div>'
+    +(w.tags&&w.tags.length?'<div style="margin-bottom:10px">'+w.tags.map(function(t){ return '<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--purple-dim);color:var(--purple);margin-right:4px">'+t+'</span>'; }).join('')+'</div>':'')
+    +(relExec.length?'<div style="font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Lịch sử gần nhất</div>'
+      +relExec.map(function(e){
+        var st=e.status==='failed'?'error':e.status;
+        var d=dur(e.startedAt,e.stoppedAt);
+        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:12px;cursor:pointer" onclick="openDrawer(\''+e.id+'\',\''+e.workflowId+'\',\''+e.workflowName+'\')">'
+          +'<span class="ex-status '+st+'">'+e.status+'</span>'
+          +'<span style="color:var(--muted)">'+timeAgo(e.startedAt)+'</span>'
+          +(d?'<span style="color:var(--muted)">'+d+'</span>':'')
+          +'<span style="font-family:monospace;font-size:10px;color:var(--muted)">#'+e.id+'</span>'
+          +'<span style="color:var(--accent);margin-left:auto;opacity:.7">↗</span>'
+        +'</div>';
+      }).join(''):'')
+    +'</div>';
+}
+
+/* ── Render Executions ── */
+function renderExecutions() {
+  var q = (document.getElementById('exSearch').value||'').toLowerCase();
+  var list = allEx.filter(function(e){
+    if (exFilter==='success' && e.status!=='success') return false;
+    if (exFilter==='error'   && e.status!=='error' && e.status!=='failed') return false;
+    if (exFilter==='running' && e.status!=='running') return false;
+    return !q || e.workflowName.toLowerCase().includes(q);
+  });
+  document.getElementById('exCount').textContent = list.length+'/'+allEx.length;
+  if (!list.length){ document.getElementById('exList').innerHTML='<div class="empty">Không tìm thấy execution</div>'; return; }
+
+  var icons = {success:'✓',error:'✗',failed:'✗',running:'⟳',waiting:'⏸'};
+  document.getElementById('exList').innerHTML = list.map(function(e){
+    var st = e.status==='failed'?'error':e.status;
+    var icon = icons[st]||'?';
+    var d = dur(e.startedAt,e.stoppedAt);
+    var border = st==='error'?'is-error':st==='running'?'is-running':'';
+    var clickable = (st==='error'||true); // all clickable
+    return '<div class="ex-item '+border+'" onclick="openDrawer(\''+e.id+'\',\''+e.workflowId+'\',\''+e.workflowName+'\')">'
       +'<div class="ex-icon '+st+'">'+icon+'</div>'
       +'<div class="ex-info">'
         +'<div class="ex-name">'+e.workflowName+'</div>'
         +'<div class="ex-meta">'
-          +'<span class="id-badge" style="margin-right:5px">#'+e.id+'</span>'
-          +timeAgo(e.startedAt)+(dur?' · <b>'+dur+'</b>':'')+(e.mode?' · '+e.mode:'')
+          +'<span class="id-badge">#'+e.id+'</span>'
+          +'<span>'+timeAgo(e.startedAt)+'</span>'
+          +(d?'<span>⏱ '+d+'</span>':'')
+          +(e.mode?'<span>'+e.mode+'</span>':'')
         +'</div>'
       +'</div>'
       +'<span class="ex-status '+st+'">'+e.status+'</span>'
-      +'<span class="open-link" style="margin-left:6px">'+linkLabel+'</span>'
+      +'<span class="open-link" style="margin-left:6px">'+(st==='error'?'↗ Lỗi':'↗')+'</span>'
     +'</div>';
   }).join('');
 }
 
-function filterWf(f, btn) {
-  wfFilter = f;
-  document.querySelectorAll('.filter-row')[0].querySelectorAll('.filter-btn').forEach(function(b){ b.classList.remove('active'); });
-  btn.classList.add('active');
-  renderWorkflows();
+/* ── Render Credentials ── */
+function renderCredentials() {
+  var q = (document.getElementById('credSearch').value||'').toLowerCase();
+  var list = allCreds.filter(function(c){ return !q||c.name.toLowerCase().includes(q)||c.type.toLowerCase().includes(q); });
+  document.getElementById('credCount').textContent = list.length+'/'+allCreds.length;
+  if (!list.length){ document.getElementById('credList').innerHTML='<div class="empty">Không tìm thấy credential</div>'; return; }
+  document.getElementById('credList').innerHTML = list.map(function(c){
+    return '<div class="cred-card">'
+      +'<div class="cred-icon">'+credIcon(c.type)+'</div>'
+      +'<div class="cred-name" title="'+c.name+'">'+c.name+'</div>'
+      +'<div class="cred-type">'+c.type+'</div>'
+      +'<div class="cred-date">Cập nhật '+timeAgo(c.updatedAt)+'</div>'
+    +'</div>';
+  }).join('');
 }
 
-function filterEx(f, btn) {
-  exFilter = f;
-  document.querySelectorAll('.filter-row')[1].querySelectorAll('.filter-btn').forEach(function(b){ b.classList.remove('active'); });
-  btn.classList.add('active');
-  renderExecutions();
+/* ── Render Variables ── */
+function renderVariables() {
+  var q = (document.getElementById('varSearch').value||'').toLowerCase();
+  var list = allVars.filter(function(v){ return !q||v.key.toLowerCase().includes(q); });
+  document.getElementById('varCount').textContent = list.length+'/'+allVars.length;
+  if (!list.length){ document.getElementById('varList').innerHTML='<div class="empty">Không tìm thấy biến</div>'; return; }
+  document.getElementById('varList').innerHTML = list.map(function(v){
+    var valId = 'var-'+v.id;
+    return '<div class="var-item">'
+      +'<span class="var-key">'+v.key+'</span>'
+      +'<span class="var-val hidden" id="'+valId+'" onclick="toggleVar(\''+valId+'\')">'+( v.value||'(trống)')+'</span>'
+      +(v.type?'<span class="var-type">'+v.type+'</span>':'')
+    +'</div>';
+  }).join('');
+}
+function toggleVar(id){ var el=document.getElementById(id); if(el) el.classList.toggle('hidden'); }
+
+/* ── Render Tags ── */
+function renderTags() {
+  var q = (document.getElementById('tagSearch').value||'').toLowerCase();
+  var list = allTags.filter(function(t){ return !q||t.name.toLowerCase().includes(q); })
+    .sort(function(a,b){ return b.usageCount-a.usageCount; });
+  document.getElementById('tagCount').textContent = list.length;
+  if (!list.length){ document.getElementById('tagList').innerHTML='<div class="empty">Không có tag</div>'; return; }
+  document.getElementById('tagList').innerHTML = list.map(function(t){
+    return '<div class="tag-chip">'
+      +'<span class="tag-chip-name">'+t.name+'</span>'
+      +'<span class="tag-chip-count">'+t.usageCount+' wf</span>'
+    +'</div>';
+  }).join('');
 }
 
-function loadData() {
-  document.getElementById('wfList').innerHTML = '<div class="loading"><div class="spin"></div>Đang tải...</div>';
-  document.getElementById('exList').innerHTML = '<div class="loading"><div class="spin"></div>Đang tải...</div>';
+/* ── Error Drawer ── */
+function openDrawer(execId, wfId, wfName) {
+  document.getElementById('drawerTitle').textContent = 'Execution #'+execId;
+  document.getElementById('drawerBody').innerHTML = '<div class="loading"><div class="spin"></div>Đang tải...</div>';
+  document.getElementById('drawerOverlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
 
-  fetch('/api/n8n', { cache: 'no-store' })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.error) {
-        var msg = '<div class="error-box">⚠ Lỗi: '+data.error+'</div>';
-        document.getElementById('wfList').innerHTML = msg;
-        document.getElementById('exList').innerHTML = msg;
-        return;
+  fetch('/api/n8n/exec?id='+execId, {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var openUrl = N8N_URL+'/workflow/'+wfId+'/executions/'+execId;
+      var dHtml = '<div class="drawer-section">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+          +'<span style="font-size:13px;font-weight:600">'+wfName+'</span>'
+          +'<a href="'+openUrl+'" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent)">↗ Mở trong n8n</a>'
+        +'</div>'
+        +'<div class="drawer-meta">'
+          +'<div class="meta-item"><div class="meta-label">Status</div><div class="meta-value '+(d.status==='success'?'green':'red')+'">'+d.status+'</div></div>'
+          +'<div class="meta-item"><div class="meta-label">Mode</div><div class="meta-value">'+(d.mode||'—')+'</div></div>'
+          +'<div class="meta-item"><div class="meta-label">Bắt đầu</div><div class="meta-value">'+timeAgo(d.startedAt)+'</div></div>'
+          +'<div class="meta-item"><div class="meta-label">Thời gian</div><div class="meta-value">'+( dur(d.startedAt,d.stoppedAt)||'—')+'</div></div>'
+          +(d.lastNodeExecuted?'<div class="meta-item" style="grid-column:span 2"><div class="meta-label">Node cuối</div><div class="meta-value">'+d.lastNodeExecuted+'</div></div>':'')
+        +'</div>'
+      +'</div>';
+
+      if (d.error) {
+        dHtml += '<div class="drawer-section">'
+          +'<div class="drawer-section-title">⚠ Chi tiết lỗi</div>'
+          +'<div class="error-box">'
+            +'<div class="error-msg">'+d.error.message+'</div>'
+            +(d.error.description?'<div class="error-desc">'+d.error.description+'</div>':'')
+            +(d.error.stack?'<div class="error-stack">'+d.error.stack+'</div>':'')
+          +'</div>'
+        +'</div>';
+      } else {
+        dHtml += '<div class="no-error">✓ Execution hoàn thành không có lỗi</div>';
       }
 
-      var s = data.stats || {};
-      document.getElementById('st-total').textContent   = s.total   || 0;
-      document.getElementById('st-active').textContent  = s.active  || 0;
-      document.getElementById('st-inactive').textContent= s.inactive|| 0;
-      document.getElementById('st-success').textContent = s.success || 0;
-      document.getElementById('st-failed').textContent  = s.failed  || 0;
-      document.getElementById('st-running').textContent = s.running || 0;
+      document.getElementById('drawerBody').innerHTML = dHtml;
+    })
+    .catch(function(e){
+      document.getElementById('drawerBody').innerHTML = '<div class="err-banner">⚠ Không tải được: '+e.message+'</div>';
+    });
+}
+function closeDrawer() {
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+}
 
-      allWorkflows  = data.workflows  || [];
-      allExecutions = data.executions || [];
-      document.getElementById('wfCount').textContent = allWorkflows.length;
-      document.getElementById('exCount').textContent = allExecutions.length;
+/* ── Load Data ── */
+function loadData() {
+  fetch('/api/n8n', {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data.error){ showError(data.error); return; }
+      var s = data.stats||{};
+      document.getElementById('st-total').textContent   = s.total||0;
+      document.getElementById('st-active').textContent  = s.active||0;
+      document.getElementById('st-inactive').textContent= s.inactive||0;
+      document.getElementById('st-success').textContent = s.success||0;
+      document.getElementById('st-failed').textContent  = s.failed||0;
+      document.getElementById('st-running').textContent = s.running||0;
+      document.getElementById('st-creds').textContent   = s.totalCreds||0;
+      document.getElementById('st-vars').textContent    = s.totalVars||0;
+
+      allWf    = data.workflows   ||[];
+      allEx    = data.executions  ||[];
+      allCreds = data.credentials ||[];
+      allVars  = data.variables   ||[];
+      allTags  = data.tags        ||[];
+      lastRun  = data.lastRun     ||{};
+
+      document.getElementById('credCount').textContent = allCreds.length;
+      document.getElementById('varCount').textContent  = allVars.length;
+      document.getElementById('tagCount').textContent  = allTags.length;
 
       renderWorkflows();
       renderExecutions();
+      renderCredentials();
+      renderVariables();
+      renderTags();
     })
-    .catch(function(e) {
-      var msg = '<div class="error-box">⚠ Không kết nối được API: '+e.message+'</div>';
-      document.getElementById('wfList').innerHTML = msg;
-      document.getElementById('exList').innerHTML = msg;
-      document.getElementById('statusDot').className = 'status-dot offline';
-      document.getElementById('statusLabel').textContent = 'Lỗi';
-    });
+    .catch(function(e){ showError(e.message); });
+}
+
+function showError(msg) {
+  ['wfList','exList'].forEach(function(id){
+    document.getElementById(id).innerHTML = '<div class="err-banner">⚠ '+msg+'</div>';
+  });
 }
 
 loadData();
 setInterval(loadData, 60000);
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeDrawer(); });
 </script>
 </body>
 </html>

@@ -15,7 +15,10 @@
       "mcp__01b61634-9f1c-41c9-be89-64c79f0ee722__workers_list",
       "mcp__01b61634-9f1c-41c9-be89-64c79f0ee722__workers_get_worker_code",
       "mcp__01b61634-9f1c-41c9-be89-64c79f0ee722__workers_get_worker",
-      "Bash(npx wrangler *)"
+      "Bash(npx wrangler *)",
+      "mcp__1ace60f7-50ba-47b4-8750-3dbba718b6f3__search_workflows",
+      "mcp__1ace60f7-50ba-47b4-8750-3dbba718b6f3__search_projects",
+      "mcp__1ace60f7-50ba-47b4-8750-3dbba718b6f3__get_workflow_details"
     ]
   }
 }
