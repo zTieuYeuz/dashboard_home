@@ -174,11 +174,11 @@ a{color:inherit;text-decoration:none}
 
 <script>
 var SERVICES = [
-  { id:'esxi',        name:'VMware ESXi',    icon:'🖥️', desc:'Hypervisor - Bare Metal',      url:'https://192.168.110.10',                     local:true },
-  { id:'n8n',         name:'n8n Automation', icon:'⚡', desc:'Workflow & Bot Automation',     url:'https://n8n-home.home-server.id.vn',          local:false },
-  { id:'casaos',      name:'CasaOS',         icon:'🏠', desc:'Home Server OS Dashboard',      url:'http://192.168.110.21:4434',                  local:true },
-  { id:'9router',     name:'9Router',        icon:'🔀', desc:'Router & Network Management',   url:'https://9router.home-server.id.vn/dashboard', local:false },
-  { id:'uptime-kuma', name:'Uptime Kuma',    icon:'📊', desc:'Service Health Monitor',        url:'http://192.168.110.21:3005/dashboard',        local:true }
+  { id:'esxi',        name:'VMware ESXi',    icon:'🖥️', desc:'Hypervisor - Bare Metal',      url:'https://192.168.110.10',                     local:true,  detailPage:null },
+  { id:'n8n',         name:'n8n Automation', icon:'⚡', desc:'Workflow & Bot Automation',     url:'https://n8n-home.home-server.id.vn',          local:false, detailPage:'/n8n.html' },
+  { id:'casaos',      name:'CasaOS',         icon:'🏠', desc:'Home Server OS Dashboard',      url:'http://192.168.110.21:4434',                  local:true,  detailPage:null },
+  { id:'9router',     name:'9Router',        icon:'🔀', desc:'Router & Network Management',   url:'https://9router.home-server.id.vn/dashboard', local:false, detailPage:null },
+  { id:'uptime-kuma', name:'Uptime Kuma',    icon:'📊', desc:'Service Health Monitor',        url:'http://192.168.110.21:3005/dashboard',        local:true,  detailPage:null }
 ];
 
 var prev = {}, checks = {}, onlineCnt = {}, log = [], totalChecks = 0;
@@ -191,7 +191,10 @@ setInterval(function(){
 function initUI() {
   var grid = document.getElementById('servicesGrid');
   grid.innerHTML = SERVICES.map(function(s){
-    return '<div class="srv-card checking" id="card-'+s.id+'" onclick="window.open(\''+s.url+'\',\'_blank\',\'noopener\')">'
+    var onclick = s.detailPage
+      ? 'window.location.href=\''+s.detailPage+'\''
+      : 'window.open(\''+s.url+'\',\'_blank\',\'noopener\')';
+    return '<div class="srv-card checking" id="card-'+s.id+'" onclick="'+onclick+'">'
       +'<div class="srv-header"><div class="srv-icon">'+s.icon+'</div><div class="srv-dot checking" id="dot-'+s.id+'"></div></div>'
       +'<div class="srv-name">'+s.name+'</div>'
       +'<div class="srv-desc">'+s.desc+'</div>'

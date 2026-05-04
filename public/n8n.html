@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>n8n — Home Lab Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d14;--surface:#131620;--card:#1a1d2e;--border:#252840;
+  --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
+  --green:#34d399;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;
+  --green-dim:#052e16;--red-dim:#2d0a0a;--amber-dim:#2d1f00;--purple-dim:#2d1b69;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+.header{background:var(--surface);border-bottom:0.5px solid var(--border);padding:0 1.5rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header-left{display:flex;align-items:center;gap:12px}
+.back-btn{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);padding:5px 10px;border-radius:6px;border:0.5px solid var(--border);transition:all .15s;cursor:pointer}
+.back-btn:hover{color:var(--text);border-color:#3d4260;background:var(--card)}
+.svc-icon{width:30px;height:30px;background:#1a1f35;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.svc-name{font-size:15px;font-weight:600}
+.svc-url{font-size:12px;color:var(--muted)}
+.header-right{display:flex;align-items:center;gap:10px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.status-dot.online{background:var(--green);box-shadow:0 0 6px var(--green)}
+.status-label{font-size:12px;color:var(--muted)}
+.open-btn{font-size:12px;padding:5px 12px;border-radius:6px;border:0.5px solid var(--border);background:transparent;color:var(--accent);cursor:pointer;transition:all .15s}
+.open-btn:hover{background:#1e3a5f;border-color:var(--accent)}
+.refresh-btn{font-size:12px;padding:5px 12px;border-radius:6px;border:0.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.refresh-btn:hover{color:var(--text);border-color:#3d4260}
+
+.container{max-width:1200px;margin:0 auto;padding:1.5rem}
+
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:1.5rem}
+.stat{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:.75rem 1rem;text-align:center}
+.stat-value{font-size:26px;font-weight:700;line-height:1;margin-bottom:4px}
+.stat-label{font-size:11px;color:var(--muted)}
+.stat-value.green{color:var(--green)}
+.stat-value.red{color:var(--red)}
+.stat-value.amber{color:var(--amber)}
+.stat-value.purple{color:var(--purple)}
+.stat-value.blue{color:var(--accent)}
+
+/* two-col */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+
+.panel{background:var(--card);border:0.5px solid var(--border);border-radius:12px;overflow:hidden}
+.panel-header{display:flex;align-items:center;justify-content:space-between;padding:.875rem 1.125rem;border-bottom:0.5px solid var(--border)}
+.panel-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+.panel-count{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--surface);color:var(--muted);border:0.5px solid var(--border)}
+.panel-body{max-height:480px;overflow-y:auto}
+
+/* workflow list */
+.wf-item{display:flex;align-items:center;gap:10px;padding:.75rem 1.125rem;border-bottom:0.5px solid var(--border);transition:background .1s;cursor:default}
+.wf-item:last-child{border-bottom:none}
+.wf-item:hover{background:#1f2235}
+.wf-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.wf-dot.active{background:var(--green)}
+.wf-dot.inactive{background:#475569}
+.wf-info{flex:1;min-width:0}
+.wf-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.wf-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.wf-badge{font-size:10px;padding:2px 7px;border-radius:20px;font-weight:500;flex-shrink:0}
+.wf-badge.active{background:var(--green-dim);color:var(--green)}
+.wf-badge.inactive{background:#1e293b;color:#475569}
+
+/* execution list */
+.ex-item{display:flex;align-items:center;gap:10px;padding:.75rem 1.125rem;border-bottom:0.5px solid var(--border);transition:background .1s}
+.ex-item:last-child{border-bottom:none}
+.ex-item:hover{background:#1f2235}
+.ex-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.ex-icon.success{background:var(--green-dim)}
+.ex-icon.error,.ex-icon.failed{background:var(--red-dim)}
+.ex-icon.running{background:var(--amber-dim)}
+.ex-icon.waiting{background:#1e293b}
+.ex-info{flex:1;min-width:0}
+.ex-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.ex-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.ex-status{font-size:10px;padding:2px 7px;border-radius:20px;font-weight:500;flex-shrink:0}
+.ex-status.success{background:var(--green-dim);color:var(--green)}
+.ex-status.error,.ex-status.failed{background:var(--red-dim);color:var(--red)}
+.ex-status.running{background:var(--amber-dim);color:var(--amber)}
+.ex-status.waiting{background:#1e293b;color:#475569}
+
+/* filters */
+.filter-row{display:flex;gap:6px;padding:.75rem 1.125rem;border-bottom:0.5px solid var(--border)}
+.filter-btn{font-size:11px;padding:3px 10px;border-radius:20px;border:0.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.filter-btn:hover:not(.active){border-color:#3d4260;color:var(--text)}
+
+/* empty */
+.empty{padding:2rem;text-align:center;color:var(--muted);font-size:13px}
+
+/* loading */
+.loading{display:flex;align-items:center;justify-content:center;padding:3rem;color:var(--muted);font-size:13px;gap:8px}
+.spin{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.error-box{margin:1.5rem;background:var(--red-dim);border:0.5px solid #5a1a1a;border-radius:10px;padding:1rem;font-size:13px;color:var(--red)}
+
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+@media(max-width:800px){.two-col{grid-template-columns:1fr}.stats{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <a class="back-btn" href="/">← Dashboard</a>
+    <div class="svc-icon">⚡</div>
+    <div>
+      <div class="svc-name">n8n Automation</div>
+      <div class="svc-url">n8n-home.home-server.id.vn</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="status-dot online" id="statusDot"></div>
+    <span class="status-label" id="statusLabel">Online</span>
+    <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
+    <a class="open-btn" href="https://n8n-home.home-server.id.vn" target="_blank" rel="noopener">↗ Mở n8n</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Stats -->
+  <div class="stats" id="stats">
+    <div class="stat"><div class="stat-value blue" id="st-total">—</div><div class="stat-label">Workflows</div></div>
+    <div class="stat"><div class="stat-value green" id="st-active">—</div><div class="stat-label">Active</div></div>
+    <div class="stat"><div class="stat-value" id="st-inactive">—</div><div class="stat-label">Inactive</div></div>
+    <div class="stat"><div class="stat-value green" id="st-success">—</div><div class="stat-label">Runs OK</div></div>
+    <div class="stat"><div class="stat-value red" id="st-failed">—</div><div class="stat-label">Runs Failed</div></div>
+    <div class="stat"><div class="stat-value amber" id="st-running">—</div><div class="stat-label">Running</div></div>
+  </div>
+
+  <div class="two-col">
+
+    <!-- Workflows -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">⚡ Workflows <span class="panel-count" id="wfCount">—</span></div>
+      </div>
+      <div class="filter-row">
+        <button class="filter-btn active" onclick="filterWf('all',this)">Tất cả</button>
+        <button class="filter-btn" onclick="filterWf('active',this)">Active</button>
+        <button class="filter-btn" onclick="filterWf('inactive',this)">Inactive</button>
+      </div>
+      <div class="panel-body" id="wfList">
+        <div class="loading"><div class="spin"></div>Đang tải...</div>
+      </div>
+    </div>
+
+    <!-- Executions -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">📋 Lịch sử chạy <span class="panel-count" id="exCount">—</span></div>
+      </div>
+      <div class="filter-row">
+        <button class="filter-btn active" onclick="filterEx('all',this)">Tất cả</button>
+        <button class="filter-btn" onclick="filterEx('success',this)">OK</button>
+        <button class="filter-btn" onclick="filterEx('error',this)">Lỗi</button>
+        <button class="filter-btn" onclick="filterEx('running',this)">Running</button>
+      </div>
+      <div class="panel-body" id="exList">
+        <div class="loading"><div class="spin"></div>Đang tải...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+var allWorkflows = [];
+var allExecutions = [];
+var wfFilter = 'all';
+var exFilter = 'all';
+
+function timeAgo(iso) {
+  if (!iso) return '—';
+  var diff = Date.now() - new Date(iso).getTime();
+  var m = Math.floor(diff/60000);
+  if (m < 1)  return 'vừa xong';
+  if (m < 60) return m + ' phút trước';
+  var h = Math.floor(m/60);
+  if (h < 24) return h + ' giờ trước';
+  return Math.floor(h/24) + ' ngày trước';
+}
+
+function duration(start, end) {
+  if (!start || !end) return '';
+  var ms = new Date(end) - new Date(start);
+  if (ms < 1000) return ms+'ms';
+  if (ms < 60000) return (ms/1000).toFixed(1)+'s';
+  return Math.floor(ms/60000)+'m '+(Math.floor(ms/1000)%60)+'s';
+}
+
+function renderWorkflows() {
+  var list = allWorkflows.filter(function(w) {
+    if (wfFilter === 'active')   return w.active;
+    if (wfFilter === 'inactive') return !w.active;
+    return true;
+  });
+  document.getElementById('wfCount').textContent = list.length;
+  if (!list.length) { document.getElementById('wfList').innerHTML = '<div class="empty">Không có workflow nào</div>'; return; }
+  document.getElementById('wfList').innerHTML = list.map(function(w) {
+    var cls = w.active ? 'active' : 'inactive';
+    var label = w.active ? 'Active' : 'Inactive';
+    var tags = (w.tags||[]).slice(0,2).map(function(t){ return '<span style="font-size:10px;padding:1px 5px;border-radius:4px;background:var(--surface);color:var(--muted);margin-right:3px">'+t+'</span>'; }).join('');
+    return '<div class="wf-item">'
+      +'<div class="wf-dot '+cls+'"></div>'
+      +'<div class="wf-info">'
+        +'<div class="wf-name">'+w.name+'</div>'
+        +'<div class="wf-meta">'+tags+'Cập nhật '+timeAgo(w.updatedAt)+'</div>'
+      +'</div>'
+      +'<span class="wf-badge '+cls+'">'+label+'</span>'
+    +'</div>';
+  }).join('');
+}
+
+function renderExecutions() {
+  var list = allExecutions.filter(function(e) {
+    if (exFilter === 'all') return true;
+    if (exFilter === 'error') return e.status === 'error' || e.status === 'failed';
+    return e.status === exFilter;
+  });
+  document.getElementById('exCount').textContent = list.length;
+  if (!list.length) { document.getElementById('exList').innerHTML = '<div class="empty">Không có execution nào</div>'; return; }
+
+  var icons = { success:'✓', error:'✗', failed:'✗', running:'…', waiting:'⏸' };
+  document.getElementById('exList').innerHTML = list.map(function(e) {
+    var st = (e.status === 'failed') ? 'error' : e.status;
+    var icon = icons[st] || '?';
+    var dur = duration(e.startedAt, e.stoppedAt);
+    return '<div class="ex-item">'
+      +'<div class="ex-icon '+st+'">'+icon+'</div>'
+      +'<div class="ex-info">'
+        +'<div class="ex-name">'+e.workflowName+'</div>'
+        +'<div class="ex-meta">'+timeAgo(e.startedAt)+(dur?' · '+dur:'')+(e.mode?' · '+e.mode:'')+'</div>'
+      +'</div>'
+      +'<span class="ex-status '+st+'">'+e.status+'</span>'
+    +'</div>';
+  }).join('');
+}
+
+function filterWf(f, btn) {
+  wfFilter = f;
+  document.querySelectorAll('.filter-row')[0].querySelectorAll('.filter-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  renderWorkflows();
+}
+
+function filterEx(f, btn) {
+  exFilter = f;
+  document.querySelectorAll('.filter-row')[1].querySelectorAll('.filter-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  renderExecutions();
+}
+
+function loadData() {
+  document.getElementById('wfList').innerHTML = '<div class="loading"><div class="spin"></div>Đang tải...</div>';
+  document.getElementById('exList').innerHTML = '<div class="loading"><div class="spin"></div>Đang tải...</div>';
+
+  fetch('/api/n8n', { cache: 'no-store' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) {
+        var msg = '<div class="error-box">⚠ Lỗi: '+data.error+'</div>';
+        document.getElementById('wfList').innerHTML = msg;
+        document.getElementById('exList').innerHTML = msg;
+        return;
+      }
+
+      var s = data.stats || {};
+      document.getElementById('st-total').textContent   = s.total   || 0;
+      document.getElementById('st-active').textContent  = s.active  || 0;
+      document.getElementById('st-inactive').textContent= s.inactive|| 0;
+      document.getElementById('st-success').textContent = s.success || 0;
+      document.getElementById('st-failed').textContent  = s.failed  || 0;
+      document.getElementById('st-running').textContent = s.running || 0;
+
+      allWorkflows  = data.workflows  || [];
+      allExecutions = data.executions || [];
+      document.getElementById('wfCount').textContent = allWorkflows.length;
+      document.getElementById('exCount').textContent = allExecutions.length;
+
+      renderWorkflows();
+      renderExecutions();
+    })
+    .catch(function(e) {
+      var msg = '<div class="error-box">⚠ Không kết nối được API: '+e.message+'</div>';
+      document.getElementById('wfList').innerHTML = msg;
+      document.getElementById('exList').innerHTML = msg;
+      document.getElementById('statusDot').className = 'status-dot offline';
+      document.getElementById('statusLabel').textContent = 'Lỗi';
+    });
+}
+
+loadData();
+setInterval(loadData, 60000);
+</script>
+</body>
+</html>
