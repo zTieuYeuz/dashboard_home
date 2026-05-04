@@ -55,9 +55,14 @@ async function handleN8n(env) {
       tags: (w.tags || []).map(t => t.name || t),
     }));
 
+    // map id -> name để tra cứu nhanh
+    const wfNameMap = {};
+    workflows.forEach(w => { wfNameMap[w.id] = w.name; });
+
     const executions = (exData.data || []).map(e => ({
       id: e.id,
-      workflowName: e.workflowData?.name || '—',
+      workflowName: wfNameMap[e.workflowId] || e.workflowData?.name || '(không rõ)',
+      workflowId: e.workflowId,
       status: e.status,
       startedAt: e.startedAt,
       stoppedAt: e.stoppedAt,
