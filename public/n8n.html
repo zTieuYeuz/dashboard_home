@@ -91,6 +91,19 @@ a{color:inherit;text-decoration:none}
 .filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .filter-btn:hover:not(.active){border-color:#3d4260;color:var(--text)}
 
+/* clickable rows */
+.wf-item.clickable,.ex-item.clickable{cursor:pointer}
+.wf-item.clickable:hover,.ex-item.clickable:hover{background:#1f2235}
+.ex-item.is-error{border-left:2px solid var(--red)}
+.ex-item.is-running{border-left:2px solid var(--amber)}
+
+/* id badge */
+.id-badge{font-size:10px;font-family:monospace;color:var(--muted);background:var(--surface);padding:1px 5px;border-radius:4px;border:0.5px solid var(--border);flex-shrink:0}
+
+/* open link */
+.open-link{font-size:11px;color:var(--accent);opacity:0;transition:opacity .15s;white-space:nowrap;flex-shrink:0}
+.ex-item:hover .open-link,.wf-item:hover .open-link{opacity:1}
+
 /* empty */
 .empty{padding:2rem;text-align:center;color:var(--muted);font-size:13px}
 
@@ -205,17 +218,21 @@ function renderWorkflows() {
   });
   document.getElementById('wfCount').textContent = list.length;
   if (!list.length) { document.getElementById('wfList').innerHTML = '<div class="empty">Không có workflow nào</div>'; return; }
+  var n8nBase = 'https://n8n-home.home-server.id.vn';
   document.getElementById('wfList').innerHTML = list.map(function(w) {
     var cls = w.active ? 'active' : 'inactive';
     var label = w.active ? 'Active' : 'Inactive';
     var tags = (w.tags||[]).slice(0,2).map(function(t){ return '<span style="font-size:10px;padding:1px 5px;border-radius:4px;background:var(--surface);color:var(--muted);margin-right:3px">'+t+'</span>'; }).join('');
-    return '<div class="wf-item">'
+    var wfUrl = n8nBase+'/workflow/'+w.id;
+    return '<div class="wf-item clickable" onclick="window.open(\''+wfUrl+'\',\'_blank\',\'noopener\')">'
       +'<div class="wf-dot '+cls+'"></div>'
       +'<div class="wf-info">'
         +'<div class="wf-name">'+w.name+'</div>'
         +'<div class="wf-meta">'+tags+'Cập nhật '+timeAgo(w.updatedAt)+'</div>'
       +'</div>'
-      +'<span class="wf-badge '+cls+'">'+label+'</span>'
+      +'<span class="id-badge">#'+w.id+'</span>'
+      +'<span class="wf-badge '+cls+'" style="margin-left:6px">'+label+'</span>'
+      +'<span class="open-link" style="margin-left:6px">↗</span>'
     +'</div>';
   }).join('');
 }
@@ -229,18 +246,26 @@ function renderExecutions() {
   document.getElementById('exCount').textContent = list.length;
   if (!list.length) { document.getElementById('exList').innerHTML = '<div class="empty">Không có execution nào</div>'; return; }
 
+  var n8nBase = 'https://n8n-home.home-server.id.vn';
   var icons = { success:'✓', error:'✗', failed:'✗', running:'…', waiting:'⏸' };
   document.getElementById('exList').innerHTML = list.map(function(e) {
     var st = (e.status === 'failed') ? 'error' : e.status;
     var icon = icons[st] || '?';
     var dur = duration(e.startedAt, e.stoppedAt);
-    return '<div class="ex-item">'
+    var exUrl = n8nBase+'/workflow/'+e.workflowId+'/executions/'+e.id;
+    var borderCls = (st==='error') ? 'is-error' : (st==='running') ? 'is-running' : '';
+    var linkLabel = (st==='error') ? '↗ Xem lỗi' : '↗ Xem';
+    return '<div class="ex-item clickable '+borderCls+'" onclick="window.open(\''+exUrl+'\',\'_blank\',\'noopener\')">'
       +'<div class="ex-icon '+st+'">'+icon+'</div>'
       +'<div class="ex-info">'
         +'<div class="ex-name">'+e.workflowName+'</div>'
-        +'<div class="ex-meta">'+timeAgo(e.startedAt)+(dur?' · '+dur:'')+(e.mode?' · '+e.mode:'')+'</div>'
+        +'<div class="ex-meta">'
+          +'<span class="id-badge" style="margin-right:5px">#'+e.id+'</span>'
+          +timeAgo(e.startedAt)+(dur?' · <b>'+dur+'</b>':'')+(e.mode?' · '+e.mode:'')
+        +'</div>'
       +'</div>'
       +'<span class="ex-status '+st+'">'+e.status+'</span>'
+      +'<span class="open-link" style="margin-left:6px">'+linkLabel+'</span>'
     +'</div>';
   }).join('');
 }
