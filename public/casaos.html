@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CasaOS Dashboard</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+:root {
+  --bg: #09090b; --surface: #18181b; --card: #18181b; --border: #27272a;
+  --text: #f4f4f5; --muted: #a1a1aa; --accent: #60a5fa; --amber: #f59e0b;
+}
+body { background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; display: flex; flex-direction: column; }
+a { color: inherit; text-decoration: none; }
+
+.header {
+  background: rgba(24, 24, 27, 0.8); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border); padding: 0 2rem; height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-btn {
+  width: 32px; height: 32px; border-radius: 8px; background: #27272a;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s;
+}
+.back-btn:hover { background: #3f3f46; }
+.title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+
+.container { flex: 1; display: flex; flex-direction: column; padding: 2rem; max-width: 1400px; margin: 0 auto; width: 100%; gap: 24px; }
+
+.main-frame {
+  flex: 1; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  background: var(--surface); display: flex; align-items: center; justify-content: center;
+  min-height: calc(100vh - 200px);
+}
+
+iframe { width: 100%; height: 100%; border: none; display: none; }
+
+.local-warning {
+  text-align: center; max-width: 400px; padding: 2rem;
+}
+.local-icon { font-size: 48px; margin-bottom: 16px; }
+.local-title { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+.local-desc { color: var(--muted); font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
+.btn-direct {
+  display: inline-block; padding: 10px 20px; background: var(--accent); color: #fff;
+  border-radius: 8px; font-weight: 500; font-size: 14px; transition: opacity 0.2s;
+}
+.btn-direct:hover { opacity: 0.9; }
+
+.footer { text-align: center; padding: 2rem; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <a href="/" class="back-btn">←</a>
+    <div class="title"><span>🏠</span> CasaOS Local Dashboard</div>
+  </div>
+  <div><span style="font-size: 13px; color: var(--muted);">IP: 192.168.110.21:4434</span></div>
+</header>
+
+<div class="container">
+  <div class="main-frame">
+    <iframe id="casaFrame" src="http://192.168.110.21:4434" allow="fullscreen"></iframe>
+    <div class="local-warning" id="localWarning">
+      <div class="local-icon">🏠</div>
+      <div class="local-title">LAN Only Access</div>
+      <div class="local-desc">CasaOS đang chạy ở dải IP nội bộ. Khung nhúng (iframe) có thể bị chặn bởi trình duyệt nếu bạn đang truy cập dashboard qua HTTPS (Mixed Content).</div>
+      <a href="http://192.168.110.21:4434" target="_blank" class="btn-direct">Mở CasaOS Tự Động ↗</a>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">Home Lab Dashboard · Local Service</footer>
+
+<script>
+  // Chặn HTTP nhúng vào HTTPS - Hiển thị fallback hoặc chạy iframe
+  if (window.location.protocol === 'https:') {
+    document.getElementById('casaFrame').style.display = 'none';
+    document.getElementById('localWarning').style.display = 'block';
+  } else {
+    document.getElementById('casaFrame').style.display = 'block';
+    document.getElementById('localWarning').style.display = 'none';
+  }
+</script>
+
+</body>
+</html>
