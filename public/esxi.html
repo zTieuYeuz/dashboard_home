@@ -103,6 +103,12 @@ a{color:inherit;text-decoration:none}
 .err-banner{margin:1rem;background:var(--red-dim);border:0.5px solid #5a1a1a;border-radius:8px;padding:.875rem 1rem;font-size:13px;color:#f87171}
 .warn-banner{margin:1rem;background:var(--amber-dim);border:0.5px solid #5a3a00;border-radius:8px;padding:.75rem 1rem;font-size:12px;color:var(--amber)}
 
+/* Power actions */
+.power-actions{display:flex;gap:4px;margin-top:6px}
+.btn-power{background:var(--border);border:none;color:var(--text);border-radius:4px;padding:3px 6px;font-size:11px;cursor:pointer;opacity:0.8}
+.btn-power:hover{opacity:1;background:var(--surface)}
+.btn-power:disabled{opacity:0.4;cursor:not-allowed}
+
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 @media(max-width:900px){
   .layout{grid-template-columns:1fr}
@@ -181,6 +187,7 @@ a{color:inherit;text-decoration:none}
             <thead><tr>
               <th>VM Name</th>
               <th>State</th>
+              <th>Actions</th>
               <th>OS</th>
               <th>CPU</th>
               <th>Memory</th>
@@ -189,7 +196,7 @@ a{color:inherit;text-decoration:none}
               <th>Uptime</th>
             </tr></thead>
             <tbody id="vmTableBody">
-              <tr><td colspan="8"><div class="loading"><div class="spin"></div>Đang tải...</div></td></tr>
+              <tr><td colspan="9"><div class="loading"><div class="spin"></div>Đang tải...</div></td></tr>
             </tbody>
           </table>
         </div>
@@ -324,7 +331,7 @@ function renderVMs() {
   document.getElementById('vmCount').textContent = list.length + '/' + allVMs.length;
 
   if (!list.length) {
-    document.getElementById('vmTableBody').innerHTML = '<tr><td colspan="8"><div class="empty">Không tìm thấy VM</div></td></tr>';
+    document.getElementById('vmTableBody').innerHTML = '<tr><td colspan="9"><div class="empty">Không tìm thấy VM</div></td></tr>';
     return;
   }
 
@@ -341,11 +348,22 @@ function renderVMs() {
 
     var uptimeTxt = ps === 'poweredOn' ? timeAgo(v.bootTime) : '—';
 
+    // Power actions UI
+    var actions = '';
+    if (ps === 'poweredOff' || ps === 'suspended') {
+      actions += '<button class="btn-power" style="color:var(--green)" onclick="doPower(\'' + v.id + '\', \'' + (v.name||'') + '\', \'powerOn\')">▶ Bật</button>';
+    } else {
+      actions += '<button class="btn-power" style="color:var(--amber)" onclick="doPower(\'' + v.id + '\', \'' + (v.name||'') + '\', \'suspend\')">⏸ Suspend</button>';
+      actions += '<button class="btn-power" style="color:var(--red)" onclick="doPower(\'' + v.id + '\', \'' + (v.name||'') + '\', \'powerOff\')">■ Tắt (Force)</button>';
+      actions += '<button class="btn-power" style="color:var(--purple)" onclick="doPower(\'' + v.id + '\', \'' + (v.name||'') + '\', \'reset\')">🔄 Reset</button>';
+    }
+
     return '<tr>'
       + '<td><div class="vm-name">' + (v.name || '—') + '</div>'
         + (v.annotation ? '<div class="vm-sub" title="' + v.annotation + '">' + v.annotation + '</div>' : '')
       + '</td>'
       + '<td><span class="power-badge ' + badgeCls + '">' + badgeTxt + '</span></td>'
+      + '<td><div class="power-actions">' + actions + '</div></td>'
       + '<td><div style="font-size:11px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (v.guestOS || '') + '">' + (v.guestOS || '—') + '</div></td>'
       + '<td>' + (v.numCPU ? v.numCPU + ' vCPU' : '—') + (ps === 'poweredOn' ? '<br>' + cpuBar : '') + '</td>'
       + '<td>' + (ps === 'poweredOn' ? memBar : fmtMem(v.memoryMB)) + '</td>'
@@ -354,6 +372,40 @@ function renderVMs() {
       + '<td style="color:var(--muted);font-size:11px">' + uptimeTxt + '</td>'
     + '</tr>';
   }).join('');
+}
+
+/* ── VM Power Action ── */
+function doPower(vmId, vmName, action) {
+  var actionTexts = {
+    'powerOn': 'Bật',
+    'powerOff': 'Tắt (Force Off)',
+    'suspend': 'Suspend',
+    'reset': 'Reset'
+  };
+  if (!confirm('Bạn có chắc muốn ' + actionTexts[action] + ' VM "' + vmName + '"?')) return;
+
+  var btns = document.querySelectorAll('.btn-power');
+  btns.forEach(function(b) { b.disabled = true; });
+
+  fetch('/api/esxi/power', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ vmId: vmId, action: action })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(res) {
+    if (res.error || !res.success) alert('Lỗi: ' + (res.error || 'Unknown error'));
+    else {
+      // Đợi task API 1 tí rồi reload host data
+      setTimeout(loadData, 1000);
+    }
+  })
+  .catch(function(e) {
+    alert('Lỗi gửi request: ' + e.message);
+  })
+  .finally(function() {
+    btns.forEach(function(b) { b.disabled = false; });
+  });
 }
 
 /* ── Load data ── */
