@@ -498,57 +498,6 @@ async function handleESXi(env) {
   }
 }
 
-async function handleESXiDebug(env) {
-  const user = env.ESXI_USER;
-  const pass = env.ESXI_PASSWORD;
-  if (!user || !pass) return json({ error: 'no creds' }, 500);
-
-  const { text: svcText } = await esxiSoap(
-    '<RetrieveServiceContent xmlns="urn:vim25">' +
-    '<_this type="ServiceInstance">ServiceInstance</_this>' +
-    '</RetrieveServiceContent>'
-  );
-  const smRef = x1(svcText, 'sessionManager') || 'ha-sessionmanager';
-  const loginBody =
-    '<Login xmlns="urn:vim25">' +
-    '<_this type="SessionManager">' + escXml(smRef) + '</_this>' +
-    '<userName>' + escXml(user) + '</userName>' +
-    '<password>' + escXml(pass) + '</password>' +
-    '</Login>';
-  const { text: loginText, cookie } = await esxiSoap(loginBody);
-  if (!cookie) return json({ error: 'no cookie', loginSnippet: loginText.slice(0, 400) }, 500);
-
-  const hostBody = `<RetrievePropertiesEx xmlns="urn:vim25">
-<_this type="PropertyCollector">ha-property-collector</_this>
-<specSet>
-  <propSet><type>HostSystem</type>
-    <pathSet>summary.config.name</pathSet>
-    <pathSet>summary.hardware.memorySize</pathSet>
-    <pathSet>summary.hardware.cpuModel</pathSet>
-    <pathSet>summary.hardware.numCpuCores</pathSet>
-    <pathSet>summary.hardware.numCpuThreads</pathSet>
-    <pathSet>summary.hardware.cpuMhz</pathSet>
-    <pathSet>summary.quickStats.overallCpuUsage</pathSet>
-    <pathSet>summary.quickStats.overallMemoryUsage</pathSet>
-    <pathSet>summary.runtime.connectionState</pathSet>
-    <pathSet>summary.overallStatus</pathSet>
-  </propSet>
-  <objectSet><obj type="HostSystem">ha-host</obj></objectSet>
-</specSet><options/></RetrievePropertiesEx>`;
-
-  const { text: hostText } = await esxiSoap(hostBody, cookie);
-  esxiSoap('<Logout xmlns="urn:vim25"><_this type="SessionManager">ha-sessionmanager</_this></Logout>', cookie).catch(() => {});
-
-  // return raw snippet + parsed objects count
-  const objs = xAll(hostText, 'objects');
-  return json({
-    rawSnippet: hostText.slice(0, 2000),
-    objectsFound: objs.length,
-    firstObjSnippet: objs[0] ? objs[0].slice(0, 800) : null,
-    propSetsInFirst: objs[0] ? xAll(objs[0], 'propSet').length : 0,
-  });
-}
-
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -564,7 +513,6 @@ export default {
     if (url.pathname === '/api/n8n/exec')    return handleExecDetail(request, env);
     if (url.pathname === '/api/9router')     return handle9Router();
     if (url.pathname === '/api/esxi')        return handleESXi(env);
-    if (url.pathname === '/api/esxi/debug')  return handleESXiDebug(env);
     return env.ASSETS.fetch(request);
   },
 };
