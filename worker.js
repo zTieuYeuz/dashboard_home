@@ -220,6 +220,282 @@ async function handle9Router() {
 }
 
 /* ═══════════════════════════════════════════════
+   ESXi — SOAP-based (works on free ESXi 8.0)
+   ═══════════════════════════════════════════════ */
+
+function escXml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Extract first match of <tag>...</tag> (non-greedy) — handle namespace prefixes
+function x1(text, tag) {
+  const m = text.match(new RegExp('<(?:[a-zA-Z0-9_]+:)?' + tag + '[^>]*>([\\s\\S]*?)</(?:[a-zA-Z0-9_]+:)?' + tag + '>'));
+  return m ? m[1].trim() : '';
+}
+
+// Extract ALL matches of <tag>...</tag> — handle namespace prefixes
+function xAll(text, tag) {
+  const re = new RegExp('<(?:[a-zA-Z0-9_]+:)?' + tag + '[^>]*>([\\s\\S]*?)</(?:[a-zA-Z0-9_]+:)?' + tag + '>', 'g');
+  const out = []; let m;
+  while ((m = re.exec(text)) !== null) out.push(m[1]);
+  return out;
+}
+
+// Build key→value map from <propSet> blocks inside one <objects> block
+function parsePropSets(objXml) {
+  const props = {};
+  for (const ps of xAll(objXml, 'propSet')) {
+    const name = x1(ps, 'name');
+    const val  = x1(ps, 'val');
+    if (name) props[name] = val;
+  }
+  return props;
+}
+
+// Wrap body in SOAP Envelope and POST to /sdk
+async function esxiSoap(bodyXml, cookie = '') {
+  const headers = {
+    'Content-Type': 'text/xml; charset=UTF-8',
+    'SOAPAction': '"urn:vim25/8.0"',
+  };
+  if (cookie) headers['Cookie'] = cookie;
+
+  const envelope = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"',
+    ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
+    '<soapenv:Body>', bodyXml, '</soapenv:Body></soapenv:Envelope>',
+  ].join('');
+
+  const res = await fetch(ESXI_SDK, {
+    method: 'POST', headers, body: envelope,
+    signal: AbortSignal.timeout(15000),
+  });
+  const text = await res.text();
+  const sc   = res.headers.get('set-cookie') || '';
+  const ck   = (sc.match(/vmware_soap_session[^;]+/) || [''])[0];
+  return { text, cookie: ck, ok: res.ok };
+}
+
+async function handleESXi(env) {
+  const user = env.ESXI_USER;
+  const pass = env.ESXI_PASSWORD;
+
+  // ── Step 1: basic info, no auth ──
+  const { text: svcText } = await esxiSoap(
+    '<RetrieveServiceContent xmlns="urn:vim25">' +
+    '<_this type="ServiceInstance">ServiceInstance</_this>' +
+    '</RetrieveServiceContent>'
+  );
+  const about = {
+    fullName:   x1(svcText, 'fullName'),
+    version:    x1(svcText, 'version'),
+    build:      x1(svcText, 'build'),
+    apiVersion: x1(svcText, 'apiVersion'),
+  };
+
+  if (!user || !pass) {
+    return json({ about, host: null, vms: [], datastores: [], stats: {}, error: 'ESXI_USER / ESXI_PASSWORD not configured' });
+  }
+
+  // ── Step 2: login ──
+  const smRef = x1(svcText, 'sessionManager') || 'ha-sessionmanager';
+
+  const loginBody =
+    '<Login xmlns="urn:vim25">' +
+    '<_this type="SessionManager">' + escXml(smRef) + '</_this>' +
+    '<userName>' + escXml(user) + '</userName>' +
+    '<password>' + escXml(pass) + '</password>' +
+    '</Login>';
+
+  const { text: loginText, cookie, ok: loginOk } = await esxiSoap(loginBody);
+
+  let sessionToken = null;
+  if (!cookie || loginText.includes('Fault>')) {
+    try {
+      const b64 = btoa(user + ':' + pass);
+      const restRes = await fetch('https://esxi.home-server.id.vn/api/session', {
+        method: 'POST',
+        headers: { 'Authorization': 'Basic ' + b64, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (restRes.ok) {
+        const tok = await restRes.json();
+        sessionToken = typeof tok === 'string' ? tok : null;
+      }
+    } catch (_) {}
+  }
+
+  if (!cookie && !sessionToken) {
+    const msg = x1(loginText, 'localizedMessage') || x1(loginText, 'faultstring') || 'Login failed';
+    return json({
+      about, host: null, vms: [], datastores: [], stats: {},
+      error: msg || 'Login failed',
+      _debug: { loginOk, hasCookie: !!cookie, loginSnippet: loginText.slice(0, 600) }
+    });
+  }
+
+  // ── Step 3: fetch host, VMs, datastores in parallel ──
+  const hostBody = `<RetrievePropertiesEx xmlns="urn:vim25">
+<_this type="PropertyCollector">ha-property-collector</_this>
+<specSet>
+  <propSet><type>HostSystem</type>
+    <pathSet>summary.config.name</pathSet>
+    <pathSet>summary.hardware.memorySize</pathSet>
+    <pathSet>summary.hardware.cpuModel</pathSet>
+    <pathSet>summary.hardware.numCpuCores</pathSet>
+    <pathSet>summary.hardware.numCpuThreads</pathSet>
+    <pathSet>summary.hardware.cpuMhz</pathSet>
+    <pathSet>summary.quickStats.overallCpuUsage</pathSet>
+    <pathSet>summary.quickStats.overallMemoryUsage</pathSet>
+    <pathSet>summary.runtime.connectionState</pathSet>
+    <pathSet>summary.overallStatus</pathSet>
+  </propSet>
+  <objectSet><obj type="HostSystem">ha-host</obj></objectSet>
+</specSet><options/></RetrievePropertiesEx>`;
+
+  const vmBody = `<RetrievePropertiesEx xmlns="urn:vim25">
+<_this type="PropertyCollector">ha-property-collector</_this>
+<specSet>
+  <propSet><type>VirtualMachine</type>
+    <pathSet>name</pathSet>
+    <pathSet>runtime.powerState</pathSet>
+    <pathSet>config.hardware.numCPU</pathSet>
+    <pathSet>config.hardware.memoryMB</pathSet>
+    <pathSet>guest.ipAddress</pathSet>
+    <pathSet>guest.hostName</pathSet>
+    <pathSet>guest.guestFullName</pathSet>
+    <pathSet>summary.quickStats.overallCpuUsage</pathSet>
+    <pathSet>summary.quickStats.guestMemoryUsage</pathSet>
+    <pathSet>summary.storage.committed</pathSet>
+    <pathSet>summary.runtime.bootTime</pathSet>
+    <pathSet>config.annotation</pathSet>
+  </propSet>
+  <objectSet>
+    <obj type="HostSystem">ha-host</obj>
+    <selectSet xsi:type="TraversalSpec">
+      <type>HostSystem</type><path>vm</path><skip>false</skip>
+    </selectSet>
+  </objectSet>
+</specSet><options><maxObjects>100</maxObjects></options></RetrievePropertiesEx>`;
+
+  const dsBody = `<RetrievePropertiesEx xmlns="urn:vim25">
+<_this type="PropertyCollector">ha-property-collector</_this>
+<specSet>
+  <propSet><type>Datastore</type>
+    <pathSet>name</pathSet>
+    <pathSet>summary.capacity</pathSet>
+    <pathSet>summary.freeSpace</pathSet>
+    <pathSet>summary.type</pathSet>
+    <pathSet>summary.accessible</pathSet>
+    <pathSet>summary.url</pathSet>
+  </propSet>
+  <objectSet>
+    <obj type="HostSystem">ha-host</obj>
+    <selectSet xsi:type="TraversalSpec">
+      <type>HostSystem</type><path>datastore</path><skip>false</skip>
+    </selectSet>
+  </objectSet>
+</specSet><options/></RetrievePropertiesEx>`;
+
+  try {
+    const [hostRes, vmRes, dsRes] = await Promise.all([
+      esxiSoap(hostBody, cookie),
+      esxiSoap(vmBody,   cookie),
+      esxiSoap(dsBody,   cookie),
+    ]);
+
+    // ── Parse host ──
+    let host = null;
+    for (const obj of xAll(hostRes.text, 'objects')) {
+      const p = parsePropSets(obj);
+      const totalMhz = parseInt(p['summary.hardware.numCpuCores'] || 0)
+                     * parseInt(p['summary.hardware.cpuMhz'] || 0);
+      const cpuUsed  = parseInt(p['summary.quickStats.overallCpuUsage'] || 0);
+      const memTotal = parseInt(p['summary.hardware.memorySize'] || 0);
+      const memUsed  = parseInt(p['summary.quickStats.overallMemoryUsage'] || 0);
+      host = {
+        name: p['summary.config.name'],
+        cpuModel: p['summary.hardware.cpuModel'],
+        numCpuCores: parseInt(p['summary.hardware.numCpuCores'] || 0),
+        numCpuThreads: parseInt(p['summary.hardware.numCpuThreads'] || 0),
+        cpuMhz: parseInt(p['summary.hardware.cpuMhz'] || 0),
+        totalCpuMhz: totalMhz,
+        usedCpuMhz: cpuUsed,
+        cpuPct: totalMhz > 0 ? Math.round(cpuUsed / totalMhz * 100) : 0,
+        memTotalMB: Math.round(memTotal / 1048576),
+        memUsedMB: memUsed,
+        memPct: memTotal > 0 ? Math.round(memUsed / (memTotal / 1048576) * 100) : 0,
+        connectionState: p['summary.runtime.connectionState'],
+        overallStatus: p['summary.overallStatus'],
+      };
+    }
+
+    // ── Parse VMs ──
+    const vms = [];
+    for (const obj of xAll(vmRes.text, 'objects')) {
+      if (!obj.includes('type="VirtualMachine"')) continue;
+      const moId = x1(obj, 'obj');
+      const p    = parsePropSets(obj);
+      const cpuMhz = parseInt(p['summary.quickStats.overallCpuUsage'] || 0);
+      const cpuPct = host && host.cpuMhz > 0
+        ? Math.round(cpuMhz / host.cpuMhz * 100) : 0;
+      const memMB  = parseInt(p['config.hardware.memoryMB'] || 0);
+      const memUsed= parseInt(p['summary.quickStats.guestMemoryUsage'] || 0);
+      vms.push({
+        id: moId,
+        name: p['name'] || '(unnamed)',
+        powerState: p['runtime.powerState'],
+        numCPU: parseInt(p['config.hardware.numCPU'] || 0),
+        memoryMB: memMB,
+        ipAddress: p['guest.ipAddress'] || null,
+        hostName: p['guest.hostName'] || null,
+        guestOS: p['guest.guestFullName'] || null,
+        cpuUsageMhz: cpuMhz,
+        cpuPct: Math.min(cpuPct, 100),
+        memUsedMB: memUsed,
+        memPct: memMB > 0 ? Math.round(memUsed / memMB * 100) : 0,
+        storageGB: Math.round(parseInt(p['summary.storage.committed'] || 0) / 1073741824 * 10) / 10,
+        bootTime: p['summary.runtime.bootTime'] || null,
+        annotation: p['config.annotation'] || null,
+      });
+    }
+    vms.sort((a, b) => {
+      if (a.powerState !== b.powerState)
+        return a.powerState === 'poweredOn' ? -1 : 1;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+
+    // ── Parse Datastores ──
+    const datastores = [];
+    for (const obj of xAll(dsRes.text, 'objects')) {
+      const p = parsePropSets(obj);
+      const cap  = parseInt(p['summary.capacity']  || 0);
+      const free = parseInt(p['summary.freeSpace'] || 0);
+      datastores.push({
+        name: p['name'],
+        type: p['summary.type'],
+        accessible: p['summary.accessible'] === 'true',
+        capacityGB: Math.round(cap  / 1073741824 * 10) / 10,
+        freeGB:     Math.round(free / 1073741824 * 10) / 10,
+        usedGB:     Math.round((cap - free) / 1073741824 * 10) / 10,
+        usedPct: cap > 0 ? Math.round((cap - free) / cap * 100) : 0,
+      });
+    }
+
+    const poweredOn  = vms.filter(v => v.powerState === 'poweredOn').length;
+    const poweredOff = vms.filter(v => v.powerState === 'poweredOff').length;
+    const suspended  = vms.filter(v => v.powerState === 'suspended').length;
+
+    return json({ about, host, vms, datastores, stats: { totalVMs: vms.length, poweredOn, poweredOff, suspended } });
+  } finally {
+    esxiSoap('<Logout xmlns="urn:vim25"><_this type="SessionManager">ha-sessionmanager</_this></Logout>', cookie).catch(() => {});
+  }
+}
+
+/* ═══════════════════════════════════════════════
    ESXi — VM Power Actions (SOAP)
    ═══════════════════════════════════════════════ */
 async function handleESXiPower(request, env) {
@@ -242,7 +518,6 @@ async function handleESXiPower(request, env) {
   const { vmId, action } = body;
   if (!vmId || !action) return json({ error: 'Missing vmId or action' }, 400);
 
-  // Map action → SOAP method
   const actionMap = {
     'powerOn':       'PowerOnVM_Task',
     'powerOff':      'PowerOffVM_Task',
@@ -254,7 +529,6 @@ async function handleESXiPower(request, env) {
   if (!soapMethod) return json({ error: 'Invalid action. Allowed: ' + Object.keys(actionMap).join(', ') }, 400);
 
   try {
-    // Login
     const { text: svcText } = await esxiSoap(
       '<RetrieveServiceContent xmlns="urn:vim25"><_this type="ServiceInstance">ServiceInstance</_this></RetrieveServiceContent>'
     );
@@ -268,18 +542,15 @@ async function handleESXiPower(request, env) {
     );
     if (!cookie) return json({ error: 'ESXi login failed' }, 502);
 
-    // Execute power action
     const powerBody =
       '<' + soapMethod + ' xmlns="urn:vim25">' +
       '<_this type="VirtualMachine">' + escXml(vmId) + '</_this>' +
       '</' + soapMethod + '>';
 
-    const { text: resultText, ok } = await esxiSoap(powerBody, cookie);
+    const { text: resultText } = await esxiSoap(powerBody, cookie);
 
-    // Logout
     esxiSoap('<Logout xmlns="urn:vim25"><_this type="SessionManager">ha-sessionmanager</_this></Logout>', cookie).catch(() => {});
 
-    // Check for fault
     if (resultText.includes('Fault>')) {
       const faultMsg = x1(resultText, 'localizedMessage') || x1(resultText, 'faultstring') || 'Unknown fault';
       return json({ success: false, error: faultMsg });
