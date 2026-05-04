@@ -5,115 +5,226 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Home Lab Dashboard</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#0b0d14;--surface:#131620;--card:#1a1d2e;--border:#252840;
-  --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
-  --green:#34d399;--red:#f87171;--amber:#fbbf24;
-  --green-dim:#052e16;--red-dim:#2d0a0a;--amber-dim:#2d1f00;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+:root {
+  --bg: #09090b;
+  --surface: #18181b;
+  --card: #18181b;
+  --border: #27272a;
+  --border-hover: #3f3f46;
+  --text: #f4f4f5;
+  --muted: #a1a1aa;
+  
+  --accent: #60a5fa;
+  --accent-glow: rgba(96, 165, 250, 0.5);
+  
+  --green: #10b981;
+  --red: #ef4444;
+  --amber: #f59e0b;
+  
+  --green-dim: rgba(16, 185, 129, 0.1);
+  --red-dim: rgba(239, 68, 68, 0.1);
+  --amber-dim: rgba(245, 158, 11, 0.1);
 }
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-a{color:inherit;text-decoration:none}
-.header{background:var(--surface);border-bottom:0.5px solid var(--border);padding:0 1.5rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
-.header-left{display:flex;align-items:center;gap:12px}
-.logo{width:28px;height:28px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px}
-.site-name{font-size:15px;font-weight:600}
-.site-sub{font-size:12px;color:var(--muted);margin-left:4px}
-.header-right{display:flex;align-items:center;gap:16px}
-.clock{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
-.refresh-btn{font-size:12px;padding:5px 12px;border-radius:6px;border:0.5px solid var(--border);background:transparent;color:var(--accent);cursor:pointer;transition:all .15s}
-.refresh-btn:hover{background:#1e3a5f;border-color:var(--accent)}
-.auto-badge{font-size:11px;padding:3px 8px;border-radius:20px;background:#052e16;color:var(--green);border:0.5px solid #0d4a25}
-.container{max-width:1400px;margin:0 auto;padding:1.5rem}
-.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.5rem}
-.sum-card{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:.875rem 1.125rem;display:flex;align-items:center;gap:12px}
-.sum-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
-.sum-icon.total{background:#1e293b}
-.sum-icon.online{background:var(--green-dim)}
-.sum-icon.offline{background:var(--red-dim)}
-.sum-icon.local{background:var(--amber-dim)}
-.sum-label{font-size:11px;color:var(--muted);margin-bottom:2px}
-.sum-value{font-size:22px;font-weight:600;line-height:1}
-.sum-value.green{color:var(--green)}
-.sum-value.red{color:var(--red)}
-.sum-value.amber{color:var(--amber)}
-.main-grid{display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start}
-.section-title{font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
-.services-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
-.srv-card{background:var(--card);border:0.5px solid var(--border);border-radius:12px;padding:1rem 1.125rem;cursor:pointer;transition:border-color .15s,transform .1s;position:relative;overflow:hidden}
-.srv-card:hover{border-color:#3d4260;transform:translateY(-1px)}
-.srv-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:12px 12px 0 0;background:transparent;transition:background .2s}
-.srv-card.online::before{background:linear-gradient(90deg,var(--green),transparent)}
-.srv-card.offline::before{background:linear-gradient(90deg,var(--red),transparent)}
-.srv-card.local::before{background:linear-gradient(90deg,var(--amber),transparent)}
-.srv-card.checking::before{background:linear-gradient(90deg,#475569,transparent)}
-.srv-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
-.srv-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;background:var(--surface);flex-shrink:0}
-.srv-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
-.srv-dot.online{background:var(--green);box-shadow:0 0 6px var(--green)}
-.srv-dot.offline{background:var(--red);box-shadow:0 0 6px var(--red)}
-.srv-dot.local{background:var(--amber)}
-.srv-dot.checking{background:#475569;animation:pulse 1s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.srv-name{font-size:14px;font-weight:600;margin-bottom:2px;color:var(--text)}
-.srv-desc{font-size:11px;color:var(--muted)}
-.srv-footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:0.5px solid var(--border)}
-.srv-badge{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:500}
-.srv-badge.online{background:var(--green-dim);color:var(--green)}
-.srv-badge.offline{background:var(--red-dim);color:var(--red)}
-.srv-badge.local{background:var(--amber-dim);color:var(--amber)}
-.srv-badge.checking{background:#1e293b;color:#475569}
-.srv-ping{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
-.srv-link{font-size:11px;color:var(--accent);opacity:0;transition:opacity .15s}
-.srv-card:hover .srv-link{opacity:1}
-.info-card{background:var(--card);border:0.5px solid var(--border);border-radius:12px;padding:1rem 1.125rem;margin-bottom:12px}
-.info-title{font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
-.info-rows{display:flex;flex-direction:column;gap:7px}
-.info-row{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:0.5px solid var(--border)}
-.info-row:last-child{border-bottom:none}
-.info-key{color:var(--muted)}
-.info-val{color:var(--text);font-weight:500;text-align:right}
-.info-val.green{color:var(--green)}
-.info-val.red{color:var(--red)}
-.info-val.amber{color:var(--amber)}
-.qlink-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.qlink{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:8px;border:0.5px solid var(--border);background:var(--surface);transition:all .15s}
-.qlink:hover{border-color:var(--accent);background:#0d1f35}
-.qlink-icon{font-size:16px}
-.qlink-name{font-size:11px;font-weight:500;color:var(--text)}
-.qlink-url{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.uptime-card{background:var(--card);border:0.5px solid var(--border);border-radius:12px;padding:1rem 1.125rem;margin-bottom:14px}
-.uptime-item{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
-.uptime-item:last-child{margin-bottom:0}
-.uptime-label{display:flex;justify-content:space-between;font-size:12px}
-.uptime-name{color:var(--text);font-weight:500}
-.uptime-pct{color:var(--muted)}
-.uptime-bar-bg{height:4px;background:var(--surface);border-radius:2px;overflow:hidden}
-.uptime-bar-fill{height:100%;border-radius:2px;transition:width .5s ease}
-.uptime-bar-fill.good{background:var(--green)}
-.uptime-bar-fill.warn{background:var(--amber)}
-.uptime-bar-fill.bad{background:var(--red)}
-.log-card{background:var(--card);border:0.5px solid var(--border);border-radius:12px;padding:1rem 1.125rem;margin-bottom:14px}
-.log-list{display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto}
-.log-item{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0;border-bottom:0.5px solid var(--border)}
-.log-item:last-child{border-bottom:none}
-.log-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.log-dot.online{background:var(--green)}
-.log-dot.offline{background:var(--red)}
-.log-time{color:var(--muted);flex-shrink:0}
-.log-text{color:var(--text);flex:1}
-.note{font-size:11px;color:var(--amber);background:var(--amber-dim);border:0.5px solid #5a3e00;border-radius:6px;padding:6px 10px;margin-top:8px}
-.footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);border-top:0.5px solid var(--border);margin-top:1rem}
-@media(max-width:900px){.main-grid{grid-template-columns:1fr}.summary{grid-template-columns:repeat(2,1fr)}.services-grid{grid-template-columns:1fr}}
-::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+body { background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+a { color: inherit; text-decoration: none; }
+
+/* HEADER */
+.header {
+  background: rgba(24, 24, 27, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 2rem;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.logo {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+.site-name { font-size: 16px; font-weight: 600; letter-spacing: -0.02em; }
+.site-sub { font-size: 13px; color: var(--muted); margin-left: 4px; }
+.header-right { display: flex; align-items: center; gap: 16px; }
+.clock { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
+.refresh-btn {
+  font-size: 13px; font-weight: 500;
+  padding: 6px 14px; border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface); color: var(--text);
+  cursor: pointer; transition: all 0.2s;
+}
+.refresh-btn:hover { background: #27272a; border-color: var(--border-hover); }
+.auto-badge {
+  font-size: 12px; padding: 4px 10px; border-radius: 20px;
+  background: var(--green-dim); color: var(--green);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  font-weight: 500;
+}
+
+/* CONTAINER */
+.container { max-width: 1400px; margin: 0 auto; padding: 2rem 1.5rem; display: flex; flex-direction: column; gap: 24px; }
+
+/* SUMMARY GRID */
+.summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.sum-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 1.25rem 1.5rem; display: flex; align-items: center; gap: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+.sum-icon {
+  width: 48px; height: 48px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;
+}
+.sum-icon.total { background: #27272a; }
+.sum-icon.online { background: var(--green-dim); color: var(--green); }
+.sum-icon.offline { background: var(--red-dim); color: var(--red); }
+.sum-icon.local { background: var(--amber-dim); color: var(--amber); }
+.sum-label { font-size: 13px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+.sum-value { font-size: 24px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+.sum-value.green { color: var(--green); }
+.sum-value.red { color: var(--red); }
+.sum-value.amber { color: var(--amber); }
+
+/* SECTIONS */
+.section-title {
+  font-size: 13px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* SERVICES GRID */
+.services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.srv-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 1.25rem; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.srv-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,0.2); }
+.srv-card::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px;
+  background: transparent; transition: background 0.2s;
+}
+.srv-card.online::after { background: var(--green); box-shadow: 0 -2px 10px rgba(16, 185, 129, 0.4); }
+.srv-card.offline::after { background: var(--red); box-shadow: 0 -2px 10px rgba(239, 68, 68, 0.4); }
+.srv-card.local::after { background: var(--amber); box-shadow: 0 -2px 10px rgba(245, 158, 11, 0.4); }
+.srv-card.checking::after { background: #52525b; }
+
+.srv-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+.srv-icon {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; background: #27272a; flex-shrink: 0;
+}
+.srv-name-wrap { margin-bottom: 12px; }
+.srv-name { font-size: 16px; font-weight: 600; margin-bottom: 4px; color: var(--text); letter-spacing: -0.01em; }
+.srv-desc { font-size: 13px; color: var(--muted); }
+
+.srv-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);
+}
+.srv-status-wrap { display: flex; align-items: center; gap: 8px; }
+.srv-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.srv-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.srv-dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); }
+.srv-dot.local { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.srv-dot.checking { background: #52525b; animation: pulse 1s infinite; }
+
+.srv-badge { font-size: 12px; font-weight: 500; color: var(--text); }
+.srv-badge.online { color: var(--green); }
+.srv-badge.offline { color: var(--red); }
+.srv-badge.local { color: var(--amber); }
+.srv-badge.checking { color: var(--muted); }
+
+.srv-ping { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; background: #27272a; padding: 2px 6px; border-radius: 6px; }
+.srv-link { font-size: 12px; font-weight: 500; color: var(--accent); opacity: 0; transition: opacity 0.2s; }
+.srv-card:hover .srv-link { opacity: 1; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* BOTTOM GRID FOR BALANCE */
+.bottom-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: start; }
+
+.boxed-section {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 16px;
+}
+
+/* UPTIME */
+.uptime-item { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.uptime-item:last-child { margin-bottom: 0; }
+.uptime-label { display: flex; justify-content: space-between; font-size: 13px; }
+.uptime-name { font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.uptime-pct { font-weight: 600; }
+.uptime-bar-bg { height: 6px; background: #27272a; border-radius: 3px; overflow: hidden; }
+.uptime-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+.uptime-bar-fill.good { background: var(--green); }
+.uptime-bar-fill.warn { background: var(--amber); }
+.uptime-bar-fill.bad { background: var(--red); }
+
+/* LOGS */
+.log-list { display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; padding-right: 4px; }
+.log-item { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.log-item:last-child { border-bottom: none; }
+.log-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.log-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.log-dot.offline { background: var(--red); box-shadow: 0 0 6px var(--red); }
+.log-time { color: var(--muted); flex-shrink: 0; font-variant-numeric: tabular-nums; font-size: 12px; }
+.log-text { color: var(--text); flex: 1; font-weight: 500; }
+
+/* INFO & LINKS */
+.info-rows { display: flex; flex-direction: column; gap: 10px; }
+.info-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+.info-key { color: var(--muted); }
+.info-val { color: var(--text); font-weight: 500; text-align: right; }
+.info-val.green { color: var(--green); }
+.info-val.red { color: var(--red); }
+.info-val.amber { color: var(--amber); }
+.note { font-size: 12px; color: var(--amber); background: var(--amber-dim); border: 1px solid rgba(245,158,11,0.2); border-radius: 8px; padding: 10px 12px; line-height: 1.4; margin-top: 10px; }
+
+.qlink-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.qlink { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); transition: all 0.2s; }
+.qlink:hover { border-color: var(--accent); background: rgba(59, 130, 246, 0.05); transform: translateY(-1px); }
+.qlink-icon { font-size: 18px; }
+.qlink-text { display: flex; flex-direction: column; overflow: hidden; }
+.qlink-name { font-size: 12px; font-weight: 600; color: var(--text); }
+.qlink-url { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* FOOTER */
+.footer { text-align: center; padding: 2rem; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); margin-top: 2rem; }
+
+/* RESPONSIVE */
+@media (max-width: 1100px) {
+  .bottom-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 800px) {
+  .summary { grid-template-columns: repeat(2, 1fr); }
+  .bottom-grid { grid-template-columns: 1fr; }
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #52525b; }
 </style>
 </head>
 <body>
 <header class="header">
   <div class="header-left">
-    <div class="logo">🏠</div>
-    <span class="site-name">Home Lab</span>
-    <span class="site-sub">/ Dashboard</span>
+    <div class="logo">🚀</div>
+    <span class="site-name">Home Lab Dashboard</span>
   </div>
   <div class="header-right">
     <span class="auto-badge" id="autoLabel">● Auto 60s</span>
@@ -123,6 +234,8 @@ a{color:inherit;text-decoration:none}
 </header>
 
 <div class="container">
+  
+  <!-- SUMMARY CARDS -->
   <div class="summary">
     <div class="sum-card"><div class="sum-icon total">📡</div><div><div class="sum-label">Tổng services</div><div class="sum-value" id="totalCount">—</div></div></div>
     <div class="sum-card"><div class="sum-icon online">✅</div><div><div class="sum-label">Online</div><div class="sum-value green" id="onlineCount">—</div></div></div>
@@ -130,47 +243,67 @@ a{color:inherit;text-decoration:none}
     <div class="sum-card"><div class="sum-icon local">🏠</div><div><div class="sum-label">LAN Only</div><div class="sum-value amber" id="localCount">—</div></div></div>
   </div>
 
-  <div class="main-grid">
-    <div>
-      <div class="section-title">📊 Services</div>
-      <div class="services-grid" id="servicesGrid"></div>
-
-      <div class="section-title">📈 Uptime (phiên này)</div>
-      <div class="uptime-card"><div id="uptimeRows"></div></div>
-
-      <div class="section-title">📋 Activity Log</div>
-      <div class="log-card"><div class="log-list" id="logList"><div style="font-size:12px;color:var(--muted);text-align:center;padding:8px">Đang kiểm tra...</div></div></div>
-    </div>
-
-    <div>
-      <div class="info-card">
-        <div class="info-title">⏱ Trạng thái</div>
-        <div class="info-rows">
-          <div class="info-row"><span class="info-key">Lần cuối check</span><span class="info-val" id="lastCheck">—</span></div>
-          <div class="info-row"><span class="info-key">Tổng lần check</span><span class="info-val" id="checkCount">0</span></div>
-          <div class="info-row"><span class="info-key">Avg Response</span><span class="info-val green" id="avgPing">—</span></div>
-          <div class="info-row"><span class="info-key">Check từ</span><span class="info-val">Cloudflare Edge</span></div>
-        </div>
-        <div class="note">⚠ Services LAN (192.168.x.x) cần Cloudflare Tunnel để check từ internet.</div>
-      </div>
-
-      <div class="info-card">
-        <div class="info-title">🔗 Quick Links</div>
-        <div class="qlink-grid" id="quickLinks"></div>
-      </div>
-
-      <div class="info-card">
-        <div class="info-title">🌐 Mạng nội bộ</div>
-        <div class="info-rows">
-          <div class="info-row"><span class="info-key">Subnet</span><span class="info-val">192.168.110.0/24</span></div>
-          <div class="info-row"><span class="info-key">Host chính</span><span class="info-val">192.168.110.21</span></div>
-          <div class="info-row"><span class="info-key">Tunnel</span><span class="info-val green">Cloudflare</span></div>
-        </div>
-      </div>
-    </div>
+  <!-- MAIN SERVICES -->
+  <div>
+    <div class="section-title">📊 Services</div>
+    <div class="services-grid" id="servicesGrid"></div>
   </div>
+
+  <!-- BALANCED BOTTOM GRID (3 COLUMNS) -->
+  <div class="bottom-grid">
+    
+    <!-- UPTIME COLUMN -->
+    <div>
+      <div class="section-title">📈 Uptime (Phiên Này)</div>
+      <div class="boxed-section"><div id="uptimeRows"></div></div>
+    </div>
+
+    <!-- LOGS COLUMN -->
+    <div>
+      <div class="section-title">📋 Activity Log</div>
+      <div class="boxed-section" style="padding-right:1rem;">
+        <div class="log-list" id="logList">
+          <div style="font-size:13px;color:var(--muted);text-align:center;padding:10px">Đang kiểm tra...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SYSTEM INFO COLUMN -->
+    <div style="display: flex; flex-direction: column; gap: 24px;">
+      
+      <div>
+        <div class="section-title">⏱ Trạng Thái</div>
+        <div class="boxed-section" style="gap: 12px;">
+          <div class="info-rows">
+            <div class="info-row"><span class="info-key">Lần cuối check</span><span class="info-val" id="lastCheck">—</span></div>
+            <div class="info-row"><span class="info-key">Tổng lần check</span><span class="info-val" id="checkCount">0</span></div>
+            <div class="info-row"><span class="info-key">Avg Response</span><span class="info-val green" id="avgPing">—</span></div>
+            <div class="info-row"><span class="info-key">Check từ</span><span class="info-val">Cloudflare Edge</span></div>
+          </div>
+          <div class="note">⚠ Services LAN cần Tunnel để check từ internet.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">🔗 Quick Links & Network</div>
+        <div class="boxed-section" style="gap: 16px;">
+          <div class="qlink-grid" id="quickLinks"></div>
+          <div style="border-top: 1px dashed var(--border); padding-top: 16px;">
+            <div class="info-rows">
+              <div class="info-row"><span class="info-key">Subnet</span><span class="info-val">192.168.110.0/24</span></div>
+              <div class="info-row"><span class="info-key">Host chính</span><span class="info-val">192.168.110.21</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+    
+  </div>
+
 </div>
-<footer class="footer">Home Lab Dashboard · Cloudflare Worker · Check từ Cloudflare Edge Network</footer>
+
+<footer class="footer">Home Lab Dashboard · Powered by Cloudflare Web Workers</footer>
 
 <script>
 var SERVICES = [
@@ -195,21 +328,29 @@ function initUI() {
       ? 'window.location.href=\''+s.detailPage+'\''
       : 'window.open(\''+s.url+'\',\'_blank\',\'noopener\')';
     return '<div class="srv-card checking" id="card-'+s.id+'" onclick="'+onclick+'">'
-      +'<div class="srv-header"><div class="srv-icon">'+s.icon+'</div><div class="srv-dot checking" id="dot-'+s.id+'"></div></div>'
-      +'<div class="srv-name">'+s.name+'</div>'
-      +'<div class="srv-desc">'+s.desc+'</div>'
+      +'<div class="srv-header">'
+        +'<div class="srv-icon">'+s.icon+'</div>'
+        +'<a class="srv-link" href="'+s.url+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">Mở ↗</a>'
+      +'</div>'
+      +'<div class="srv-name-wrap">'
+        +'<div class="srv-name">'+s.name+'</div>'
+        +'<div class="srv-desc">'+s.desc+'</div>'
+      +'</div>'
       +'<div class="srv-footer">'
-        +'<span class="srv-badge checking" id="badge-'+s.id+'">Checking…</span>'
+        +'<div class="srv-status-wrap">'
+          +'<div class="srv-dot checking" id="dot-'+s.id+'"></div>'
+          +'<span class="srv-badge checking" id="badge-'+s.id+'">Checking…</span>'
+        +'</div>'
         +'<span class="srv-ping" id="ping-'+s.id+'">—</span>'
-        +'<a class="srv-link" href="'+s.url+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗ Mở</a>'
       +'</div></div>';
   }).join('');
 
   document.getElementById('quickLinks').innerHTML = SERVICES.map(function(s){
     return '<a class="qlink" href="'+s.url+'" target="_blank" rel="noopener">'
       +'<div class="qlink-icon">'+s.icon+'</div>'
-      +'<div class="qlink-name">'+s.name+'</div>'
-      +'<div class="qlink-url">'+s.url.replace(/^https?:\/\//,'')+'</div>'
+      +'<div class="qlink-text">'
+        +'<span class="qlink-name">'+s.name+'</span>'
+      +'</div>'
       +'</a>';
   }).join('');
 }
@@ -220,7 +361,7 @@ function updateCard(s, status, ping) {
   var badge = document.getElementById('badge-'+s.id);
   var pingEl= document.getElementById('ping-'+s.id);
   if(!card) return;
-  var label = status==='online'?'Online':status==='local'?'LAN Only':'Offline';
+  var label = status==='online' ? 'Online' : status==='local' ? 'LAN Only' : 'Offline';
   card.className  = 'srv-card '+status;
   dot.className   = 'srv-dot '+status;
   badge.className = 'srv-badge '+status;
@@ -232,9 +373,9 @@ function renderUptimeBars() {
   document.getElementById('uptimeRows').innerHTML = SERVICES.map(function(s){
     var total = checks[s.id];
     var pct = total>0 ? Math.round((onlineCnt[s.id]/total)*100) : 0;
-    var cls = pct>=95?'good':pct>=70?'warn':'bad';
+    var cls = pct>=95 ? 'good' : pct>=70 ? 'warn' : 'bad';
     return '<div class="uptime-item">'
-      +'<div class="uptime-label"><span class="uptime-name">'+s.icon+' '+s.name+'</span><span class="uptime-pct">'+(total>0?pct+'%':'—')+'</span></div>'
+      +'<div class="uptime-label"><span class="uptime-name"><span>'+s.icon+'</span> '+s.name+'</span><span class="uptime-pct">'+(total>0?pct+'%':'—')+'</span></div>'
       +'<div class="uptime-bar-bg"><div class="uptime-bar-fill '+cls+'" style="width:'+pct+'%"></div></div>'
       +'</div>';
   }).join('');
@@ -244,9 +385,9 @@ function addLog(status, name) {
   var time = new Date().toLocaleTimeString('vi-VN',{hour12:false});
   log.unshift({status:status, name:name, time:time});
   if(log.length>30) log.pop();
-  document.getElementById('logList').innerHTML = log.slice(0,15).map(function(e){
-    var dot = e.status==='online'?'online':'offline';
-    var txt = e.status==='online'?'✓ Online':e.status==='local'?'⚠ LAN Only':'✗ Offline';
+  document.getElementById('logList').innerHTML = log.slice(0,18).map(function(e){
+    var dot = e.status==='online' ? 'online' : 'offline';
+    var txt = e.status==='online' ? 'Online' : e.status==='local' ? 'LAN Only' : 'Offline';
     return '<div class="log-item"><div class="log-dot '+dot+'"></div>'
       +'<span class="log-time">'+e.time+'</span>'
       +'<span class="log-text">'+e.name+' — '+txt+'</span></div>';
@@ -279,7 +420,7 @@ function runChecks() {
         prev[s.id] = status;
       });
 
-      document.getElementById('totalCount').textContent  = SERVICES.length;
+      document.getElementById('totalCount').textContent   = SERVICES.length;
       document.getElementById('onlineCount').textContent  = onlineN;
       document.getElementById('offlineCount').textContent = offlineN;
       document.getElementById('localCount').textContent   = localN;
