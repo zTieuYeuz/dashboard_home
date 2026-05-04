@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__Claude_in_Chrome__browser_batch",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git branch *)",
+      "Bash(git pull *)",
+      "Bash(git push *)",
+      "mcp__01b61634-9f1c-41c9-be89-64c79f0ee722__accounts_list",
+      "mcp__01b61634-9f1c-41c9-be89-64c79f0ee722__set_active_account",
+      "mcp__01b61634-9f1c-41c9-be89-64c79f0ee722__workers_list",
+      "mcp__01b61634-9f1c-41c9-be89-64c79f0ee722__workers_get_worker_code",
+      "mcp__01b61634-9f1c-41c9-be89-64c79f0ee722__workers_get_worker",
+      "Bash(npx wrangler *)"
+    ]
+  }
+}
