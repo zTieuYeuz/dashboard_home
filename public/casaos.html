@@ -5,89 +5,405 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CasaOS Dashboard</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-:root {
-  --bg: #09090b; --surface: #18181b; --card: #18181b; --border: #27272a;
-  --text: #f4f4f5; --muted: #a1a1aa; --accent: #60a5fa; --amber: #f59e0b;
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d14;--surface:#131620;--card:#1a1d2e;--border:#252840;
+  --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
+  --green:#34d399;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;--cyan:#22d3ee;
+  --green-dim:#052e16;--red-dim:#2d0a0a;--amber-dim:#2d1f00;
 }
-body { background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; display: flex; flex-direction: column; }
-a { color: inherit; text-decoration: none; }
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+a{color:inherit;text-decoration:none}
 
-.header {
-  background: rgba(24, 24, 27, 0.8); backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border); padding: 0 2rem; height: 64px;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.header-left { display: flex; align-items: center; gap: 12px; }
-.back-btn {
-  width: 32px; height: 32px; border-radius: 8px; background: #27272a;
-  display: flex; align-items: center; justify-content: center;
-  transition: background 0.2s;
-}
-.back-btn:hover { background: #3f3f46; }
-.title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+/* ── Header ── */
+.header{background:var(--surface);border-bottom:.5px solid var(--border);padding:0 1.5rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.hdr-left{display:flex;align-items:center;gap:12px}
+.back-btn{font-size:12px;padding:4px 10px;border-radius:6px;border:.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.back-btn:hover{color:var(--text);border-color:#3d4260}
+.hdr-title{display:flex;align-items:center;gap:8px}
+.hdr-name{font-size:15px;font-weight:600}
+.hdr-sub{font-size:12px;color:var(--muted)}
+.hdr-right{display:flex;align-items:center;gap:10px}
+.open-btn{font-size:12px;padding:5px 12px;border-radius:6px;border:.5px solid var(--border);background:transparent;color:var(--accent);cursor:pointer;transition:all .15s}
+.open-btn:hover{background:#1e3a5f;border-color:var(--accent)}
+.refresh-btn{font-size:12px;padding:5px 12px;border-radius:6px;border:.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.refresh-btn:hover{color:var(--text)}
+.last-update{font-size:11px;color:var(--muted)}
 
-.container { flex: 1; display: flex; flex-direction: column; padding: 2rem; max-width: 1400px; margin: 0 auto; width: 100%; gap: 24px; }
+/* ── Container ── */
+.container{max-width:1400px;margin:0 auto;padding:1.5rem}
 
-.main-frame {
-  flex: 1; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
-  background: var(--surface); display: flex; align-items: center; justify-content: center;
-  min-height: calc(100vh - 200px);
-}
+/* ── Stat Cards ── */
+.stats-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:1.25rem}
+.stat-card{background:var(--card);border:.5px solid var(--border);border-radius:10px;padding:.75rem 1rem;display:flex;flex-direction:column;gap:4px;position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.stat-card.total::before{background:linear-gradient(90deg,var(--accent),transparent)}
+.stat-card.running::before{background:linear-gradient(90deg,var(--green),transparent)}
+.stat-card.stopped::before{background:linear-gradient(90deg,var(--red),transparent)}
+.stat-card.cpu::before{background:linear-gradient(90deg,var(--purple),transparent)}
+.stat-card.ram::before{background:linear-gradient(90deg,var(--cyan),transparent)}
+.stat-card.disk::before{background:linear-gradient(90deg,var(--amber),transparent)}
+.stat-label{font-size:10px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.stat-value{font-size:22px;font-weight:700;line-height:1}
+.stat-value.accent{color:var(--accent)}
+.stat-value.green{color:var(--green)}
+.stat-value.red{color:var(--red)}
+.stat-value.purple{color:var(--purple)}
+.stat-value.cyan{color:var(--cyan)}
+.stat-value.amber{color:var(--amber)}
+.stat-sub{font-size:11px;color:var(--muted)}
 
-iframe { width: 100%; height: 100%; border: none; display: none; }
+/* ── Layout ── */
+.layout{display:grid;grid-template-columns:300px 1fr;gap:14px;align-items:start}
 
-.local-warning {
-  text-align: center; max-width: 400px; padding: 2rem;
-}
-.local-icon { font-size: 48px; margin-bottom: 16px; }
-.local-title { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
-.local-desc { color: var(--muted); font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
-.btn-direct {
-  display: inline-block; padding: 10px 20px; background: var(--accent); color: #fff;
-  border-radius: 8px; font-weight: 500; font-size: 14px; transition: opacity 0.2s;
-}
-.btn-direct:hover { opacity: 0.9; }
+/* ── Panel ── */
+.panel{background:var(--card);border:.5px solid var(--border);border-radius:12px;padding:1rem 1.125rem;margin-bottom:12px}
+.panel:last-child{margin-bottom:0}
+.panel-title{font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
 
-.footer { text-align: center; padding: 2rem; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); }
+/* ── Resource bars ── */
+.resource-item{margin-bottom:14px}
+.resource-item:last-child{margin-bottom:0}
+.resource-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+.resource-name{font-size:12px;font-weight:500}
+.resource-val{font-size:11px;color:var(--muted)}
+.bar-bg{height:6px;background:#1e2235;border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:width .5s ease}
+.bar-green{background:var(--green)}
+.bar-amber{background:var(--amber)}
+.bar-red{background:var(--red)}
+.bar-purple{background:var(--purple)}
+.bar-cyan{background:var(--cyan)}
+
+/* ── Info rows ── */
+.info-row{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:.5px solid var(--border)}
+.info-row:last-child{border-bottom:none}
+.info-key{color:var(--muted)}
+.info-val{color:var(--text);font-weight:500;text-align:right}
+
+/* ── Network ── */
+.net-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.net-item{background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center}
+.net-label{font-size:10px;color:var(--muted);margin-bottom:4px}
+.net-val{font-size:13px;font-weight:600}
+.net-up{color:var(--green)}
+.net-down{color:var(--cyan)}
+
+/* ── Apps ── */
+.apps-panel{background:var(--card);border:.5px solid var(--border);border-radius:12px;padding:1rem 1.125rem}
+.apps-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.apps-title{font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.apps-filter{display:flex;gap:6px}
+.filter-btn{font-size:11px;padding:3px 10px;border-radius:20px;border:.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.filter-btn.active{background:#1e3a5f;color:var(--accent);border-color:var(--accent)}
+.filter-btn:hover:not(.active){color:var(--text)}
+
+.apps-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px}
+.app-card{background:var(--surface);border:.5px solid var(--border);border-radius:10px;padding:.875rem;display:flex;flex-direction:column;gap:8px;transition:border-color .15s;position:relative}
+.app-card:hover{border-color:#3d4260}
+.app-top{display:flex;align-items:center;gap:10px}
+.app-icon-wrap{position:relative;flex-shrink:0}
+.app-icon{width:36px;height:36px;border-radius:8px;object-fit:contain;background:#131620;padding:3px}
+.app-icon-fallback{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:16px}
+.app-info{min-width:0;flex:1}
+.app-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app-image{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.app-footer{display:flex;align-items:center;justify-content:space-between}
+.status-badge{font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;display:inline-flex;align-items:center;gap:4px}
+.badge-running{background:var(--green-dim);color:var(--green)}
+.badge-stopped{background:var(--red-dim);color:var(--red)}
+.badge-unknown{background:#1e293b;color:var(--muted)}
+.status-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+.app-port{font-size:10px;color:var(--muted);background:var(--card);border:.5px solid var(--border);border-radius:4px;padding:2px 6px;font-family:monospace}
+
+/* ── Error / Loading ── */
+.error-banner{background:#2d0a0a;border:.5px solid #7f1d1d;border-radius:8px;padding:.75rem 1rem;font-size:13px;color:var(--red);margin-bottom:12px}
+.loading-msg{color:var(--muted);font-size:13px;padding:2rem;text-align:center;grid-column:1/-1}
+.spin{display:inline-block;animation:spin .8s linear infinite;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.skel{background:linear-gradient(90deg,#1a1d2e 25%,#252840 50%,#1a1d2e 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:4px;height:13px;margin-bottom:8px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 </style>
 </head>
 <body>
 
-<header class="header">
-  <div class="header-left">
-    <a href="/" class="back-btn">←</a>
-    <div class="title"><span>🏠</span> CasaOS Local Dashboard</div>
-  </div>
-  <div><span style="font-size: 13px; color: var(--muted);">IP: 192.168.110.21:4434</span></div>
-</header>
-
-<div class="container">
-  <div class="main-frame">
-    <iframe id="casaFrame" src="http://192.168.110.21:4434" allow="fullscreen"></iframe>
-    <div class="local-warning" id="localWarning">
-      <div class="local-icon">🏠</div>
-      <div class="local-title">LAN Only Access</div>
-      <div class="local-desc">CasaOS đang chạy ở dải IP nội bộ. Khung nhúng (iframe) có thể bị chặn bởi trình duyệt nếu bạn đang truy cập dashboard qua HTTPS (Mixed Content).</div>
-      <a href="http://192.168.110.21:4434" target="_blank" class="btn-direct">Mở CasaOS Tự Động ↗</a>
+<div class="header">
+  <div class="hdr-left">
+    <button class="back-btn" onclick="history.back()">← Dashboard</button>
+    <div class="hdr-title">
+      <span style="font-size:18px;margin-right:4px">🏠</span>
+      <div>
+        <div class="hdr-name">CasaOS</div>
+        <div class="hdr-sub" id="hdr-sub">Home Server OS</div>
+      </div>
     </div>
+  </div>
+  <div class="hdr-right">
+    <span class="last-update" id="last-update"></span>
+    <button class="refresh-btn" onclick="loadData()">↻ Làm mới</button>
+    <a href="https://casaos.home-server.id.vn" target="_blank">
+      <button class="open-btn">🔗 Mở CasaOS</button>
+    </a>
   </div>
 </div>
 
-<footer class="footer">Home Lab Dashboard · Local Service</footer>
+<div class="container">
+
+  <div class="error-banner" id="error-banner" style="display:none"></div>
+
+  <!-- Stats row -->
+  <div class="stats-row">
+    <div class="stat-card total">
+      <div class="stat-label">Tổng Apps</div>
+      <div class="stat-value accent" id="s-total">—</div>
+      <div class="stat-sub">containers</div>
+    </div>
+    <div class="stat-card running">
+      <div class="stat-label">Đang chạy</div>
+      <div class="stat-value green" id="s-running">—</div>
+      <div class="stat-sub">running</div>
+    </div>
+    <div class="stat-card stopped">
+      <div class="stat-label">Đã dừng</div>
+      <div class="stat-value red" id="s-stopped">—</div>
+      <div class="stat-sub">stopped / exited</div>
+    </div>
+    <div class="stat-card cpu">
+      <div class="stat-label">CPU Usage</div>
+      <div class="stat-value purple" id="s-cpu">—</div>
+      <div class="stat-sub" id="s-cpu-sub">—</div>
+    </div>
+    <div class="stat-card ram">
+      <div class="stat-label">RAM Usage</div>
+      <div class="stat-value cyan" id="s-ram">—</div>
+      <div class="stat-sub" id="s-ram-sub">—</div>
+    </div>
+    <div class="stat-card disk">
+      <div class="stat-label">Disk Usage</div>
+      <div class="stat-value amber" id="s-disk">—</div>
+      <div class="stat-sub" id="s-disk-sub">—</div>
+    </div>
+  </div>
+
+  <div class="layout">
+
+    <!-- Left column -->
+    <div>
+      <!-- Resources -->
+      <div class="panel">
+        <div class="panel-title">📊 Tài nguyên hệ thống</div>
+        <div class="resource-item">
+          <div class="resource-header">
+            <span class="resource-name">CPU</span>
+            <span class="resource-val" id="r-cpu-lbl">—</span>
+          </div>
+          <div class="bar-bg"><div class="bar-fill bar-purple" id="r-cpu-bar" style="width:0%"></div></div>
+        </div>
+        <div class="resource-item">
+          <div class="resource-header">
+            <span class="resource-name">Memory</span>
+            <span class="resource-val" id="r-mem-lbl">—</span>
+          </div>
+          <div class="bar-bg"><div class="bar-fill bar-cyan" id="r-mem-bar" style="width:0%"></div></div>
+        </div>
+        <div class="resource-item">
+          <div class="resource-header">
+            <span class="resource-name">Disk</span>
+            <span class="resource-val" id="r-disk-lbl">—</span>
+          </div>
+          <div class="bar-bg"><div class="bar-fill bar-amber" id="r-disk-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- Host info -->
+      <div class="panel">
+        <div class="panel-title">💻 Thông tin Host</div>
+        <div id="host-rows">
+          <div class="skel"></div><div class="skel" style="width:75%"></div>
+          <div class="skel" style="width:60%"></div><div class="skel" style="width:85%"></div>
+        </div>
+      </div>
+
+      <!-- Network -->
+      <div class="panel">
+        <div class="panel-title">🌐 Mạng</div>
+        <div id="net-rows">
+          <div class="skel"></div><div class="skel" style="width:50%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Apps grid -->
+    <div class="apps-panel">
+      <div class="apps-header">
+        <div class="apps-title">📦 Containers &amp; Apps</div>
+        <div class="apps-filter">
+          <button class="filter-btn active" onclick="filterApps('all',this)">Tất cả</button>
+          <button class="filter-btn" onclick="filterApps('running',this)">▶ Running</button>
+          <button class="filter-btn" onclick="filterApps('stopped',this)">■ Stopped</button>
+        </div>
+      </div>
+      <div class="apps-grid" id="apps-grid">
+        <div class="loading-msg"><span class="spin">⟳</span> Đang tải...</div>
+      </div>
+    </div>
+
+  </div><!-- /layout -->
+</div><!-- /container -->
 
 <script>
-  // Chặn HTTP nhúng vào HTTPS - Hiển thị fallback hoặc chạy iframe
-  if (window.location.protocol === 'https:') {
-    document.getElementById('casaFrame').style.display = 'none';
-    document.getElementById('localWarning').style.display = 'block';
-  } else {
-    document.getElementById('casaFrame').style.display = 'block';
-    document.getElementById('localWarning').style.display = 'none';
-  }
-</script>
+let _allApps = [];
+let _filter  = 'all';
 
+async function loadData() {
+  set('last-update', 'Đang tải...');
+  hide('error-banner');
+  try {
+    const res  = await fetch('/api/casaos');
+    const data = await res.json();
+    if (data.error) { showErr(data.error); return; }
+    renderStats(data.stats, data.system);
+    renderSystem(data.system);
+    _allApps = data.apps || [];
+    renderApps();
+    set('last-update', 'Cập nhật: ' + new Date().toLocaleTimeString('vi-VN'));
+  } catch(e) {
+    showErr('Lỗi kết nối: ' + e.message);
+  }
+}
+
+function renderStats(st, sys) {
+  set('s-total',   st.total);
+  set('s-running', st.running);
+  set('s-stopped', st.stopped);
+  set('s-cpu',     sys.cpu.percent.toFixed(1) + '%');
+  set('s-cpu-sub', sys.cpu.cores + ' cores · ' + (sys.cpu.model || 'intel').replace(/^\w/,c=>c.toUpperCase()));
+  set('s-ram',     sys.memory.usedPercent + '%');
+  set('s-ram-sub', sys.memory.usedGB.toFixed(1) + ' / ' + sys.memory.totalGB.toFixed(1) + ' GB');
+  set('s-disk',    sys.disk.usedPercent + '%');
+  set('s-disk-sub', sys.disk.usedGB.toFixed(1) + ' / ' + sys.disk.totalGB.toFixed(1) + ' GB');
+  set('hdr-sub',   'CasaOS · ' + (sys.arch || 'amd64'));
+}
+
+function renderSystem(sys) {
+  const cpuPct  = Math.min(+sys.cpu.percent  || 0, 100);
+  const memPct  = Math.min(+sys.memory.usedPercent || 0, 100);
+  const diskPct = Math.min(+sys.disk.usedPercent   || 0, 100);
+
+  setBar('r-cpu-bar',  cpuPct);
+  setBar('r-mem-bar',  memPct);
+  setBar('r-disk-bar', diskPct);
+
+  const tempStr = sys.cpu.temperature > 0 ? ' · ' + sys.cpu.temperature + '°C' : '';
+  set('r-cpu-lbl',  cpuPct.toFixed(1) + '%' + tempStr);
+  set('r-mem-lbl',  sys.memory.usedGB.toFixed(1) + ' GB / ' + sys.memory.totalGB.toFixed(1) + ' GB');
+  set('r-disk-lbl', sys.disk.usedGB.toFixed(1) + ' GB / ' + sys.disk.totalGB.toFixed(1) + ' GB');
+
+  const hostRows = [
+    ['Kiến trúc',  sys.arch || 'amd64'],
+    ['CPU Model',  (sys.cpu.model||'Intel').replace(/^\w/,c=>c.toUpperCase())],
+    ['CPU Cores',  sys.cpu.cores + ' cores'],
+    ['Nhiệt độ',   sys.cpu.temperature > 0 ? sys.cpu.temperature + '°C' : '—'],
+    ['Disk Health',sys.disk.healthy
+      ? '<span style="color:var(--green)">✓ Healthy</span>'
+      : '<span style="color:var(--red)">⚠ Warning</span>'],
+  ];
+  set('host-rows', hostRows.map(([k,v])=>
+    `<div class="info-row"><span class="info-key">${k}</span><span class="info-val">${v}</span></div>`
+  ).join(''));
+
+  const n = sys.network;
+  const stateColor = n.state === 'up' ? 'var(--green)' : 'var(--red)';
+  set('net-rows', `
+    <div class="info-row" style="margin-bottom:8px">
+      <span class="info-key">Interface</span>
+      <span class="info-val">${n.name||'—'} &nbsp;<span style="color:${stateColor};font-size:10px">● ${(n.state||'—').toUpperCase()}</span></span>
+    </div>
+    <div class="net-grid">
+      <div class="net-item"><div class="net-label">↑ Tổng gửi</div><div class="net-val net-up">${n.sentGB.toFixed(2)} GB</div></div>
+      <div class="net-item"><div class="net-label">↓ Tổng nhận</div><div class="net-val net-down">${n.recvGB.toFixed(2)} GB</div></div>
+    </div>`);
+}
+
+function renderApps() {
+  let apps = _allApps;
+  if (_filter === 'running') apps = apps.filter(a => a.status === 'running');
+  if (_filter === 'stopped') apps = apps.filter(a => a.status === 'exited' || a.status === 'stopped');
+
+  const grid = document.getElementById('apps-grid');
+  if (!apps.length) {
+    grid.innerHTML = '<div class="loading-msg">Không có app nào</div>';
+    return;
+  }
+
+  grid.innerHTML = apps.map(app => {
+    const running = app.status === 'running';
+    const stopped = app.status === 'exited' || app.status === 'stopped';
+    const bClass  = running ? 'badge-running' : stopped ? 'badge-stopped' : 'badge-unknown';
+    const bText   = running ? '▶ Running' : stopped ? '■ Stopped' : app.status;
+    const imgShort = (app.image || '').split(':')[0].split('/').pop();
+
+    const iconHtml = app.icon
+      ? `<img class="app-icon" src="${esc(app.icon)}"
+           onerror="this.style.display='none';this.parentElement.querySelector('.app-icon-fallback').style.display='flex'"
+           alt="${esc(app.title)}">`
+        + `<div class="app-icon-fallback" style="display:none">📦</div>`
+      : `<div class="app-icon-fallback">📦</div>`;
+
+    return `<div class="app-card">
+      <div class="app-top">
+        <div class="app-icon-wrap">${iconHtml}</div>
+        <div class="app-info">
+          <div class="app-name" title="${esc(app.name)}">${esc(app.title)}</div>
+          <div class="app-image" title="${esc(app.image||'')}">
+            ${imgShort ? esc(imgShort) : esc(app.name)}
+          </div>
+        </div>
+      </div>
+      <div class="app-footer">
+        <span class="status-badge ${bClass}"><span class="status-dot"></span>${bText}</span>
+        ${app.port ? `<span class="app-port">:${esc(app.port)}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterApps(f, btn) {
+  _filter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderApps();
+}
+
+function setBar(id, pct) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.width = pct + '%';
+  // Change color at thresholds
+  const base = el.className.replace(/bar-(red|amber|green)/g,'').trim();
+  el.className = base + ' ' + (pct >= 85 ? 'bar-red' : pct >= 65 ? 'bar-amber' : el.className.match(/bar-(purple|cyan|amber|green)/)?.[0] || 'bar-green');
+}
+
+function set(id, html) {
+  const el = document.getElementById(id);
+  if (el) el.innerHTML = html;
+}
+function hide(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = 'none';
+}
+function showErr(msg) {
+  const el = document.getElementById('error-banner');
+  el.textContent = '⚠ ' + msg;
+  el.style.display = 'block';
+  set('last-update', 'Lỗi');
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+loadData();
+setInterval(loadData, 30000);
+</script>
 </body>
 </html>

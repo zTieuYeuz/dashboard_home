@@ -562,6 +562,115 @@ async function handleESXiPower(request, env) {
   }
 }
 
+/* ═══════════════════════════════════════════════
+   CasaOS — REST API (v0.4.x)
+   Auth: POST /v1/users/login → token (raw, no "Bearer" prefix!)
+   ═══════════════════════════════════════════════ */
+const CASAOS_BASE = 'https://casaos.home-server.id.vn';
+
+async function handleCasaOS(env) {
+  const user = env.CASAOS_USER;
+  const pass = env.CASAOS_PASSWORD;
+  if (!user || !pass) return json({ error: 'CASAOS_USER / CASAOS_PASSWORD not configured' }, 500);
+
+  // ── Step 1: Login ──
+  let token;
+  try {
+    const loginRes = await fetch(`${CASAOS_BASE}/v1/users/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: user, password: pass }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!loginRes.ok) return json({ error: `CasaOS login failed: ${loginRes.status}` }, 502);
+    const loginData = await loginRes.json();
+    token = loginData?.data?.token?.access_token;
+    if (!token) return json({ error: 'No access_token in login response' }, 502);
+  } catch (e) {
+    return json({ error: `CasaOS login error: ${e.message}` }, 502);
+  }
+
+  // NOTE: CasaOS uses raw token, NOT "Bearer <token>"
+  const opts = {
+    headers: { 'Authorization': token },
+    signal: AbortSignal.timeout(10000),
+  };
+  const safeJson = async (url) => {
+    try {
+      const r = await fetch(url, opts);
+      if (!r.ok) return null;
+      const d = await r.json();
+      return d?.data !== undefined ? d.data : d;
+    } catch { return null; }
+  };
+
+  // ── Step 2: Fetch in parallel ──
+  const [sysRaw, appsRaw, hwRaw] = await Promise.all([
+    safeJson(`${CASAOS_BASE}/v1/sys/utilization`),
+    safeJson(`${CASAOS_BASE}/v2/app_management/web/appgrid`),
+    safeJson(`${CASAOS_BASE}/v1/sys/hardware`),
+  ]);
+
+  // ── Parse system ──
+  const cpu  = sysRaw?.cpu  || {};
+  const mem  = sysRaw?.mem  || {};
+  const disk = sysRaw?.sys_disk || {};
+  const net  = (sysRaw?.net || [])[0] || {};
+
+  // ── Parse apps ──
+  const rawApps = Array.isArray(appsRaw) ? appsRaw : [];
+  const apps = rawApps
+    .filter(a => a.name)
+    .map(a => ({
+      name:          a.name,
+      title:         a.title?.custom || a.title?.en_us || a.title?.en_US || a.name,
+      icon:          a.icon || null,
+      status:        a.status || 'unknown',
+      port:          a.port  || null,
+      image:         a.image || null,
+      scheme:        a.scheme || 'http',
+      hostname:      a.hostname || null,
+      appType:       a.app_type,
+      authorType:    a.author_type,
+      isUncontrolled: !!a.is_uncontrolled,
+    }));
+
+  const running = apps.filter(a => a.status === 'running').length;
+  const stopped = apps.filter(a => a.status === 'exited' || a.status === 'stopped').length;
+
+  return json({
+    system: {
+      cpu: {
+        model:       cpu.model       || '',
+        cores:       cpu.num         || 0,
+        percent:     cpu.percent     || 0,
+        temperature: cpu.temperature || 0,
+      },
+      memory: {
+        totalGB:     Math.round((mem.total || 0) / 1073741824 * 10) / 10,
+        usedGB:      Math.round((mem.used  || 0) / 1073741824 * 10) / 10,
+        usedPercent: Math.round(mem.usedPercent || 0),
+      },
+      disk: {
+        totalGB:    Math.round((disk.size || 0) / 1073741824 * 10) / 10,
+        usedGB:     Math.round((disk.used || 0) / 1073741824 * 10) / 10,
+        availGB:    Math.round((disk.avail || 0) / 1073741824 * 10) / 10,
+        usedPercent: disk.size > 0 ? Math.round(disk.used / disk.size * 100) : 0,
+        healthy:    disk.health !== false,
+      },
+      network: {
+        name:       net.name      || '',
+        sentGB:     Math.round((net.bytesSent || 0) / 1073741824 * 100) / 100,
+        recvGB:     Math.round((net.bytesRecv || 0) / 1073741824 * 100) / 100,
+        state:      net.state     || '',
+      },
+      arch: hwRaw?.arch || '',
+    },
+    apps,
+    stats: { total: apps.length, running, stopped },
+  });
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -578,6 +687,7 @@ export default {
     if (url.pathname === '/api/9router')     return handle9Router();
     if (url.pathname === '/api/esxi')        return handleESXi(env);
     if (url.pathname === '/api/esxi/power')  return handleESXiPower(request, env);
+    if (url.pathname === '/api/casaos')      return handleCasaOS(env);
     return env.ASSETS.fetch(request);
   },
 };
