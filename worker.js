@@ -301,17 +301,43 @@ async function handleESXi(env) {
   }
 
   // ── Step 2: login ──
-  const { text: loginText, cookie } = await esxiSoap(
+  // Try to extract sessionManager ref from service content
+  const smRef = x1(svcText, 'sessionManager') || 'ha-sessionmanager';
+
+  const loginBody =
     '<Login xmlns="urn:vim25">' +
-    '<_this type="SessionManager">ha-sessionmanager</_this>' +
+    '<_this type="SessionManager">' + escXml(smRef) + '</_this>' +
     '<userName>' + escXml(user) + '</userName>' +
     '<password>' + escXml(pass) + '</password>' +
-    '</Login>'
-  );
+    '</Login>';
 
+  const { text: loginText, cookie, ok: loginOk } = await esxiSoap(loginBody);
+
+  // Also try REST API session if SOAP login fails (ESXi 8.0 supports both)
+  let sessionToken = null;
   if (!cookie || loginText.includes('Fault>')) {
+    try {
+      const b64 = btoa(user + ':' + pass);
+      const restRes = await fetch('https://esxi.home-server.id.vn/api/session', {
+        method: 'POST',
+        headers: { 'Authorization': 'Basic ' + b64, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (restRes.ok) {
+        const tok = await restRes.json();
+        sessionToken = typeof tok === 'string' ? tok : null;
+      }
+    } catch (_) {}
+  }
+
+  if (!cookie && !sessionToken) {
     const msg = x1(loginText, 'localizedMessage') || x1(loginText, 'faultstring') || 'Login failed';
-    return json({ about, host: null, vms: [], datastores: [], stats: {}, error: msg });
+    // Return debug info so we can diagnose
+    return json({
+      about, host: null, vms: [], datastores: [], stats: {},
+      error: msg || 'Login failed',
+      _debug: { loginOk, hasCookie: !!cookie, loginSnippet: loginText.slice(0, 600) }
+    });
   }
 
   // ── Step 3: fetch host, VMs, datastores in parallel ──
