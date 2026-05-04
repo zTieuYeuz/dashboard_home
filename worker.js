@@ -6,7 +6,8 @@ const SERVICES = [
   { id: 'uptime-kuma', name: 'Uptime Kuma',    checkUrl: null },
 ];
 
-const N8N_BASE = 'https://n8n-home.home-server.id.vn/api/v1';
+const N8N_BASE      = 'https://n8n-home.home-server.id.vn/api/v1';
+const NINEROUTER_BASE = 'https://9router.home-server.id.vn';
 
 async function checkService(service) {
   if (!service.checkUrl) return { id: service.id, status: 'local', ping: null };
@@ -135,6 +136,46 @@ async function handleExecDetail(request, env) {
   }
 }
 
+async function handle9Router() {
+  const opts = { signal: AbortSignal.timeout(8000), headers: { 'Accept': 'application/json' } };
+  try {
+    const [provRes, comboRes, usageRes, keysRes] = await Promise.all([
+      fetch(`${NINEROUTER_BASE}/api/providers`, opts),
+      fetch(`${NINEROUTER_BASE}/api/combos`, opts),
+      fetch(`${NINEROUTER_BASE}/api/usage/stats?period=7d`, opts),
+      fetch(`${NINEROUTER_BASE}/api/keys`, opts),
+    ]);
+
+    const [providers, combos, usage, keys] = await Promise.all([
+      provRes.ok  ? provRes.json()  : [],
+      comboRes.ok ? comboRes.json() : [],
+      usageRes.ok ? usageRes.json() : {},
+      keysRes.ok  ? keysRes.json()  : [],
+    ]);
+
+    const provList  = Array.isArray(providers) ? providers : (providers.data || providers.providers || []);
+    const comboList = Array.isArray(combos)    ? combos    : (combos.data    || combos.combos    || []);
+    const keyList   = Array.isArray(keys)      ? keys      : (keys.data      || keys.keys        || []);
+
+    const activeProviders = provList.filter(p => p.enabled !== false && p.active !== false).length;
+
+    return json({
+      providers: provList,
+      combos:    comboList,
+      usage,
+      keys: keyList.map(k => ({ id: k.id, name: k.name, key: k.key ? k.key.slice(0,8)+'...' : '—', createdAt: k.createdAt, lastUsed: k.lastUsed })),
+      stats: {
+        totalProviders: provList.length,
+        activeProviders,
+        totalCombos: comboList.length,
+        totalKeys: keyList.length,
+      },
+    });
+  } catch (e) {
+    return json({ error: e.message }, 502);
+  }
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -148,6 +189,7 @@ export default {
     if (url.pathname === '/api/status')      return handleStatus();
     if (url.pathname === '/api/n8n')         return handleN8n(env);
     if (url.pathname === '/api/n8n/exec')    return handleExecDetail(request, env);
+    if (url.pathname === '/api/9router')     return handle9Router();
     return env.ASSETS.fetch(request);
   },
 };

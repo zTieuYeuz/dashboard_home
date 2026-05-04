@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>9Router — Home Lab Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d14;--surface:#131620;--card:#1a1d2e;--border:#252840;
+  --text:#e2e8f0;--muted:#64748b;--accent:#f97316;
+  --green:#34d399;--red:#f87171;--amber:#fbbf24;--blue:#60a5fa;--purple:#a78bfa;
+  --green-dim:#052e16;--red-dim:#2d0a0a;--amber-dim:#2d1f00;--orange-dim:#2d1500;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+.header{background:var(--surface);border-bottom:0.5px solid var(--border);padding:0 1.5rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header-left{display:flex;align-items:center;gap:12px}
+.back-btn{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);padding:5px 10px;border-radius:6px;border:0.5px solid var(--border);transition:all .15s}
+.back-btn:hover{color:var(--text);border-color:#3d4260;background:var(--card)}
+.svc-icon{width:30px;height:30px;background:#2d1500;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.svc-name{font-size:15px;font-weight:600}
+.svc-url{font-size:11px;color:var(--muted)}
+.header-right{display:flex;align-items:center;gap:10px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)}
+.btn{font-size:12px;padding:5px 12px;border-radius:6px;border:0.5px solid var(--border);background:transparent;cursor:pointer;transition:all .15s}
+.btn-accent{color:var(--accent)}.btn-accent:hover{background:var(--orange-dim);border-color:var(--accent)}
+.btn-muted{color:var(--muted)}.btn-muted:hover{color:var(--text);border-color:#3d4260}
+
+.container{max-width:1300px;margin:0 auto;padding:1.5rem}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.25rem}
+.stat{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:.875rem 1rem;text-align:center}
+.stat-value{font-size:28px;font-weight:700;line-height:1;margin-bottom:4px}
+.stat-label{font-size:11px;color:var(--muted)}
+.c-orange{color:var(--accent)}.c-green{color:var(--green)}.c-blue{color:var(--blue)}.c-purple{color:var(--purple)}
+
+/* Tabs */
+.tabs{display:flex;gap:2px;margin-bottom:1rem;background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:4px;width:fit-content}
+.tab{font-size:13px;font-weight:500;padding:6px 16px;border-radius:7px;cursor:pointer;color:var(--muted);transition:all .15s;border:none;background:transparent}
+.tab.active{background:var(--card);color:var(--text);border:0.5px solid var(--border)}
+.tab:hover:not(.active){color:var(--text)}
+.tab-content{display:none}.tab-content.active{display:block}
+
+/* Panel */
+.panel{background:var(--card);border:0.5px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px}
+.panel-header{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;border-bottom:0.5px solid var(--border)}
+.panel-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+.count-badge{font-size:11px;padding:1px 7px;border-radius:20px;background:var(--surface);color:var(--muted);border:0.5px solid var(--border)}
+
+/* Search */
+.search-wrap{padding:.625rem 1rem;border-bottom:0.5px solid var(--border);position:relative}
+.search-input{width:100%;font-size:12px;padding:6px 10px 6px 28px;border-radius:7px;border:0.5px solid var(--border);background:var(--surface);color:var(--text);outline:none;transition:border-color .15s}
+.search-input:focus{border-color:var(--accent)}
+.search-icon{position:absolute;left:18px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px;pointer-events:none}
+
+.list-body{max-height:500px;overflow-y:auto}
+
+/* Provider item */
+.prov-item{display:flex;align-items:center;gap:10px;padding:.75rem 1rem;border-bottom:0.5px solid var(--border);transition:background .1s}
+.prov-item:last-child{border-bottom:none}
+.prov-item:hover{background:#1e2238}
+.prov-icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;background:var(--surface)}
+.prov-info{flex:1;min-width:0}
+.prov-name{font-size:13px;font-weight:600;margin-bottom:2px}
+.prov-meta{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.prov-status{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:500;flex-shrink:0}
+.prov-status.active{background:var(--green-dim);color:var(--green)}
+.prov-status.inactive{background:#1e293b;color:#475569}
+.prov-models{font-size:10px;padding:1px 6px;border-radius:4px;background:var(--orange-dim);color:var(--accent);flex-shrink:0}
+
+/* Combo item */
+.combo-item{display:flex;align-items:center;gap:10px;padding:.75rem 1rem;border-bottom:0.5px solid var(--border);transition:background .1s}
+.combo-item:last-child{border-bottom:none}
+.combo-item:hover{background:#1e2238}
+.combo-info{flex:1;min-width:0}
+.combo-name{font-size:13px;font-weight:600;margin-bottom:4px}
+.combo-providers{display:flex;flex-wrap:wrap;gap:4px}
+.combo-tag{font-size:10px;padding:2px 7px;border-radius:20px;background:var(--surface);color:var(--muted);border:0.5px solid var(--border)}
+.combo-active{background:var(--orange-dim);color:var(--accent);border-color:var(--accent)}
+
+/* Usage */
+.usage-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:1rem}
+.usage-card{background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:.875rem 1rem}
+.usage-label{font-size:11px;color:var(--muted);margin-bottom:6px}
+.usage-value{font-size:20px;font-weight:700;color:var(--text)}
+.usage-sub{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* Daily chart */
+.chart-wrap{padding:1rem}
+.chart-bars{display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:4px}
+.chart-bar{flex:1;border-radius:3px 3px 0 0;background:var(--accent);opacity:.7;min-height:2px;transition:opacity .15s;position:relative;cursor:default}
+.chart-bar:hover{opacity:1}
+.chart-bar:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:#1e2238;border:0.5px solid var(--border);border-radius:5px;padding:3px 7px;font-size:10px;white-space:nowrap;color:var(--text);z-index:10}
+.chart-labels{display:flex;gap:4px}
+.chart-label{flex:1;font-size:9px;color:var(--muted);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:clip}
+
+/* Keys */
+.key-item{display:flex;align-items:center;gap:10px;padding:.75rem 1rem;border-bottom:0.5px solid var(--border)}
+.key-item:last-child{border-bottom:none}
+.key-info{flex:1}
+.key-name{font-size:13px;font-weight:500;margin-bottom:2px}
+.key-val{font-size:11px;font-family:monospace;color:var(--muted)}
+.key-date{font-size:11px;color:var(--muted)}
+
+/* Empty / loading */
+.empty{padding:2rem;text-align:center;color:var(--muted);font-size:13px}
+.loading{display:flex;align-items:center;justify-content:center;padding:2.5rem;color:var(--muted);font-size:13px;gap:8px}
+.spin{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err-banner{margin:1rem;background:var(--red-dim);border:0.5px solid #5a1a1a;border-radius:8px;padding:.875rem 1rem;font-size:13px;color:#f87171}
+
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+@media(max-width:800px){.stats{grid-template-columns:repeat(2,1fr)}.usage-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <a class="back-btn" href="/">← Dashboard</a>
+    <div class="svc-icon">🔀</div>
+    <div>
+      <div class="svc-name">9Router Proxy</div>
+      <div class="svc-url">9router.home-server.id.vn</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="status-dot" id="statusDot"></div>
+    <span style="font-size:12px;color:var(--muted)" id="version">—</span>
+    <button class="btn btn-muted" onclick="loadData()">↻ Refresh</button>
+    <a class="btn btn-accent" href="https://9router.home-server.id.vn/dashboard" target="_blank" rel="noopener">↗ Mở 9Router</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat"><div class="stat-value c-orange" id="st-providers">—</div><div class="stat-label">Providers</div></div>
+    <div class="stat"><div class="stat-value c-green"  id="st-active">—</div><div class="stat-label">Active</div></div>
+    <div class="stat"><div class="stat-value c-blue"   id="st-combos">—</div><div class="stat-label">Combos</div></div>
+    <div class="stat"><div class="stat-value c-purple" id="st-keys">—</div><div class="stat-label">API Keys</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('providers',this)">🤖 Providers</button>
+    <button class="tab" onclick="switchTab('combos',this)">🔗 Combos</button>
+    <button class="tab" onclick="switchTab('usage',this)">📊 Usage</button>
+    <button class="tab" onclick="switchTab('keys',this)">🔑 API Keys</button>
+  </div>
+
+  <!-- TAB: Providers -->
+  <div class="tab-content active" id="tab-providers">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">🤖 AI Providers <span class="count-badge" id="provCount">—</span></div>
+      </div>
+      <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" id="provSearch" placeholder="Tìm provider..." oninput="renderProviders()"/></div>
+      <div class="list-body" id="provList"><div class="loading"><div class="spin"></div>Đang tải...</div></div>
+    </div>
+  </div>
+
+  <!-- TAB: Combos -->
+  <div class="tab-content" id="tab-combos">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">🔗 Combos <span class="count-badge" id="comboCount">—</span></div>
+      </div>
+      <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" id="comboSearch" placeholder="Tìm combo..." oninput="renderCombos()"/></div>
+      <div class="list-body" id="comboList"><div class="loading"><div class="spin"></div>Đang tải...</div></div>
+    </div>
+  </div>
+
+  <!-- TAB: Usage -->
+  <div class="tab-content" id="tab-usage">
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">📊 Usage 7 ngày qua</div></div>
+      <div class="usage-grid" id="usageSummary">
+        <div class="usage-card"><div class="usage-label">Tổng requests</div><div class="usage-value" id="u-requests">—</div></div>
+        <div class="usage-card"><div class="usage-label">Tokens dùng</div><div class="usage-value" id="u-tokens">—</div></div>
+        <div class="usage-card"><div class="usage-label">Success rate</div><div class="usage-value" id="u-rate">—</div></div>
+      </div>
+      <div class="chart-wrap">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Requests theo ngày</div>
+        <div class="chart-bars" id="chartBars"></div>
+        <div class="chart-labels" id="chartLabels"></div>
+      </div>
+      <div style="padding:0 1rem 1rem" id="usageByProvider"></div>
+    </div>
+  </div>
+
+  <!-- TAB: API Keys -->
+  <div class="tab-content" id="tab-keys">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">🔑 API Keys <span class="count-badge" id="keyCount">—</span></div>
+      </div>
+      <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" id="keySearch" placeholder="Tìm key..." oninput="renderKeys()"/></div>
+      <div class="list-body" id="keyList"><div class="loading"><div class="spin"></div>Đang tải...</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+var allProviders = [], allCombos = [], allKeys = [], usageData = {};
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(function(el){ el.classList.remove('active'); });
+  document.querySelectorAll('.tab').forEach(function(el){ el.classList.remove('active'); });
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+
+function providerIcon(name) {
+  var n = (name||'').toLowerCase();
+  if (n.includes('openai'))    return '🟢';
+  if (n.includes('anthropic') || n.includes('claude')) return '🟠';
+  if (n.includes('google') || n.includes('gemini'))    return '🔵';
+  if (n.includes('deepseek'))  return '🐋';
+  if (n.includes('groq'))      return '⚡';
+  if (n.includes('mistral'))   return '🌀';
+  if (n.includes('openrouter'))return '🔀';
+  if (n.includes('together'))  return '🤝';
+  if (n.includes('cohere'))    return '🔮';
+  if (n.includes('xai') || n.includes('grok')) return '𝕏';
+  if (n.includes('fireworks')) return '🎆';
+  if (n.includes('cerebras'))  return '🧠';
+  if (n.includes('ollama'))    return '🦙';
+  return '🤖';
+}
+
+function fmtNum(n) {
+  if (!n && n!==0) return '—';
+  if (n >= 1000000) return (n/1000000).toFixed(1)+'M';
+  if (n >= 1000)    return (n/1000).toFixed(1)+'K';
+  return String(n);
+}
+
+function timeAgo(iso) {
+  if (!iso) return '—';
+  var diff = Date.now() - new Date(iso).getTime();
+  var m = Math.floor(diff/60000);
+  if (m < 1)  return 'vừa xong';
+  if (m < 60) return m+'ph trước';
+  var h = Math.floor(m/60);
+  if (h < 24) return h+'h trước';
+  return Math.floor(h/24)+'ng trước';
+}
+
+/* ── Providers ── */
+function renderProviders() {
+  var q = (document.getElementById('provSearch').value||'').toLowerCase();
+  var list = allProviders.filter(function(p){ return !q || (p.name||'').toLowerCase().includes(q) || (p.type||'').toLowerCase().includes(q); });
+  document.getElementById('provCount').textContent = list.length+'/'+allProviders.length;
+  if (!list.length){ document.getElementById('provList').innerHTML='<div class="empty">Không tìm thấy provider</div>'; return; }
+
+  document.getElementById('provList').innerHTML = list.map(function(p){
+    var isActive = p.enabled !== false && p.active !== false && p.status !== 'inactive';
+    var models = p.models ? p.models.length : (p.modelCount || 0);
+    var acctCount = p.accounts ? p.accounts.length : (p.accountCount || 0);
+    return '<div class="prov-item">'
+      +'<div class="prov-icon">'+providerIcon(p.name||p.type||'')+'</div>'
+      +'<div class="prov-info">'
+        +'<div class="prov-name">'+(p.name||p.type||p.id||'Unknown')+'</div>'
+        +'<div class="prov-meta">'
+          +(acctCount?'<span>'+acctCount+' accounts</span>':'')
+          +(p.type&&p.type!==p.name?'<span>'+p.type+'</span>':'')
+          +(p.baseUrl?'<span style="font-family:monospace;font-size:10px">'+p.baseUrl.replace(/^https?:\/\//,'').slice(0,30)+'</span>':'')
+        +'</div>'
+      +'</div>'
+      +(models?'<span class="prov-models">'+models+' models</span>':'')
+      +'<span class="prov-status '+(isActive?'active':'inactive')+'">'+(isActive?'Active':'Off')+'</span>'
+    +'</div>';
+  }).join('');
+}
+
+/* ── Combos ── */
+function renderCombos() {
+  var q = (document.getElementById('comboSearch').value||'').toLowerCase();
+  var list = allCombos.filter(function(c){ return !q || (c.name||'').toLowerCase().includes(q); });
+  document.getElementById('comboCount').textContent = list.length+'/'+allCombos.length;
+  if (!list.length){ document.getElementById('comboList').innerHTML='<div class="empty">Không tìm thấy combo</div>'; return; }
+
+  document.getElementById('comboList').innerHTML = list.map(function(c){
+    var providers = c.providers || c.items || [];
+    var isActive = c.enabled !== false && c.active !== false;
+    return '<div class="combo-item">'
+      +'<div style="width:32px;height:32px;border-radius:8px;background:var(--orange-dim);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🔗</div>'
+      +'<div class="combo-info">'
+        +'<div class="combo-name">'+(c.name||c.id||'Combo')+'</div>'
+        +'<div class="combo-providers">'
+          +providers.map(function(p){
+            var n = p.name||p.provider||p.id||p;
+            return '<span class="combo-tag '+(isActive?'combo-active':'')+'">'+providerIcon(n)+' '+n+'</span>';
+          }).join('')
+          +(providers.length===0?'<span style="font-size:11px;color:var(--muted)">Không có provider</span>':'')
+        +'</div>'
+      +'</div>'
+      +'<span class="prov-status '+(isActive?'active':'inactive')+'">'+(isActive?'Active':'Off')+'</span>'
+    +'</div>';
+  }).join('');
+}
+
+/* ── Usage ── */
+function renderUsage() {
+  var d = usageData;
+  if (!d || Object.keys(d).length === 0) {
+    document.getElementById('chartBars').innerHTML = '<div style="color:var(--muted);font-size:12px">Không có dữ liệu usage</div>';
+    return;
+  }
+
+  var total    = d.totalRequests || d.total || d.requests || 0;
+  var tokens   = d.totalTokens   || d.tokens || 0;
+  var success  = d.successRate   || d.success || null;
+  document.getElementById('u-requests').textContent = fmtNum(total);
+  document.getElementById('u-tokens').textContent   = fmtNum(tokens);
+  document.getElementById('u-rate').textContent     = success !== null ? Math.round(success*100)+'%' : '—';
+
+  // daily chart
+  var daily = d.daily || d.days || d.byDay || [];
+  if (daily.length > 0) {
+    var max = Math.max.apply(null, daily.map(function(x){ return x.requests||x.count||x.total||0; }));
+    document.getElementById('chartBars').innerHTML = daily.map(function(x){
+      var val = x.requests||x.count||x.total||0;
+      var h = max>0 ? Math.round((val/max)*76)+4 : 4;
+      var label = (x.date||x.day||'').slice(5);
+      return '<div class="chart-bar" style="height:'+h+'px" data-tip="'+label+': '+fmtNum(val)+' req"></div>';
+    }).join('');
+    document.getElementById('chartLabels').innerHTML = daily.map(function(x){
+      return '<div class="chart-label">'+(x.date||x.day||'').slice(5)+'</div>';
+    }).join('');
+  } else {
+    document.getElementById('chartBars').innerHTML = '<div style="color:var(--muted);font-size:12px">Không có dữ liệu theo ngày</div>';
+  }
+
+  // by provider
+  var byProv = d.byProvider || d.providers || [];
+  if (byProv.length > 0) {
+    document.getElementById('usageByProvider').innerHTML =
+      '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Theo Provider</div>'
+      +byProv.slice(0,10).map(function(p){
+        var name = p.provider||p.name||'Unknown';
+        var req = p.requests||p.count||0;
+        var pct = total>0 ? Math.round((req/total)*100) : 0;
+        return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+          +'<span style="font-size:13px">'+providerIcon(name)+'</span>'
+          +'<span style="font-size:12px;flex:0 0 140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+name+'</span>'
+          +'<div style="flex:1;height:5px;background:var(--surface);border-radius:3px;overflow:hidden">'
+            +'<div style="height:100%;background:var(--accent);border-radius:3px;width:'+pct+'%"></div>'
+          +'</div>'
+          +'<span style="font-size:11px;color:var(--muted);flex-shrink:0">'+fmtNum(req)+'</span>'
+        +'</div>';
+      }).join('');
+  }
+}
+
+/* ── Keys ── */
+function renderKeys() {
+  var q = (document.getElementById('keySearch').value||'').toLowerCase();
+  var list = allKeys.filter(function(k){ return !q || (k.name||'').toLowerCase().includes(q) || (k.key||'').includes(q); });
+  document.getElementById('keyCount').textContent = list.length+'/'+allKeys.length;
+  if (!list.length){ document.getElementById('keyList').innerHTML='<div class="empty">Không có API key</div>'; return; }
+  document.getElementById('keyList').innerHTML = list.map(function(k){
+    return '<div class="key-item">'
+      +'<div style="font-size:20px">🔑</div>'
+      +'<div class="key-info">'
+        +'<div class="key-name">'+(k.name||'Unnamed key')+'</div>'
+        +'<div class="key-val">'+(k.key||'—')+'</div>'
+      +'</div>'
+      +'<div class="key-date" style="text-align:right">'
+        +(k.lastUsed?'<div>Dùng '+timeAgo(k.lastUsed)+'</div>':'')
+        +(k.createdAt?'<div style="color:var(--muted)">Tạo '+timeAgo(k.createdAt)+'</div>':'')
+      +'</div>'
+    +'</div>';
+  }).join('');
+}
+
+/* ── Load ── */
+function loadData() {
+  fetch('/api/9router', {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data.error){
+        ['provList','comboList','keyList'].forEach(function(id){
+          document.getElementById(id).innerHTML='<div class="err-banner">⚠ '+data.error+'</div>';
+        });
+        return;
+      }
+      var s = data.stats||{};
+      document.getElementById('st-providers').textContent = s.totalProviders||0;
+      document.getElementById('st-active').textContent    = s.activeProviders||0;
+      document.getElementById('st-combos').textContent    = s.totalCombos||0;
+      document.getElementById('st-keys').textContent      = s.totalKeys||0;
+
+      allProviders = data.providers||[];
+      allCombos    = data.combos||[];
+      allKeys      = data.keys||[];
+      usageData    = data.usage||{};
+
+      renderProviders();
+      renderCombos();
+      renderUsage();
+      renderKeys();
+
+      // version from settings if available
+      if (data.version) document.getElementById('version').textContent = 'v'+data.version;
+    })
+    .catch(function(e){
+      document.getElementById('provList').innerHTML='<div class="err-banner">⚠ '+e.message+'</div>';
+    });
+}
+
+loadData();
+setInterval(loadData, 60000);
+</script>
+</body>
+</html>
