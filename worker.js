@@ -1,0 +1,400 @@
+const SERVICES = [
+  {
+    id: 'esxi',
+    name: 'VMware ESXi',
+    icon: '🖥️',
+    category: 'Infrastructure',
+    desc: 'Hypervisor - Bare Metal',
+    url: 'https://192.168.110.10',
+    checkUrl: null, // local only, cannot check from Worker
+  },
+  {
+    id: 'n8n',
+    name: 'n8n Automation',
+    icon: '⚡',
+    category: 'Automation',
+    desc: 'Workflow & Bot Automation',
+    url: 'https://n8n-home.home-server.id.vn',
+    checkUrl: 'https://n8n-home.home-server.id.vn',
+  },
+  {
+    id: 'casaos',
+    name: 'CasaOS',
+    icon: '🏠',
+    category: 'Home Server',
+    desc: 'Home Server OS Dashboard',
+    url: 'http://192.168.110.21:4434',
+    checkUrl: null, // local only
+  },
+  {
+    id: '9router',
+    name: '9Router',
+    icon: '🔀',
+    category: 'Network',
+    desc: 'Router & Network Management',
+    url: 'https://9router.home-server.id.vn/dashboard',
+    checkUrl: 'https://9router.home-server.id.vn',
+  },
+  {
+    id: 'uptime-kuma',
+    name: 'Uptime Kuma',
+    icon: '📊',
+    category: 'Monitoring',
+    desc: 'Service Health Monitor',
+    url: 'http://192.168.110.21:3005/dashboard',
+    checkUrl: null, // local only
+  },
+];
+
+async function checkService(service) {
+  if (!service.checkUrl) {
+    return { id: service.id, status: 'local', ping: null };
+  }
+  const t0 = Date.now();
+  try {
+    const res = await fetch(service.checkUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(6000),
+      headers: { 'User-Agent': 'HomeLabDashboard/1.0' },
+    });
+    const ping = Date.now() - t0;
+    const ok = res.status < 500;
+    return { id: service.id, status: ok ? 'online' : 'offline', ping, httpStatus: res.status };
+  } catch (e) {
+    return { id: service.id, status: 'offline', ping: null, error: e.message };
+  }
+}
+
+async function handleStatus() {
+  const results = await Promise.all(SERVICES.map(checkService));
+  const map = {};
+  results.forEach(r => { map[r.id] = r; });
+
+  return new Response(JSON.stringify({
+    ts: new Date().toISOString(),
+    services: map,
+  }), {
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+
+const HTML = `<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Home Lab Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d14;--surface:#131620;--card:#1a1d2e;--border:#252840;
+  --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
+  --green:#34d399;--red:#f87171;--amber:#fbbf24;
+  --green-dim:#052e16;--red-dim:#2d0a0a;--amber-dim:#2d1f00;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+a{color:inherit;text-decoration:none}
+.header{background:var(--surface);border-bottom:0.5px solid var(--border);padding:0 1.5rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header-left{display:flex;align-items:center;gap:12px}
+.logo{width:28px;height:28px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.site-name{font-size:15px;font-weight:600}
+.site-sub{font-size:12px;color:var(--muted);margin-left:4px}
+.header-right{display:flex;align-items:center;gap:16px}
+.clock{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.refresh-btn{font-size:12px;padding:5px 12px;border-radius:6px;border:0.5px solid var(--border);background:transparent;color:var(--accent);cursor:pointer;transition:all .15s}
+.refresh-btn:hover{background:#1e3a5f;border-color:var(--accent)}
+.auto-badge{font-size:11px;padding:3px 8px;border-radius:20px;background:#052e16;color:var(--green);border:0.5px solid #0d4a25}
+.container{max-width:1400px;margin:0 auto;padding:1.5rem}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.5rem}
+.sum-card{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:.875rem 1.125rem;display:flex;align-items:center;gap:12px}
+.sum-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.sum-icon.total{background:#1e293b}
+.sum-icon.online{background:var(--green-dim)}
+.sum-icon.offline{background:var(--red-dim)}
+.sum-icon.local{background:#1e293b}
+.sum-label{font-size:11px;color:var(--muted);margin-bottom:2px}
+.sum-value{font-size:22px;font-weight:600;line-height:1}
+.sum-value.green{color:var(--green)}
+.sum-value.red{color:var(--red)}
+.sum-value.amber{color:var(--amber)}
+.main-grid{display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start}
+.section-title{font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.services-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+.srv-card{background:var(--card);border:0.5px solid var(--border);border-radius:12px;padding:1rem 1.125rem;cursor:pointer;transition:border-color .15s,transform .1s;position:relative;overflow:hidden}
+.srv-card:hover{border-color:#3d4260;transform:translateY(-1px)}
+.srv-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:12px 12px 0 0;background:transparent;transition:background .2s}
+.srv-card.online::before{background:linear-gradient(90deg,var(--green),transparent)}
+.srv-card.offline::before{background:linear-gradient(90deg,var(--red),transparent)}
+.srv-card.local::before{background:linear-gradient(90deg,var(--amber),transparent)}
+.srv-card.checking::before{background:linear-gradient(90deg,#475569,transparent)}
+.srv-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.srv-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;background:var(--surface);flex-shrink:0}
+.srv-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.srv-dot.online{background:var(--green);box-shadow:0 0 6px var(--green)}
+.srv-dot.offline{background:var(--red);box-shadow:0 0 6px var(--red)}
+.srv-dot.local{background:var(--amber)}
+.srv-dot.checking{background:#475569;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.srv-name{font-size:14px;font-weight:600;margin-bottom:2px;color:var(--text)}
+.srv-desc{font-size:11px;color:var(--muted)}
+.srv-footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:0.5px solid var(--border)}
+.srv-badge{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:500}
+.srv-badge.online{background:var(--green-dim);color:var(--green)}
+.srv-badge.offline{background:var(--red-dim);color:var(--red)}
+.srv-badge.local{background:var(--amber-dim);color:var(--amber)}
+.srv-badge.checking{background:#1e293b;color:#475569}
+.srv-ping{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.srv-link{font-size:11px;color:var(--accent);opacity:0;transition:opacity .15s}
+.srv-card:hover .srv-link{opacity:1}
+.info-card{background:var(--card);border:0.5px solid var(--border);border-radius:12px;padding:1rem 1.125rem;margin-bottom:12px}
+.info-title{font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.info-rows{display:flex;flex-direction:column;gap:7px}
+.info-row{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:0.5px solid var(--border)}
+.info-row:last-child{border-bottom:none}
+.info-key{color:var(--muted)}
+.info-val{color:var(--text);font-weight:500;text-align:right}
+.info-val.green{color:var(--green)}
+.info-val.red{color:var(--red)}
+.info-val.amber{color:var(--amber)}
+.qlink-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.qlink{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:8px;border:0.5px solid var(--border);background:var(--surface);transition:all .15s}
+.qlink:hover{border-color:var(--accent);background:#0d1f35}
+.qlink-icon{font-size:16px}
+.qlink-name{font-size:11px;font-weight:500;color:var(--text)}
+.qlink-url{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.uptime-card{background:var(--card);border:0.5px solid var(--border);border-radius:12px;padding:1rem 1.125rem;margin-bottom:14px}
+.uptime-item{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.uptime-item:last-child{margin-bottom:0}
+.uptime-label{display:flex;justify-content:space-between;font-size:12px}
+.uptime-name{color:var(--text);font-weight:500}
+.uptime-pct{color:var(--muted)}
+.uptime-bar-bg{height:4px;background:var(--surface);border-radius:2px;overflow:hidden}
+.uptime-bar-fill{height:100%;border-radius:2px;transition:width .5s ease}
+.uptime-bar-fill.good{background:var(--green)}
+.uptime-bar-fill.warn{background:var(--amber)}
+.uptime-bar-fill.bad{background:var(--red)}
+.log-card{background:var(--card);border:0.5px solid var(--border);border-radius:12px;padding:1rem 1.125rem;margin-bottom:14px}
+.log-list{display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto}
+.log-item{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0;border-bottom:0.5px solid var(--border)}
+.log-item:last-child{border-bottom:none}
+.log-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.log-dot.online{background:var(--green)}
+.log-dot.offline{background:var(--red)}
+.log-time{color:var(--muted);flex-shrink:0}
+.log-text{color:var(--text);flex:1}
+.note{font-size:11px;color:var(--amber);background:var(--amber-dim);border:0.5px solid #5a3e00;border-radius:6px;padding:6px 10px;margin-top:8px}
+.footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);border-top:0.5px solid var(--border);margin-top:1rem}
+@media(max-width:900px){.main-grid{grid-template-columns:1fr}.summary{grid-template-columns:repeat(2,1fr)}.services-grid{grid-template-columns:1fr}}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="header-left">
+    <div class="logo">🏠</div>
+    <span class="site-name">Home Lab</span>
+    <span class="site-sub">/ Dashboard</span>
+  </div>
+  <div class="header-right">
+    <span class="auto-badge" id="autoLabel">● Auto 60s</span>
+    <span class="clock" id="clock">--:--:--</span>
+    <button class="refresh-btn" onclick="runChecks()">↻ Refresh</button>
+  </div>
+</header>
+
+<div class="container">
+  <div class="summary">
+    <div class="sum-card"><div class="sum-icon total">📡</div><div><div class="sum-label">Tổng services</div><div class="sum-value" id="totalCount">—</div></div></div>
+    <div class="sum-card"><div class="sum-icon online">✅</div><div><div class="sum-label">Online</div><div class="sum-value green" id="onlineCount">—</div></div></div>
+    <div class="sum-card"><div class="sum-icon offline">🔴</div><div><div class="sum-label">Offline</div><div class="sum-value red" id="offlineCount">—</div></div></div>
+    <div class="sum-card"><div class="sum-icon local">🏠</div><div><div class="sum-label">LAN Only</div><div class="sum-value amber" id="localCount">—</div></div></div>
+  </div>
+
+  <div class="main-grid">
+    <div>
+      <div class="section-title">📊 Services</div>
+      <div class="services-grid" id="servicesGrid"></div>
+
+      <div class="section-title">📈 Uptime (phiên này)</div>
+      <div class="uptime-card"><div id="uptimeRows"></div></div>
+
+      <div class="section-title">📋 Activity Log</div>
+      <div class="log-card"><div class="log-list" id="logList"><div style="font-size:12px;color:var(--muted);text-align:center;padding:8px">Đang kiểm tra...</div></div></div>
+    </div>
+
+    <div>
+      <div class="info-card">
+        <div class="info-title">⏱ Trạng thái</div>
+        <div class="info-rows">
+          <div class="info-row"><span class="info-key">Lần cuối check</span><span class="info-val" id="lastCheck">—</span></div>
+          <div class="info-row"><span class="info-key">Tổng lần check</span><span class="info-val" id="checkCount">0</span></div>
+          <div class="info-row"><span class="info-key">Avg Response</span><span class="info-val green" id="avgPing">—</span></div>
+          <div class="info-row"><span class="info-key">Check từ</span><span class="info-val">Cloudflare Edge</span></div>
+        </div>
+        <div class="note">⚠ Services LAN (192.168.x.x) cần thêm Cloudflare Tunnel để check được từ internet.</div>
+      </div>
+
+      <div class="info-card">
+        <div class="info-title">🔗 Quick Links</div>
+        <div class="qlink-grid" id="quickLinks"></div>
+      </div>
+
+      <div class="info-card">
+        <div class="info-title">🌐 Mạng nội bộ</div>
+        <div class="info-rows">
+          <div class="info-row"><span class="info-key">Subnet</span><span class="info-val">192.168.110.0/24</span></div>
+          <div class="info-row"><span class="info-key">Host chính</span><span class="info-val">192.168.110.21</span></div>
+          <div class="info-row"><span class="info-key">Tunnel</span><span class="info-val green">Cloudflare</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<footer class="footer">Home Lab Dashboard · Cloudflare Worker · Check từ Cloudflare Edge Network</footer>
+
+<script>
+const SERVICES = [
+  { id:'esxi',        name:'VMware ESXi',    icon:'🖥️', desc:'Hypervisor - Bare Metal',      url:'https://192.168.110.10',                      local:true },
+  { id:'n8n',         name:'n8n Automation', icon:'⚡', desc:'Workflow & Bot Automation',     url:'https://n8n-home.home-server.id.vn',           local:false },
+  { id:'casaos',      name:'CasaOS',         icon:'🏠', desc:'Home Server OS Dashboard',      url:'http://192.168.110.21:4434',                   local:true },
+  { id:'9router',     name:'9Router',        icon:'🔀', desc:'Router & Network Management',   url:'https://9router.home-server.id.vn/dashboard',  local:false },
+  { id:'uptime-kuma', name:'Uptime Kuma',    icon:'📊', desc:'Service Health Monitor',        url:'http://192.168.110.21:3005/dashboard',         local:true },
+];
+
+const state = { prev:{}, checks:{}, online:{}, log:[], total:0, startTime:Date.now() };
+SERVICES.forEach(s => { state.checks[s.id]=0; state.online[s.id]=0; });
+
+// clock
+setInterval(()=>{ document.getElementById('clock').textContent=new Date().toLocaleTimeString('vi-VN',{hour12:false}); },1000);
+
+// init cards & links
+function initUI() {
+  document.getElementById('servicesGrid').innerHTML = SERVICES.map(s=>`
+    <div class="srv-card checking" id="card-${s.id}" onclick="window.open('${s.url}','_blank','noopener')">
+      <div class="srv-header"><div class="srv-icon">${s.icon}</div><div class="srv-dot checking" id="dot-${s.id}"></div></div>
+      <div class="srv-name">${s.name}</div>
+      <div class="srv-desc">${s.desc}</div>
+      <div class="srv-footer">
+        <span class="srv-badge checking" id="badge-${s.id}">Checking…</span>
+        <span class="srv-ping" id="ping-${s.id}">—</span>
+        <a class="srv-link" href="${s.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗ Mở</a>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('quickLinks').innerHTML = SERVICES.map(s=>`
+    <a class="qlink" href="${s.url}" target="_blank" rel="noopener">
+      <div class="qlink-icon">${s.icon}</div>
+      <div class="qlink-name">${s.name}</div>
+      <div class="qlink-url">${s.url.replace(/^https?:\/\//,'')}</div>
+    </a>`).join('');
+}
+
+function updateCard(s, status, ping) {
+  const card = document.getElementById('card-'+s.id);
+  const dot  = document.getElementById('dot-'+s.id);
+  const badge= document.getElementById('badge-'+s.id);
+  const pingEl=document.getElementById('ping-'+s.id);
+  if(!card) return;
+  const label = status==='online'?'Online':status==='local'?'LAN Only':'Offline';
+  card.className  = 'srv-card '+status;
+  dot.className   = 'srv-dot '+status;
+  badge.className = 'srv-badge '+status;
+  badge.textContent = label;
+  pingEl.textContent = ping!=null ? ping+'ms' : '—';
+}
+
+function renderUptimeBars() {
+  document.getElementById('uptimeRows').innerHTML = SERVICES.map(s=>{
+    const total = state.checks[s.id];
+    const pct = total>0 ? Math.round((state.online[s.id]/total)*100) : 0;
+    const cls = pct>=95?'good':pct>=70?'warn':'bad';
+    return \`<div class="uptime-item">
+      <div class="uptime-label"><span class="uptime-name">\${s.icon} \${s.name}</span><span class="uptime-pct">\${total>0?pct+'%':'—'}</span></div>
+      <div class="uptime-bar-bg"><div class="uptime-bar-fill \${cls}" style="width:\${pct}%"></div></div>
+    </div>\`;
+  }).join('');
+}
+
+function addLog(status, name) {
+  const time = new Date().toLocaleTimeString('vi-VN',{hour12:false});
+  state.log.unshift({status,name,time});
+  if(state.log.length>30) state.log.pop();
+  document.getElementById('logList').innerHTML = state.log.slice(0,15).map(e=>\`
+    <div class="log-item">
+      <div class="log-dot \${e.status==='online'?'online':'offline'}"></div>
+      <span class="log-time">\${e.time}</span>
+      <span class="log-text">\${e.name} — \${e.status==='online'?'✓ Online':e.status==='local'?'⚠ LAN Only':'✗ Offline'}</span>
+    </div>\`).join('');
+}
+
+async function runChecks() {
+  state.total++;
+  document.getElementById('checkCount').textContent = state.total;
+  document.getElementById('lastCheck').textContent = new Date().toLocaleTimeString('vi-VN',{hour12:false});
+
+  let data;
+  try {
+    const res = await fetch('/api/status', { cache:'no-store' });
+    data = await res.json();
+  } catch(e) {
+    console.error('API error', e);
+    return;
+  }
+
+  let onlineN=0, offlineN=0, localN=0, pings=[];
+
+  SERVICES.forEach(s => {
+    const r = data.services[s.id] || {};
+    const status = r.status || 'offline';
+    const ping = r.ping || null;
+
+    state.checks[s.id]++;
+    if(status==='online') { state.online[s.id]++; onlineN++; pings.push(ping); }
+    else if(status==='local') localN++;
+    else offlineN++;
+
+    updateCard(s, status, ping);
+
+    const prev = state.prev[s.id];
+    if(prev===undefined || prev!==status) addLog(status, s.name);
+    state.prev[s.id] = status;
+  });
+
+  document.getElementById('totalCount').textContent  = SERVICES.length;
+  document.getElementById('onlineCount').textContent  = onlineN;
+  document.getElementById('offlineCount').textContent = offlineN;
+  document.getElementById('localCount').textContent   = localN;
+  const avgP = pings.filter(Boolean);
+  document.getElementById('avgPing').textContent = avgP.length ? Math.round(avgP.reduce((a,b)=>a+b,0)/avgP.length)+'ms' : '—';
+
+  renderUptimeBars();
+}
+
+// auto refresh
+let cd=60;
+setInterval(()=>{ cd--; document.getElementById('autoLabel').textContent=\`● Auto \${cd}s\`; if(cd<=0){runChecks();cd=60;} },1000);
+
+initUI();
+runChecks();
+</script>
+</body>
+</html>`;
+
+export default {
+  async fetch(request) {
+    const url = new URL(request.url);
+
+    if (url.pathname === '/api/status') {
+      return handleStatus();
+    }
+
+    return new Response(HTML, {
+      headers: { 'Content-Type': 'text/html;charset=UTF-8' },
+    });
+  },
+};
