@@ -20,22 +20,21 @@ a{color:inherit;text-decoration:none}
 .back-btn{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);padding:5px 10px;border-radius:6px;border:0.5px solid var(--border);transition:all .15s}
 .back-btn:hover{color:var(--text);border-color:#3d4260;background:var(--card)}
 .svc-icon{width:30px;height:30px;background:#2d1500;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px}
-.svc-name{font-size:15px;font-weight:600}
-.svc-url{font-size:11px;color:var(--muted)}
+.svc-name{font-size:15px;font-weight:600}.svc-url{font-size:11px;color:var(--muted)}
 .header-right{display:flex;align-items:center;gap:10px}
 .status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)}
 .btn{font-size:12px;padding:5px 12px;border-radius:6px;border:0.5px solid var(--border);background:transparent;cursor:pointer;transition:all .15s}
 .btn-accent{color:var(--accent)}.btn-accent:hover{background:var(--orange-dim);border-color:var(--accent)}
 .btn-muted{color:var(--muted)}.btn-muted:hover{color:var(--text);border-color:#3d4260}
 
-.container{max-width:1300px;margin:0 auto;padding:1.5rem}
+.container{max-width:1340px;margin:0 auto;padding:1.5rem}
 
-/* Stats */
+/* Stats bar */
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.25rem}
 .stat{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:.875rem 1rem;text-align:center}
-.stat-value{font-size:28px;font-weight:700;line-height:1;margin-bottom:4px}
+.stat-value{font-size:26px;font-weight:700;line-height:1;margin-bottom:3px}
 .stat-label{font-size:11px;color:var(--muted)}
-.c-orange{color:var(--accent)}.c-green{color:var(--green)}.c-blue{color:var(--blue)}.c-purple{color:var(--purple)}
+.c-orange{color:var(--accent)}.c-green{color:var(--green)}.c-red{color:var(--red)}.c-blue{color:var(--blue)}.c-purple{color:var(--purple)}
 
 /* Tabs */
 .tabs{display:flex;gap:2px;margin-bottom:1rem;background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:4px;width:fit-content}
@@ -55,79 +54,86 @@ a{color:inherit;text-decoration:none}
 .search-input{width:100%;font-size:12px;padding:6px 10px 6px 28px;border-radius:7px;border:0.5px solid var(--border);background:var(--surface);color:var(--text);outline:none;transition:border-color .15s}
 .search-input:focus{border-color:var(--accent)}
 .search-icon{position:absolute;left:18px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px;pointer-events:none}
+.list-body{max-height:540px;overflow-y:auto}
 
-.list-body{max-height:520px;overflow-y:auto}
-
-/* Provider item */
-.prov-item{display:flex;align-items:center;gap:10px;padding:.75rem 1rem;border-bottom:0.5px solid var(--border);transition:background .1s}
-.prov-item:last-child{border-bottom:none}
-.prov-item:hover{background:#1e2238}
-.prov-icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;background:var(--surface)}
-.prov-info{flex:1;min-width:0}
-.prov-name{font-size:13px;font-weight:600;margin-bottom:2px}
-.prov-meta{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.prov-status{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:500;flex-shrink:0}
-.prov-status.active{background:var(--green-dim);color:var(--green)}
-.prov-status.inactive{background:#1e293b;color:#475569}
-.prov-models{font-size:10px;padding:1px 6px;border-radius:4px;background:var(--orange-dim);color:var(--accent);flex-shrink:0}
+/* Connection card */
+.conn-item{display:flex;align-items:flex-start;gap:12px;padding:.875rem 1rem;border-bottom:0.5px solid var(--border);transition:background .1s}
+.conn-item:last-child{border-bottom:none}
+.conn-item:hover{background:#1e2238}
+.conn-avatar{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;background:var(--surface)}
+.conn-info{flex:1;min-width:0}
+.conn-name{font-size:13px;font-weight:600;margin-bottom:2px}
+.conn-meta{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.conn-locks{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+.lock-chip{font-size:9px;padding:1px 6px;border-radius:20px;background:var(--red-dim);color:var(--red);border:0.5px solid #5a1a1a}
+.conn-status{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:500;flex-shrink:0}
+.conn-status.active{background:var(--green-dim);color:var(--green)}
+.conn-status.error{background:var(--red-dim);color:var(--red)}
+.conn-status.inactive{background:#1e293b;color:#475569}
+.conn-status.expired{background:var(--amber-dim);color:var(--amber)}
 
 /* Combo item */
-.combo-item{display:flex;align-items:center;gap:10px;padding:.75rem 1rem;border-bottom:0.5px solid var(--border);transition:background .1s}
+.combo-item{padding:.875rem 1rem;border-bottom:0.5px solid var(--border);transition:background .1s}
 .combo-item:last-child{border-bottom:none}
 .combo-item:hover{background:#1e2238}
-.combo-info{flex:1;min-width:0}
-.combo-name{font-size:13px;font-weight:600;margin-bottom:4px}
-.combo-providers{display:flex;flex-wrap:wrap;gap:4px}
-.combo-tag{font-size:10px;padding:2px 7px;border-radius:20px;background:var(--surface);color:var(--muted);border:0.5px solid var(--border)}
-.combo-active{background:var(--orange-dim);color:var(--accent);border-color:var(--accent)}
+.combo-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.combo-name{font-size:13px;font-weight:600}
+.combo-models{display:flex;flex-wrap:wrap;gap:4px}
+.model-chip{font-size:10px;padding:2px 8px;border-radius:20px;background:var(--surface);color:var(--muted);border:0.5px solid var(--border);font-family:monospace}
+.model-chip.pref-cx{border-color:#3b6aff33;color:#60a5fa}
+.model-chip.pref-gh{border-color:#27374633;color:#4ade80}
+.model-chip.pref-cc,.model-chip.pref-ag{border-color:#f9731633;color:#fb923c}
+.model-chip.pref-nvidia,.model-chip.pref-oc{border-color:#22d3ee33;color:#22d3ee}
+.model-chip.pref-gemini{border-color:#a78bfa33;color:#a78bfa}
+.model-chip.pref-ollama{border-color:#34d39933;color:#34d399}
+.model-chip.pref-openrouter,.model-chip.pref-qwen{border-color:#fbbf2433;color:#fbbf24}
 
-/* ── Usage & Quota ── */
-.period-tabs{display:flex;gap:4px;padding:.75rem 1rem;border-bottom:0.5px solid var(--border)}
-.period-btn{font-size:11px;padding:3px 12px;border-radius:20px;border:0.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
-.period-btn.active{background:var(--orange-dim);color:var(--accent);border-color:var(--accent)}
+/* Usage summary cards */
+.usage-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:1rem}
+.u-card{background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:.75rem 1rem}
+.u-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.u-value{font-size:22px;font-weight:700;line-height:1}
+.u-sub{font-size:10px;color:var(--muted);margin-top:3px}
 
-.usage-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:1rem}
-.usage-card{background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:.75rem 1rem}
-.usage-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
-.usage-value{font-size:20px;font-weight:700;color:var(--text);line-height:1}
-.usage-sub{font-size:10px;color:var(--muted);margin-top:3px}
+/* Provider usage table */
+.usage-table{width:100%;border-collapse:collapse}
+.usage-table th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:.5rem 1rem;text-align:left;border-bottom:0.5px solid var(--border);background:var(--surface)}
+.usage-table th:not(:first-child){text-align:right}
+.usage-table td{padding:.625rem 1rem;border-bottom:0.5px solid var(--border);font-size:12px;vertical-align:middle}
+.usage-table td:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+.usage-table tr:last-child td{border-bottom:none}
+.usage-table tr:hover td{background:#1e2238}
+.bar-wrap{display:flex;align-items:center;gap:8px}
+.bar-bg{flex:1;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;min-width:60px}
+.bar-fill{height:100%;background:var(--accent);border-radius:2px}
+.cost-green{color:var(--green)}
+.cost-amber{color:var(--amber)}
+.cost-red{color:var(--red)}
 
-/* Daily chart */
-.chart-section{padding:1rem;border-bottom:0.5px solid var(--border)}
-.section-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
-.chart-bars{display:flex;align-items:flex-end;gap:3px;height:90px;margin-bottom:4px}
-.chart-bar{flex:1;border-radius:3px 3px 0 0;background:var(--accent);opacity:.65;min-height:2px;transition:opacity .15s;position:relative;cursor:default}
-.chart-bar:hover{opacity:1}
-.chart-bar:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:#1e2238;border:0.5px solid var(--border);border-radius:5px;padding:3px 7px;font-size:10px;white-space:nowrap;color:var(--text);z-index:10;pointer-events:none}
-.chart-labels{display:flex;gap:3px}
-.chart-label{flex:1;font-size:9px;color:var(--muted);text-align:center}
+/* Recent requests */
+.req-item{display:flex;align-items:center;gap:10px;padding:.5rem 1rem;border-bottom:0.5px solid var(--border);font-size:12px}
+.req-item:last-child{border-bottom:none}
+.req-model{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.req-prov{font-size:10px;color:var(--muted)}
+.req-tokens{flex-shrink:0;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right;min-width:110px}
+.req-time{flex-shrink:0;font-size:10px;color:var(--muted);min-width:55px;text-align:right}
+.req-status{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.req-status.ok{background:var(--green)}
+.req-status.error{background:var(--red)}
 
-/* Provider quota rows */
-.quota-section{padding:1rem}
-.quota-row{display:grid;grid-template-columns:36px 1fr 90px 90px 90px 80px;align-items:center;gap:10px;padding:.6rem .5rem;border-bottom:0.5px solid var(--border);transition:background .1s}
-.quota-row:last-child{border-bottom:none}
-.quota-row:hover{background:#1e2238;border-radius:6px}
-.quota-head{display:grid;grid-template-columns:36px 1fr 90px 90px 90px 80px;align-items:center;gap:10px;padding:.4rem .5rem;margin-bottom:2px}
-.quota-head span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-.quota-name{font-size:12px;font-weight:600}
-.quota-bar-wrap{margin-top:4px;height:3px;background:var(--surface);border-radius:2px;overflow:hidden}
-.quota-bar-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .4s}
-.quota-val{font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
-.quota-sub{font-size:10px;color:var(--muted);text-align:right;margin-top:1px}
-.quota-badge{font-size:10px;padding:2px 7px;border-radius:20px;font-weight:500;text-align:center}
-.quota-badge.hi{background:var(--red-dim);color:var(--red)}
-.quota-badge.mid{background:var(--amber-dim);color:var(--amber)}
-.quota-badge.lo{background:var(--green-dim);color:var(--green)}
-.quota-badge.na{background:var(--surface);color:var(--muted)}
-
-/* Keys */
-.key-item{display:flex;align-items:center;gap:10px;padding:.75rem 1rem;border-bottom:0.5px solid var(--border)}
-.key-item:last-child{border-bottom:none}
-.key-info{flex:1}
-.key-name{font-size:13px;font-weight:500;margin-bottom:2px}
-.key-val{font-size:11px;font-family:monospace;color:var(--muted)}
-.key-date{font-size:11px;color:var(--muted);text-align:right}
-.key-reqs{font-size:13px;font-weight:600;color:var(--accent);text-align:right}
+/* Rate limit / model lock */
+.quota-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:1rem}
+.quota-card{background:var(--surface);border:0.5px solid var(--border);border-radius:10px;overflow:hidden}
+.quota-card-head{display:flex;align-items:center;gap:10px;padding:.75rem 1rem;border-bottom:0.5px solid var(--border)}
+.quota-card-name{font-size:13px;font-weight:600}
+.quota-card-email{font-size:10px;color:var(--muted)}
+.quota-model-row{display:flex;align-items:center;justify-content:space-between;padding:.5rem 1rem;border-bottom:0.5px solid var(--border);font-size:11px}
+.quota-model-row:last-child{border-bottom:none}
+.qm-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qm-lock{font-size:10px;padding:2px 7px;border-radius:20px;flex-shrink:0}
+.qm-lock.locked{background:var(--red-dim);color:var(--red)}
+.qm-lock.free{background:var(--green-dim);color:var(--green)}
+.qm-until{font-size:10px;color:var(--muted);min-width:80px;text-align:right}
 
 /* Empty / loading */
 .empty{padding:2rem;text-align:center;color:var(--muted);font-size:13px}
@@ -139,10 +145,8 @@ a{color:inherit;text-decoration:none}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 @media(max-width:800px){
   .stats{grid-template-columns:repeat(2,1fr)}
-  .usage-summary{grid-template-columns:repeat(2,1fr)}
-  .quota-row,.quota-head{grid-template-columns:28px 1fr 70px 70px}
-  .quota-row .quota-val:nth-child(4),.quota-head span:nth-child(4),
-  .quota-row .quota-badge,.quota-head span:nth-child(6){display:none}
+  .usage-cards{grid-template-columns:repeat(2,1fr)}
+  .quota-grid{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -167,30 +171,30 @@ a{color:inherit;text-decoration:none}
 
 <div class="container">
 
-  <!-- Stats -->
+  <!-- Stats bar -->
   <div class="stats">
-    <div class="stat"><div class="stat-value c-orange" id="st-providers">—</div><div class="stat-label">Providers</div></div>
+    <div class="stat"><div class="stat-value c-orange" id="st-conns">—</div><div class="stat-label">Connections</div></div>
     <div class="stat"><div class="stat-value c-green"  id="st-active">—</div><div class="stat-label">Active</div></div>
+    <div class="stat"><div class="stat-value c-red"    id="st-errors">—</div><div class="stat-label">Errors</div></div>
     <div class="stat"><div class="stat-value c-blue"   id="st-combos">—</div><div class="stat-label">Combos</div></div>
-    <div class="stat"><div class="stat-value c-purple" id="st-keys">—</div><div class="stat-label">API Keys</div></div>
   </div>
 
   <!-- Tabs -->
   <div class="tabs">
-    <button class="tab active" onclick="switchTab('providers',this)">🤖 Providers</button>
+    <button class="tab active" onclick="switchTab('connections',this)">🔌 Connections</button>
     <button class="tab" onclick="switchTab('combos',this)">🔗 Combos</button>
-    <button class="tab" onclick="switchTab('usage',this)">📊 Usage & Quota</button>
-    <button class="tab" onclick="switchTab('keys',this)">🔑 API Keys</button>
+    <button class="tab" onclick="switchTab('usage',this)">📊 Usage</button>
+    <button class="tab" onclick="switchTab('quota',this)">🎯 Rate Limits</button>
   </div>
 
-  <!-- TAB: Providers -->
-  <div class="tab-content active" id="tab-providers">
+  <!-- TAB: Connections -->
+  <div class="tab-content active" id="tab-connections">
     <div class="panel">
       <div class="panel-header">
-        <div class="panel-title">🤖 AI Providers <span class="count-badge" id="provCount">—</span></div>
+        <div class="panel-title">🔌 Provider Connections <span class="count-badge" id="connCount">—</span></div>
       </div>
-      <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" id="provSearch" placeholder="Tìm provider..." oninput="renderProviders()"/></div>
-      <div class="list-body" id="provList"><div class="loading"><div class="spin"></div>Đang tải...</div></div>
+      <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" id="connSearch" placeholder="Tìm connection..." oninput="renderConnections()"/></div>
+      <div class="list-body" id="connList"><div class="loading"><div class="spin"></div>Đang tải...</div></div>
     </div>
   </div>
 
@@ -198,93 +202,108 @@ a{color:inherit;text-decoration:none}
   <div class="tab-content" id="tab-combos">
     <div class="panel">
       <div class="panel-header">
-        <div class="panel-title">🔗 Combos <span class="count-badge" id="comboCount">—</span></div>
+        <div class="panel-title">🔗 Model Combos <span class="count-badge" id="comboCount">—</span></div>
       </div>
       <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" id="comboSearch" placeholder="Tìm combo..." oninput="renderCombos()"/></div>
       <div class="list-body" id="comboList"><div class="loading"><div class="spin"></div>Đang tải...</div></div>
     </div>
   </div>
 
-  <!-- TAB: Usage & Quota -->
+  <!-- TAB: Usage -->
   <div class="tab-content" id="tab-usage">
 
-    <!-- Period selector -->
+    <!-- Summary cards -->
     <div class="panel" style="margin-bottom:12px">
-      <div class="period-tabs">
-        <button class="period-btn active" onclick="setPeriod('1d',this)">Hôm nay</button>
-        <button class="period-btn" onclick="setPeriod('7d',this)">7 ngày</button>
-        <button class="period-btn" onclick="setPeriod('30d',this)">30 ngày</button>
-      </div>
-      <!-- Summary numbers -->
-      <div class="usage-summary">
-        <div class="usage-card">
-          <div class="usage-label">Tổng requests</div>
-          <div class="usage-value c-orange" id="u-requests">—</div>
-          <div class="usage-sub" id="u-req-sub"></div>
+      <div class="panel-header"><div class="panel-title">📊 Usage & Analytics</div></div>
+      <div class="usage-cards">
+        <div class="u-card">
+          <div class="u-label">Total Requests</div>
+          <div class="u-value c-orange" id="u-req">—</div>
+          <div class="u-sub" id="u-req-sub"></div>
         </div>
-        <div class="usage-card">
-          <div class="usage-label">Input tokens</div>
-          <div class="usage-value c-blue" id="u-input">—</div>
-          <div class="usage-sub" id="u-input-sub"></div>
+        <div class="u-card">
+          <div class="u-label">Input Tokens</div>
+          <div class="u-value c-blue" id="u-in">—</div>
+          <div class="u-sub">prompt tokens</div>
         </div>
-        <div class="usage-card">
-          <div class="usage-label">Output tokens</div>
-          <div class="usage-value c-purple" id="u-output">—</div>
-          <div class="usage-sub" id="u-output-sub"></div>
+        <div class="u-card">
+          <div class="u-label">Output Tokens</div>
+          <div class="u-value c-purple" id="u-out">—</div>
+          <div class="u-sub">completion tokens</div>
         </div>
-        <div class="usage-card">
-          <div class="usage-label">Success rate</div>
-          <div class="usage-value c-green" id="u-rate">—</div>
-          <div class="usage-sub" id="u-rate-sub"></div>
+        <div class="u-card">
+          <div class="u-label">Est. Cost</div>
+          <div class="u-value c-amber" id="u-cost">—</div>
+          <div class="u-sub">estimated, not billing</div>
         </div>
-      </div>
-
-      <!-- Daily chart -->
-      <div class="chart-section">
-        <div class="section-label">Requests theo ngày</div>
-        <div class="chart-bars" id="chartBars"><div style="color:var(--muted);font-size:12px;padding:.5rem">Chưa có dữ liệu</div></div>
-        <div class="chart-labels" id="chartLabels"></div>
       </div>
     </div>
 
-    <!-- Per-provider quota -->
-    <div class="panel">
+    <!-- By Provider table -->
+    <div class="panel" style="margin-bottom:12px">
+      <div class="panel-header"><div class="panel-title">⚡ Theo Provider</div></div>
+      <div style="overflow-x:auto">
+        <table class="usage-table">
+          <thead><tr>
+            <th>Provider</th>
+            <th>Requests</th>
+            <th>Input</th>
+            <th>Output</th>
+            <th>Cost</th>
+            <th style="width:120px">Share</th>
+          </tr></thead>
+          <tbody id="providerTable"><tr><td colspan="6" style="text-align:center;padding:1.5rem;color:var(--muted)">Đang tải...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- By Model table -->
+    <div class="panel" style="margin-bottom:12px">
       <div class="panel-header">
-        <div class="panel-title">⚡ Usage theo Provider</div>
-        <div style="font-size:11px;color:var(--muted)" id="quotaPeriodLabel">—</div>
+        <div class="panel-title">🤖 Theo Model <span class="count-badge" id="modelCount">—</span></div>
       </div>
-      <div class="quota-section">
-        <div class="quota-head">
-          <span></span>
-          <span>Provider</span>
-          <span style="text-align:right">Requests</span>
-          <span style="text-align:right">Tokens</span>
-          <span style="text-align:right">Cost (est.)</span>
-          <span style="text-align:center">Load</span>
-        </div>
-        <div id="quotaList"><div class="loading"><div class="spin"></div>Đang tải...</div></div>
+      <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" id="modelSearch" placeholder="Tìm model..." oninput="renderModelTable()"/></div>
+      <div style="overflow-x:auto">
+        <table class="usage-table">
+          <thead><tr>
+            <th>Model</th>
+            <th>Provider</th>
+            <th>Requests</th>
+            <th>Input</th>
+            <th>Output</th>
+            <th>Cost</th>
+            <th>Last Used</th>
+          </tr></thead>
+          <tbody id="modelTable"><tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--muted)">Đang tải...</td></tr></tbody>
+        </table>
       </div>
+    </div>
+
+    <!-- Recent requests -->
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">🕐 Recent Requests</div></div>
+      <div class="list-body" id="recentList"><div class="loading"><div class="spin"></div>Đang tải...</div></div>
     </div>
 
   </div>
 
-  <!-- TAB: API Keys -->
-  <div class="tab-content" id="tab-keys">
-    <div class="panel">
+  <!-- TAB: Rate Limits -->
+  <div class="tab-content" id="tab-quota">
+    <div class="panel" style="margin-bottom:12px">
       <div class="panel-header">
-        <div class="panel-title">🔑 API Keys <span class="count-badge" id="keyCount">—</span></div>
+        <div class="panel-title">🎯 Model Rate Limits per Connection</div>
+        <div style="font-size:11px;color:var(--muted)">Từ modelLock trong connections API</div>
       </div>
-      <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" id="keySearch" placeholder="Tìm key..." oninput="renderKeys()"/></div>
-      <div class="list-body" id="keyList"><div class="loading"><div class="spin"></div>Đang tải...</div></div>
+      <div class="quota-grid" id="quotaGrid"><div class="loading"><div class="spin"></div>Đang tải...</div></div>
     </div>
   </div>
 
 </div>
 
 <script>
-var allProviders = [], allCombos = [], allKeys = [], allUsage = {};
-var currentPeriod = '1d';
+var allConns = [], allCombos = [], allUsage = {};
 
+/* ── helpers ── */
 function switchTab(name, btn) {
   document.querySelectorAll('.tab-content').forEach(function(el){ el.classList.remove('active'); });
   document.querySelectorAll('.tab').forEach(function(el){ el.classList.remove('active'); });
@@ -292,48 +311,54 @@ function switchTab(name, btn) {
   btn.classList.add('active');
 }
 
-function setPeriod(p, btn) {
-  currentPeriod = p;
-  document.querySelectorAll('.period-btn').forEach(function(b){ b.classList.remove('active'); });
-  btn.classList.add('active');
-  renderUsage();
-}
-
-/* ── helpers ── */
 function providerIcon(name) {
   var n = (name||'').toLowerCase();
-  if (n.includes('openai'))                         return '🟢';
-  if (n.includes('anthropic')||n.includes('claude'))return '🟠';
-  if (n.includes('google')||n.includes('gemini'))   return '🔵';
-  if (n.includes('deepseek'))                        return '🐋';
-  if (n.includes('groq'))                            return '⚡';
-  if (n.includes('mistral'))                         return '🌀';
-  if (n.includes('openrouter'))                      return '🔀';
-  if (n.includes('together'))                        return '🤝';
-  if (n.includes('cohere'))                          return '🔮';
-  if (n.includes('xai')||n.includes('grok'))         return '𝕏';
-  if (n.includes('fireworks'))                       return '🎆';
-  if (n.includes('cerebras'))                        return '🧠';
-  if (n.includes('ollama'))                          return '🦙';
-  if (n.includes('perplexity'))                      return '🔍';
-  if (n.includes('azure'))                           return '☁️';
-  if (n.includes('bedrock'))                         return '🪨';
-  if (n.includes('vertex'))                          return '🔷';
+  if (n === 'claude' || n.includes('anthropic'))  return '🟠';
+  if (n === 'github' || n.includes('copilot'))    return '🐙';
+  if (n === 'antigravity')                         return '🅰';
+  if (n === 'nvidia')                              return '🟩';
+  if (n === 'opencode')                            return '📦';
+  if (n === 'gemini')                              return '🔷';
+  if (n === 'openrouter')                          return '🔀';
+  if (n === 'ollama')                              return '🦙';
+  if (n.includes('openai') || n === 'codex')      return '🟢';
+  if (n.includes('deepseek'))                      return '🐋';
+  if (n.includes('qwen'))                          return '🔵';
+  if (n.includes('kyma'))                          return '💎';
   return '🤖';
 }
 
+function prefixColor(prefix) {
+  var p = (prefix||'').toLowerCase();
+  if (p==='cx')                  return 'pref-cx';
+  if (p==='gh')                  return 'pref-gh';
+  if (p==='cc'||p==='ag')        return 'pref-ag';
+  if (p==='nvidia'||p==='oc')    return 'pref-oc';
+  if (p==='gemini')              return 'pref-gemini';
+  if (p==='ollama')              return 'pref-ollama';
+  if (p==='openrouter'||p==='qwen') return 'pref-openrouter';
+  return '';
+}
+
 function fmtNum(n) {
-  if (!n && n !== 0) return '—';
-  if (n >= 1000000000) return (n/1000000000).toFixed(2)+'B';
-  if (n >= 1000000)    return (n/1000000).toFixed(2)+'M';
-  if (n >= 1000)       return (n/1000).toFixed(1)+'K';
-  return String(n);
+  if (!n && n!==0) return '—';
+  if (n >= 1e9) return (n/1e9).toFixed(2)+'B';
+  if (n >= 1e6) return (n/1e6).toFixed(2)+'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1)+'K';
+  return String(Math.round(n));
 }
 
 function fmtCost(n) {
-  if (!n && n !== 0) return '—';
-  if (n < 0.01) return '<$0.01';
-  return '$'+n.toFixed(2);
+  if (!n && n!==0) return '—';
+  if (n < 0.001) return '<$0.001';
+  return '$'+n.toFixed(3);
+}
+
+function costClass(n) {
+  if (!n) return '';
+  if (n >= 5) return 'c-red';
+  if (n >= 1) return 'c-amber';
+  return 'cost-green';
 }
 
 function timeAgo(iso) {
@@ -341,47 +366,66 @@ function timeAgo(iso) {
   var diff = Date.now() - new Date(iso).getTime();
   var m = Math.floor(diff/60000);
   if (m < 1)  return 'vừa xong';
-  if (m < 60) return m+'ph trước';
+  if (m < 60) return m+'ph';
   var h = Math.floor(m/60);
-  if (h < 24) return h+'h trước';
-  return Math.floor(h/24)+'ng trước';
+  if (h < 24) return h+'h';
+  return Math.floor(h/24)+'d';
 }
 
-function periodLabel(p) {
-  return p==='1d' ? 'Hôm nay' : p==='7d' ? '7 ngày qua' : '30 ngày qua';
+function untilLabel(iso) {
+  if (!iso) return '';
+  var diff = new Date(iso).getTime() - Date.now();
+  if (diff <= 0) return 'expired';
+  var m = Math.floor(diff/60000);
+  if (m < 60) return 'unlocks '+m+'min';
+  return 'unlocks '+Math.floor(m/60)+'h'+Math.floor(m%60)+'m';
 }
 
-/* ── Providers ── */
-function renderProviders() {
-  var q = (document.getElementById('provSearch').value||'').toLowerCase();
-  var list = allProviders.filter(function(p){
-    return !q || (p.name||'').toLowerCase().includes(q) || (p.type||'').toLowerCase().includes(q);
+function connStatusCls(c) {
+  if (!c.isActive) return 'inactive';
+  if (c.errorCode && c.errorCode >= 400) return 'error';
+  if (c.testStatus === 'active') return 'active';
+  return 'active';
+}
+
+/* ── CONNECTIONS ── */
+function renderConnections() {
+  var q = (document.getElementById('connSearch').value||'').toLowerCase();
+  var list = allConns.filter(function(c){
+    return !q || (c.name||'').toLowerCase().includes(q)
+              || (c.provider||'').toLowerCase().includes(q)
+              || (c.email||'').toLowerCase().includes(q);
   });
-  document.getElementById('provCount').textContent = list.length+'/'+allProviders.length;
-  if (!list.length){ document.getElementById('provList').innerHTML='<div class="empty">Không tìm thấy provider</div>'; return; }
+  document.getElementById('connCount').textContent = list.length+'/'+allConns.length;
+  if (!list.length){ document.getElementById('connList').innerHTML='<div class="empty">Không tìm thấy connection</div>'; return; }
 
-  document.getElementById('provList').innerHTML = list.map(function(p){
-    var isActive = p.enabled !== false && p.active !== false && p.status !== 'inactive';
-    var models   = p.models ? p.models.length : (p.modelCount || 0);
-    var acctCount= p.accounts ? p.accounts.length : (p.accountCount || 0);
-    var label    = p.name || p.type || p.id || 'Unknown';
-    return '<div class="prov-item">'
-      +'<div class="prov-icon">'+providerIcon(label)+'</div>'
-      +'<div class="prov-info">'
-        +'<div class="prov-name">'+label+'</div>'
-        +'<div class="prov-meta">'
-          +(acctCount ? '<span>'+acctCount+' accounts</span>' : '')
-          +(p.type && p.type !== p.name ? '<span>'+p.type+'</span>' : '')
-          +(p.baseUrl ? '<span style="font-family:monospace;font-size:10px">'+p.baseUrl.replace(/^https?:\/\//,'').slice(0,40)+'</span>' : '')
+  document.getElementById('connList').innerHTML = list.map(function(c){
+    var sc = connStatusCls(c);
+    var scLabel = sc==='active'?'Active': sc==='error'?'Error '+c.errorCode: sc==='expired'?'Expired':'Inactive';
+    var locks = c.lockedModels || [];
+    return '<div class="conn-item">'
+      +'<div class="conn-avatar">'+providerIcon(c.provider)+'</div>'
+      +'<div class="conn-info">'
+        +'<div class="conn-name">'+(c.name||c.email||c.provider)+'</div>'
+        +'<div class="conn-meta">'
+          +'<span style="font-weight:500;color:var(--text)">'+c.provider+'</span>'
+          +(c.authType?'<span>'+c.authType+'</span>':'')
+          +(c.email&&c.email!==c.name?'<span>'+c.email+'</span>':'')
+          +(c.lastUsedAt?'<span>Used '+timeAgo(c.lastUsedAt)+' ago</span>':'')
+          +(c.backoffLevel?'<span style="color:var(--amber)">Backoff Lv'+c.backoffLevel+'</span>':'')
         +'</div>'
+        +(locks.length?'<div class="conn-locks">'
+          +locks.map(function(l){
+            return '<span class="lock-chip">🔒 '+l.model+' ('+untilLabel(l.until)+')</span>';
+          }).join('')+'</div>':'')
+        +(c.lastError?'<div style="font-size:10px;color:var(--red);margin-top:3px">'+c.lastError+'</div>':'')
       +'</div>'
-      +(models ? '<span class="prov-models">'+models+' models</span>' : '')
-      +'<span class="prov-status '+(isActive?'active':'inactive')+'">'+(isActive?'Active':'Off')+'</span>'
+      +'<span class="conn-status '+sc+'">'+scLabel+'</span>'
     +'</div>';
   }).join('');
 }
 
-/* ── Combos ── */
+/* ── COMBOS ── */
 function renderCombos() {
   var q = (document.getElementById('comboSearch').value||'').toLowerCase();
   var list = allCombos.filter(function(c){ return !q || (c.name||'').toLowerCase().includes(q); });
@@ -389,165 +433,159 @@ function renderCombos() {
   if (!list.length){ document.getElementById('comboList').innerHTML='<div class="empty">Không tìm thấy combo</div>'; return; }
 
   document.getElementById('comboList').innerHTML = list.map(function(c){
-    var providers = c.providers || c.items || [];
-    var isActive  = c.enabled !== false && c.active !== false;
+    var models = c.models || [];
     return '<div class="combo-item">'
-      +'<div style="width:32px;height:32px;border-radius:8px;background:var(--orange-dim);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🔗</div>'
-      +'<div class="combo-info">'
-        +'<div class="combo-name">'+(c.name||c.id||'Combo')+'</div>'
-        +'<div class="combo-providers">'
-          +providers.map(function(p){
-            var n = p.name||p.provider||p.id||p;
-            return '<span class="combo-tag '+(isActive?'combo-active':'')+'">'+providerIcon(n)+' '+n+'</span>';
-          }).join('')
-          +(providers.length===0?'<span style="font-size:11px;color:var(--muted)">Không có provider</span>':'')
-        +'</div>'
-      +'</div>'
-      +'<span class="prov-status '+(isActive?'active':'inactive')+'">'+(isActive?'Active':'Off')+'</span>'
-    +'</div>';
-  }).join('');
-}
-
-/* ── Usage & Quota ── */
-function renderUsage() {
-  var d = allUsage[currentPeriod] || {};
-  document.getElementById('quotaPeriodLabel').textContent = periodLabel(currentPeriod);
-
-  /* summary */
-  var total   = d.totalRequests || d.total || d.requests || 0;
-  var inputT  = d.totalInputTokens  || d.inputTokens  || d.promptTokens  || 0;
-  var outputT = d.totalOutputTokens || d.outputTokens || d.completionTokens || 0;
-  var allT    = d.totalTokens || d.tokens || (inputT + outputT) || 0;
-  if (!inputT && !outputT && allT) { inputT = Math.round(allT*0.7); outputT = allT - inputT; }
-  var success = d.successRate || d.success || null;
-  var cost    = d.totalCost   || d.cost    || null;
-  var failed  = d.failedRequests || d.failed || 0;
-
-  document.getElementById('u-requests').textContent = fmtNum(total);
-  document.getElementById('u-req-sub').textContent  = failed ? failed+' lỗi' : '';
-  document.getElementById('u-input').textContent    = fmtNum(inputT)  || (allT ? fmtNum(allT) : '—');
-  document.getElementById('u-input-sub').textContent= inputT ? 'prompt tokens' : (allT ? 'total tokens' : '');
-  document.getElementById('u-output').textContent   = fmtNum(outputT) || (cost ? fmtCost(cost) : '—');
-  document.getElementById('u-output-sub').textContent = outputT ? 'completion tokens' : (cost ? 'est. cost' : '');
-  document.getElementById('u-rate').textContent     = success !== null ? Math.round(success*100)+'%' : (total && !failed ? '100%' : '—');
-  document.getElementById('u-rate-sub').textContent = total ? total+' requests' : '';
-
-  /* daily chart */
-  var daily = d.daily || d.days || d.byDay || d.data || [];
-  if (Array.isArray(daily) && daily.length > 0) {
-    var max = Math.max.apply(null, daily.map(function(x){ return x.requests||x.count||x.total||0; }));
-    document.getElementById('chartBars').innerHTML = daily.map(function(x){
-      var val = x.requests||x.count||x.total||0;
-      var h   = max > 0 ? Math.round((val/max)*82)+4 : 4;
-      var lbl = (x.date||x.day||x.time||'').slice(5);
-      return '<div class="chart-bar" style="height:'+h+'px" data-tip="'+lbl+': '+fmtNum(val)+' req"></div>';
-    }).join('');
-    document.getElementById('chartLabels').innerHTML = daily.map(function(x){
-      return '<div class="chart-label">'+(x.date||x.day||x.time||'').slice(5)+'</div>';
-    }).join('');
-  } else {
-    var msg = currentPeriod==='1d' ? 'Không có dữ liệu theo giờ hôm nay' : 'Không có dữ liệu theo ngày';
-    document.getElementById('chartBars').innerHTML  = '<div style="color:var(--muted);font-size:12px;padding:.5rem">'+msg+'</div>';
-    document.getElementById('chartLabels').innerHTML = '';
-  }
-
-  /* per-provider quota rows */
-  var byProv = d.byProvider || d.providers || d.channels || [];
-  if (Array.isArray(byProv) && byProv.length > 0) {
-    var maxReq = Math.max.apply(null, byProv.map(function(p){ return p.requests||p.count||0; }));
-    document.getElementById('quotaList').innerHTML = byProv.map(function(p){
-      var name    = p.provider||p.name||p.channel||'Unknown';
-      var req     = p.requests||p.count||p.totalRequests||0;
-      var pct     = maxReq > 0 ? Math.round((req/maxReq)*100) : 0;
-      var tIn     = p.inputTokens  || p.promptTokens    || 0;
-      var tOut    = p.outputTokens || p.completionTokens || 0;
-      var tAll    = p.tokens || p.totalTokens || (tIn+tOut) || 0;
-      var tokDisp = (tIn||tOut) ? fmtNum(tIn)+' / '+fmtNum(tOut) : (tAll ? fmtNum(tAll) : '—');
-      var cost    = p.cost || p.totalCost || null;
-      var badgeCls= pct>=80?'hi':pct>=40?'mid':'lo';
-      var badgeTxt= pct>=80?'High':pct>=40?'Mid':'Low';
-      return '<div class="quota-row">'
-        +'<div style="font-size:18px;text-align:center">'+providerIcon(name)+'</div>'
+      +'<div class="combo-top">'
+        +'<div style="font-size:20px">🔗</div>'
         +'<div>'
-          +'<div class="quota-name">'+name+'</div>'
-          +'<div class="quota-bar-wrap"><div class="quota-bar-fill" style="width:'+pct+'%"></div></div>'
+          +'<div class="combo-name">'+(c.name||c.id)+'</div>'
+          +'<div style="font-size:11px;color:var(--muted)">'+models.length+' models</div>'
         +'</div>'
-        +'<div class="quota-val">'+fmtNum(req)+'<div class="quota-sub">requests</div></div>'
-        +'<div class="quota-val">'+tokDisp+'<div class="quota-sub">'+(tIn||tOut?'in / out':'tokens')+'</div></div>'
-        +'<div class="quota-val">'+(cost?fmtCost(cost):'—')+'<div class="quota-sub">est. cost</div></div>'
-        +'<div style="text-align:center"><span class="quota-badge '+badgeCls+'">'+badgeTxt+'</span></div>'
-      +'</div>';
-    }).join('');
-  } else {
-    /* fallback: build from providers list if usage API has no byProvider */
-    if (allProviders.length > 0) {
-      document.getElementById('quotaList').innerHTML =
-        '<div class="empty" style="padding:1.5rem">'
-        +'API chưa trả về dữ liệu phân theo provider.<br>'
-        +'<span style="font-size:11px">Kiểm tra endpoint <code>/api/usage/stats?period='+currentPeriod+'</code></span>'
-        +'</div>';
-    } else {
-      document.getElementById('quotaList').innerHTML = '<div class="empty">Không có dữ liệu</div>';
-    }
-  }
-}
-
-/* ── Keys ── */
-function renderKeys() {
-  var q = (document.getElementById('keySearch').value||'').toLowerCase();
-  var list = allKeys.filter(function(k){ return !q || (k.name||'').toLowerCase().includes(q) || (k.key||'').includes(q); });
-  document.getElementById('keyCount').textContent = list.length+'/'+allKeys.length;
-  if (!list.length){ document.getElementById('keyList').innerHTML='<div class="empty">Không có API key</div>'; return; }
-  document.getElementById('keyList').innerHTML = list.map(function(k){
-    return '<div class="key-item">'
-      +'<div style="font-size:20px;flex-shrink:0">🔑</div>'
-      +'<div class="key-info">'
-        +'<div class="key-name">'+(k.name||'Unnamed key')+'</div>'
-        +'<div class="key-val">'+(k.key||'—')+'</div>'
       +'</div>'
-      +'<div style="text-align:right;flex-shrink:0">'
-        +(k.requestCount ? '<div class="key-reqs">'+fmtNum(k.requestCount)+' req</div>' : '')
-        +(k.lastUsed?'<div class="key-date">Dùng '+timeAgo(k.lastUsed)+'</div>':'')
-        +(k.createdAt?'<div class="key-date">Tạo '+timeAgo(k.createdAt)+'</div>':'')
+      +'<div class="combo-models">'
+        +models.map(function(m){
+          var parts = m.split('/');
+          var prefix = parts.length > 1 ? parts[0] : '';
+          var modelName = parts.length > 1 ? parts.slice(1).join('/') : m;
+          var cls = prefixColor(prefix);
+          return '<span class="model-chip '+cls+'">'+(prefix?'<span style="opacity:.6">'+prefix+'/</span>':'')+modelName+'</span>';
+        }).join('')
       +'</div>'
     +'</div>';
   }).join('');
 }
 
-/* ── Load ── */
+/* ── USAGE ── */
+function renderUsage() {
+  var u = allUsage;
+  document.getElementById('u-req').textContent  = fmtNum(u.totalRequests);
+  document.getElementById('u-in').textContent   = fmtNum(u.totalPromptTokens);
+  document.getElementById('u-out').textContent  = fmtNum(u.totalCompletionTokens);
+  document.getElementById('u-cost').textContent = fmtCost(u.totalCost);
+  document.getElementById('u-req-sub').textContent = u.totalRequests ? 'tất cả thời gian' : '';
+
+  /* Provider table */
+  var byProv = u.byProvider || [];
+  var maxReq = byProv.length ? Math.max.apply(null, byProv.map(function(p){ return p.requests; })) : 1;
+  document.getElementById('providerTable').innerHTML = byProv.length
+    ? byProv.map(function(p){
+        var pct = maxReq>0 ? Math.round(p.requests/maxReq*100) : 0;
+        return '<tr>'
+          +'<td><span style="font-size:16px">'+providerIcon(p.provider)+'</span> '+p.provider+'</td>'
+          +'<td>'+fmtNum(p.requests)+'</td>'
+          +'<td>'+fmtNum(p.promptTokens)+'</td>'
+          +'<td>'+fmtNum(p.completionTokens)+'</td>'
+          +'<td class="'+(p.cost>=5?'c-red':p.cost>=1?'c-amber':'cost-green')+'">'+fmtCost(p.cost)+'</td>'
+          +'<td><div class="bar-wrap"><div class="bar-bg"><div class="bar-fill" style="width:'+pct+'%"></div></div><span style="font-size:10px;color:var(--muted);flex-shrink:0">'+pct+'%</span></div></td>'
+        +'</tr>';
+      }).join('')
+    : '<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:var(--muted)">Không có dữ liệu</td></tr>';
+
+  /* Model table init */
+  document.getElementById('modelCount').textContent = (u.byModel||[]).length;
+  renderModelTable();
+
+  /* Recent requests */
+  var recent = u.recentRequests || [];
+  document.getElementById('recentList').innerHTML = recent.length
+    ? recent.map(function(r){
+        return '<div class="req-item">'
+          +'<div class="req-status '+(r.status==='ok'?'ok':'error')+'"></div>'
+          +'<div style="flex:1;min-width:0">'
+            +'<div class="req-model">'+r.model+'</div>'
+            +'<div class="req-prov">'+providerIcon(r.provider)+' '+r.provider+'</div>'
+          +'</div>'
+          +'<div class="req-tokens">↑'+fmtNum(r.promptTokens)+' ↓'+fmtNum(r.completionTokens)+'</div>'
+          +'<div class="req-time">'+timeAgo(r.timestamp)+'</div>'
+        +'</div>';
+      }).join('')
+    : '<div class="empty">Không có recent requests</div>';
+}
+
+function renderModelTable() {
+  var q = (document.getElementById('modelSearch').value||'').toLowerCase();
+  var list = (allUsage.byModel||[]).filter(function(m){
+    return !q || (m.model||'').toLowerCase().includes(q) || (m.provider||'').toLowerCase().includes(q);
+  });
+  document.getElementById('modelTable').innerHTML = list.length
+    ? list.map(function(m){
+        return '<tr>'
+          +'<td style="font-family:monospace;font-size:11px">'+m.model+'</td>'
+          +'<td><span style="font-size:13px">'+providerIcon(m.provider)+'</span> '+m.provider+'</td>'
+          +'<td>'+fmtNum(m.requests)+'</td>'
+          +'<td>'+fmtNum(m.promptTokens)+'</td>'
+          +'<td>'+fmtNum(m.completionTokens)+'</td>'
+          +'<td class="'+(m.cost>=5?'c-red':m.cost>=1?'c-amber':'cost-green')+'">'+fmtCost(m.cost)+'</td>'
+          +'<td>'+timeAgo(m.lastUsed)+'</td>'
+        +'</tr>';
+      }).join('')
+    : '<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--muted)">Không tìm thấy model</td></tr>';
+}
+
+/* ── RATE LIMITS / QUOTA ── */
+function renderQuota() {
+  var conns = allConns.filter(function(c){ return Object.keys(c.modelLocks||{}).length > 0; });
+  if (!conns.length){
+    document.getElementById('quotaGrid').innerHTML = '<div class="empty" style="padding:2rem;grid-column:1/-1">Không có dữ liệu model lock</div>';
+    return;
+  }
+  document.getElementById('quotaGrid').innerHTML = conns.map(function(c){
+    var locks = c.modelLocks || {};
+    var models = Object.keys(locks);
+    var lockedCount = Object.values(locks).filter(function(v){ return v!==null; }).length;
+    return '<div class="quota-card">'
+      +'<div class="quota-card-head">'
+        +'<div style="font-size:20px">'+providerIcon(c.provider)+'</div>'
+        +'<div>'
+          +'<div class="quota-card-name">'+c.provider+' — '+(c.name||c.email||'Account')+'</div>'
+          +'<div class="quota-card-email">'+(c.email||'')
+            +(lockedCount?'<span style="margin-left:6px;color:var(--red)">'+lockedCount+' locked</span>':'')
+          +'</div>'
+        +'</div>'
+      +'</div>'
+      +models.map(function(m){
+        var until = locks[m];
+        var isLocked = until !== null;
+        return '<div class="quota-model-row">'
+          +'<div class="qm-name" title="'+m+'">'+m+'</div>'
+          +'<span class="qm-lock '+(isLocked?'locked':'free')+'">'+(isLocked?'🔒 Locked':'✓ Free')+'</span>'
+          +'<div class="qm-until">'+(isLocked?untilLabel(until):'')+'</div>'
+        +'</div>';
+      }).join('')
+    +'</div>';
+  }).join('');
+}
+
+/* ── LOAD ── */
 function loadData() {
   fetch('/api/9router', {cache:'no-store'})
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (data.error){
-        ['provList','comboList','keyList','quotaList'].forEach(function(id){
-          var el = document.getElementById(id);
-          if(el) el.innerHTML='<div class="err-banner">⚠ '+data.error+'</div>';
-        });
+        document.getElementById('connList').innerHTML='<div class="err-banner">⚠ '+data.error+'</div>';
         return;
       }
       var s = data.stats||{};
-      document.getElementById('st-providers').textContent = s.totalProviders||0;
-      document.getElementById('st-active').textContent    = s.activeProviders||0;
-      document.getElementById('st-combos').textContent    = s.totalCombos||0;
-      document.getElementById('st-keys').textContent      = s.totalKeys||0;
+      document.getElementById('st-conns').textContent  = s.totalConnections||0;
+      document.getElementById('st-active').textContent = s.activeConnections||0;
+      document.getElementById('st-errors').textContent = s.errorConnections||0;
+      document.getElementById('st-combos').textContent = s.totalCombos||0;
 
-      allProviders = data.providers||[];
-      allCombos    = data.combos||[];
-      allKeys      = data.keys||[];
-      allUsage     = data.usage||{};
+      allConns   = data.connections||[];
+      allCombos  = data.combos||[];
+      allUsage   = data.usage||{};
 
       var now = new Date();
       document.getElementById('lastUpdate').textContent =
         now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
 
-      renderProviders();
+      renderConnections();
       renderCombos();
       renderUsage();
-      renderKeys();
+      renderQuota();
     })
     .catch(function(e){
-      document.getElementById('provList').innerHTML='<div class="err-banner">⚠ '+e.message+'</div>';
+      document.getElementById('connList').innerHTML='<div class="err-banner">⚠ '+e.message+'</div>';
     });
 }
 

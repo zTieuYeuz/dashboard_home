@@ -138,45 +138,79 @@ async function handleExecDetail(request, env) {
 
 async function handle9Router() {
   const opts = { signal: AbortSignal.timeout(10000), headers: { 'Accept': 'application/json' } };
-  const safe = async (res) => { try { return res.ok ? await res.json() : null; } catch { return null; } };
+  const safeFetch = async (url) => {
+    try {
+      const res = await fetch(url, opts);
+      if (!res.ok) return null;
+      const d = await res.json();
+      return (d && d.error) ? null : d;
+    } catch { return null; }
+  };
 
   try {
-    const [provRes, comboRes, u1dRes, u7dRes, u30dRes, keysRes] = await Promise.all([
-      fetch(`${NINEROUTER_BASE}/api/providers`, opts),
-      fetch(`${NINEROUTER_BASE}/api/combos`, opts),
-      fetch(`${NINEROUTER_BASE}/api/usage/stats?period=1d`, opts),
-      fetch(`${NINEROUTER_BASE}/api/usage/stats?period=7d`, opts),
-      fetch(`${NINEROUTER_BASE}/api/usage/stats?period=30d`, opts),
-      fetch(`${NINEROUTER_BASE}/api/keys`, opts),
+    const [connData, comboData, usageData] = await Promise.all([
+      safeFetch(`${NINEROUTER_BASE}/api/providers`),
+      safeFetch(`${NINEROUTER_BASE}/api/combos`),
+      safeFetch(`${NINEROUTER_BASE}/api/usage/stats`),
     ]);
 
-    const [providers, combos, u1d, u7d, u30d, keys] = await Promise.all([
-      safe(provRes), safe(comboRes),
-      safe(u1dRes), safe(u7dRes), safe(u30dRes),
-      safe(keysRes),
-    ]);
+    const rawConns = (connData && connData.connections) ? connData.connections : [];
+    const combos   = (comboData && comboData.combos)    ? comboData.combos    : [];
+    const usage    = usageData || {};
 
-    const provList  = Array.isArray(providers) ? providers : ((providers||{}).data || (providers||{}).providers || []);
-    const comboList = Array.isArray(combos)    ? combos    : ((combos||{}).data    || (combos||{}).combos    || []);
-    const keyList   = Array.isArray(keys)      ? keys      : ((keys||{}).data      || (keys||{}).keys        || []);
+    // Extract modelLock fields from each connection
+    const connections = rawConns.map(c => {
+      const modelLocks = {};
+      Object.keys(c).forEach(k => {
+        if (k.startsWith('modelLock_')) modelLocks[k.slice(10)] = c[k];
+      });
+      return {
+        id: c.id, provider: c.provider, authType: c.authType,
+        name: c.name, email: c.email || null,
+        priority: c.priority, isActive: c.isActive,
+        testStatus: c.testStatus, errorCode: c.errorCode || null,
+        backoffLevel: c.backoffLevel || 0,
+        expiresAt: c.expiresAt, expiresIn: c.expiresIn,
+        lastUsedAt: c.lastUsedAt,
+        lastError: c.lastError ? c.lastError.slice(0, 120) : null,
+        consecutiveUseCount: c.consecutiveUseCount || 0,
+        modelLocks,
+        lockedModels: Object.entries(modelLocks).filter(([,v]) => v !== null).map(([m, until]) => ({ model: m, until })),
+      };
+    });
 
-    const activeProviders = provList.filter(p => p.enabled !== false && p.active !== false).length;
+    // byProvider usage → sorted array
+    const usageByProvider = Object.entries(usage.byProvider || {})
+      .map(([name, d]) => ({ provider: name, requests: d.requests||0, promptTokens: d.promptTokens||0, completionTokens: d.completionTokens||0, cost: d.cost||0 }))
+      .sort((a, b) => b.requests - a.requests);
+
+    // byModel → top 30
+    const usageByModel = Object.entries(usage.byModel || {})
+      .map(([, d]) => ({ model: d.rawModel, provider: d.provider, requests: d.requests||0, promptTokens: d.promptTokens||0, completionTokens: d.completionTokens||0, cost: d.cost||0, lastUsed: d.lastUsed }))
+      .sort((a, b) => b.requests - a.requests)
+      .slice(0, 30);
+
+    const activeConns = connections.filter(c => c.isActive).length;
+    const errorConns  = connections.filter(c => c.errorCode && c.errorCode >= 400).length;
 
     return json({
-      providers: provList,
-      combos:    comboList,
-      usage: { '1d': u1d || {}, '7d': u7d || {}, '30d': u30d || {} },
-      keys: keyList.map(k => ({
-        id: k.id, name: k.name,
-        key: k.key ? k.key.slice(0,8)+'...' : '—',
-        createdAt: k.createdAt, lastUsed: k.lastUsed,
-        requestCount: k.requestCount || k.usedCount || 0,
-      })),
+      connections,
+      combos,
+      usage: {
+        totalRequests:         usage.totalRequests         || 0,
+        totalPromptTokens:     usage.totalPromptTokens     || 0,
+        totalCompletionTokens: usage.totalCompletionTokens || 0,
+        totalCost:             usage.totalCost             || 0,
+        byProvider:    usageByProvider,
+        byModel:       usageByModel,
+        recentRequests: (usage.recentRequests || []).slice(0, 25),
+        activeRequests: usage.activeRequests || [],
+      },
       stats: {
-        totalProviders: provList.length,
-        activeProviders,
-        totalCombos: comboList.length,
-        totalKeys: keyList.length,
+        totalConnections: connections.length,
+        activeConnections: activeConns,
+        errorConnections:  errorConns,
+        totalCombos: combos.length,
       },
     });
   } catch (e) {
