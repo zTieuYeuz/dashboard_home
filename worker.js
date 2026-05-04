@@ -137,33 +137,41 @@ async function handleExecDetail(request, env) {
 }
 
 async function handle9Router() {
-  const opts = { signal: AbortSignal.timeout(8000), headers: { 'Accept': 'application/json' } };
+  const opts = { signal: AbortSignal.timeout(10000), headers: { 'Accept': 'application/json' } };
+  const safe = async (res) => { try { return res.ok ? await res.json() : null; } catch { return null; } };
+
   try {
-    const [provRes, comboRes, usageRes, keysRes] = await Promise.all([
+    const [provRes, comboRes, u1dRes, u7dRes, u30dRes, keysRes] = await Promise.all([
       fetch(`${NINEROUTER_BASE}/api/providers`, opts),
       fetch(`${NINEROUTER_BASE}/api/combos`, opts),
+      fetch(`${NINEROUTER_BASE}/api/usage/stats?period=1d`, opts),
       fetch(`${NINEROUTER_BASE}/api/usage/stats?period=7d`, opts),
+      fetch(`${NINEROUTER_BASE}/api/usage/stats?period=30d`, opts),
       fetch(`${NINEROUTER_BASE}/api/keys`, opts),
     ]);
 
-    const [providers, combos, usage, keys] = await Promise.all([
-      provRes.ok  ? provRes.json()  : [],
-      comboRes.ok ? comboRes.json() : [],
-      usageRes.ok ? usageRes.json() : {},
-      keysRes.ok  ? keysRes.json()  : [],
+    const [providers, combos, u1d, u7d, u30d, keys] = await Promise.all([
+      safe(provRes), safe(comboRes),
+      safe(u1dRes), safe(u7dRes), safe(u30dRes),
+      safe(keysRes),
     ]);
 
-    const provList  = Array.isArray(providers) ? providers : (providers.data || providers.providers || []);
-    const comboList = Array.isArray(combos)    ? combos    : (combos.data    || combos.combos    || []);
-    const keyList   = Array.isArray(keys)      ? keys      : (keys.data      || keys.keys        || []);
+    const provList  = Array.isArray(providers) ? providers : ((providers||{}).data || (providers||{}).providers || []);
+    const comboList = Array.isArray(combos)    ? combos    : ((combos||{}).data    || (combos||{}).combos    || []);
+    const keyList   = Array.isArray(keys)      ? keys      : ((keys||{}).data      || (keys||{}).keys        || []);
 
     const activeProviders = provList.filter(p => p.enabled !== false && p.active !== false).length;
 
     return json({
       providers: provList,
       combos:    comboList,
-      usage,
-      keys: keyList.map(k => ({ id: k.id, name: k.name, key: k.key ? k.key.slice(0,8)+'...' : '—', createdAt: k.createdAt, lastUsed: k.lastUsed })),
+      usage: { '1d': u1d || {}, '7d': u7d || {}, '30d': u30d || {} },
+      keys: keyList.map(k => ({
+        id: k.id, name: k.name,
+        key: k.key ? k.key.slice(0,8)+'...' : '—',
+        createdAt: k.createdAt, lastUsed: k.lastUsed,
+        requestCount: k.requestCount || k.usedCount || 0,
+      })),
       stats: {
         totalProviders: provList.length,
         activeProviders,

@@ -56,7 +56,7 @@ a{color:inherit;text-decoration:none}
 .search-input:focus{border-color:var(--accent)}
 .search-icon{position:absolute;left:18px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px;pointer-events:none}
 
-.list-body{max-height:500px;overflow-y:auto}
+.list-body{max-height:520px;overflow-y:auto}
 
 /* Provider item */
 .prov-item{display:flex;align-items:center;gap:10px;padding:.75rem 1rem;border-bottom:0.5px solid var(--border);transition:background .1s}
@@ -81,21 +81,44 @@ a{color:inherit;text-decoration:none}
 .combo-tag{font-size:10px;padding:2px 7px;border-radius:20px;background:var(--surface);color:var(--muted);border:0.5px solid var(--border)}
 .combo-active{background:var(--orange-dim);color:var(--accent);border-color:var(--accent)}
 
-/* Usage */
-.usage-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:1rem}
-.usage-card{background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:.875rem 1rem}
-.usage-label{font-size:11px;color:var(--muted);margin-bottom:6px}
-.usage-value{font-size:20px;font-weight:700;color:var(--text)}
-.usage-sub{font-size:11px;color:var(--muted);margin-top:2px}
+/* ── Usage & Quota ── */
+.period-tabs{display:flex;gap:4px;padding:.75rem 1rem;border-bottom:0.5px solid var(--border)}
+.period-btn{font-size:11px;padding:3px 12px;border-radius:20px;border:0.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.period-btn.active{background:var(--orange-dim);color:var(--accent);border-color:var(--accent)}
+
+.usage-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:1rem}
+.usage-card{background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:.75rem 1rem}
+.usage-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.usage-value{font-size:20px;font-weight:700;color:var(--text);line-height:1}
+.usage-sub{font-size:10px;color:var(--muted);margin-top:3px}
 
 /* Daily chart */
-.chart-wrap{padding:1rem}
-.chart-bars{display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:4px}
-.chart-bar{flex:1;border-radius:3px 3px 0 0;background:var(--accent);opacity:.7;min-height:2px;transition:opacity .15s;position:relative;cursor:default}
+.chart-section{padding:1rem;border-bottom:0.5px solid var(--border)}
+.section-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+.chart-bars{display:flex;align-items:flex-end;gap:3px;height:90px;margin-bottom:4px}
+.chart-bar{flex:1;border-radius:3px 3px 0 0;background:var(--accent);opacity:.65;min-height:2px;transition:opacity .15s;position:relative;cursor:default}
 .chart-bar:hover{opacity:1}
-.chart-bar:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:#1e2238;border:0.5px solid var(--border);border-radius:5px;padding:3px 7px;font-size:10px;white-space:nowrap;color:var(--text);z-index:10}
-.chart-labels{display:flex;gap:4px}
-.chart-label{flex:1;font-size:9px;color:var(--muted);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:clip}
+.chart-bar:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:#1e2238;border:0.5px solid var(--border);border-radius:5px;padding:3px 7px;font-size:10px;white-space:nowrap;color:var(--text);z-index:10;pointer-events:none}
+.chart-labels{display:flex;gap:3px}
+.chart-label{flex:1;font-size:9px;color:var(--muted);text-align:center}
+
+/* Provider quota rows */
+.quota-section{padding:1rem}
+.quota-row{display:grid;grid-template-columns:36px 1fr 90px 90px 90px 80px;align-items:center;gap:10px;padding:.6rem .5rem;border-bottom:0.5px solid var(--border);transition:background .1s}
+.quota-row:last-child{border-bottom:none}
+.quota-row:hover{background:#1e2238;border-radius:6px}
+.quota-head{display:grid;grid-template-columns:36px 1fr 90px 90px 90px 80px;align-items:center;gap:10px;padding:.4rem .5rem;margin-bottom:2px}
+.quota-head span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.quota-name{font-size:12px;font-weight:600}
+.quota-bar-wrap{margin-top:4px;height:3px;background:var(--surface);border-radius:2px;overflow:hidden}
+.quota-bar-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .4s}
+.quota-val{font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+.quota-sub{font-size:10px;color:var(--muted);text-align:right;margin-top:1px}
+.quota-badge{font-size:10px;padding:2px 7px;border-radius:20px;font-weight:500;text-align:center}
+.quota-badge.hi{background:var(--red-dim);color:var(--red)}
+.quota-badge.mid{background:var(--amber-dim);color:var(--amber)}
+.quota-badge.lo{background:var(--green-dim);color:var(--green)}
+.quota-badge.na{background:var(--surface);color:var(--muted)}
 
 /* Keys */
 .key-item{display:flex;align-items:center;gap:10px;padding:.75rem 1rem;border-bottom:0.5px solid var(--border)}
@@ -103,7 +126,8 @@ a{color:inherit;text-decoration:none}
 .key-info{flex:1}
 .key-name{font-size:13px;font-weight:500;margin-bottom:2px}
 .key-val{font-size:11px;font-family:monospace;color:var(--muted)}
-.key-date{font-size:11px;color:var(--muted)}
+.key-date{font-size:11px;color:var(--muted);text-align:right}
+.key-reqs{font-size:13px;font-weight:600;color:var(--accent);text-align:right}
 
 /* Empty / loading */
 .empty{padding:2rem;text-align:center;color:var(--muted);font-size:13px}
@@ -113,7 +137,13 @@ a{color:inherit;text-decoration:none}
 .err-banner{margin:1rem;background:var(--red-dim);border:0.5px solid #5a1a1a;border-radius:8px;padding:.875rem 1rem;font-size:13px;color:#f87171}
 
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-@media(max-width:800px){.stats{grid-template-columns:repeat(2,1fr)}.usage-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:800px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .usage-summary{grid-template-columns:repeat(2,1fr)}
+  .quota-row,.quota-head{grid-template-columns:28px 1fr 70px 70px}
+  .quota-row .quota-val:nth-child(4),.quota-head span:nth-child(4),
+  .quota-row .quota-badge,.quota-head span:nth-child(6){display:none}
+}
 </style>
 </head>
 <body>
@@ -129,7 +159,7 @@ a{color:inherit;text-decoration:none}
   </div>
   <div class="header-right">
     <div class="status-dot" id="statusDot"></div>
-    <span style="font-size:12px;color:var(--muted)" id="version">—</span>
+    <span style="font-size:12px;color:var(--muted)" id="lastUpdate">—</span>
     <button class="btn btn-muted" onclick="loadData()">↻ Refresh</button>
     <a class="btn btn-accent" href="https://9router.home-server.id.vn/dashboard" target="_blank" rel="noopener">↗ Mở 9Router</a>
   </div>
@@ -149,7 +179,7 @@ a{color:inherit;text-decoration:none}
   <div class="tabs">
     <button class="tab active" onclick="switchTab('providers',this)">🤖 Providers</button>
     <button class="tab" onclick="switchTab('combos',this)">🔗 Combos</button>
-    <button class="tab" onclick="switchTab('usage',this)">📊 Usage</button>
+    <button class="tab" onclick="switchTab('usage',this)">📊 Usage & Quota</button>
     <button class="tab" onclick="switchTab('keys',this)">🔑 API Keys</button>
   </div>
 
@@ -175,22 +205,67 @@ a{color:inherit;text-decoration:none}
     </div>
   </div>
 
-  <!-- TAB: Usage -->
+  <!-- TAB: Usage & Quota -->
   <div class="tab-content" id="tab-usage">
-    <div class="panel">
-      <div class="panel-header"><div class="panel-title">📊 Usage 7 ngày qua</div></div>
-      <div class="usage-grid" id="usageSummary">
-        <div class="usage-card"><div class="usage-label">Tổng requests</div><div class="usage-value" id="u-requests">—</div></div>
-        <div class="usage-card"><div class="usage-label">Tokens dùng</div><div class="usage-value" id="u-tokens">—</div></div>
-        <div class="usage-card"><div class="usage-label">Success rate</div><div class="usage-value" id="u-rate">—</div></div>
+
+    <!-- Period selector -->
+    <div class="panel" style="margin-bottom:12px">
+      <div class="period-tabs">
+        <button class="period-btn active" onclick="setPeriod('1d',this)">Hôm nay</button>
+        <button class="period-btn" onclick="setPeriod('7d',this)">7 ngày</button>
+        <button class="period-btn" onclick="setPeriod('30d',this)">30 ngày</button>
       </div>
-      <div class="chart-wrap">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Requests theo ngày</div>
-        <div class="chart-bars" id="chartBars"></div>
+      <!-- Summary numbers -->
+      <div class="usage-summary">
+        <div class="usage-card">
+          <div class="usage-label">Tổng requests</div>
+          <div class="usage-value c-orange" id="u-requests">—</div>
+          <div class="usage-sub" id="u-req-sub"></div>
+        </div>
+        <div class="usage-card">
+          <div class="usage-label">Input tokens</div>
+          <div class="usage-value c-blue" id="u-input">—</div>
+          <div class="usage-sub" id="u-input-sub"></div>
+        </div>
+        <div class="usage-card">
+          <div class="usage-label">Output tokens</div>
+          <div class="usage-value c-purple" id="u-output">—</div>
+          <div class="usage-sub" id="u-output-sub"></div>
+        </div>
+        <div class="usage-card">
+          <div class="usage-label">Success rate</div>
+          <div class="usage-value c-green" id="u-rate">—</div>
+          <div class="usage-sub" id="u-rate-sub"></div>
+        </div>
+      </div>
+
+      <!-- Daily chart -->
+      <div class="chart-section">
+        <div class="section-label">Requests theo ngày</div>
+        <div class="chart-bars" id="chartBars"><div style="color:var(--muted);font-size:12px;padding:.5rem">Chưa có dữ liệu</div></div>
         <div class="chart-labels" id="chartLabels"></div>
       </div>
-      <div style="padding:0 1rem 1rem" id="usageByProvider"></div>
     </div>
+
+    <!-- Per-provider quota -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">⚡ Usage theo Provider</div>
+        <div style="font-size:11px;color:var(--muted)" id="quotaPeriodLabel">—</div>
+      </div>
+      <div class="quota-section">
+        <div class="quota-head">
+          <span></span>
+          <span>Provider</span>
+          <span style="text-align:right">Requests</span>
+          <span style="text-align:right">Tokens</span>
+          <span style="text-align:right">Cost (est.)</span>
+          <span style="text-align:center">Load</span>
+        </div>
+        <div id="quotaList"><div class="loading"><div class="spin"></div>Đang tải...</div></div>
+      </div>
+    </div>
+
   </div>
 
   <!-- TAB: API Keys -->
@@ -207,7 +282,8 @@ a{color:inherit;text-decoration:none}
 </div>
 
 <script>
-var allProviders = [], allCombos = [], allKeys = [], usageData = {};
+var allProviders = [], allCombos = [], allKeys = [], allUsage = {};
+var currentPeriod = '1d';
 
 function switchTab(name, btn) {
   document.querySelectorAll('.tab-content').forEach(function(el){ el.classList.remove('active'); });
@@ -216,29 +292,48 @@ function switchTab(name, btn) {
   btn.classList.add('active');
 }
 
+function setPeriod(p, btn) {
+  currentPeriod = p;
+  document.querySelectorAll('.period-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  renderUsage();
+}
+
+/* ── helpers ── */
 function providerIcon(name) {
   var n = (name||'').toLowerCase();
-  if (n.includes('openai'))    return '🟢';
-  if (n.includes('anthropic') || n.includes('claude')) return '🟠';
-  if (n.includes('google') || n.includes('gemini'))    return '🔵';
-  if (n.includes('deepseek'))  return '🐋';
-  if (n.includes('groq'))      return '⚡';
-  if (n.includes('mistral'))   return '🌀';
-  if (n.includes('openrouter'))return '🔀';
-  if (n.includes('together'))  return '🤝';
-  if (n.includes('cohere'))    return '🔮';
-  if (n.includes('xai') || n.includes('grok')) return '𝕏';
-  if (n.includes('fireworks')) return '🎆';
-  if (n.includes('cerebras'))  return '🧠';
-  if (n.includes('ollama'))    return '🦙';
+  if (n.includes('openai'))                         return '🟢';
+  if (n.includes('anthropic')||n.includes('claude'))return '🟠';
+  if (n.includes('google')||n.includes('gemini'))   return '🔵';
+  if (n.includes('deepseek'))                        return '🐋';
+  if (n.includes('groq'))                            return '⚡';
+  if (n.includes('mistral'))                         return '🌀';
+  if (n.includes('openrouter'))                      return '🔀';
+  if (n.includes('together'))                        return '🤝';
+  if (n.includes('cohere'))                          return '🔮';
+  if (n.includes('xai')||n.includes('grok'))         return '𝕏';
+  if (n.includes('fireworks'))                       return '🎆';
+  if (n.includes('cerebras'))                        return '🧠';
+  if (n.includes('ollama'))                          return '🦙';
+  if (n.includes('perplexity'))                      return '🔍';
+  if (n.includes('azure'))                           return '☁️';
+  if (n.includes('bedrock'))                         return '🪨';
+  if (n.includes('vertex'))                          return '🔷';
   return '🤖';
 }
 
 function fmtNum(n) {
-  if (!n && n!==0) return '—';
-  if (n >= 1000000) return (n/1000000).toFixed(1)+'M';
-  if (n >= 1000)    return (n/1000).toFixed(1)+'K';
+  if (!n && n !== 0) return '—';
+  if (n >= 1000000000) return (n/1000000000).toFixed(2)+'B';
+  if (n >= 1000000)    return (n/1000000).toFixed(2)+'M';
+  if (n >= 1000)       return (n/1000).toFixed(1)+'K';
   return String(n);
+}
+
+function fmtCost(n) {
+  if (!n && n !== 0) return '—';
+  if (n < 0.01) return '<$0.01';
+  return '$'+n.toFixed(2);
 }
 
 function timeAgo(iso) {
@@ -252,28 +347,35 @@ function timeAgo(iso) {
   return Math.floor(h/24)+'ng trước';
 }
 
+function periodLabel(p) {
+  return p==='1d' ? 'Hôm nay' : p==='7d' ? '7 ngày qua' : '30 ngày qua';
+}
+
 /* ── Providers ── */
 function renderProviders() {
   var q = (document.getElementById('provSearch').value||'').toLowerCase();
-  var list = allProviders.filter(function(p){ return !q || (p.name||'').toLowerCase().includes(q) || (p.type||'').toLowerCase().includes(q); });
+  var list = allProviders.filter(function(p){
+    return !q || (p.name||'').toLowerCase().includes(q) || (p.type||'').toLowerCase().includes(q);
+  });
   document.getElementById('provCount').textContent = list.length+'/'+allProviders.length;
   if (!list.length){ document.getElementById('provList').innerHTML='<div class="empty">Không tìm thấy provider</div>'; return; }
 
   document.getElementById('provList').innerHTML = list.map(function(p){
     var isActive = p.enabled !== false && p.active !== false && p.status !== 'inactive';
-    var models = p.models ? p.models.length : (p.modelCount || 0);
-    var acctCount = p.accounts ? p.accounts.length : (p.accountCount || 0);
+    var models   = p.models ? p.models.length : (p.modelCount || 0);
+    var acctCount= p.accounts ? p.accounts.length : (p.accountCount || 0);
+    var label    = p.name || p.type || p.id || 'Unknown';
     return '<div class="prov-item">'
-      +'<div class="prov-icon">'+providerIcon(p.name||p.type||'')+'</div>'
+      +'<div class="prov-icon">'+providerIcon(label)+'</div>'
       +'<div class="prov-info">'
-        +'<div class="prov-name">'+(p.name||p.type||p.id||'Unknown')+'</div>'
+        +'<div class="prov-name">'+label+'</div>'
         +'<div class="prov-meta">'
-          +(acctCount?'<span>'+acctCount+' accounts</span>':'')
-          +(p.type&&p.type!==p.name?'<span>'+p.type+'</span>':'')
-          +(p.baseUrl?'<span style="font-family:monospace;font-size:10px">'+p.baseUrl.replace(/^https?:\/\//,'').slice(0,30)+'</span>':'')
+          +(acctCount ? '<span>'+acctCount+' accounts</span>' : '')
+          +(p.type && p.type !== p.name ? '<span>'+p.type+'</span>' : '')
+          +(p.baseUrl ? '<span style="font-family:monospace;font-size:10px">'+p.baseUrl.replace(/^https?:\/\//,'').slice(0,40)+'</span>' : '')
         +'</div>'
       +'</div>'
-      +(models?'<span class="prov-models">'+models+' models</span>':'')
+      +(models ? '<span class="prov-models">'+models+' models</span>' : '')
       +'<span class="prov-status '+(isActive?'active':'inactive')+'">'+(isActive?'Active':'Off')+'</span>'
     +'</div>';
   }).join('');
@@ -288,7 +390,7 @@ function renderCombos() {
 
   document.getElementById('comboList').innerHTML = list.map(function(c){
     var providers = c.providers || c.items || [];
-    var isActive = c.enabled !== false && c.active !== false;
+    var isActive  = c.enabled !== false && c.active !== false;
     return '<div class="combo-item">'
       +'<div style="width:32px;height:32px;border-radius:8px;background:var(--orange-dim);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🔗</div>'
       +'<div class="combo-info">'
@@ -306,56 +408,87 @@ function renderCombos() {
   }).join('');
 }
 
-/* ── Usage ── */
+/* ── Usage & Quota ── */
 function renderUsage() {
-  var d = usageData;
-  if (!d || Object.keys(d).length === 0) {
-    document.getElementById('chartBars').innerHTML = '<div style="color:var(--muted);font-size:12px">Không có dữ liệu usage</div>';
-    return;
-  }
+  var d = allUsage[currentPeriod] || {};
+  document.getElementById('quotaPeriodLabel').textContent = periodLabel(currentPeriod);
 
-  var total    = d.totalRequests || d.total || d.requests || 0;
-  var tokens   = d.totalTokens   || d.tokens || 0;
-  var success  = d.successRate   || d.success || null;
+  /* summary */
+  var total   = d.totalRequests || d.total || d.requests || 0;
+  var inputT  = d.totalInputTokens  || d.inputTokens  || d.promptTokens  || 0;
+  var outputT = d.totalOutputTokens || d.outputTokens || d.completionTokens || 0;
+  var allT    = d.totalTokens || d.tokens || (inputT + outputT) || 0;
+  if (!inputT && !outputT && allT) { inputT = Math.round(allT*0.7); outputT = allT - inputT; }
+  var success = d.successRate || d.success || null;
+  var cost    = d.totalCost   || d.cost    || null;
+  var failed  = d.failedRequests || d.failed || 0;
+
   document.getElementById('u-requests').textContent = fmtNum(total);
-  document.getElementById('u-tokens').textContent   = fmtNum(tokens);
-  document.getElementById('u-rate').textContent     = success !== null ? Math.round(success*100)+'%' : '—';
+  document.getElementById('u-req-sub').textContent  = failed ? failed+' lỗi' : '';
+  document.getElementById('u-input').textContent    = fmtNum(inputT)  || (allT ? fmtNum(allT) : '—');
+  document.getElementById('u-input-sub').textContent= inputT ? 'prompt tokens' : (allT ? 'total tokens' : '');
+  document.getElementById('u-output').textContent   = fmtNum(outputT) || (cost ? fmtCost(cost) : '—');
+  document.getElementById('u-output-sub').textContent = outputT ? 'completion tokens' : (cost ? 'est. cost' : '');
+  document.getElementById('u-rate').textContent     = success !== null ? Math.round(success*100)+'%' : (total && !failed ? '100%' : '—');
+  document.getElementById('u-rate-sub').textContent = total ? total+' requests' : '';
 
-  // daily chart
-  var daily = d.daily || d.days || d.byDay || [];
-  if (daily.length > 0) {
+  /* daily chart */
+  var daily = d.daily || d.days || d.byDay || d.data || [];
+  if (Array.isArray(daily) && daily.length > 0) {
     var max = Math.max.apply(null, daily.map(function(x){ return x.requests||x.count||x.total||0; }));
     document.getElementById('chartBars').innerHTML = daily.map(function(x){
       var val = x.requests||x.count||x.total||0;
-      var h = max>0 ? Math.round((val/max)*76)+4 : 4;
-      var label = (x.date||x.day||'').slice(5);
-      return '<div class="chart-bar" style="height:'+h+'px" data-tip="'+label+': '+fmtNum(val)+' req"></div>';
+      var h   = max > 0 ? Math.round((val/max)*82)+4 : 4;
+      var lbl = (x.date||x.day||x.time||'').slice(5);
+      return '<div class="chart-bar" style="height:'+h+'px" data-tip="'+lbl+': '+fmtNum(val)+' req"></div>';
     }).join('');
     document.getElementById('chartLabels').innerHTML = daily.map(function(x){
-      return '<div class="chart-label">'+(x.date||x.day||'').slice(5)+'</div>';
+      return '<div class="chart-label">'+(x.date||x.day||x.time||'').slice(5)+'</div>';
     }).join('');
   } else {
-    document.getElementById('chartBars').innerHTML = '<div style="color:var(--muted);font-size:12px">Không có dữ liệu theo ngày</div>';
+    var msg = currentPeriod==='1d' ? 'Không có dữ liệu theo giờ hôm nay' : 'Không có dữ liệu theo ngày';
+    document.getElementById('chartBars').innerHTML  = '<div style="color:var(--muted);font-size:12px;padding:.5rem">'+msg+'</div>';
+    document.getElementById('chartLabels').innerHTML = '';
   }
 
-  // by provider
-  var byProv = d.byProvider || d.providers || [];
-  if (byProv.length > 0) {
-    document.getElementById('usageByProvider').innerHTML =
-      '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Theo Provider</div>'
-      +byProv.slice(0,10).map(function(p){
-        var name = p.provider||p.name||'Unknown';
-        var req = p.requests||p.count||0;
-        var pct = total>0 ? Math.round((req/total)*100) : 0;
-        return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-          +'<span style="font-size:13px">'+providerIcon(name)+'</span>'
-          +'<span style="font-size:12px;flex:0 0 140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+name+'</span>'
-          +'<div style="flex:1;height:5px;background:var(--surface);border-radius:3px;overflow:hidden">'
-            +'<div style="height:100%;background:var(--accent);border-radius:3px;width:'+pct+'%"></div>'
-          +'</div>'
-          +'<span style="font-size:11px;color:var(--muted);flex-shrink:0">'+fmtNum(req)+'</span>'
+  /* per-provider quota rows */
+  var byProv = d.byProvider || d.providers || d.channels || [];
+  if (Array.isArray(byProv) && byProv.length > 0) {
+    var maxReq = Math.max.apply(null, byProv.map(function(p){ return p.requests||p.count||0; }));
+    document.getElementById('quotaList').innerHTML = byProv.map(function(p){
+      var name    = p.provider||p.name||p.channel||'Unknown';
+      var req     = p.requests||p.count||p.totalRequests||0;
+      var pct     = maxReq > 0 ? Math.round((req/maxReq)*100) : 0;
+      var tIn     = p.inputTokens  || p.promptTokens    || 0;
+      var tOut    = p.outputTokens || p.completionTokens || 0;
+      var tAll    = p.tokens || p.totalTokens || (tIn+tOut) || 0;
+      var tokDisp = (tIn||tOut) ? fmtNum(tIn)+' / '+fmtNum(tOut) : (tAll ? fmtNum(tAll) : '—');
+      var cost    = p.cost || p.totalCost || null;
+      var badgeCls= pct>=80?'hi':pct>=40?'mid':'lo';
+      var badgeTxt= pct>=80?'High':pct>=40?'Mid':'Low';
+      return '<div class="quota-row">'
+        +'<div style="font-size:18px;text-align:center">'+providerIcon(name)+'</div>'
+        +'<div>'
+          +'<div class="quota-name">'+name+'</div>'
+          +'<div class="quota-bar-wrap"><div class="quota-bar-fill" style="width:'+pct+'%"></div></div>'
+        +'</div>'
+        +'<div class="quota-val">'+fmtNum(req)+'<div class="quota-sub">requests</div></div>'
+        +'<div class="quota-val">'+tokDisp+'<div class="quota-sub">'+(tIn||tOut?'in / out':'tokens')+'</div></div>'
+        +'<div class="quota-val">'+(cost?fmtCost(cost):'—')+'<div class="quota-sub">est. cost</div></div>'
+        +'<div style="text-align:center"><span class="quota-badge '+badgeCls+'">'+badgeTxt+'</span></div>'
+      +'</div>';
+    }).join('');
+  } else {
+    /* fallback: build from providers list if usage API has no byProvider */
+    if (allProviders.length > 0) {
+      document.getElementById('quotaList').innerHTML =
+        '<div class="empty" style="padding:1.5rem">'
+        +'API chưa trả về dữ liệu phân theo provider.<br>'
+        +'<span style="font-size:11px">Kiểm tra endpoint <code>/api/usage/stats?period='+currentPeriod+'</code></span>'
         +'</div>';
-      }).join('');
+    } else {
+      document.getElementById('quotaList').innerHTML = '<div class="empty">Không có dữ liệu</div>';
+    }
   }
 }
 
@@ -367,14 +500,15 @@ function renderKeys() {
   if (!list.length){ document.getElementById('keyList').innerHTML='<div class="empty">Không có API key</div>'; return; }
   document.getElementById('keyList').innerHTML = list.map(function(k){
     return '<div class="key-item">'
-      +'<div style="font-size:20px">🔑</div>'
+      +'<div style="font-size:20px;flex-shrink:0">🔑</div>'
       +'<div class="key-info">'
         +'<div class="key-name">'+(k.name||'Unnamed key')+'</div>'
         +'<div class="key-val">'+(k.key||'—')+'</div>'
       +'</div>'
-      +'<div class="key-date" style="text-align:right">'
-        +(k.lastUsed?'<div>Dùng '+timeAgo(k.lastUsed)+'</div>':'')
-        +(k.createdAt?'<div style="color:var(--muted)">Tạo '+timeAgo(k.createdAt)+'</div>':'')
+      +'<div style="text-align:right;flex-shrink:0">'
+        +(k.requestCount ? '<div class="key-reqs">'+fmtNum(k.requestCount)+' req</div>' : '')
+        +(k.lastUsed?'<div class="key-date">Dùng '+timeAgo(k.lastUsed)+'</div>':'')
+        +(k.createdAt?'<div class="key-date">Tạo '+timeAgo(k.createdAt)+'</div>':'')
       +'</div>'
     +'</div>';
   }).join('');
@@ -386,8 +520,9 @@ function loadData() {
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (data.error){
-        ['provList','comboList','keyList'].forEach(function(id){
-          document.getElementById(id).innerHTML='<div class="err-banner">⚠ '+data.error+'</div>';
+        ['provList','comboList','keyList','quotaList'].forEach(function(id){
+          var el = document.getElementById(id);
+          if(el) el.innerHTML='<div class="err-banner">⚠ '+data.error+'</div>';
         });
         return;
       }
@@ -400,15 +535,16 @@ function loadData() {
       allProviders = data.providers||[];
       allCombos    = data.combos||[];
       allKeys      = data.keys||[];
-      usageData    = data.usage||{};
+      allUsage     = data.usage||{};
+
+      var now = new Date();
+      document.getElementById('lastUpdate').textContent =
+        now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
 
       renderProviders();
       renderCombos();
       renderUsage();
       renderKeys();
-
-      // version from settings if available
-      if (data.version) document.getElementById('version').textContent = 'v'+data.version;
     })
     .catch(function(e){
       document.getElementById('provList').innerHTML='<div class="err-banner">⚠ '+e.message+'</div>';
