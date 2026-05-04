@@ -349,10 +349,10 @@ async function handleESXi(env) {
     <pathSet>summary.hardware.memorySize</pathSet>
     <pathSet>summary.hardware.cpuModel</pathSet>
     <pathSet>summary.hardware.numCpuCores</pathSet>
+    <pathSet>summary.hardware.numCpuThreads</pathSet>
     <pathSet>summary.hardware.cpuMhz</pathSet>
     <pathSet>summary.quickStats.overallCpuUsage</pathSet>
     <pathSet>summary.quickStats.overallMemoryUsage</pathSet>
-    <pathSet>summary.runtime.uptime</pathSet>
     <pathSet>summary.runtime.connectionState</pathSet>
     <pathSet>summary.overallStatus</pathSet>
   </propSet>
@@ -431,7 +431,6 @@ async function handleESXi(env) {
         memTotalMB: Math.round(memTotal / 1048576),
         memUsedMB: memUsed,
         memPct: memTotal > 0 ? Math.round(memUsed / (memTotal / 1048576) * 100) : 0,
-        uptime: parseInt(p['summary.runtime.uptime'] || 0),
         connectionState: p['summary.runtime.connectionState'],
         overallStatus: p['summary.overallStatus'],
       };
@@ -527,10 +526,12 @@ async function handleESXiDebug(env) {
     <pathSet>summary.hardware.memorySize</pathSet>
     <pathSet>summary.hardware.cpuModel</pathSet>
     <pathSet>summary.hardware.numCpuCores</pathSet>
+    <pathSet>summary.hardware.numCpuThreads</pathSet>
     <pathSet>summary.hardware.cpuMhz</pathSet>
     <pathSet>summary.quickStats.overallCpuUsage</pathSet>
     <pathSet>summary.quickStats.overallMemoryUsage</pathSet>
-    <pathSet>summary.runtime.uptime</pathSet>
+    <pathSet>summary.runtime.connectionState</pathSet>
+    <pathSet>summary.overallStatus</pathSet>
   </propSet>
   <objectSet><obj type="HostSystem">ha-host</obj></objectSet>
 </specSet><options/></RetrievePropertiesEx>`;
