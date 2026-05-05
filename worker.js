@@ -697,13 +697,21 @@ async function handleFortigate(env) {
 
   const opts = { headers, signal: AbortSignal.timeout(12000) };
 
+  const _debug = {};
   const safeGet = async (path) => {
     try {
       const r = await fetch(`${base}${path}`, opts);
-      if (!r.ok) return null;
+      _debug[path] = { status: r.status, ok: r.ok };
+      if (!r.ok) {
+        try { _debug[path].body = (await r.text()).slice(0, 300); } catch {}
+        return null;
+      }
       const d = await r.json();
       return d?.results ?? d;
-    } catch { return null; }
+    } catch(e) {
+      _debug[path] = { error: e.message };
+      return null;
+    }
   };
 
   // Fetch all endpoints in parallel (all read-only)
@@ -808,6 +816,7 @@ async function handleFortigate(env) {
       vpnTotal: vpns.length,
       sessions,
     },
+    _debug,
   });
 }
 
