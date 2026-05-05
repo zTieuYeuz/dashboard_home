@@ -737,11 +737,9 @@ async function handleFortigate(env, debug = false) {
   };
 
   // Fetch all endpoints in parallel (all read-only)
-  const [sysRaw, resUsage, resSession, resUptime, ifaceRaw2, vpnIpsec] = await Promise.all([
+  const [sysRaw, resUsage, ifaceRaw2, vpnIpsec] = await Promise.all([
     safeGetFull('/api/v2/monitor/system/status'),
     safeGet('/api/v2/monitor/system/resource/usage'),
-    safeGet('/api/v2/monitor/system/resource/usage?resource=netsession'),
-    safeGet('/api/v2/monitor/system/resource/usage?resource=uptime'),
     safeGet('/api/v2/monitor/system/interface'),
     safeGet('/api/v2/monitor/vpn/ipsec'),
   ]);
@@ -763,11 +761,15 @@ async function handleFortigate(env, debug = false) {
   const res = resUsage || {};
   const cpuPct   = lastVal(res.cpu);
   const memPct   = lastVal(res.mem);
-  const sessions = lastVal(res.netsession) ?? lastVal(resSession?.netsession);
+  // Sessions: FortiOS 7.4 uses "session" key (not "netsession") in resource/usage
+  const sessions = lastVal(res.session) ?? lastVal(res.netsession) ?? null;
   const diskPct  = lastVal(res.disk);
-  // uptime: try dedicated call, then combined, then system status top-level
-  const uptimeFromRes = lastVal(resUptime?.uptime) ?? lastVal(res.uptime);
-  const upSec = uptimeFromRes ?? sysRaw?.uptime ?? sysRaw?.results?.uptime ?? 0;
+  // Uptime: from system/status results (field may be beyond 200-char snippet)
+  // sysRaw.results.uptime is in seconds on FortiOS 7.x
+  const upSec = sysRaw?.results?.uptime
+    ?? sysRaw?.uptime
+    ?? lastVal(res.uptime)
+    ?? 0;
 
   // ── Uptime string ──
   const uptimeDays  = Math.floor(upSec / 86400);
