@@ -6,14 +6,16 @@
 <title>FortiGate Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#0b0d14;--surface:#131620;--card:#1a1d2e;--border:#252840;
   --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
   --green:#34d399;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;
-  --font:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+  --font:'Inter',system-ui,sans-serif;
+  --num:'Space Grotesk','Inter',sans-serif;
+  --mono:'IBM Plex Mono','Courier New',monospace;
 }
 html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100%;font-size:13px;-webkit-font-smoothing:antialiased}
 
@@ -38,20 +40,20 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 @media(max-width:600px){.stats-row{grid-template-columns:repeat(2,1fr)}}
 .stat-card{background:var(--card);border:.5px solid var(--border);border-radius:10px;padding:12px 14px}
 .stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px;font-weight:600}
-.stat-value{font-size:22px;font-weight:700;line-height:1;letter-spacing:-.5px}
+.stat-value{font-size:24px;font-weight:700;line-height:1;letter-spacing:-.3px;font-family:var(--num)}
 .stat-sub{font-size:10px;color:var(--muted);margin-top:3px;font-weight:500}
 .c-green{color:var(--green)}.c-red{color:var(--red)}.c-amber{color:var(--amber)}.c-blue{color:var(--accent)}.c-purple{color:var(--purple)}
 
 /* ── 3-column body grid ── */
-/*  col1: sidebar(210px) | col2: interfaces(fixed 360px) | col3: bandwidth(1fr, roomy) */
+/*  col1: sidebar(210px) | col2: interfaces(fixed 430px) | col3: bandwidth(1fr, roomy) */
 .body-grid{
   display:grid;
-  grid-template-columns:210px 360px 1fr;
+  grid-template-columns:210px 430px 1fr;
   gap:.85rem;
   align-items:start;
   margin-bottom:.85rem;
 }
-@media(max-width:1200px){.body-grid{grid-template-columns:200px 320px 1fr}}
+@media(max-width:1200px){.body-grid{grid-template-columns:200px 380px 1fr}}
 @media(max-width:900px){.body-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:600px){.body-grid{grid-template-columns:1fr}}
 
@@ -78,7 +80,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 /* ── Resource bars ── */
 .res-item{margin-bottom:10px}.res-item:last-child{margin-bottom:0}
 .res-header{display:flex;justify-content:space-between;margin-bottom:4px}
-.res-name{font-size:12px;font-weight:500}.res-val{font-size:12px;color:var(--muted);font-weight:600}
+.res-name{font-size:12px;font-weight:500}.res-val{font-size:13px;color:var(--muted);font-weight:700;font-family:var(--num)}
 .bar-track{height:5px;background:#1e2440;border-radius:3px;overflow:hidden}
 .bar-fill{height:100%;border-radius:3px;transition:width .5s}
 .bar-green{background:var(--green)}.bar-amber{background:var(--amber)}.bar-red{background:var(--red)}
@@ -87,7 +89,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 .info-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:.5px solid var(--border)}
 .info-row:last-child{border-bottom:none}
 .info-key{font-size:11px;color:var(--muted);font-weight:500}
-.info-val{font-size:11px;font-weight:600;text-align:right;word-break:break-all;max-width:135px;font-family:var(--mono)}
+.info-val{font-size:11px;font-weight:600;text-align:right;word-break:break-all;max-width:135px;font-family:var(--mono);letter-spacing:.3px}
 
 /* ── Interfaces: 2-column grid inside panel ── */
 .iface-grid{display:grid;grid-template-columns:1fr 1fr}
@@ -106,8 +108,8 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 .iface-info{flex:1;min-width:0;overflow:hidden}
 .iface-name{font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px;white-space:nowrap}
 .iface-ip{font-size:10px;color:var(--accent);font-family:var(--mono);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.iface-right{text-align:right;font-size:10px;color:var(--muted);flex-shrink:0;white-space:nowrap;font-family:var(--mono)}
-.iface-speed{font-size:11px;font-weight:600;color:var(--text)}
+.iface-right{text-align:right;font-size:10px;color:var(--muted);flex-shrink:0;white-space:nowrap;font-family:var(--mono);letter-spacing:.2px}
+.iface-speed{font-size:11px;font-weight:700;color:var(--text);font-family:var(--num)}
 .badge-up{font-size:9px;padding:1px 5px;border-radius:3px;background:#0d2d1e;color:var(--green);border:.5px solid #1a5c3a;font-weight:600}
 .badge-down{font-size:9px;padding:1px 5px;border-radius:3px;background:#2d0d0d;color:var(--red);border:.5px solid #5c1a1a;font-weight:600}
 .badge-on{font-size:9px;padding:1px 5px;border-radius:3px;background:#0d1e2d;color:var(--accent);border:.5px solid #1a3a5c;font-weight:600}
@@ -266,7 +268,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
           </div>
         </div>
         <div class="bw-body" id="bw-body">
-          <div id="bw-rate" style="text-align:center;font-size:11px;color:var(--muted);margin-bottom:4px">Đang thu thập...</div>
+          <div id="bw-rate" style="text-align:center;font-size:14px;color:var(--muted);margin-bottom:6px;font-family:var(--num);font-weight:600;letter-spacing:.2px">Đang thu thập...</div>
           <canvas id="bw-canvas"></canvas>
         </div>
       </div>
@@ -349,8 +351,8 @@ function updateBandwidth(ifaces){
       const canvas=document.getElementById('bw-canvas');
       if(canvas)drawBwChart(canvas.width/(window.devicePixelRatio||1),canvas.height/(window.devicePixelRatio||1));
       document.getElementById('bw-rate').innerHTML=
-        '<span style="color:var(--green)">↓ '+rxMbps.toFixed(2)+' Mbps</span>'
-        +'&nbsp;&nbsp;<span style="color:var(--accent)">↑ '+txMbps.toFixed(2)+' Mbps</span>';
+        '<span style="color:var(--green)">↓ <strong>'+rxMbps.toFixed(2)+'</strong> Mbps</span>'
+        +'&emsp;<span style="color:var(--accent)">↑ <strong>'+txMbps.toFixed(2)+'</strong> Mbps</span>';
     }
   }
   prevWan1={ts:now,rx:wan1.rxBytes,tx:wan1.txBytes};
@@ -455,9 +457,9 @@ function renderStats(d){
     <div class="stat-card"><div class="stat-label">Memory</div><div class="stat-value ${valCls(mem)}">${mem!=='—'?mem+'%':'—'}</div><div class="stat-sub">RAM usage</div></div>
     <div class="stat-card"><div class="stat-label">Sessions</div><div class="stat-value c-blue">${r.sessions!=null?Number(r.sessions).toLocaleString():'—'}</div><div class="stat-sub">Active conns</div></div>
     <div class="stat-card"><div class="stat-label">SSL VPN</div><div class="stat-value ${(s.sslUsers||0)>0?'c-green':'c-muted'}">${s.sslUsers??0}</div><div class="stat-sub">Users online</div></div>
-    <div class="stat-card"><div class="stat-label">Interfaces</div><div class="stat-value ${(s.ifaceUp||0)>0?'c-green':'c-red'}">${s.ifaceUp??0}<span style="font-size:11px;color:var(--muted)">/${s.ifaceTotal??'?'}</span></div><div class="stat-sub">Up / Total</div></div>
-    <div class="stat-card"><div class="stat-label">VPN IPSec</div><div class="stat-value ${(s.vpnUp||0)>0?'c-green':'c-amber'}">${s.vpnUp??0}<span style="font-size:11px;color:var(--muted)">/${s.vpnTotal??0}</span></div><div class="stat-sub">Tunnels up</div></div>
-    <div class="stat-card"><div class="stat-label">Policies</div><div class="stat-value c-blue">${s.enabledPolicies??'—'}<span style="font-size:11px;color:var(--muted)">/${s.totalPolicies??'?'}</span></div><div class="stat-sub">Enabled</div></div>`;
+    <div class="stat-card"><div class="stat-label">Interfaces</div><div class="stat-value ${(s.ifaceUp||0)>0?'c-green':'c-red'}">${s.ifaceUp??0}<span style="font-size:13px;color:var(--muted);font-family:var(--num)">/${s.ifaceTotal??'?'}</span></div><div class="stat-sub">Up / Total</div></div>
+    <div class="stat-card"><div class="stat-label">VPN IPSec</div><div class="stat-value ${(s.vpnUp||0)>0?'c-green':'c-amber'}">${s.vpnUp??0}<span style="font-size:13px;color:var(--muted);font-family:var(--num)">/${s.vpnTotal??0}</span></div><div class="stat-sub">Tunnels up</div></div>
+    <div class="stat-card"><div class="stat-label">Policies</div><div class="stat-value c-blue">${s.enabledPolicies??'—'}<span style="font-size:13px;color:var(--muted);font-family:var(--num)">/${s.totalPolicies??'?'}</span></div><div class="stat-sub">Enabled</div></div>`;
 }
 
 function renderResources(r){
