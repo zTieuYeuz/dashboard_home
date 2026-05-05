@@ -433,11 +433,12 @@ function runChecks() {
     .catch(function(e){ console.error('API error', e); });
 }
 
-var cd = 60;
+var cd = 120;
 setInterval(function(){
   cd--;
-  document.getElementById('autoLabel').textContent = '● Auto '+cd+'s';
-  if(cd<=0){ runChecks(); cd=60; }
+  const m=Math.floor(cd/60), s=cd%60;
+  document.getElementById('autoLabel').textContent = '● Auto '+(m>0?m+'m ':'')+s+'s';
+  if(cd<=0){ runChecks(); cd=120; }
 }, 1000);
 
 initUI();

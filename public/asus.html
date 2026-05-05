@@ -583,7 +583,7 @@ let _lastClients = null; // cache last known good client list
 
 function startPolling(){
   if(_pollTimer) clearInterval(_pollTimer);
-  _pollTimer = setInterval(load, 30000);
+  _pollTimer = setInterval(load, 120000);
 }
 function stopPolling(){
   if(_pollTimer){ clearInterval(_pollTimer); _pollTimer=null; }
