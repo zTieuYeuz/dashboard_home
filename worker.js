@@ -1006,11 +1006,11 @@ async function handleAsus(env) {
   const ddnsServer   = app.ddns_server_x   || '';
   const ddnsIp       = app.ddns_ipaddr     || '';
   const ddnsUpdated  = app.ddns_updated    || '';
-  // Working = enabled + (updated says success OR registered IP matches WAN IP)
-  const ddnsWorking  = ddnsEnabled && (
-    ddnsUpdated.toLowerCase().includes('success') ||
-    (ddnsIp && wanIp && ddnsIp === wanIp)
-  );
+  // Working = enabled + has a valid registered IP + last update didn't fail
+  // Note: ddns_updated is often a timestamp like "2025/04/12 08:30:00", not "success"
+  const ddnsHasIp    = ddnsIp && ddnsIp !== '' && ddnsIp !== '0.0.0.0';
+  const ddnsNotFailed = !ddnsUpdated.toLowerCase().match(/fail|error|n\/a|none/);
+  const ddnsWorking  = ddnsEnabled && ddnsHasIp && ddnsNotFailed;
 
   // ── WiFi client counts (wl0_sta_list / wl1_sta_list are MAC lists) ──
   const countMacs = (s) => s ? s.split(' ').filter(m => m.trim().length > 0).length : 0;
