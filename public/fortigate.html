@@ -11,109 +11,126 @@
   --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
   --green:#34d399;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;
 }
-html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text)}
+html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100%}
 
 /* ── Header ── */
-.header{
-  background:var(--surface);border-bottom:.5px solid var(--border);
-  padding:0 1.25rem;height:48px;
-  display:flex;align-items:center;justify-content:space-between;
-  position:sticky;top:0;z-index:10;
-}
+.header{background:var(--surface);border-bottom:.5px solid var(--border);padding:0 1.25rem;height:48px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
 .hdr-left{display:flex;align-items:center;gap:10px}
 .back-btn{font-size:12px;padding:4px 10px;border-radius:6px;border:.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
 .back-btn:hover{color:var(--text);border-color:#3d4260}
-.hdr-title{display:flex;align-items:center;gap:8px}
 .hdr-name{font-size:14px;font-weight:600}
 .hdr-sub{font-size:11px;color:var(--muted)}
 .hdr-right{display:flex;align-items:center;gap:8px}
 .refresh-btn{font-size:12px;padding:4px 10px;border-radius:6px;border:.5px solid var(--border);background:transparent;color:var(--accent);cursor:pointer;transition:all .15s}
 .refresh-btn:hover{background:#1e3a5f;border-color:var(--accent)}
-.status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-right:6px}
-.status-dot.red{background:var(--red)}
-.status-dot.amber{background:var(--amber)}
 .last-update{font-size:11px;color:var(--muted)}
 
-/* ── Layout ── */
-.page{padding:1.25rem;max-width:1400px;margin:0 auto}
+/* ── Page ── */
+.page{padding:1.25rem;max-width:1500px;margin:0 auto}
 
 /* ── Stats row ── */
-.stats-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:1.25rem}
-.stat-card{background:var(--card);border:.5px solid var(--border);border-radius:10px;padding:14px 16px}
-.stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
-.stat-value{font-size:22px;font-weight:700;line-height:1}
-.stat-sub{font-size:11px;color:var(--muted);margin-top:4px}
-.stat-value.green{color:var(--green)}
-.stat-value.red{color:var(--red)}
-.stat-value.amber{color:var(--amber)}
-.stat-value.blue{color:var(--accent)}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:1rem}
+.stat-card{background:var(--card);border:.5px solid var(--border);border-radius:10px;padding:12px 14px}
+.stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
+.stat-value{font-size:20px;font-weight:700;line-height:1}
+.stat-sub{font-size:10px;color:var(--muted);margin-top:3px}
+.c-green{color:var(--green)}.c-red{color:var(--red)}.c-amber{color:var(--amber)}.c-blue{color:var(--accent)}.c-purple{color:var(--purple)}
 
-/* ── Two column layout ── */
-.main-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+/* ── BW Chart ── */
+.bw-panel{background:var(--card);border:.5px solid var(--border);border-radius:10px;margin-bottom:1rem;overflow:hidden}
+.bw-header{padding:10px 16px;border-bottom:.5px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.bw-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.bw-legend{display:flex;gap:14px;font-size:11px}
+.bw-legend span{display:flex;align-items:center;gap:5px}
+.bw-dot{width:8px;height:3px;border-radius:2px;display:inline-block}
+.bw-body{padding:8px 16px 12px;position:relative}
+#bw-canvas{width:100%;height:120px;display:block}
+.bw-hint{font-size:11px;color:var(--muted);text-align:center;padding:12px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+
+/* ── Main grid ── */
+.main-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
 @media(max-width:900px){.main-grid{grid-template-columns:1fr}}
 
 /* ── Panel ── */
 .panel{background:var(--card);border:.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1rem}
-.panel-header{padding:12px 16px;border-bottom:.5px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.panel-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.panel:last-child{margin-bottom:0}
+.panel-header{padding:10px 14px;border-bottom:.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.panel-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
 .panel-badge{font-size:10px;padding:2px 8px;border-radius:10px;background:#1e2440;color:var(--accent);border:.5px solid #2d3a6a}
-.panel-body{padding:14px 16px}
+.panel-body{padding:12px 14px}
 
 /* ── Resource bars ── */
-.res-item{margin-bottom:14px}
-.res-item:last-child{margin-bottom:0}
-.res-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
-.res-name{font-size:12px;font-weight:500}
-.res-val{font-size:12px;color:var(--muted)}
-.bar-track{height:6px;background:#1e2440;border-radius:3px;overflow:hidden}
-.bar-fill{height:100%;border-radius:3px;transition:width .5s ease}
-.bar-green{background:var(--green)}
-.bar-amber{background:var(--amber)}
-.bar-red{background:var(--red)}
+.res-item{margin-bottom:12px}.res-item:last-child{margin-bottom:0}
+.res-header{display:flex;justify-content:space-between;margin-bottom:4px}
+.res-name{font-size:12px;font-weight:500}.res-val{font-size:12px;color:var(--muted)}
+.bar-track{height:5px;background:#1e2440;border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:width .5s}
+.bar-green{background:var(--green)}.bar-amber{background:var(--amber)}.bar-red{background:var(--red)}
 
 /* ── Info rows ── */
-.info-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:.5px solid var(--border)}
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:.5px solid var(--border)}
 .info-row:last-child{border-bottom:none}
 .info-key{font-size:12px;color:var(--muted)}
-.info-val{font-size:12px;font-weight:500;text-align:right;max-width:200px;word-break:break-all}
+.info-val{font-size:12px;font-weight:500;text-align:right;word-break:break-all;max-width:220px}
 
 /* ── Interface list ── */
-.iface-item{display:flex;align-items:center;padding:9px 0;border-bottom:.5px solid var(--border);gap:10px}
+.iface-item{display:flex;align-items:center;padding:7px 0;border-bottom:.5px solid var(--border);gap:8px}
 .iface-item:last-child{border-bottom:none}
-.iface-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.iface-dot.up{background:var(--green)}
-.iface-dot.down{background:var(--red)}
+.dot8{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot8.up{background:var(--green)}.dot8.down{background:var(--red)}
 .iface-info{flex:1;min-width:0}
 .iface-name{font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px}
-.iface-alias{font-size:10px;color:var(--muted)}
-.iface-ip{font-size:11px;color:var(--accent);margin-top:1px;font-family:monospace}
+.iface-ip{font-size:11px;color:var(--accent);font-family:monospace;margin-top:1px}
 .iface-right{text-align:right;font-size:10px;color:var(--muted);flex-shrink:0}
 .iface-speed{font-size:11px;font-weight:500;color:var(--text)}
-.iface-traffic{font-size:10px;color:var(--muted);margin-top:1px}
 .badge-up{font-size:9px;padding:1px 5px;border-radius:4px;background:#0d2d1e;color:var(--green);border:.5px solid #1a5c3a}
 .badge-down{font-size:9px;padding:1px 5px;border-radius:4px;background:#2d0d0d;color:var(--red);border:.5px solid #5c1a1a}
+.badge-on{font-size:9px;padding:1px 5px;border-radius:4px;background:#0d1e2d;color:var(--accent);border:.5px solid #1a3a5c}
 
-/* ── VPN list ── */
-.vpn-item{padding:9px 0;border-bottom:.5px solid var(--border)}
+/* ── SSL VPN ── */
+.ssl-user{padding:8px 0;border-bottom:.5px solid var(--border)}
+.ssl-user:last-child{border-bottom:none}
+.ssl-user-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ssl-user-name{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
+.ssl-user-meta{font-size:10px;color:var(--muted);margin-top:3px;display:flex;gap:12px;flex-wrap:wrap}
+.ssl-empty{font-size:12px;color:var(--muted);text-align:center;padding:16px}
+
+/* ── VPN IPSec ── */
+.vpn-item{padding:8px 0;border-bottom:.5px solid var(--border)}
 .vpn-item:last-child{border-bottom:none}
-.vpn-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.vpn-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .vpn-name{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
 .vpn-rgwy{font-size:10px;color:var(--muted);font-family:monospace}
-.vpn-tunnels{padding-left:14px}
-.vpn-tunnel-row{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);padding:2px 0}
-.vpn-empty{font-size:12px;color:var(--muted);text-align:center;padding:20px}
+.vpn-tunnels{padding-left:12px;margin-top:3px}
+.vpn-tunnel-row{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);padding:1px 0}
 
-/* ── Skeleton / loading ── */
-.skeleton{background:linear-gradient(90deg,#1a1d2e 25%,#22263a 50%,#1a1d2e 75%);background-size:200% 100%;animation:shimmer 1.4s infinite}
+/* ── Policy table ── */
+.policy-table{width:100%;border-collapse:collapse;font-size:11px}
+.policy-table th{padding:6px 10px;text-align:left;color:var(--muted);font-weight:500;border-bottom:.5px solid var(--border);white-space:nowrap;text-transform:uppercase;letter-spacing:.4px;font-size:10px}
+.policy-table td{padding:7px 10px;border-bottom:.5px solid #1e2440;vertical-align:middle}
+.policy-table tr:last-child td{border-bottom:none}
+.policy-table tr:hover td{background:#1e2440}
+.policy-id{font-size:10px;color:var(--muted);font-family:monospace}
+.policy-name{font-weight:500}
+.badge-accept{font-size:9px;padding:1px 6px;border-radius:4px;background:#0d2d1e;color:var(--green);border:.5px solid #1a5c3a}
+.badge-deny{font-size:9px;padding:1px 6px;border-radius:4px;background:#2d0d0d;color:var(--red);border:.5px solid #5c1a1a}
+.badge-enable{font-size:9px;padding:1px 6px;border-radius:4px;background:#1e2440;color:var(--accent);border:.5px solid #2d3a6a}
+.badge-disable{font-size:9px;padding:1px 6px;border-radius:4px;background:#252525;color:var(--muted);border:.5px solid #3a3a3a}
+.intf-tag{display:inline-block;font-size:9px;padding:1px 5px;border-radius:3px;background:#1a1d2e;border:.5px solid var(--border);margin:1px;white-space:nowrap}
+.policy-search{width:100%;padding:6px 10px;background:#131620;border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;margin-bottom:10px;outline:none}
+.policy-search:focus{border-color:var(--accent)}
+
+/* ── Skeleton ── */
+.skeleton{background:linear-gradient(90deg,#1a1d2e 25%,#22263a 50%,#1a1d2e 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:4px}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-.skel-text{height:13px;border-radius:4px;margin-bottom:6px}
-
-/* ── Error ── */
-.error-box{background:#1a0f0f;border:.5px solid #5c1a1a;border-radius:8px;padding:16px;color:var(--red);font-size:13px;text-align:center}
+.skel-line{height:12px;margin-bottom:8px}
 
 /* ── Spin ── */
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{display:inline-block;animation:spin .8s linear infinite}
+
+/* ── Error ── */
+.error-box{background:#1a0f0f;border:.5px solid #5c1a1a;border-radius:8px;padding:14px;color:var(--red);font-size:13px;text-align:center}
 </style>
 </head>
 <body>
@@ -121,7 +138,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
 <div class="header">
   <div class="hdr-left">
     <button class="back-btn" onclick="history.back()">← Dashboard</button>
-    <div class="hdr-title">
+    <div style="display:flex;align-items:center;gap:8px">
       <span style="font-size:16px">🔥</span>
       <div>
         <div class="hdr-name">FortiGate</div>
@@ -136,286 +153,474 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
 </div>
 
 <div class="page">
-  <!-- Stats row -->
+
+  <!-- Stats -->
   <div class="stats-row" id="stats-row">
-    <div class="stat-card"><div class="stat-label">CPU</div><div class="stat-value skeleton skel-text" style="width:60%"></div></div>
-    <div class="stat-card"><div class="stat-label">Memory</div><div class="stat-value skeleton skel-text" style="width:60%"></div></div>
-    <div class="stat-card"><div class="stat-label">Sessions</div><div class="stat-value skeleton skel-text" style="width:60%"></div></div>
-    <div class="stat-card"><div class="stat-label">Interfaces Up</div><div class="stat-value skeleton skel-text" style="width:60%"></div></div>
-    <div class="stat-card"><div class="stat-label">VPN Tunnels</div><div class="stat-value skeleton skel-text" style="width:60%"></div></div>
-    <div class="stat-card"><div class="stat-label">Uptime</div><div class="stat-value skeleton skel-text" style="width:80%"></div></div>
+    <div class="stat-card"><div class="stat-label">CPU</div><div class="skeleton skel-line" style="width:50%"></div></div>
+    <div class="stat-card"><div class="stat-label">Memory</div><div class="skeleton skel-line" style="width:50%"></div></div>
+    <div class="stat-card"><div class="stat-label">Sessions</div><div class="skeleton skel-line" style="width:50%"></div></div>
+    <div class="stat-card"><div class="stat-label">SSL VPN</div><div class="skeleton skel-line" style="width:50%"></div></div>
+    <div class="stat-card"><div class="stat-label">Interfaces</div><div class="skeleton skel-line" style="width:50%"></div></div>
+    <div class="stat-card"><div class="stat-label">VPN IPSec</div><div class="skeleton skel-line" style="width:50%"></div></div>
+    <div class="stat-card"><div class="stat-label">Policies</div><div class="skeleton skel-line" style="width:50%"></div></div>
   </div>
 
-  <!-- Main grid -->
-  <div class="main-grid">
-    <!-- Left column -->
-    <div>
-      <!-- Resource bars -->
-      <div class="panel">
-        <div class="panel-header"><span class="panel-title">📈 Resources</span></div>
-        <div class="panel-body" id="res-panel">
-          <div class="skeleton skel-text" style="width:100%;margin-bottom:16px"></div>
-          <div class="skeleton skel-text" style="width:100%;margin-bottom:16px"></div>
-          <div class="skeleton skel-text" style="width:100%"></div>
-        </div>
-      </div>
-
-      <!-- System info -->
-      <div class="panel">
-        <div class="panel-header"><span class="panel-title">⚙️ System Info</span></div>
-        <div class="panel-body" id="sys-panel">
-          <div class="skeleton skel-text" style="width:100%;margin-bottom:8px"></div>
-          <div class="skeleton skel-text" style="width:80%"></div>
-        </div>
+  <!-- WAN1 Bandwidth chart -->
+  <div class="bw-panel">
+    <div class="bw-header">
+      <span class="bw-title">📶 WAN1 Bandwidth</span>
+      <div class="bw-legend">
+        <span><span class="bw-dot" style="background:var(--green)"></span> Download</span>
+        <span><span class="bw-dot" style="background:var(--accent)"></span> Upload</span>
+        <span id="bw-current" style="font-size:11px;color:var(--muted)">Đang thu thập...</span>
       </div>
     </div>
+    <div class="bw-body">
+      <canvas id="bw-canvas"></canvas>
+    </div>
+  </div>
 
-    <!-- Right column -->
+  <!-- Main 2-col grid -->
+  <div class="main-grid">
+    <!-- Left -->
     <div>
-      <!-- Interfaces -->
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">📈 Resources</span></div>
+        <div class="panel-body" id="res-panel"><div class="skeleton skel-line"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">⚙️ System Info</span></div>
+        <div class="panel-body" id="sys-panel"><div class="skeleton skel-line"></div></div>
+      </div>
+    </div>
+    <!-- Right -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">🔐 SSL VPN</span>
+          <span class="panel-badge" id="ssl-badge">—</span>
+        </div>
+        <div class="panel-body" id="ssl-panel"><div class="skeleton skel-line"></div></div>
+      </div>
       <div class="panel">
         <div class="panel-header">
           <span class="panel-title">🌐 Interfaces</span>
           <span class="panel-badge" id="iface-badge">—</span>
         </div>
-        <div class="panel-body" id="iface-panel">
-          <div class="skeleton skel-text" style="width:100%;margin-bottom:10px"></div>
-          <div class="skeleton skel-text" style="width:90%"></div>
-        </div>
+        <div class="panel-body" id="iface-panel"><div class="skeleton skel-line"></div></div>
       </div>
-
-      <!-- VPN -->
       <div class="panel">
         <div class="panel-header">
           <span class="panel-title">🔒 VPN IPSec</span>
           <span class="panel-badge" id="vpn-badge">—</span>
         </div>
-        <div class="panel-body" id="vpn-panel">
-          <div class="skeleton skel-text" style="width:80%"></div>
-        </div>
+        <div class="panel-body" id="vpn-panel"><div class="skeleton skel-line"></div></div>
       </div>
     </div>
   </div>
+
+  <!-- Firewall Policies (full width) -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">🛡️ Firewall Policies</span>
+      <span class="panel-badge" id="policy-badge">—</span>
+    </div>
+    <div class="panel-body">
+      <input class="policy-search" id="policy-search" placeholder="🔍 Filter by name, interface, action..." oninput="filterPolicies()"/>
+      <div style="overflow-x:auto">
+        <table class="policy-table" id="policy-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th>Src Interface</th>
+              <th>Dst Interface</th>
+              <th>Src Address</th>
+              <th>Dst Address</th>
+              <th>Service</th>
+              <th>Action</th>
+              <th>NAT</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="policy-tbody">
+            <tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px">Đang tải...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
-function fmtBytes(b) {
-  if (b === null || b === undefined) return '—';
-  if (b >= 1e12) return (b/1e12).toFixed(2) + ' TB';
-  if (b >= 1e9)  return (b/1e9).toFixed(2)  + ' GB';
-  if (b >= 1e6)  return (b/1e6).toFixed(1)   + ' MB';
-  if (b >= 1e3)  return (b/1e3).toFixed(0)   + ' KB';
-  return b + ' B';
-}
-function fmtNum(n) {
-  if (n === null || n === undefined) return '—';
-  return Number(n).toLocaleString();
-}
-function barClass(pct) {
-  if (pct >= 85) return 'bar-red';
-  if (pct >= 65) return 'bar-amber';
-  return 'bar-green';
-}
-function valClass(pct) {
-  if (pct >= 85) return 'red';
-  if (pct >= 65) return 'amber';
-  return 'green';
+/* ─────────────────────────────
+   Bandwidth chart state
+───────────────────────────── */
+const BW = { labels:[], rx:[], tx:[], maxPts:30 };
+let prevWan1 = null;
+
+function initCanvas() {
+  const canvas = document.getElementById('bw-canvas');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width  = rect.width  * dpr;
+  canvas.height = 130 * dpr;
+  canvas.style.height = '130px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  drawBwChart(null, null, rect.width, 130);
 }
 
+function updateBandwidth(ifaces) {
+  const wan1 = (ifaces || []).find(i => i.name === 'wan1');
+  if (!wan1) return;
+  const now = Date.now();
+  if (prevWan1 && prevWan1.ts) {
+    const dt = (now - prevWan1.ts) / 1000;
+    if (dt > 0 && dt < 120) {
+      const rxMbps = Math.max(0, (wan1.rxBytes - prevWan1.rx) * 8 / dt / 1e6);
+      const txMbps = Math.max(0, (wan1.txBytes - prevWan1.tx) * 8 / dt / 1e6);
+      BW.labels.push(new Date().toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+      BW.rx.push(+rxMbps.toFixed(3));
+      BW.tx.push(+txMbps.toFixed(3));
+      if (BW.labels.length > BW.maxPts) { BW.labels.shift(); BW.rx.shift(); BW.tx.shift(); }
+      const canvas = document.getElementById('bw-canvas');
+      if (canvas) {
+        const dpr = window.devicePixelRatio || 1;
+        drawBwChart(rxMbps, txMbps, canvas.width / dpr, canvas.height / dpr);
+      }
+      document.getElementById('bw-current').textContent =
+        '↓ ' + rxMbps.toFixed(2) + ' Mbps  ↑ ' + txMbps.toFixed(2) + ' Mbps';
+    }
+  }
+  prevWan1 = { ts: now, rx: wan1.rxBytes, tx: wan1.txBytes };
+}
+
+function drawBwChart(curRx, curTx, W, H) {
+  const canvas = document.getElementById('bw-canvas');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.clearRect(0, 0, W * dpr, H * dpr);
+
+  const PAD_L = 52, PAD_R = 10, PAD_T = 22, PAD_B = 20;
+  const cW = W - PAD_L - PAD_R;
+  const cH = H - PAD_T - PAD_B;
+
+  if (BW.rx.length < 2) {
+    ctx.fillStyle = '#64748b';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Đang thu thập dữ liệu băng thông... (30s / lần)', W / 2, H / 2);
+    ctx.restore();
+    return;
+  }
+
+  const allVals = [...BW.rx, ...BW.tx];
+  const maxVal  = Math.max(...allVals, 0.1);
+  const niceCeil = v => { const e = Math.pow(10, Math.floor(Math.log10(v))); return Math.ceil(v/e)*e; };
+  const yMax = niceCeil(maxVal * 1.2);
+
+  // Grid
+  for (let i = 0; i <= 4; i++) {
+    const y = PAD_T + cH - cH * i / 4;
+    ctx.strokeStyle = '#252840'; ctx.lineWidth = .5;
+    ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(PAD_L + cW, y); ctx.stroke();
+    ctx.fillStyle = '#64748b'; ctx.font = '9px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText((yMax * i / 4).toFixed(yMax < 1 ? 2 : 1) + 'M', PAD_L - 4, y + 3);
+  }
+
+  // X axis labels (every 5 pts)
+  ctx.fillStyle = '#64748b'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+  BW.labels.forEach((lbl, i) => {
+    if (i % 5 === 0) {
+      const x = PAD_L + cW * i / (BW.maxPts - 1);
+      ctx.fillText(lbl, x, PAD_T + cH + 14);
+    }
+  });
+
+  const drawLine = (data, color) => {
+    if (data.length < 2) return;
+    // Fill
+    ctx.beginPath();
+    data.forEach((v, i) => {
+      const x = PAD_L + cW * i / (BW.maxPts - 1);
+      const y = PAD_T + cH - cH * v / yMax;
+      i === 0 ? ctx.moveTo(x, PAD_T + cH) : null;
+      ctx.lineTo(x, y);
+    });
+    ctx.lineTo(PAD_L + cW * (data.length - 1) / (BW.maxPts - 1), PAD_T + cH);
+    ctx.closePath();
+    ctx.fillStyle = color + '28';
+    ctx.fill();
+    // Line
+    ctx.beginPath();
+    data.forEach((v, i) => {
+      const x = PAD_L + cW * i / (BW.maxPts - 1);
+      const y = PAD_T + cH - cH * v / yMax;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+  };
+
+  drawLine(BW.rx, '#34d399');
+  drawLine(BW.tx, '#60a5fa');
+  ctx.restore();
+}
+
+/* ─────────────────────────────
+   Helpers
+───────────────────────────── */
+function fmtBytes(b) {
+  if (!b && b !== 0) return '—';
+  if (b >= 1e12) return (b/1e12).toFixed(2)+' TB';
+  if (b >= 1e9)  return (b/1e9).toFixed(2)+' GB';
+  if (b >= 1e6)  return (b/1e6).toFixed(1)+' MB';
+  if (b >= 1e3)  return (b/1e3).toFixed(0)+' KB';
+  return b+' B';
+}
+function fmtDur(s) {
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sc = s%60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${sc}s`;
+  return `${sc}s`;
+}
+function barCls(p) { return p>=85?'bar-red':p>=65?'bar-amber':'bar-green'; }
+function valCls(p) { return p>=85?'c-red':p>=65?'c-amber':'c-green'; }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+/* ─────────────────────────────
+   Policy filter
+───────────────────────────── */
+let _policies = [];
+function filterPolicies() {
+  const q = document.getElementById('policy-search').value.toLowerCase();
+  renderPolicyTable(q ? _policies.filter(p =>
+    (p.name||'').toLowerCase().includes(q) ||
+    (p.srcIntf||'').toLowerCase().includes(q) ||
+    (p.dstIntf||'').toLowerCase().includes(q) ||
+    (p.action||'').toLowerCase().includes(q) ||
+    (p.srcAddr||'').toLowerCase().includes(q) ||
+    (p.dstAddr||'').toLowerCase().includes(q) ||
+    (p.service||'').toLowerCase().includes(q)
+  ) : _policies);
+}
+
+function renderPolicyTable(list) {
+  const tbody = document.getElementById('policy-tbody');
+  if (!list || !list.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px">Không có policy nào</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(p => {
+    const actionBadge = p.action === 'accept'
+      ? '<span class="badge-accept">ACCEPT</span>'
+      : '<span class="badge-deny">DENY</span>';
+    const statusBadge = p.status === 'enable'
+      ? '<span class="badge-enable">ON</span>'
+      : '<span class="badge-disable">OFF</span>';
+    const natBadge = p.nat === 'enable' ? '<span class="badge-on">NAT</span>' : '';
+    const tags = arr => (arr||'').split(',').map(s=>s.trim()).filter(Boolean)
+      .map(s=>`<span class="intf-tag">${esc(s)}</span>`).join('');
+    return `<tr>
+      <td class="policy-id">${p.id}</td>
+      <td class="policy-name">${esc(p.name)}</td>
+      <td>${tags(p.srcIntf)}</td>
+      <td>${tags(p.dstIntf)}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.srcAddr)}">${esc(p.srcAddr)||'—'}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.dstAddr)}">${esc(p.dstAddr)||'—'}</td>
+      <td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.service)}">${esc(p.service)||'—'}</td>
+      <td>${actionBadge}</td>
+      <td>${natBadge}</td>
+      <td>${statusBadge}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ─────────────────────────────
+   Render functions
+───────────────────────────── */
+function renderStats(d) {
+  const r = d.resources||{}, s = d.stats||{};
+  const cpu = r.cpuPct??'—', mem = r.memPct??'—';
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">CPU</div>
+      <div class="stat-value ${valCls(cpu)}">${cpu!=='—'?cpu+'%':'—'}</div>
+      <div class="stat-sub">Processor</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Memory</div>
+      <div class="stat-value ${valCls(mem)}">${mem!=='—'?mem+'%':'—'}</div>
+      <div class="stat-sub">RAM usage</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Sessions</div>
+      <div class="stat-value c-blue">${r.sessions!==null&&r.sessions!==undefined?Number(r.sessions).toLocaleString():'—'}</div>
+      <div class="stat-sub">Active conns</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">SSL VPN</div>
+      <div class="stat-value ${(s.sslUsers||0)>0?'c-green':'c-muted'}">${s.sslUsers??0}</div>
+      <div class="stat-sub">Connected users</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Interfaces</div>
+      <div class="stat-value ${(s.ifaceUp||0)>0?'c-green':'c-red'}">${s.ifaceUp??0}</div>
+      <div class="stat-sub">of ${s.ifaceTotal??'?'} total</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">VPN IPSec</div>
+      <div class="stat-value ${(s.vpnUp||0)>0?'c-green':'c-amber'}">${s.vpnUp??0}/${s.vpnTotal??0}</div>
+      <div class="stat-sub">Tunnels up</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Policies</div>
+      <div class="stat-value c-blue">${s.enabledPolicies??'—'}</div>
+      <div class="stat-sub">of ${s.totalPolicies??'?'} enabled</div>
+    </div>
+  `;
+}
+
+function renderResources(r) {
+  const items = [
+    {label:'CPU Usage',  val:r?.cpuPct,  unit:'%'},
+    {label:'Memory',     val:r?.memPct,  unit:'%'},
+    {label:'Disk Usage', val:r?.diskPct, unit:'%'},
+  ].filter(i => i.val !== null && i.val !== undefined);
+  document.getElementById('res-panel').innerHTML = items.length
+    ? items.map(i=>`<div class="res-item">
+        <div class="res-header"><span class="res-name">${i.label}</span><span class="res-val">${i.val}${i.unit}</span></div>
+        <div class="bar-track"><div class="bar-fill ${barCls(i.val)}" style="width:${Math.min(i.val,100)}%"></div></div>
+      </div>`).join('')
+    : '<div style="color:var(--muted);font-size:12px">No data</div>';
+}
+
+function renderSysInfo(sys) {
+  const rows = [
+    {k:'Hostname', v:sys?.hostname},
+    {k:'Model',    v:sys?.model + (sys?.build?' ('+sys.model_number+')':'')},
+    {k:'Version',  v:sys?.version},
+    {k:'Build',    v:sys?.build},
+    {k:'Serial',   v:sys?.serial},
+  ].filter(r=>r.v);
+  document.getElementById('sys-panel').innerHTML = rows.map(r=>
+    `<div class="info-row"><span class="info-key">${r.k}</span><span class="info-val">${esc(r.v)}</span></div>`
+  ).join('');
+}
+
+function renderSSL(ssl, stats) {
+  const count = ssl?.activeUsers ?? 0;
+  document.getElementById('ssl-badge').textContent = `${count} user${count!==1?'s':''} online`;
+  if (!ssl?.users?.length) {
+    document.getElementById('ssl-panel').innerHTML = '<div class="ssl-empty">🔒 No SSL VPN users connected</div>';
+    return;
+  }
+  document.getElementById('ssl-panel').innerHTML = ssl.users.map(u=>`
+    <div class="ssl-user">
+      <div class="ssl-user-header">
+        <div class="ssl-user-name">👤 ${esc(u.user)} <span class="badge-enable">ONLINE</span></div>
+        <span style="font-size:10px;color:var(--muted)">${fmtDur(u.duration)}</span>
+      </div>
+      <div class="ssl-user-meta">
+        <span>🌐 ${esc(u.remoteHost||'—')}</span>
+        ${u.tunnelIp?`<span>🔗 ${esc(u.tunnelIp)}</span>`:''}
+        ${u.inBytes?`<span>↓${fmtBytes(u.inBytes)}</span>`:''}
+        ${u.outBytes?`<span>↑${fmtBytes(u.outBytes)}</span>`:''}
+      </div>
+    </div>`).join('');
+}
+
+function renderInterfaces(ifaces, stats) {
+  document.getElementById('iface-badge').textContent = `${stats?.ifaceUp??0} up / ${stats?.ifaceTotal??0}`;
+  if (!ifaces?.length) { document.getElementById('iface-panel').innerHTML='<div class="ssl-empty">No data</div>'; return; }
+  document.getElementById('iface-panel').innerHTML = ifaces.map(i=>{
+    const speed = i.speed>0?(i.speed>=1000?(i.speed/1000)+'G':i.speed+'M'):'';
+    const badge = i.status==='up'?'<span class="badge-up">UP</span>':'<span class="badge-down">DOWN</span>';
+    const ip = i.ip&&i.ip!=='0.0.0.0'?`<div class="iface-ip">${i.ip}</div>`:'';
+    return `<div class="iface-item">
+      <div class="dot8 ${i.status}"></div>
+      <div class="iface-info">
+        <div class="iface-name">${esc(i.name)} ${badge}</div>${ip}
+      </div>
+      <div class="iface-right">
+        ${speed?`<div class="iface-speed">${speed}bps</div>`:''}
+        <div>↓${fmtBytes(i.rxBytes)} ↑${fmtBytes(i.txBytes)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderVPN(vpns, stats) {
+  document.getElementById('vpn-badge').textContent = `${stats?.vpnUp??0} up / ${stats?.vpnTotal??0}`;
+  if (!vpns?.length) { document.getElementById('vpn-panel').innerHTML='<div class="ssl-empty">No VPN tunnels</div>'; return; }
+  document.getElementById('vpn-panel').innerHTML = vpns.map(v=>{
+    const badge = v.status==='up'?'<span class="badge-up">UP</span>':'<span class="badge-down">DOWN</span>';
+    const rgwy = v.rgwy?`<div class="vpn-rgwy">${esc(v.rgwy)}</div>`:'';
+    const tunnels = v.tunnels.map(t=>`<div class="vpn-tunnel-row">
+      <span>${esc(t.name)} ${t.status==='up'?'🟢':'🔴'}</span>
+      <span>↓${fmtBytes(t.inBytes)} ↑${fmtBytes(t.outBytes)}</span>
+    </div>`).join('');
+    return `<div class="vpn-item">
+      <div class="vpn-header"><div class="vpn-name">${esc(v.name)} ${badge}</div>${rgwy}</div>
+      ${tunnels?`<div class="vpn-tunnels">${tunnels}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function renderPolicies(policies, stats) {
+  _policies = policies || [];
+  document.getElementById('policy-badge').textContent =
+    `${stats?.enabledPolicies??0} enabled / ${stats?.totalPolicies??0} total`;
+  filterPolicies();
+}
+
+/* ─────────────────────────────
+   Main load
+───────────────────────────── */
 async function load() {
   const btn = document.getElementById('refresh-btn');
-  btn.innerHTML = '<span class="spin">⟳</span> Loading';
+  btn.innerHTML = '<span class="spin">⟳</span>';
   btn.disabled = true;
-
   try {
     const r = await fetch('/api/fortigate');
     const d = await r.json();
-
     if (d.error) {
       document.getElementById('stats-row').innerHTML =
         `<div class="error-box" style="grid-column:1/-1">⚠️ ${d.error}</div>`;
       return;
     }
-
     renderStats(d);
     renderResources(d.resources);
     renderSysInfo(d.system);
+    renderSSL(d.ssl, d.stats);
     renderInterfaces(d.interfaces, d.stats);
     renderVPN(d.vpn, d.stats);
+    renderPolicies(d.policies, d.stats);
+    updateBandwidth(d.interfaces);
 
-    const sub = d.system.hostname
-      ? `${d.system.model} · ${d.system.version}`
-      : 'FortiGate Firewall';
+    const sub = d.system?.hostname ? `${d.system.hostname} · ${d.system.version}` : 'FortiGate';
     document.getElementById('hdr-sub').textContent = sub;
-    document.getElementById('last-update').textContent =
-      'Updated ' + new Date().toLocaleTimeString('vi-VN');
-
+    document.getElementById('last-update').textContent = 'Updated ' + new Date().toLocaleTimeString('vi-VN');
   } catch(e) {
     document.getElementById('stats-row').innerHTML =
-      `<div class="error-box" style="grid-column:1/-1">⚠️ Lỗi kết nối: ${e.message}</div>`;
+      `<div class="error-box" style="grid-column:1/-1">⚠️ ${e.message}</div>`;
   } finally {
     btn.innerHTML = '⟳ Refresh';
     btn.disabled = false;
   }
 }
 
-function renderStats(d) {
-  const r = d.resources || {};
-  const s = d.stats || {};
-  const sys = d.system || {};
-
-  const cpu  = r.cpuPct  !== null ? r.cpuPct  : '—';
-  const mem  = r.memPct  !== null ? r.memPct  : '—';
-  const sess = r.sessions !== null ? fmtNum(r.sessions) : '—';
-
-  document.getElementById('stats-row').innerHTML = `
-    <div class="stat-card">
-      <div class="stat-label">CPU</div>
-      <div class="stat-value ${valClass(cpu)}">${cpu !== '—' ? cpu+'%' : '—'}</div>
-      <div class="stat-sub">Processor load</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Memory</div>
-      <div class="stat-value ${valClass(mem)}">${mem !== '—' ? mem+'%' : '—'}</div>
-      <div class="stat-sub">RAM usage</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Sessions</div>
-      <div class="stat-value blue">${sess}</div>
-      <div class="stat-sub">Active connections</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Interfaces Up</div>
-      <div class="stat-value ${s.ifaceUp > 0 ? 'green' : 'red'}">${s.ifaceUp ?? '—'}</div>
-      <div class="stat-sub">of ${s.ifaceTotal ?? '?'} total</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">VPN Tunnels</div>
-      <div class="stat-value ${s.vpnUp > 0 ? 'green' : (s.vpnTotal === 0 ? 'muted' : 'amber')}">${s.vpnUp ?? 0}/${s.vpnTotal ?? 0}</div>
-      <div class="stat-sub">IPSec up/total</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Uptime</div>
-      <div class="stat-value" style="font-size:15px;color:var(--text)">${sys.uptime || '—'}</div>
-      <div class="stat-sub">Since last reboot</div>
-    </div>
-  `;
-}
-
-function renderResources(r) {
-  if (!r) return;
-  const items = [
-    { label: 'CPU Usage',    val: r.cpuPct,  unit: '%' },
-    { label: 'Memory Usage', val: r.memPct,  unit: '%' },
-    { label: 'Disk Usage',   val: r.diskPct, unit: '%' },
-  ].filter(i => i.val !== null && i.val !== undefined);
-
-  if (!items.length) {
-    document.getElementById('res-panel').innerHTML = '<div class="vpn-empty">No resource data</div>';
-    return;
-  }
-
-  document.getElementById('res-panel').innerHTML = items.map(i => `
-    <div class="res-item">
-      <div class="res-header">
-        <span class="res-name">${i.label}</span>
-        <span class="res-val">${i.val}${i.unit}</span>
-      </div>
-      <div class="bar-track">
-        <div class="bar-fill ${barClass(i.val)}" style="width:${Math.min(i.val,100)}%"></div>
-      </div>
-    </div>
-  `).join('');
-}
-
-function renderSysInfo(sys) {
-  if (!sys) return;
-  const rows = [
-    { k: 'Hostname',  v: sys.hostname },
-    { k: 'Model',     v: sys.model },
-    { k: 'Version',   v: sys.version },
-    { k: 'Build',     v: sys.build },
-    { k: 'Serial',    v: sys.serial },
-    { k: 'Time',      v: sys.sysTime ? new Date(sys.sysTime).toLocaleString('vi-VN') : '' },
-  ].filter(r => r.v);
-
-  document.getElementById('sys-panel').innerHTML = rows.map(r => `
-    <div class="info-row">
-      <span class="info-key">${r.k}</span>
-      <span class="info-val">${r.v}</span>
-    </div>
-  `).join('');
-}
-
-function renderInterfaces(ifaces, stats) {
-  document.getElementById('iface-badge').textContent =
-    `${stats?.ifaceUp ?? 0} up / ${stats?.ifaceTotal ?? 0}`;
-
-  if (!ifaces || !ifaces.length) {
-    document.getElementById('iface-panel').innerHTML = '<div class="vpn-empty">No interface data</div>';
-    return;
-  }
-
-  document.getElementById('iface-panel').innerHTML = ifaces.map(i => {
-    const speed = i.speed > 0 ? (i.speed >= 1000 ? (i.speed/1000)+'G' : i.speed+'M') : '';
-    const badge = i.status === 'up'
-      ? '<span class="badge-up">UP</span>'
-      : '<span class="badge-down">DOWN</span>';
-    const alias = i.alias ? ` <span class="iface-alias">(${i.alias})</span>` : '';
-    const ip = i.ip && i.ip !== '0.0.0.0' ? `<div class="iface-ip">${i.ip}</div>` : '';
-    const rx = fmtBytes(i.rxBytes);
-    const tx = fmtBytes(i.txBytes);
-    return `
-      <div class="iface-item">
-        <div class="iface-dot ${i.status}"></div>
-        <div class="iface-info">
-          <div class="iface-name">${i.name}${alias} ${badge}</div>
-          ${ip}
-        </div>
-        <div class="iface-right">
-          ${speed ? `<div class="iface-speed">${speed}bps</div>` : ''}
-          <div class="iface-traffic">↓${rx} ↑${tx}</div>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-function renderVPN(vpns, stats) {
-  document.getElementById('vpn-badge').textContent =
-    `${stats?.vpnUp ?? 0} up / ${stats?.vpnTotal ?? 0}`;
-
-  if (!vpns || !vpns.length) {
-    document.getElementById('vpn-panel').innerHTML = '<div class="vpn-empty">No VPN tunnels configured</div>';
-    return;
-  }
-
-  document.getElementById('vpn-panel').innerHTML = vpns.map(v => {
-    const badge = v.status === 'up'
-      ? '<span class="badge-up">UP</span>'
-      : '<span class="badge-down">DOWN</span>';
-    const rgwy = v.rgwy ? `<div class="vpn-rgwy">${v.rgwy}</div>` : '';
-    const tunnels = v.tunnels.length ? v.tunnels.map(t => `
-      <div class="vpn-tunnel-row">
-        <span>${t.name || 'tunnel'} ${t.status === 'up' ? '🟢' : '🔴'}</span>
-        <span>↓${fmtBytes(t.inBytes)} ↑${fmtBytes(t.outBytes)}</span>
-      </div>
-    `).join('') : '';
-    return `
-      <div class="vpn-item">
-        <div class="vpn-header">
-          <div class="vpn-name">${v.name} ${badge}</div>
-          ${rgwy}
-        </div>
-        ${tunnels ? `<div class="vpn-tunnels">${tunnels}</div>` : ''}
-      </div>
-    `;
-  }).join('');
-}
-
-// Auto-refresh every 30s
-load();
-setInterval(load, 30000);
+// Init
+window.addEventListener('load', () => {
+  initCanvas();
+  window.addEventListener('resize', initCanvas);
+  load();
+  setInterval(load, 30000);
+});
 </script>
 </body>
 </html>

@@ -737,11 +737,14 @@ async function handleFortigate(env, debug = false) {
   };
 
   // Fetch all endpoints in parallel (all read-only)
-  const [sysRaw, resUsage, ifaceRaw2, vpnIpsec] = await Promise.all([
+  const [sysRaw, resUsage, ifaceRaw2, vpnIpsec, sslVpnRaw, sslVpnStats, policiesRaw] = await Promise.all([
     safeGetFull('/api/v2/monitor/system/status'),
     safeGet('/api/v2/monitor/system/resource/usage'),
     safeGet('/api/v2/monitor/system/interface'),
     safeGet('/api/v2/monitor/vpn/ipsec'),
+    safeGet('/api/v2/monitor/vpn/ssl'),
+    safeGet('/api/v2/monitor/vpn/ssl/stats'),
+    safeGet('/api/v2/cmdb/firewall/policy?count=100'),
   ]);
 
   // Merge top-level (serial, version, build) + results (hostname, model) for system status
@@ -833,6 +836,39 @@ async function handleFortigate(env, debug = false) {
   const vpnUp   = vpns.filter(v => v.status === 'up').length;
   const vpnDown = vpns.length - vpnUp;
 
+  // ── SSL VPN ──
+  const sslUsers = Array.isArray(sslVpnRaw) ? sslVpnRaw : [];
+  const sslStats = sslVpnStats?.statistics || sslVpnStats || {};
+  const ssl = {
+    activeUsers: sslUsers.length,
+    maxTunnels:  sslStats.max_num_tunnels  ?? sslStats.max_tunnels  ?? null,
+    numTunnels:  sslStats.num_tunnels      ?? sslUsers.length,
+    users: sslUsers.map(u => ({
+      user:       u.user_name    || u.username || '',
+      remoteHost: u.remote_host  || '',
+      tunnelIp:   u.tunnel_ip    || '',
+      duration:   u.duration     || 0,
+      inBytes:    u.incoming_bytes  || 0,
+      outBytes:   u.outgoing_bytes  || 0,
+    })),
+  };
+
+  // ── Firewall Policies ──
+  const policyArr = Array.isArray(policiesRaw) ? policiesRaw : [];
+  const policies = policyArr.map(p => ({
+    id:       p.policyid  || p.q_origin_key,
+    name:     p.name      || `Policy ${p.policyid}`,
+    srcIntf:  (p.srcintf  || []).map(i => i.name || i).join(', '),
+    dstIntf:  (p.dstintf  || []).map(i => i.name || i).join(', '),
+    srcAddr:  (p.srcaddr  || []).map(i => i.name || i).join(', '),
+    dstAddr:  (p.dstaddr  || []).map(i => i.name || i).join(', '),
+    service:  (p.service  || []).map(i => i.name || i).join(', '),
+    action:   p.action    || 'accept',
+    status:   p.status    || 'enable',
+    nat:      p.nat       || 'disable',
+    comments: p.comments  || '',
+  }));
+
   return json({
     system: {
       hostname:  sys.hostname   || '',
@@ -847,6 +883,8 @@ async function handleFortigate(env, debug = false) {
     resources: { cpuPct, memPct, sessions, diskPct },
     interfaces: ifaces,
     vpn: vpns,
+    ssl,
+    policies,
     stats: {
       ifaceUp:   ifaces.filter(i => i.status === 'up').length,
       ifaceDown: ifaces.filter(i => i.status === 'down').length,
@@ -855,6 +893,9 @@ async function handleFortigate(env, debug = false) {
       vpnDown,
       vpnTotal: vpns.length,
       sessions,
+      sslUsers: ssl.activeUsers,
+      totalPolicies: policies.length,
+      enabledPolicies: policies.filter(p => p.status === 'enable').length,
     },
     ...(debug ? { _debug } : {}),
   });
