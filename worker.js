@@ -583,7 +583,7 @@ async function handleCasaOS(env) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: user, password: pass }),
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(20000),
     });
     if (!loginRes.ok) return json({ error: `CasaOS login failed: ${loginRes.status}` }, 502);
     const loginData = await loginRes.json();
@@ -596,7 +596,7 @@ async function handleCasaOS(env) {
   // NOTE: CasaOS uses raw token, NOT "Bearer <token>"
   const opts = {
     headers: { 'Authorization': token },
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(20000),
   };
   const safeJson = async (url) => {
     try {
