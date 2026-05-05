@@ -4,7 +4,8 @@ const SERVICES = [
   { id: 'casaos',      name: 'CasaOS',         checkUrl: 'https://casaos.home-server.id.vn' },
   { id: '9router',     name: '9Router',        checkUrl: 'https://9router.home-server.id.vn' },
   { id: 'uptime-kuma', name: 'Uptime Kuma',    checkUrl: null },
-  { id: 'ssh',         name: 'SSH Terminal',  checkUrl: 'https://termix.home-server.id.vn' },
+  { id: 'ssh',         name: 'SSH Terminal',   checkUrl: 'https://termix.home-server.id.vn' },
+  { id: 'fortigate',   name: 'FortiGate',      checkUrl: null },
 ];
 
 const N8N_BASE        = 'https://n8n-home.home-server.id.vn/api/v1';
@@ -672,6 +673,144 @@ async function handleCasaOS(env) {
   });
 }
 
+/* ═══════════════════════════════════════════════
+   FortiGate — REST API v2 (read-only token)
+   Via Cloudflare Tunnel + CF Access Service Token
+   ═══════════════════════════════════════════════ */
+async function handleFortigate(env) {
+  const base  = env.FORTIGATE_URL;
+  const key   = env.FORTIGATE_API_KEY;
+  const cfId  = env.CF_ACCESS_CLIENT_ID;
+  const cfSec = env.CF_ACCESS_CLIENT_SECRET;
+
+  if (!base || !key) return json({ error: 'FORTIGATE_URL / FORTIGATE_API_KEY not configured' }, 500);
+
+  const headers = {
+    'Authorization': `Bearer ${key}`,
+    'Accept': 'application/json',
+  };
+  // Bypass Cloudflare Access for Worker→Fortigate tunnel calls
+  if (cfId && cfSec) {
+    headers['CF-Access-Client-Id']     = cfId;
+    headers['CF-Access-Client-Secret'] = cfSec;
+  }
+
+  const opts = { headers, signal: AbortSignal.timeout(12000) };
+
+  const safeGet = async (path) => {
+    try {
+      const r = await fetch(`${base}${path}`, opts);
+      if (!r.ok) return null;
+      const d = await r.json();
+      return d?.results ?? d;
+    } catch { return null; }
+  };
+
+  // Fetch all endpoints in parallel (all read-only)
+  const [sysStatus, resUsage, interfaces, vpnIpsec, fwPolicy] = await Promise.all([
+    safeGet('/api/v2/monitor/system/status'),
+    safeGet('/api/v2/monitor/system/resource/usage?resource=cpu,mem,netsession,disk&interval=1min&period=1min'),
+    safeGet('/api/v2/monitor/system/interface?include_aggregate=false'),
+    safeGet('/api/v2/monitor/vpn/ipsec'),
+    safeGet('/api/v2/monitor/firewall/policy/lookup'),  // may be null, fine
+  ]);
+
+  // ── System info ──
+  const sys = sysStatus || {};
+  const upSec = sys.uptime_seconds ?? sys.uptime ?? 0;
+  const uptimeDays  = Math.floor(upSec / 86400);
+  const uptimeHours = Math.floor((upSec % 86400) / 3600);
+  const uptimeMins  = Math.floor((upSec % 3600)  / 60);
+  const uptimeStr   = uptimeDays > 0
+    ? `${uptimeDays}d ${uptimeHours}h ${uptimeMins}m`
+    : `${uptimeHours}h ${uptimeMins}m`;
+
+  // ── Resource usage — last datapoint in each array ──
+  const lastVal = (arr) => Array.isArray(arr) ? (arr[arr.length - 1]?.current ?? null) : null;
+  const res = resUsage || {};
+  const cpuPct  = lastVal(res.cpu);
+  const memPct  = lastVal(res.mem);
+  const sessions= lastVal(res.netsession);
+  const diskPct = lastVal(res.disk);
+
+  // ── Interfaces ──
+  const ifaceRaw = Array.isArray(interfaces) ? interfaces : [];
+  const ifaces = ifaceRaw
+    .filter(i => i.name && !i.name.startsWith('naf.') && !i.name.startsWith('ssl.'))
+    .map(i => ({
+      name:     i.name,
+      alias:    i.alias  || '',
+      status:   (i.link === true || i.status === 'up') ? 'up' : 'down',
+      ip:       i.ip    || '',
+      mask:     i.mask  || '',
+      speed:    i.speed || 0,
+      txBytes:  i.tx_bytes  || 0,
+      rxBytes:  i.rx_bytes  || 0,
+      txPkts:   i.tx_packets || 0,
+      rxPkts:   i.rx_packets || 0,
+      mac:      i.mac   || '',
+      type:     i.type  || '',
+    }))
+    .sort((a, b) => {
+      // WAN first, then up interfaces, then alpha
+      const priority = (n) => {
+        if (/wan/i.test(n)) return 0;
+        if (/lan|internal|port1/i.test(n)) return 1;
+        return 2;
+      };
+      const pd = priority(a.name) - priority(b.name);
+      if (pd !== 0) return pd;
+      if (a.status !== b.status) return a.status === 'up' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+  // ── VPN IPSec ──
+  const vpnRaw = Array.isArray(vpnIpsec) ? vpnIpsec : [];
+  const vpns = vpnRaw.map(v => {
+    const tunnels = (v.proxyid || []).map(p => ({
+      name:     p.p2name    || p.name || '',
+      status:   p.status   || 'down',
+      inBytes:  p.inbytes  || 0,
+      outBytes: p.outbytes || 0,
+    }));
+    const anyUp = tunnels.some(t => t.status === 'up') || v.tun_stat?.includes('up');
+    return {
+      name:    v.name || v.rgwy || '',
+      status:  anyUp ? 'up' : 'down',
+      rgwy:    v.rgwy || '',
+      tunnels,
+    };
+  });
+
+  const vpnUp   = vpns.filter(v => v.status === 'up').length;
+  const vpnDown = vpns.length - vpnUp;
+
+  return json({
+    system: {
+      hostname:  sys.hostname   || '',
+      model:     sys.model_name || sys.model || sys.model_number || '',
+      serial:    sys.serial     || '',
+      version:   sys.version    || '',
+      build:     sys.build      || '',
+      uptime:    uptimeStr,
+      uptimeSec: upSec,
+      sysTime:   sys.system_time || sys.current_time || '',
+    },
+    resources: { cpuPct, memPct, sessions, diskPct },
+    interfaces: ifaces,
+    vpn: vpns,
+    stats: {
+      ifaceUp:   ifaces.filter(i => i.status === 'up').length,
+      ifaceDown: ifaces.filter(i => i.status === 'down').length,
+      ifaceTotal: ifaces.length,
+      vpnUp,
+      vpnDown,
+      vpnTotal: vpns.length,
+      sessions,
+    },
+  });
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -689,6 +828,7 @@ export default {
     if (url.pathname === '/api/esxi')        return handleESXi(env);
     if (url.pathname === '/api/esxi/power')  return handleESXiPower(request, env);
     if (url.pathname === '/api/casaos')      return handleCasaOS(env);
+    if (url.pathname === '/api/fortigate')   return handleFortigate(env);
     return env.ASSETS.fetch(request);
   },
 };
