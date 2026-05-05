@@ -135,7 +135,9 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 .error-box{background:#1a0f0f;border:.5px solid #5c1a1a;border-radius:8px;padding:12px;color:var(--red);font-size:12px;text-align:center;grid-column:1/-1}
 
 /* ── Clients table ── */
-.clients-panel{background:var(--card);border:.5px solid var(--border);border-radius:10px;overflow:hidden;margin-top:0}
+.clients-panel{background:var(--card);border:.5px solid var(--border);border-radius:10px;overflow:hidden;margin-top:.85rem}
+.clients-panel.collapsed>.panel-body{display:none}
+.clients-panel.collapsed>.clients-header>.chevron{transform:rotate(-90deg)}
 .clients-header{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;user-select:none}
 .clients-header:hover{background:rgba(255,255,255,.02)}
 .clients-title{font-size:13px;font-weight:600;flex:1}
@@ -418,10 +420,28 @@ async function doReboot(){
     const r=await fetch('/api/asus/reboot',{method:'POST'});
     const d=await r.json();
     if(d.success){
-      btn.innerHTML='✓ Đã gửi lệnh reboot';
-      msg.style.color='var(--green)';
-      msg.textContent='Router đang reboot. Kết nối sẽ khôi phục sau ~60 giây.';
-      setTimeout(()=>{btn.innerHTML='🔄 Reboot Router';btn.disabled=false;msg.textContent='';},90000);
+      // Stop polling during reboot, countdown 90s, then resume
+      stopPolling();
+      btn.innerHTML='⏳ Đang reboot...';
+      msg.style.color='var(--amber)';
+      let secs=90;
+      msg.textContent=`Router đang reboot... còn ${secs}s`;
+      const tick=setInterval(()=>{
+        secs--;
+        if(secs>0){
+          msg.textContent=`Router đang reboot... còn ${secs}s`;
+        } else {
+          clearInterval(tick);
+          btn.innerHTML='🔄 Reboot Router';
+          btn.disabled=false;
+          msg.style.color='var(--green)';
+          msg.textContent='✓ Đã xong — đang kết nối lại...';
+          setTimeout(()=>{msg.textContent='';},5000);
+          // Resume polling and fetch immediately
+          startPolling();
+          load();
+        }
+      },1000);
     } else {
       throw new Error(d.error||'Unknown error');
     }
@@ -557,6 +577,18 @@ function renderWifi(wifi,stats){
     </div>`;
 }
 
+/* ── Polling control ── */
+let _pollTimer = null;
+let _lastClients = null; // cache last known good client list
+
+function startPolling(){
+  if(_pollTimer) clearInterval(_pollTimer);
+  _pollTimer = setInterval(load, 30000);
+}
+function stopPolling(){
+  if(_pollTimer){ clearInterval(_pollTimer); _pollTimer=null; }
+}
+
 /* ── Render Clients ── */
 function rssiBar(rssi){
   if(!rssi||rssi===0)return'<span style="color:var(--muted)">—</span>';
@@ -571,19 +603,27 @@ function connBadge(type){
   return`<span class="ct-type ct-wired">${esc(type)}</span>`;
 }
 function renderClients(clients,stats){
-  const list=Array.isArray(clients)?clients:[];
-  const total=list.length;
+  const list=Array.isArray(clients)&&clients.length>0 ? clients : null;
+
+  // If we got real data, cache it; if empty, fall back to cache
+  if(list) _lastClients=list;
+  const display=_lastClients||[];
+  const stale=!list&&_lastClients; // showing old data
+
+  const total=display.length;
   document.getElementById('clients-count').textContent=
-    `${total} total · ${stats?.wifi24Clients||0} 2.4G · ${stats?.wifi5Clients||0} 5G · ${stats?.wiredClients||0} Wired`;
+    `${total} total · ${stats?.wifi24Clients||0} 2.4G · ${stats?.wifi5Clients||0} 5G · ${stats?.wiredClients||0} Wired`
+    +(stale?' (cached)':'');
 
   if(!total){
     document.getElementById('clients-tbody').innerHTML=
       '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--muted)">No devices found</td></tr>';
     return;
   }
+  const clients_=display;
   // Sort: wired first, then 2.4G, then 5G, then by IP
   const order={Wired:0,'2.4G':1,'5G':2,'5G-2':3};
-  const sorted=[...list].sort((a,b)=>{
+  const sorted=[...clients_].sort((a,b)=>{
     const od=(order[a.type]??9)-(order[b.type]??9);
     if(od!==0)return od;
     return(a.ip||'').localeCompare(b.ip||'',undefined,{numeric:true});
@@ -629,7 +669,7 @@ window.addEventListener('load',()=>{
   initCanvas();
   window.addEventListener('resize',initCanvas);
   load();
-  setInterval(load,30000);
+  startPolling();
 });
 </script>
 </body>

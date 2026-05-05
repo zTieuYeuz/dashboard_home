@@ -948,10 +948,10 @@ async function handleAsus(env) {
   const token = await asusLogin(env);
   if (!token) return json({ error: 'ASUS router login failed — check credentials' }, 502);
 
-  // Build hook query: nvram_get() + appobj calls + client list
+  // Main hook: only nvram_get + appobj — NO get_clientlist() here
+  // (some firmware breaks the entire response if get_clientlist() is mixed in)
   const hookVars = [
     'cpu_usage(appobj)', 'memory_usage(appobj)', 'netdev(appobj)',
-    'get_clientlist()',
     'nvram_get(wan_ipaddr)', 'nvram_get(wan_gateway)', 'nvram_get(wan_dns)',
     'nvram_get(wan_proto)', 'nvram_get(link_internet)',
     'nvram_get(ddns_enable_x)', 'nvram_get(ddns_hostname_x)',
@@ -962,10 +962,21 @@ async function handleAsus(env) {
     'nvram_get(lan_ipaddr)', 'nvram_get(uptime)', 'nvram_get(label_mac)',
   ].join(';');
 
-  const appRes = await asusRequest('/appGet.cgi', 'POST', `hook=${encodeURIComponent(hookVars)}`, token, env);
+  // Fetch main data + client list in parallel (isolated so client list failure doesn't break main data)
+  const [appRes, clRes] = await Promise.all([
+    asusRequest('/appGet.cgi', 'POST', `hook=${encodeURIComponent(hookVars)}`, token, env),
+    asusRequest('/appGet.cgi', 'POST', `hook=${encodeURIComponent('get_clientlist()')}`, token, env),
+  ]);
 
   let app = {};
   try { app = JSON.parse(appRes.text || '{}'); } catch {}
+
+  // Client list from separate fetch
+  let clRaw = null;
+  try {
+    const clJson = JSON.parse(clRes.text || '{}');
+    clRaw = clJson.get_clientlist ?? null;
+  } catch {}
 
   // ── Parse client list ──────────────────────────────────────────────────
   // get_clientlist() returns either a string "<MAC>><name>><ip>><isWL>><rssi>><online>><ssid>>"
@@ -1007,7 +1018,7 @@ async function handleAsus(env) {
     return [];
   }
 
-  const clients = parseClientList(app.get_clientlist).filter(c => c.online || c.ip);
+  const clients = parseClientList(clRaw).filter(c => c.online || c.ip);
 
   // ── CPU ──
   const cpuObj = app.cpu_usage || {};
