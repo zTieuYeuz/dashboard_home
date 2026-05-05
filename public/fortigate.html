@@ -26,111 +26,124 @@ html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-se
 .last-update{font-size:11px;color:var(--muted)}
 
 /* ── Page ── */
-.page{padding:1.25rem;max-width:1500px;margin:0 auto}
+.page{padding:1rem 1.25rem;max-width:1600px;margin:0 auto}
 
 /* ── Stats row ── */
-.stats-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:1rem}
-.stat-card{background:var(--card);border:.5px solid var(--border);border-radius:10px;padding:12px 14px}
-.stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
-.stat-value{font-size:20px;font-weight:700;line-height:1}
-.stat-sub{font-size:10px;color:var(--muted);margin-top:3px}
+.stats-row{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:.85rem}
+@media(max-width:1100px){.stats-row{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:600px){.stats-row{grid-template-columns:repeat(2,1fr)}}
+.stat-card{background:var(--card);border:.5px solid var(--border);border-radius:8px;padding:10px 12px}
+.stat-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px}
+.stat-value{font-size:18px;font-weight:700;line-height:1}
+.stat-sub{font-size:9px;color:var(--muted);margin-top:2px}
 .c-green{color:var(--green)}.c-red{color:var(--red)}.c-amber{color:var(--amber)}.c-blue{color:var(--accent)}.c-purple{color:var(--purple)}
 
 /* ── BW Chart ── */
-.bw-panel{background:var(--card);border:.5px solid var(--border);border-radius:10px;margin-bottom:1rem;overflow:hidden}
-.bw-header{padding:10px 16px;border-bottom:.5px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.bw-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
-.bw-legend{display:flex;gap:14px;font-size:11px}
-.bw-legend span{display:flex;align-items:center;gap:5px}
+.bw-panel{background:var(--card);border:.5px solid var(--border);border-radius:10px;margin-bottom:.85rem;overflow:hidden}
+.bw-header{padding:8px 14px;border-bottom:.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.bw-header:hover{background:#1e2035}
+.bw-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.bw-legend{display:flex;gap:12px;font-size:10px;align-items:center}
+.bw-legend span{display:flex;align-items:center;gap:4px}
 .bw-dot{width:8px;height:3px;border-radius:2px;display:inline-block}
-.bw-body{padding:8px 16px 12px;position:relative}
-#bw-canvas{width:100%;height:120px;display:block}
-.bw-hint{font-size:11px;color:var(--muted);text-align:center;padding:12px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+.bw-body{padding:6px 14px 10px;position:relative}
+#bw-canvas{width:100%;height:110px;display:block}
+.bw-body.collapsed{display:none}
 
-/* ── Main grid ── */
-.main-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
-@media(max-width:900px){.main-grid{grid-template-columns:1fr}}
+/* ── 3-column main layout ── */
+.main-grid{display:grid;grid-template-columns:230px 1fr 1fr;gap:.85rem;margin-bottom:.85rem;align-items:start}
+@media(max-width:1200px){.main-grid{grid-template-columns:210px 1fr 1fr}}
+@media(max-width:900px){.main-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.main-grid{grid-template-columns:1fr}}
 
 /* ── Panel ── */
-.panel{background:var(--card);border:.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1rem}
+.panel{background:var(--card);border:.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:.75rem}
 .panel:last-child{margin-bottom:0}
-.panel-header{padding:10px 14px;border-bottom:.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
-.panel-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
-.panel-badge{font-size:10px;padding:2px 8px;border-radius:10px;background:#1e2440;color:var(--accent);border:.5px solid #2d3a6a}
-.panel-body{padding:12px 14px}
+.panel-header{
+  padding:8px 12px;border-bottom:.5px solid var(--border);
+  display:flex;align-items:center;gap:6px;
+  cursor:pointer;user-select:none;transition:background .15s;
+}
+.panel-header:hover{background:#1e2035}
+.panel-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);flex:1}
+.panel-badge{font-size:9px;padding:2px 7px;border-radius:8px;background:#1e2440;color:var(--accent);border:.5px solid #2d3a6a;white-space:nowrap}
+.chevron{font-size:10px;color:var(--muted);transition:transform .2s;flex-shrink:0;line-height:1}
+.panel.collapsed>.panel-header>.chevron{transform:rotate(-90deg)}
+.panel.collapsed>.panel-body{display:none}
+.panel-body{padding:10px 12px}
+.panel-body.pad0{padding:0}
 
-/* ── Resource bars ── */
-.res-item{margin-bottom:12px}.res-item:last-child{margin-bottom:0}
-.res-header{display:flex;justify-content:space-between;margin-bottom:4px}
-.res-name{font-size:12px;font-weight:500}.res-val{font-size:12px;color:var(--muted)}
-.bar-track{height:5px;background:#1e2440;border-radius:3px;overflow:hidden}
+/* ── Resource bars (compact) ── */
+.res-item{margin-bottom:8px}.res-item:last-child{margin-bottom:0}
+.res-header{display:flex;justify-content:space-between;margin-bottom:3px}
+.res-name{font-size:11px;font-weight:500}.res-val{font-size:11px;color:var(--muted)}
+.bar-track{height:4px;background:#1e2440;border-radius:3px;overflow:hidden}
 .bar-fill{height:100%;border-radius:3px;transition:width .5s}
 .bar-green{background:var(--green)}.bar-amber{background:var(--amber)}.bar-red{background:var(--red)}
 
-/* ── Info rows ── */
-.info-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:.5px solid var(--border)}
+/* ── Info rows (compact) ── */
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:.5px solid var(--border)}
 .info-row:last-child{border-bottom:none}
-.info-key{font-size:12px;color:var(--muted)}
-.info-val{font-size:12px;font-weight:500;text-align:right;word-break:break-all;max-width:220px}
+.info-key{font-size:10px;color:var(--muted)}
+.info-val{font-size:10px;font-weight:500;text-align:right;word-break:break-all;max-width:140px}
 
 /* ── Interface list ── */
-.iface-item{display:flex;align-items:center;padding:7px 0;border-bottom:.5px solid var(--border);gap:8px}
+.iface-item{display:flex;align-items:center;padding:5px 0;border-bottom:.5px solid var(--border);gap:7px}
 .iface-item:last-child{border-bottom:none}
-.dot8{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot8{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .dot8.up{background:var(--green)}.dot8.down{background:var(--red)}
 .iface-info{flex:1;min-width:0}
-.iface-name{font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px}
-.iface-ip{font-size:11px;color:var(--accent);font-family:monospace;margin-top:1px}
-.iface-right{text-align:right;font-size:10px;color:var(--muted);flex-shrink:0}
-.iface-speed{font-size:11px;font-weight:500;color:var(--text)}
-.badge-up{font-size:9px;padding:1px 5px;border-radius:4px;background:#0d2d1e;color:var(--green);border:.5px solid #1a5c3a}
-.badge-down{font-size:9px;padding:1px 5px;border-radius:4px;background:#2d0d0d;color:var(--red);border:.5px solid #5c1a1a}
-.badge-on{font-size:9px;padding:1px 5px;border-radius:4px;background:#0d1e2d;color:var(--accent);border:.5px solid #1a3a5c}
+.iface-name{font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px}
+.iface-ip{font-size:10px;color:var(--accent);font-family:monospace;margin-top:1px}
+.iface-right{text-align:right;font-size:9px;color:var(--muted);flex-shrink:0}
+.iface-speed{font-size:10px;font-weight:500;color:var(--text)}
+.badge-up{font-size:8px;padding:1px 4px;border-radius:3px;background:#0d2d1e;color:var(--green);border:.5px solid #1a5c3a}
+.badge-down{font-size:8px;padding:1px 4px;border-radius:3px;background:#2d0d0d;color:var(--red);border:.5px solid #5c1a1a}
+.badge-on{font-size:8px;padding:1px 4px;border-radius:3px;background:#0d1e2d;color:var(--accent);border:.5px solid #1a3a5c}
 
 /* ── SSL VPN ── */
-.ssl-user{padding:8px 0;border-bottom:.5px solid var(--border)}
+.ssl-user{padding:7px 0;border-bottom:.5px solid var(--border)}
 .ssl-user:last-child{border-bottom:none}
-.ssl-user-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.ssl-user-name{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
-.ssl-user-meta{font-size:10px;color:var(--muted);margin-top:3px;display:flex;gap:12px;flex-wrap:wrap}
-.ssl-empty{font-size:12px;color:var(--muted);text-align:center;padding:16px}
+.ssl-user-header{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.ssl-user-name{font-size:11px;font-weight:600;display:flex;align-items:center;gap:5px}
+.ssl-user-meta{font-size:10px;color:var(--muted);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap}
+.ssl-empty{font-size:11px;color:var(--muted);text-align:center;padding:14px}
 
 /* ── VPN IPSec ── */
-.vpn-item{padding:8px 0;border-bottom:.5px solid var(--border)}
+.vpn-item{padding:7px 0;border-bottom:.5px solid var(--border)}
 .vpn-item:last-child{border-bottom:none}
-.vpn-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.vpn-name{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
-.vpn-rgwy{font-size:10px;color:var(--muted);font-family:monospace}
-.vpn-tunnels{padding-left:12px;margin-top:3px}
-.vpn-tunnel-row{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);padding:1px 0}
+.vpn-header{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.vpn-name{font-size:11px;font-weight:600;display:flex;align-items:center;gap:5px}
+.vpn-rgwy{font-size:9px;color:var(--muted);font-family:monospace}
+.vpn-tunnels{padding-left:10px;margin-top:2px}
+.vpn-tunnel-row{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);padding:1px 0}
 
 /* ── Policy table ── */
+.policy-wrap{overflow-x:auto}
 .policy-table{width:100%;border-collapse:collapse;font-size:11px}
-.policy-table th{padding:6px 10px;text-align:left;color:var(--muted);font-weight:500;border-bottom:.5px solid var(--border);white-space:nowrap;text-transform:uppercase;letter-spacing:.4px;font-size:10px}
-.policy-table td{padding:7px 10px;border-bottom:.5px solid #1e2440;vertical-align:middle}
+.policy-table th{padding:5px 9px;text-align:left;color:var(--muted);font-weight:500;border-bottom:.5px solid var(--border);white-space:nowrap;text-transform:uppercase;letter-spacing:.4px;font-size:9px;background:var(--surface)}
+.policy-table td{padding:6px 9px;border-bottom:.5px solid #1e2440;vertical-align:middle}
 .policy-table tr:last-child td{border-bottom:none}
 .policy-table tr:hover td{background:#1e2440}
 .policy-id{font-size:10px;color:var(--muted);font-family:monospace}
 .policy-name{font-weight:500}
-.badge-accept{font-size:9px;padding:1px 6px;border-radius:4px;background:#0d2d1e;color:var(--green);border:.5px solid #1a5c3a}
-.badge-deny{font-size:9px;padding:1px 6px;border-radius:4px;background:#2d0d0d;color:var(--red);border:.5px solid #5c1a1a}
-.badge-enable{font-size:9px;padding:1px 6px;border-radius:4px;background:#1e2440;color:var(--accent);border:.5px solid #2d3a6a}
-.badge-disable{font-size:9px;padding:1px 6px;border-radius:4px;background:#252525;color:var(--muted);border:.5px solid #3a3a3a}
-.intf-tag{display:inline-block;font-size:9px;padding:1px 5px;border-radius:3px;background:#1a1d2e;border:.5px solid var(--border);margin:1px;white-space:nowrap}
-.policy-search{width:100%;padding:6px 10px;background:#131620;border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;margin-bottom:10px;outline:none}
+.badge-accept{font-size:8px;padding:1px 5px;border-radius:3px;background:#0d2d1e;color:var(--green);border:.5px solid #1a5c3a}
+.badge-deny{font-size:8px;padding:1px 5px;border-radius:3px;background:#2d0d0d;color:var(--red);border:.5px solid #5c1a1a}
+.badge-enable{font-size:8px;padding:1px 5px;border-radius:3px;background:#1e2440;color:var(--accent);border:.5px solid #2d3a6a}
+.badge-disable{font-size:8px;padding:1px 5px;border-radius:3px;background:#252525;color:var(--muted);border:.5px solid #3a3a3a}
+.intf-tag{display:inline-block;font-size:9px;padding:1px 4px;border-radius:3px;background:#1a1d2e;border:.5px solid var(--border);margin:1px;white-space:nowrap}
+.policy-filter-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:.5px solid var(--border)}
+.policy-search{flex:1;padding:5px 10px;background:#131620;border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;outline:none}
 .policy-search:focus{border-color:var(--accent)}
+.policy-count{font-size:10px;color:var(--muted);white-space:nowrap}
 
 /* ── Skeleton ── */
 .skeleton{background:linear-gradient(90deg,#1a1d2e 25%,#22263a 50%,#1a1d2e 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:4px}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-.skel-line{height:12px;margin-bottom:8px}
-
-/* ── Spin ── */
+.skel-line{height:10px;margin-bottom:7px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{display:inline-block;animation:spin .8s linear infinite}
-
-/* ── Error ── */
-.error-box{background:#1a0f0f;border:.5px solid #5c1a1a;border-radius:8px;padding:14px;color:var(--red);font-size:13px;text-align:center}
+.error-box{background:#1a0f0f;border:.5px solid #5c1a1a;border-radius:8px;padding:12px;color:var(--red);font-size:12px;text-align:center}
 </style>
 </head>
 <body>
@@ -154,7 +167,7 @@ html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-se
 
 <div class="page">
 
-  <!-- Stats -->
+  <!-- Stats row -->
   <div class="stats-row" id="stats-row">
     <div class="stat-card"><div class="stat-label">CPU</div><div class="skeleton skel-line" style="width:50%"></div></div>
     <div class="stat-card"><div class="stat-label">Memory</div><div class="skeleton skel-line" style="width:50%"></div></div>
@@ -165,82 +178,98 @@ html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-se
     <div class="stat-card"><div class="stat-label">Policies</div><div class="skeleton skel-line" style="width:50%"></div></div>
   </div>
 
-  <!-- WAN1 Bandwidth chart -->
-  <div class="bw-panel">
-    <div class="bw-header">
-      <span class="bw-title">📶 WAN1 Bandwidth</span>
+  <!-- BW Chart (collapsible) -->
+  <div class="bw-panel" id="bw-panel">
+    <div class="bw-header" onclick="toggleBw()">
+      <span class="bw-title">
+        <span id="bw-chevron" style="font-size:10px;color:var(--muted);transition:transform .2s;display:inline-block">▼</span>
+        📶 WAN1 Bandwidth
+      </span>
       <div class="bw-legend">
         <span><span class="bw-dot" style="background:var(--green)"></span> Download</span>
         <span><span class="bw-dot" style="background:var(--accent)"></span> Upload</span>
-        <span id="bw-current" style="font-size:11px;color:var(--muted)">Đang thu thập...</span>
+        <span id="bw-current" style="color:var(--muted)">Đang thu thập...</span>
       </div>
     </div>
-    <div class="bw-body">
+    <div class="bw-body" id="bw-body">
       <canvas id="bw-canvas"></canvas>
     </div>
   </div>
 
-  <!-- Main 2-col grid -->
+  <!-- 3-column layout -->
   <div class="main-grid">
-    <!-- Left -->
+
+    <!-- Col 1: Resources + System Info (compact) -->
     <div>
-      <div class="panel">
-        <div class="panel-header"><span class="panel-title">📈 Resources</span></div>
+      <div class="panel" id="panel-res">
+        <div class="panel-header" onclick="togglePanel('panel-res')">
+          <span class="panel-title">📈 Resources</span>
+          <span class="chevron">▼</span>
+        </div>
         <div class="panel-body" id="res-panel"><div class="skeleton skel-line"></div></div>
       </div>
-      <div class="panel">
-        <div class="panel-header"><span class="panel-title">⚙️ System Info</span></div>
+      <div class="panel" id="panel-sys">
+        <div class="panel-header" onclick="togglePanel('panel-sys')">
+          <span class="panel-title">⚙️ System Info</span>
+          <span class="chevron">▼</span>
+        </div>
         <div class="panel-body" id="sys-panel"><div class="skeleton skel-line"></div></div>
       </div>
-    </div>
-    <!-- Right -->
-    <div>
-      <div class="panel">
-        <div class="panel-header">
-          <span class="panel-title">🔐 SSL VPN</span>
-          <span class="panel-badge" id="ssl-badge">—</span>
-        </div>
-        <div class="panel-body" id="ssl-panel"><div class="skeleton skel-line"></div></div>
-      </div>
-      <div class="panel">
-        <div class="panel-header">
-          <span class="panel-title">🌐 Interfaces</span>
-          <span class="panel-badge" id="iface-badge">—</span>
-        </div>
-        <div class="panel-body" id="iface-panel"><div class="skeleton skel-line"></div></div>
-      </div>
-      <div class="panel">
-        <div class="panel-header">
+      <div class="panel" id="panel-vpn">
+        <div class="panel-header" onclick="togglePanel('panel-vpn')">
           <span class="panel-title">🔒 VPN IPSec</span>
           <span class="panel-badge" id="vpn-badge">—</span>
+          <span class="chevron">▼</span>
         </div>
         <div class="panel-body" id="vpn-panel"><div class="skeleton skel-line"></div></div>
       </div>
     </div>
+
+    <!-- Col 2: SSL VPN -->
+    <div>
+      <div class="panel" id="panel-ssl">
+        <div class="panel-header" onclick="togglePanel('panel-ssl')">
+          <span class="panel-title">🔐 SSL VPN</span>
+          <span class="panel-badge" id="ssl-badge">—</span>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="panel-body" id="ssl-panel"><div class="skeleton skel-line"></div></div>
+      </div>
+    </div>
+
+    <!-- Col 3: Interfaces -->
+    <div>
+      <div class="panel" id="panel-iface">
+        <div class="panel-header" onclick="togglePanel('panel-iface')">
+          <span class="panel-title">🌐 Interfaces</span>
+          <span class="panel-badge" id="iface-badge">—</span>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="panel-body" id="iface-panel"><div class="skeleton skel-line"></div></div>
+      </div>
+    </div>
+
   </div>
 
-  <!-- Firewall Policies (full width) -->
-  <div class="panel">
-    <div class="panel-header">
+  <!-- Firewall Policies (full width, collapsible) -->
+  <div class="panel" id="panel-policy">
+    <div class="panel-header" onclick="togglePanel('panel-policy')">
       <span class="panel-title">🛡️ Firewall Policies</span>
       <span class="panel-badge" id="policy-badge">—</span>
+      <span class="chevron">▼</span>
     </div>
-    <div class="panel-body">
-      <input class="policy-search" id="policy-search" placeholder="🔍 Filter by name, interface, action..." oninput="filterPolicies()"/>
-      <div style="overflow-x:auto">
+    <div class="panel-body pad0">
+      <div class="policy-filter-bar">
+        <input class="policy-search" id="policy-search" placeholder="🔍 Filter by name, interface, address, action..." oninput="filterPolicies()"/>
+        <span class="policy-count" id="policy-count"></span>
+      </div>
+      <div class="policy-wrap">
         <table class="policy-table" id="policy-table">
           <thead>
             <tr>
-              <th>#</th>
-              <th>Name</th>
-              <th>Src Interface</th>
-              <th>Dst Interface</th>
-              <th>Src Address</th>
-              <th>Dst Address</th>
-              <th>Service</th>
-              <th>Action</th>
-              <th>NAT</th>
-              <th>Status</th>
+              <th>#</th><th>Name</th><th>Src Intf</th><th>Dst Intf</th>
+              <th>Src Address</th><th>Dst Address</th><th>Service</th>
+              <th>Action</th><th>NAT</th><th>Status</th>
             </tr>
           </thead>
           <tbody id="policy-tbody">
@@ -254,9 +283,22 @@ html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-se
 </div>
 
 <script>
-/* ─────────────────────────────
-   Bandwidth chart state
-───────────────────────────── */
+/* ── Collapse / Expand ── */
+function togglePanel(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle('collapsed');
+}
+
+let _bwOpen = true;
+function toggleBw() {
+  _bwOpen = !_bwOpen;
+  document.getElementById('bw-body').classList.toggle('collapsed', !_bwOpen);
+  document.getElementById('bw-chevron').style.transform = _bwOpen ? '' : 'rotate(-90deg)';
+  if (_bwOpen) initCanvas();
+}
+
+/* ── Bandwidth chart state ── */
 const BW = { labels:[], rx:[], tx:[], maxPts:30 };
 let prevWan1 = null;
 
@@ -265,12 +307,13 @@ function initCanvas() {
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.parentElement.getBoundingClientRect();
-  canvas.width  = rect.width  * dpr;
-  canvas.height = 130 * dpr;
-  canvas.style.height = '130px';
+  if (!rect.width) return;
+  canvas.width  = rect.width * dpr;
+  canvas.height = 110 * dpr;
+  canvas.style.height = '110px';
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
-  drawBwChart(null, null, rect.width, 130);
+  drawBwChart(null, null, rect.width, 110);
 }
 
 function updateBandwidth(ifaces) {
@@ -282,9 +325,8 @@ function updateBandwidth(ifaces) {
     if (dt > 0 && dt < 120) {
       const rxMbps = Math.max(0, (wan1.rxBytes - prevWan1.rx) * 8 / dt / 1e6);
       const txMbps = Math.max(0, (wan1.txBytes - prevWan1.tx) * 8 / dt / 1e6);
-      BW.labels.push(new Date().toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
-      BW.rx.push(+rxMbps.toFixed(3));
-      BW.tx.push(+txMbps.toFixed(3));
+      const t = new Date().toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      BW.labels.push(t); BW.rx.push(+rxMbps.toFixed(3)); BW.tx.push(+txMbps.toFixed(3));
       if (BW.labels.length > BW.maxPts) { BW.labels.shift(); BW.rx.shift(); BW.tx.shift(); }
       const canvas = document.getElementById('bw-canvas');
       if (canvas) {
@@ -305,100 +347,77 @@ function drawBwChart(curRx, curTx, W, H) {
   const ctx = canvas.getContext('2d');
   ctx.save();
   ctx.clearRect(0, 0, W * dpr, H * dpr);
-
-  const PAD_L = 52, PAD_R = 10, PAD_T = 22, PAD_B = 20;
-  const cW = W - PAD_L - PAD_R;
-  const cH = H - PAD_T - PAD_B;
-
+  const PAD_L=46, PAD_R=10, PAD_T=18, PAD_B=18;
+  const cW = W - PAD_L - PAD_R, cH = H - PAD_T - PAD_B;
   if (BW.rx.length < 2) {
-    ctx.fillStyle = '#64748b';
-    ctx.font = '12px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Đang thu thập dữ liệu băng thông... (30s / lần)', W / 2, H / 2);
-    ctx.restore();
-    return;
+    ctx.fillStyle='#64748b'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('Đang thu thập dữ liệu... (30s / lần)', W/2, H/2);
+    ctx.restore(); return;
   }
-
   const allVals = [...BW.rx, ...BW.tx];
-  const maxVal  = Math.max(...allVals, 0.1);
-  const niceCeil = v => { const e = Math.pow(10, Math.floor(Math.log10(v))); return Math.ceil(v/e)*e; };
+  const maxVal = Math.max(...allVals, 0.1);
+  const niceCeil = v => { const e=Math.pow(10,Math.floor(Math.log10(v))); return Math.ceil(v/e)*e; };
   const yMax = niceCeil(maxVal * 1.2);
-
-  // Grid
-  for (let i = 0; i <= 4; i++) {
-    const y = PAD_T + cH - cH * i / 4;
-    ctx.strokeStyle = '#252840'; ctx.lineWidth = .5;
-    ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(PAD_L + cW, y); ctx.stroke();
-    ctx.fillStyle = '#64748b'; ctx.font = '9px sans-serif'; ctx.textAlign = 'right';
-    ctx.fillText((yMax * i / 4).toFixed(yMax < 1 ? 2 : 1) + 'M', PAD_L - 4, y + 3);
+  for (let i=0; i<=4; i++) {
+    const y = PAD_T + cH - cH*i/4;
+    ctx.strokeStyle='#252840'; ctx.lineWidth=.5;
+    ctx.beginPath(); ctx.moveTo(PAD_L,y); ctx.lineTo(PAD_L+cW,y); ctx.stroke();
+    ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='right';
+    ctx.fillText((yMax*i/4).toFixed(yMax<1?2:1)+'M', PAD_L-3, y+3);
   }
-
-  // X axis labels (every 5 pts)
-  ctx.fillStyle = '#64748b'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
-  BW.labels.forEach((lbl, i) => {
+  ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+  BW.labels.forEach((lbl,i) => {
     if (i % 5 === 0) {
-      const x = PAD_L + cW * i / (BW.maxPts - 1);
-      ctx.fillText(lbl, x, PAD_T + cH + 14);
+      const x = PAD_L + cW * i / (BW.maxPts-1);
+      ctx.fillText(lbl, x, PAD_T+cH+13);
     }
   });
-
   const drawLine = (data, color) => {
     if (data.length < 2) return;
-    // Fill
     ctx.beginPath();
-    data.forEach((v, i) => {
-      const x = PAD_L + cW * i / (BW.maxPts - 1);
-      const y = PAD_T + cH - cH * v / yMax;
-      i === 0 ? ctx.moveTo(x, PAD_T + cH) : null;
+    data.forEach((v,i) => {
+      const x=PAD_L+cW*i/(BW.maxPts-1), y=PAD_T+cH-cH*v/yMax;
+      if (i===0) ctx.moveTo(x, PAD_T+cH);
       ctx.lineTo(x, y);
     });
-    ctx.lineTo(PAD_L + cW * (data.length - 1) / (BW.maxPts - 1), PAD_T + cH);
-    ctx.closePath();
-    ctx.fillStyle = color + '28';
-    ctx.fill();
-    // Line
+    ctx.lineTo(PAD_L+cW*(data.length-1)/(BW.maxPts-1), PAD_T+cH);
+    ctx.closePath(); ctx.fillStyle=color+'28'; ctx.fill();
     ctx.beginPath();
-    data.forEach((v, i) => {
-      const x = PAD_L + cW * i / (BW.maxPts - 1);
-      const y = PAD_T + cH - cH * v / yMax;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    data.forEach((v,i) => {
+      const x=PAD_L+cW*i/(BW.maxPts-1), y=PAD_T+cH-cH*v/yMax;
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
     });
-    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.stroke();
   };
-
   drawLine(BW.rx, '#34d399');
   drawLine(BW.tx, '#60a5fa');
   ctx.restore();
 }
 
-/* ─────────────────────────────
-   Helpers
-───────────────────────────── */
+/* ── Helpers ── */
 function fmtBytes(b) {
-  if (!b && b !== 0) return '—';
-  if (b >= 1e12) return (b/1e12).toFixed(2)+' TB';
-  if (b >= 1e9)  return (b/1e9).toFixed(2)+' GB';
-  if (b >= 1e6)  return (b/1e6).toFixed(1)+' MB';
-  if (b >= 1e3)  return (b/1e3).toFixed(0)+' KB';
+  if (!b&&b!==0) return '—';
+  if (b>=1e12) return (b/1e12).toFixed(2)+' TB';
+  if (b>=1e9)  return (b/1e9).toFixed(2)+' GB';
+  if (b>=1e6)  return (b/1e6).toFixed(1)+' MB';
+  if (b>=1e3)  return (b/1e3).toFixed(0)+' KB';
   return b+' B';
 }
 function fmtDur(s) {
-  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sc = s%60;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${sc}s`;
+  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sc=s%60;
+  if (h>0) return `${h}h ${m}m`;
+  if (m>0) return `${m}m ${sc}s`;
   return `${sc}s`;
 }
 function barCls(p) { return p>=85?'bar-red':p>=65?'bar-amber':'bar-green'; }
 function valCls(p) { return p>=85?'c-red':p>=65?'c-amber':'c-green'; }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
-/* ─────────────────────────────
-   Policy filter
-───────────────────────────── */
+/* ── Policy filter ── */
 let _policies = [];
 function filterPolicies() {
   const q = document.getElementById('policy-search').value.toLowerCase();
-  renderPolicyTable(q ? _policies.filter(p =>
+  const list = q ? _policies.filter(p =>
     (p.name||'').toLowerCase().includes(q) ||
     (p.srcIntf||'').toLowerCase().includes(q) ||
     (p.dstIntf||'').toLowerCase().includes(q) ||
@@ -406,117 +425,80 @@ function filterPolicies() {
     (p.srcAddr||'').toLowerCase().includes(q) ||
     (p.dstAddr||'').toLowerCase().includes(q) ||
     (p.service||'').toLowerCase().includes(q)
-  ) : _policies);
+  ) : _policies;
+  document.getElementById('policy-count').textContent = list.length + ' / ' + _policies.length + ' policies';
+  renderPolicyTable(list);
 }
 
 function renderPolicyTable(list) {
   const tbody = document.getElementById('policy-tbody');
-  if (!list || !list.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px">Không có policy nào</td></tr>';
+  if (!list||!list.length) {
+    tbody.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:16px">Không có policy nào</td></tr>';
     return;
   }
-  tbody.innerHTML = list.map(p => {
-    const actionBadge = p.action === 'accept'
-      ? '<span class="badge-accept">ACCEPT</span>'
-      : '<span class="badge-deny">DENY</span>';
-    const statusBadge = p.status === 'enable'
-      ? '<span class="badge-enable">ON</span>'
-      : '<span class="badge-disable">OFF</span>';
-    const natBadge = p.nat === 'enable' ? '<span class="badge-on">NAT</span>' : '';
-    const tags = arr => (arr||'').split(',').map(s=>s.trim()).filter(Boolean)
-      .map(s=>`<span class="intf-tag">${esc(s)}</span>`).join('');
-    return `<tr>
-      <td class="policy-id">${p.id}</td>
-      <td class="policy-name">${esc(p.name)}</td>
-      <td>${tags(p.srcIntf)}</td>
-      <td>${tags(p.dstIntf)}</td>
-      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.srcAddr)}">${esc(p.srcAddr)||'—'}</td>
-      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.dstAddr)}">${esc(p.dstAddr)||'—'}</td>
-      <td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.service)}">${esc(p.service)||'—'}</td>
-      <td>${actionBadge}</td>
-      <td>${natBadge}</td>
-      <td>${statusBadge}</td>
-    </tr>`;
-  }).join('');
+  const tags = arr => (arr||'').split(',').map(s=>s.trim()).filter(Boolean)
+    .map(s=>`<span class="intf-tag">${esc(s)}</span>`).join('');
+  tbody.innerHTML = list.map(p => `<tr>
+    <td class="policy-id">${p.id}</td>
+    <td class="policy-name">${esc(p.name)}</td>
+    <td>${tags(p.srcIntf)}</td>
+    <td>${tags(p.dstIntf)}</td>
+    <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.srcAddr)}">${esc(p.srcAddr)||'—'}</td>
+    <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.dstAddr)}">${esc(p.dstAddr)||'—'}</td>
+    <td style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.service)}">${esc(p.service)||'—'}</td>
+    <td>${p.action==='accept'?'<span class="badge-accept">ACCEPT</span>':'<span class="badge-deny">DENY</span>'}</td>
+    <td>${p.nat==='enable'?'<span class="badge-on">NAT</span>':''}</td>
+    <td>${p.status==='enable'?'<span class="badge-enable">ON</span>':'<span class="badge-disable">OFF</span>'}</td>
+  </tr>`).join('');
 }
 
-/* ─────────────────────────────
-   Render functions
-───────────────────────────── */
+/* ── Render functions ── */
 function renderStats(d) {
-  const r = d.resources||{}, s = d.stats||{};
-  const cpu = r.cpuPct??'—', mem = r.memPct??'—';
+  const r=d.resources||{}, s=d.stats||{};
+  const cpu=r.cpuPct??'—', mem=r.memPct??'—';
   document.getElementById('stats-row').innerHTML = `
-    <div class="stat-card">
-      <div class="stat-label">CPU</div>
-      <div class="stat-value ${valCls(cpu)}">${cpu!=='—'?cpu+'%':'—'}</div>
-      <div class="stat-sub">Processor</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Memory</div>
-      <div class="stat-value ${valCls(mem)}">${mem!=='—'?mem+'%':'—'}</div>
-      <div class="stat-sub">RAM usage</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Sessions</div>
-      <div class="stat-value c-blue">${r.sessions!==null&&r.sessions!==undefined?Number(r.sessions).toLocaleString():'—'}</div>
-      <div class="stat-sub">Active conns</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">SSL VPN</div>
-      <div class="stat-value ${(s.sslUsers||0)>0?'c-green':'c-muted'}">${s.sslUsers??0}</div>
-      <div class="stat-sub">Connected users</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Interfaces</div>
-      <div class="stat-value ${(s.ifaceUp||0)>0?'c-green':'c-red'}">${s.ifaceUp??0}</div>
-      <div class="stat-sub">of ${s.ifaceTotal??'?'} total</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">VPN IPSec</div>
-      <div class="stat-value ${(s.vpnUp||0)>0?'c-green':'c-amber'}">${s.vpnUp??0}/${s.vpnTotal??0}</div>
-      <div class="stat-sub">Tunnels up</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Policies</div>
-      <div class="stat-value c-blue">${s.enabledPolicies??'—'}</div>
-      <div class="stat-sub">of ${s.totalPolicies??'?'} enabled</div>
-    </div>
+    <div class="stat-card"><div class="stat-label">CPU</div><div class="stat-value ${valCls(cpu)}">${cpu!=='—'?cpu+'%':'—'}</div><div class="stat-sub">Processor</div></div>
+    <div class="stat-card"><div class="stat-label">Memory</div><div class="stat-value ${valCls(mem)}">${mem!=='—'?mem+'%':'—'}</div><div class="stat-sub">RAM usage</div></div>
+    <div class="stat-card"><div class="stat-label">Sessions</div><div class="stat-value c-blue">${r.sessions!=null?Number(r.sessions).toLocaleString():'—'}</div><div class="stat-sub">Active conns</div></div>
+    <div class="stat-card"><div class="stat-label">SSL VPN</div><div class="stat-value ${(s.sslUsers||0)>0?'c-green':'c-muted'}">${s.sslUsers??0}</div><div class="stat-sub">Users online</div></div>
+    <div class="stat-card"><div class="stat-label">Interfaces</div><div class="stat-value ${(s.ifaceUp||0)>0?'c-green':'c-red'}">${s.ifaceUp??0}<span style="font-size:11px;color:var(--muted)">/${s.ifaceTotal??'?'}</span></div><div class="stat-sub">Up / Total</div></div>
+    <div class="stat-card"><div class="stat-label">VPN IPSec</div><div class="stat-value ${(s.vpnUp||0)>0?'c-green':'c-amber'}">${s.vpnUp??0}<span style="font-size:11px;color:var(--muted)">/${s.vpnTotal??0}</span></div><div class="stat-sub">Tunnels up</div></div>
+    <div class="stat-card"><div class="stat-label">Policies</div><div class="stat-value c-blue">${s.enabledPolicies??'—'}<span style="font-size:11px;color:var(--muted)">/${s.totalPolicies??'?'}</span></div><div class="stat-sub">Enabled</div></div>
   `;
 }
 
 function renderResources(r) {
   const items = [
-    {label:'CPU Usage',  val:r?.cpuPct,  unit:'%'},
-    {label:'Memory',     val:r?.memPct,  unit:'%'},
-    {label:'Disk Usage', val:r?.diskPct, unit:'%'},
-  ].filter(i => i.val !== null && i.val !== undefined);
+    {label:'CPU',  val:r?.cpuPct},
+    {label:'Memory', val:r?.memPct},
+    {label:'Disk', val:r?.diskPct},
+  ].filter(i=>i.val!=null);
   document.getElementById('res-panel').innerHTML = items.length
     ? items.map(i=>`<div class="res-item">
-        <div class="res-header"><span class="res-name">${i.label}</span><span class="res-val">${i.val}${i.unit}</span></div>
+        <div class="res-header"><span class="res-name">${i.label}</span><span class="res-val">${i.val}%</span></div>
         <div class="bar-track"><div class="bar-fill ${barCls(i.val)}" style="width:${Math.min(i.val,100)}%"></div></div>
       </div>`).join('')
-    : '<div style="color:var(--muted);font-size:12px">No data</div>';
+    : '<div style="color:var(--muted);font-size:11px">No data</div>';
 }
 
 function renderSysInfo(sys) {
   const rows = [
     {k:'Hostname', v:sys?.hostname},
-    {k:'Model',    v:sys?.model + (sys?.build?' ('+sys.model_number+')':'')},
+    {k:'Model',    v:sys?.model},
     {k:'Version',  v:sys?.version},
     {k:'Build',    v:sys?.build},
     {k:'Serial',   v:sys?.serial},
   ].filter(r=>r.v);
   document.getElementById('sys-panel').innerHTML = rows.map(r=>
     `<div class="info-row"><span class="info-key">${r.k}</span><span class="info-val">${esc(r.v)}</span></div>`
-  ).join('');
+  ).join('') || '<div style="color:var(--muted);font-size:11px">No data</div>';
 }
 
-function renderSSL(ssl, stats) {
+function renderSSL(ssl) {
   const count = ssl?.activeUsers ?? 0;
-  document.getElementById('ssl-badge').textContent = `${count} user${count!==1?'s':''} online`;
+  document.getElementById('ssl-badge').textContent = count ? count+' user'+(count!==1?'s':'')+' online' : 'No users';
   if (!ssl?.users?.length) {
-    document.getElementById('ssl-panel').innerHTML = '<div class="ssl-empty">🔒 No SSL VPN users connected</div>';
+    document.getElementById('ssl-panel').innerHTML='<div class="ssl-empty">🔒 No SSL VPN users connected</div>';
     return;
   }
   document.getElementById('ssl-panel').innerHTML = ssl.users.map(u=>`
@@ -543,9 +525,7 @@ function renderInterfaces(ifaces, stats) {
     const ip = i.ip&&i.ip!=='0.0.0.0'?`<div class="iface-ip">${i.ip}</div>`:'';
     return `<div class="iface-item">
       <div class="dot8 ${i.status}"></div>
-      <div class="iface-info">
-        <div class="iface-name">${esc(i.name)} ${badge}</div>${ip}
-      </div>
+      <div class="iface-info"><div class="iface-name">${esc(i.name)} ${badge}</div>${ip}</div>
       <div class="iface-right">
         ${speed?`<div class="iface-speed">${speed}bps</div>`:''}
         <div>↓${fmtBytes(i.rxBytes)} ↑${fmtBytes(i.txBytes)}</div>
@@ -560,7 +540,7 @@ function renderVPN(vpns, stats) {
   document.getElementById('vpn-panel').innerHTML = vpns.map(v=>{
     const badge = v.status==='up'?'<span class="badge-up">UP</span>':'<span class="badge-down">DOWN</span>';
     const rgwy = v.rgwy?`<div class="vpn-rgwy">${esc(v.rgwy)}</div>`:'';
-    const tunnels = v.tunnels.map(t=>`<div class="vpn-tunnel-row">
+    const tunnels = (v.tunnels||[]).map(t=>`<div class="vpn-tunnel-row">
       <span>${esc(t.name)} ${t.status==='up'?'🟢':'🔴'}</span>
       <span>↓${fmtBytes(t.inBytes)} ↑${fmtBytes(t.outBytes)}</span>
     </div>`).join('');
@@ -578,9 +558,7 @@ function renderPolicies(policies, stats) {
   filterPolicies();
 }
 
-/* ─────────────────────────────
-   Main load
-───────────────────────────── */
+/* ── Main load ── */
 async function load() {
   const btn = document.getElementById('refresh-btn');
   btn.innerHTML = '<span class="spin">⟳</span>';
@@ -596,12 +574,11 @@ async function load() {
     renderStats(d);
     renderResources(d.resources);
     renderSysInfo(d.system);
-    renderSSL(d.ssl, d.stats);
+    renderSSL(d.ssl);
     renderInterfaces(d.interfaces, d.stats);
     renderVPN(d.vpn, d.stats);
     renderPolicies(d.policies, d.stats);
     updateBandwidth(d.interfaces);
-
     const sub = d.system?.hostname ? `${d.system.hostname} · ${d.system.version}` : 'FortiGate';
     document.getElementById('hdr-sub').textContent = sub;
     document.getElementById('last-update').textContent = 'Updated ' + new Date().toLocaleTimeString('vi-VN');
@@ -614,7 +591,6 @@ async function load() {
   }
 }
 
-// Init
 window.addEventListener('load', () => {
   initCanvas();
   window.addEventListener('resize', initCanvas);
