@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Viewer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d14;--surface:#131620;--border:#252840;
+  --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
+  --green:#34d399;--red:#f87171;
+}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text)}
+
+/* ── Toolbar ── */
+.toolbar{
+  height:44px;background:var(--surface);border-bottom:.5px solid var(--border);
+  display:flex;align-items:center;gap:8px;padding:0 12px;flex-shrink:0;
+  position:relative;z-index:10;
+}
+.tb-btn{
+  font-size:12px;padding:4px 10px;border-radius:6px;
+  border:.5px solid var(--border);background:transparent;
+  color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0;
+}
+.tb-btn:hover{color:var(--text);border-color:#3d4260}
+.tb-btn.accent{color:var(--accent)}
+.tb-btn.accent:hover{background:#1e3a5f;border-color:var(--accent)}
+
+.addr-bar{
+  flex:1;display:flex;align-items:center;gap:8px;
+  background:var(--bg);border:.5px solid var(--border);border-radius:7px;
+  padding:0 10px;height:28px;min-width:0;
+}
+.addr-icon{font-size:13px;flex-shrink:0}
+.addr-text{
+  font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;
+}
+.addr-name{font-size:13px;font-weight:600;color:var(--text);flex-shrink:0}
+
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
+.status-dot.green{background:var(--green)}
+.status-dot.red{background:var(--red)}
+
+/* ── Frame area ── */
+.frame-wrap{position:relative;height:calc(100vh - 44px)}
+iframe{width:100%;height:100%;border:none;display:block}
+
+/* ── Loading overlay ── */
+.loading{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;
+  background:var(--bg);z-index:5;transition:opacity .3s;
+}
+.loading.hidden{opacity:0;pointer-events:none}
+.spinner{
+  width:36px;height:36px;border:3px solid var(--border);
+  border-top-color:var(--accent);border-radius:50%;
+  animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading p{font-size:13px;color:var(--muted)}
+
+/* ── Error state ── */
+.err-box{
+  position:absolute;inset:0;display:none;flex-direction:column;
+  align-items:center;justify-content:center;gap:12px;text-align:center;padding:2rem;
+}
+.err-box.show{display:flex}
+.err-icon{font-size:48px}
+.err-title{font-size:16px;font-weight:600;color:var(--red)}
+.err-msg{font-size:13px;color:var(--muted);max-width:400px;line-height:1.6}
+.err-btn{
+  font-size:13px;padding:7px 18px;border-radius:8px;
+  background:var(--accent);color:#0b0d14;border:none;
+  cursor:pointer;font-weight:600;
+}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button class="tb-btn" onclick="goBack()">← Dashboard</button>
+
+  <div class="addr-bar">
+    <div class="status-dot" id="status-dot"></div>
+    <span class="addr-name" id="addr-name">—</span>
+    <span class="addr-text" id="addr-text"></span>
+  </div>
+
+  <button class="tb-btn" onclick="reloadFrame()" title="Tải lại">⟳</button>
+  <button class="tb-btn accent" onclick="openExternal()" title="Mở tab mới">↗ Tab mới</button>
+</div>
+
+<div class="frame-wrap">
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p id="loading-msg">Đang kết nối...</p>
+  </div>
+
+  <div class="err-box" id="err-box">
+    <div class="err-icon">🔒</div>
+    <div class="err-title">Không thể tải trang</div>
+    <div class="err-msg" id="err-msg">Trang này chặn iframe embedding hoặc không thể kết nối.</div>
+    <button class="err-btn" onclick="openExternal()">↗ Mở trong tab mới</button>
+  </div>
+
+  <iframe id="main-frame" title="Viewer" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation"></iframe>
+</div>
+
+<script>
+const params  = new URLSearchParams(location.search);
+const origUrl = params.get('url') || '';
+const name    = params.get('name') || origUrl;
+const useProxy= params.get('proxy') !== '0'; // default: use proxy
+
+const dot     = document.getElementById('status-dot');
+const frame   = document.getElementById('main-frame');
+const loading = document.getElementById('loading');
+const errBox  = document.getElementById('err-box');
+
+// Set page title + address bar
+document.title = name + ' — Dashboard Viewer';
+document.getElementById('addr-name').textContent = name;
+document.getElementById('addr-text').textContent  = origUrl;
+
+function goBack() {
+  if (document.referrer && document.referrer.includes(location.hostname)) {
+    history.back();
+  } else {
+    location.href = '/';
+  }
+}
+
+function openExternal() {
+  window.open(origUrl, '_blank');
+}
+
+function showLoading(msg) {
+  document.getElementById('loading-msg').textContent = msg || 'Đang kết nối...';
+  loading.classList.remove('hidden');
+  errBox.classList.remove('show');
+  dot.className = 'status-dot';
+}
+
+function hideLoading(ok) {
+  loading.classList.add('hidden');
+  dot.className = 'status-dot ' + (ok ? 'green' : 'red');
+}
+
+function showError(msg) {
+  hideLoading(false);
+  document.getElementById('err-msg').textContent = msg;
+  errBox.classList.add('show');
+}
+
+function loadUrl(url, proxy) {
+  if (!url) { showError('Không có URL được cung cấp.'); return; }
+  showLoading('Đang kết nối tới ' + name + '...');
+
+  const src = proxy ? `/proxy?url=${encodeURIComponent(url)}` : url;
+  frame.src = src;
+}
+
+// Detect if frame loaded OK
+let loadTimer;
+frame.addEventListener('load', () => {
+  clearTimeout(loadTimer);
+  try {
+    // If we can access contentDocument, it loaded (same-origin via proxy)
+    const doc = frame.contentDocument;
+    if (doc && doc.body) {
+      const bodyText = doc.body.innerText || '';
+      if (bodyText.startsWith('Proxy error') || bodyText.startsWith('Only HTTPS')) {
+        showError(bodyText);
+        return;
+      }
+    }
+  } catch(e) {
+    // Cross-origin = still loaded (expected for some cases)
+  }
+  hideLoading(true);
+});
+
+frame.addEventListener('error', () => {
+  clearTimeout(loadTimer);
+  showError('Không thể tải nội dung. Trang có thể đã chặn kết nối.');
+});
+
+// Timeout fallback
+function reloadFrame() {
+  loadUrl(origUrl, useProxy);
+  loadTimer = setTimeout(() => {
+    // If still loading after 15s, check if blank
+    try {
+      const doc = frame.contentDocument;
+      if (!doc || doc.body?.innerHTML === '') {
+        showError('Hết thời gian kết nối. Trang không phản hồi.');
+      } else {
+        hideLoading(true);
+      }
+    } catch {
+      hideLoading(true); // Cross-origin = probably loaded fine
+    }
+  }, 15000);
+}
+
+// Start
+if (origUrl) {
+  reloadFrame();
+} else {
+  showError('Không có URL. Quay lại dashboard và thử lại.');
+}
+</script>
+</body>
+</html>

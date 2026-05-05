@@ -1148,6 +1148,80 @@ function json(data, status = 200) {
   });
 }
 
+/* ═══════════════════════════════════════════════
+   Web Proxy — fetch any HTTPS URL, strip frame-blocking headers
+   so it can be embedded in an iframe on the dashboard
+   ═══════════════════════════════════════════════ */
+async function handleProxy(request, env) {
+  const reqUrl = new URL(request.url);
+  const target = reqUrl.searchParams.get('url');
+  if (!target) return new Response('Missing ?url= parameter', { status: 400 });
+
+  let targetUrl;
+  try { targetUrl = new URL(target); } catch {
+    return new Response('Invalid URL', { status: 400 });
+  }
+  if (targetUrl.protocol !== 'https:')
+    return new Response('Only HTTPS URLs are allowed', { status: 400 });
+
+  // Forward CF Access credentials for internal services
+  const cfId  = env.CF_ACCESS_CLIENT_ID;
+  const cfSec = env.CF_ACCESS_CLIENT_SECRET;
+  const headers = { 'User-Agent': 'Mozilla/5.0 (HomeLabDashboard Proxy)' };
+  if (cfId && cfSec && targetUrl.hostname.endsWith('home-server.id.vn')) {
+    headers['CF-Access-Client-Id']     = cfId;
+    headers['CF-Access-Client-Secret'] = cfSec;
+  }
+
+  try {
+    const res = await fetch(targetUrl.toString(), {
+      method: 'GET', headers,
+      redirect: 'follow',
+      signal: AbortSignal.timeout(20000),
+    });
+
+    // Build new headers, stripping frame-blocking ones
+    const out = new Headers();
+    for (const [k, v] of res.headers) {
+      const kl = k.toLowerCase();
+      if (kl === 'x-frame-options') continue;         // allow iframe
+      if (kl === 'content-security-policy') {
+        // Strip frame-ancestors directive only
+        const stripped = v.replace(/frame-ancestors[^;]*(;|$)/gi, '').trim().replace(/;$/, '');
+        if (stripped) out.set(k, stripped);
+        continue;
+      }
+      out.set(k, v);
+    }
+    out.set('X-Proxy-By', 'HomeLabDashboard');
+
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('text/html')) {
+      let html = await res.text();
+      // Inject <base> so relative URLs resolve back to the original origin
+      const baseTag = `<base href="${targetUrl.origin}/">`;
+      if (/<head[\s>]/i.test(html)) {
+        html = html.replace(/(<head[^>]*>)/i, `$1\n  ${baseTag}`);
+      } else {
+        html = baseTag + html;
+      }
+      out.set('content-type', 'text/html; charset=utf-8');
+      return new Response(html, { status: res.status, headers: out });
+    }
+
+    return new Response(res.body, { status: res.status, headers: out });
+  } catch (e) {
+    return new Response(
+      `<html><body style="font-family:sans-serif;padding:2rem;background:#0b0d14;color:#e2e8f0">
+        <h2 style="color:#f87171">⚠ Proxy Error</h2>
+        <p>${e.message}</p>
+        <p style="color:#64748b;font-size:13px">URL: ${target}</p>
+      </body></html>`,
+      { status: 502, headers: { 'content-type': 'text/html' } }
+    );
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -1157,10 +1231,11 @@ export default {
     if (url.pathname === '/api/9router')     return handle9Router();
     if (url.pathname === '/api/esxi')        return handleESXi(env);
     if (url.pathname === '/api/esxi/power')  return handleESXiPower(request, env);
-    if (url.pathname === '/api/casaos')        return handleCasaOS(env);
-    if (url.pathname === '/api/fortigate')     return handleFortigate(env, url.searchParams.has('debug'));
-    if (url.pathname === '/api/asus')          return handleAsus(env);
-    if (url.pathname === '/api/asus/reboot')   return handleAsusReboot(request, env);
+    if (url.pathname === '/api/casaos')      return handleCasaOS(env);
+    if (url.pathname === '/api/fortigate')   return handleFortigate(env, url.searchParams.has('debug'));
+    if (url.pathname === '/api/asus')        return handleAsus(env);
+    if (url.pathname === '/api/asus/reboot') return handleAsusReboot(request, env);
+    if (url.pathname === '/proxy')           return handleProxy(request, env);
     return env.ASSETS.fetch(request);
   },
 };

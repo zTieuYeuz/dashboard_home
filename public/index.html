@@ -202,6 +202,40 @@ a { color: inherit; text-decoration: none; }
 .qlink-name { font-size: 12px; font-weight: 600; color: var(--text); }
 .qlink-url { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* BOOKMARKS */
+.bm-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.bm-add-btn{font-size:12px;padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--accent);cursor:pointer;transition:all .2s;font-weight:500}
+.bm-add-btn:hover{background:#1e3a5f;border-color:var(--accent)}
+.bm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.bm-card{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);cursor:pointer;transition:all .2s;position:relative;group:true;text-decoration:none}
+.bm-card:hover{border-color:var(--accent);background:rgba(96,165,250,.06);transform:translateY(-1px)}
+.bm-icon{font-size:20px;flex-shrink:0;line-height:1}
+.bm-info{flex:1;min-width:0}
+.bm-name{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bm-url{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.bm-del{opacity:0;position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:4px;background:var(--red-dim);border:none;color:var(--red);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
+.bm-card:hover .bm-del{opacity:1}
+.bm-del:hover{background:var(--red);color:#fff}
+.bm-empty{font-size:13px;color:var(--muted);padding:20px;text-align:center;border:1px dashed var(--border);border-radius:10px}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:1000;backdrop-filter:blur(4px)}
+.modal-overlay.hidden{display:none}
+.modal{background:#18181b;border:1px solid var(--border);border-radius:16px;padding:1.5rem;width:380px;max-width:90vw;box-shadow:0 25px 50px rgba(0,0,0,.5)}
+.modal-title{font-size:15px;font-weight:700;margin-bottom:1.25rem}
+.modal-row{display:flex;gap:10px;margin-bottom:12px}
+.modal-row.full{flex-direction:column}
+.m-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.m-input{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;outline:none;transition:border .15s}
+.m-input:focus{border-color:var(--accent)}
+.m-icon-input{width:60px;font-size:20px;text-align:center;flex-shrink:0}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:1rem}
+.m-btn{padding:7px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s}
+.m-btn.primary{background:var(--accent);color:#0b0d14}
+.m-btn.primary:hover{background:#3b82f6}
+.m-btn.cancel{background:var(--surface);color:var(--muted);border:1px solid var(--border)}
+.m-btn.cancel:hover{color:var(--text)}
+
 /* FOOTER */
 .footer { text-align: center; padding: 2rem; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); margin-top: 2rem; }
 
@@ -292,25 +326,46 @@ a { color: inherit; text-decoration: none; }
       </div>
 
       <div>
-        <div class="section-title">💡 Gợi ý sắp xếp cho tương lai (Ví dụ Monitor Tab)</div>
-        <div class="boxed-section" style="gap:10px; font-size:14px; color:var(--muted);">
-          <ul style="padding-left:18px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-            <li>Biểu đồ CPU, RAM, Disk</li>
-            <li>Trạng thái Camera CCTV</li>
-            <li>Theo dõi lưu lượng mạng (Bandwidth)</li>
-            <li>Nhắc nhở ngày Backup Dữ liệu</li>
-            <li>Thời tiết khu vực Home Lab</li>
-            <li>Logs bảo mật mạng</li>
-            <li>Danh sách Container/VM đang chạy</li>
-            <li>Nhiệt độ phòng Server</li>
-          </ul>
+        <div class="bm-header">
+          <div class="section-title" style="margin-bottom:0">🔖 Bookmarks</div>
+          <button class="bm-add-btn" onclick="bmOpenModal()">+ Thêm link</button>
         </div>
+        <div class="bm-grid" id="bm-grid"></div>
       </div>
       
     </div>
 
   </div> <!-- KẾT THÚC BỐ CỤC CHIA CỘT -->
 
+</div>
+
+<!-- Add Bookmark Modal -->
+<div class="modal-overlay hidden" id="bm-modal" onclick="bmCloseOnBg(event)">
+  <div class="modal">
+    <div class="modal-title">🔖 Thêm Bookmark</div>
+    <div class="modal-row">
+      <div style="flex:0">
+        <div class="m-label">Icon</div>
+        <input class="m-input m-icon-input" id="bm-icon" type="text" value="🌐" maxlength="4" placeholder="🌐"/>
+      </div>
+      <div style="flex:1">
+        <div class="m-label">Tên hiển thị</div>
+        <input class="m-input" id="bm-name" type="text" placeholder="FortiGate UI" maxlength="40"/>
+      </div>
+    </div>
+    <div class="modal-row full">
+      <div class="m-label">URL</div>
+      <input class="m-input" id="bm-url" type="url" placeholder="https://fortigate.home-server.id.vn" autocomplete="url"/>
+    </div>
+    <div class="modal-row" style="align-items:center;gap:8px;margin-bottom:0">
+      <input type="checkbox" id="bm-proxy" checked style="accent-color:var(--accent);width:14px;height:14px"/>
+      <label for="bm-proxy" style="font-size:12px;color:var(--muted);cursor:pointer">Mở qua Dashboard Proxy (cho trang nội bộ/bị chặn iframe)</label>
+    </div>
+    <div class="modal-btns">
+      <button class="m-btn cancel" onclick="bmCloseModal()">Hủy</button>
+      <button class="m-btn primary" onclick="bmSave()">Lưu</button>
+    </div>
+  </div>
 </div>
 
 <footer class="footer">Home Lab Dashboard · Powered by Cloudflare Web Workers</footer>
@@ -443,6 +498,85 @@ setInterval(function(){
 
 initUI();
 runChecks();
+
+/* ══════════════════════════════════════════
+   BOOKMARKS — lưu vào localStorage
+   ══════════════════════════════════════════ */
+var BM_KEY = 'homelab_bookmarks';
+
+function bmLoad() {
+  try { return JSON.parse(localStorage.getItem(BM_KEY) || '[]'); } catch { return []; }
+}
+function bmSave2(list) {
+  localStorage.setItem(BM_KEY, JSON.stringify(list));
+  bmRender(list);
+}
+
+function bmRender(list) {
+  var grid = document.getElementById('bm-grid');
+  if (!list || !list.length) {
+    grid.innerHTML = '<div class="bm-empty">Chưa có bookmark nào.<br>Nhấn <b>+ Thêm link</b> để thêm.</div>';
+    return;
+  }
+  grid.innerHTML = list.map(function(bm, i) {
+    var viewUrl = '/viewer?url=' + encodeURIComponent(bm.url)
+      + '&name=' + encodeURIComponent(bm.name)
+      + (bm.proxy === false ? '&proxy=0' : '');
+    return '<a class="bm-card" href="' + viewUrl + '">'
+      + '<span class="bm-icon">' + esc2(bm.icon || '🌐') + '</span>'
+      + '<div class="bm-info">'
+      + '<div class="bm-name">' + esc2(bm.name) + '</div>'
+      + '<div class="bm-url">' + esc2(bm.url) + '</div>'
+      + '</div>'
+      + '<button class="bm-del" onclick="bmDelete(event,' + i + ')" title="Xóa">✕</button>'
+      + '</a>';
+  }).join('');
+}
+function esc2(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function bmDelete(e, idx) {
+  e.preventDefault(); e.stopPropagation();
+  var list = bmLoad();
+  list.splice(idx, 1);
+  bmSave2(list);
+}
+
+function bmOpenModal() {
+  document.getElementById('bm-icon').value = '🌐';
+  document.getElementById('bm-name').value = '';
+  document.getElementById('bm-url').value  = '';
+  document.getElementById('bm-proxy').checked = true;
+  document.getElementById('bm-modal').classList.remove('hidden');
+  setTimeout(function(){ document.getElementById('bm-name').focus(); }, 50);
+}
+function bmCloseModal() {
+  document.getElementById('bm-modal').classList.add('hidden');
+}
+function bmCloseOnBg(e) {
+  if (e.target === document.getElementById('bm-modal')) bmCloseModal();
+}
+function bmSave() {
+  var icon  = document.getElementById('bm-icon').value.trim() || '🌐';
+  var name  = document.getElementById('bm-name').value.trim();
+  var url   = document.getElementById('bm-url').value.trim();
+  var proxy = document.getElementById('bm-proxy').checked;
+  if (!name || !url) { alert('Vui lòng nhập tên và URL.'); return; }
+  if (!url.startsWith('http')) url = 'https://' + url;
+  var list = bmLoad();
+  list.push({ icon: icon, name: name, url: url, proxy: proxy });
+  bmSave2(list);
+  bmCloseModal();
+}
+
+// Keyboard shortcut: Esc to close modal
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') bmCloseModal();
+});
+
+// Init bookmarks on load
+bmRender(bmLoad());
 </script>
 </body>
 </html>

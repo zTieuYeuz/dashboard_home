@@ -48,7 +48,18 @@
       "Bash(grep -oE 'version[^\"<]{0,50}|ESXi[^\"<]{0,30}|buildNumber[^\"<]{0,30}')",
       "Bash(curl -sk \"https://esxi.home-server.id.vn/api/\" -o /dev/null -w \"api/ status: %{http_code}\")",
       "Bash(curl -sk \"https://esxi.home-server.id.vn/api/vcenter/vm\" -o /dev/null -w \"vcenter/vm status: %{http_code}\")",
-      "Bash(curl -sk \"https://esxi.home-server.id.vn/sdk\" -H \"Content-Type: text/xml\" -d '<?xml version=\"1.0\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Body><RetrieveServiceContent xmlns=\"urn:vim25\"><_this type=\"ServiceInstance\">ServiceInstance</_this></RetrieveServiceContent></soapenv:Body></soapenv:Envelope>')"
+      "Bash(curl -sk \"https://esxi.home-server.id.vn/sdk\" -H \"Content-Type: text/xml\" -d '<?xml version=\"1.0\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Body><RetrieveServiceContent xmlns=\"urn:vim25\"><_this type=\"ServiceInstance\">ServiceInstance</_this></RetrieveServiceContent></soapenv:Body></soapenv:Envelope>')",
+      "Bash(curl -sI \"https://termix.home-server.id.vn\")",
+      "mcp__Claude_in_Chrome__navigate",
+      "mcp__Claude_in_Chrome__get_page_text",
+      "Bash(node --input-type=module)",
+      "mcp__Claude_in_Chrome__computer",
+      "mcp__Claude_in_Chrome__javascript_tool",
+      "mcp__Claude_in_Chrome__read_console_messages",
+      "Bash(gh api *)",
+      "Bash(curl -s \"https://api.github.com/repos/Vaskivskyi/asusrouter/git/trees/main?recursive=1\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(x['path']\\) for x in d.get\\('tree',[]\\) if x['type']=='blob']\")",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }
