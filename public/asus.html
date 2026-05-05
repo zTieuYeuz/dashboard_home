@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ASUS Router Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d14;--surface:#131620;--card:#1a1d2e;--border:#252840;
+  --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
+  --green:#34d399;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;
+  --font:'Inter',system-ui,sans-serif;
+  --num:'Space Grotesk','Inter',sans-serif;
+  --mono:'IBM Plex Mono',monospace;
+}
+html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100%;-webkit-font-smoothing:antialiased}
+
+.header{background:var(--surface);border-bottom:.5px solid var(--border);padding:0 1.25rem;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.hdr-left{display:flex;align-items:center;gap:12px}
+.back-btn{font-size:12px;padding:5px 12px;border-radius:7px;border:.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;font-family:var(--font);font-weight:500}
+.back-btn:hover{color:var(--text);border-color:#3d4260}
+.hdr-name{font-size:15px;font-weight:700;letter-spacing:-.2px}
+.hdr-sub{font-size:11.5px;color:var(--muted);margin-top:1px}
+.hdr-right{display:flex;align-items:center;gap:10px}
+.refresh-btn{font-size:12px;padding:5px 12px;border-radius:7px;border:.5px solid var(--border);background:transparent;color:var(--accent);cursor:pointer;transition:all .15s;font-family:var(--font);font-weight:500}
+.refresh-btn:hover{background:#1e3a5f;border-color:var(--accent)}
+.last-update{font-size:11.5px;color:var(--muted)}
+
+.page{padding:1rem 1.25rem;max-width:1400px;margin:0 auto}
+
+/* Stats row */
+.stats-row{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:.85rem}
+@media(max-width:900px){.stats-row{grid-template-columns:repeat(3,1fr)}}
+.stat-card{background:var(--card);border:.5px solid var(--border);border-radius:10px;padding:12px 14px}
+.stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px;font-weight:600}
+.stat-value{font-size:22px;font-weight:700;line-height:1;letter-spacing:-.3px;font-family:var(--num)}
+.stat-sub{font-size:10px;color:var(--muted);margin-top:3px;font-weight:500}
+.c-green{color:var(--green)}.c-red{color:var(--red)}.c-amber{color:var(--amber)}.c-blue{color:var(--accent)}.c-muted{color:var(--muted)}
+
+/* Main grid */
+.main-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.85rem;margin-bottom:.85rem;align-items:start}
+@media(max-width:900px){.main-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.main-grid{grid-template-columns:1fr}}
+
+/* Panel */
+.panel{background:var(--card);border:.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:.7rem}
+.panel:last-child{margin-bottom:0}
+.panel-header{padding:9px 13px;border-bottom:.5px solid var(--border);display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;transition:background .15s}
+.panel-header:hover{background:#1e2035}
+.panel-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);flex:1}
+.panel-badge{font-size:10px;padding:2px 8px;border-radius:8px;background:#1e2440;color:var(--accent);border:.5px solid #2d3a6a;white-space:nowrap;font-weight:500}
+.chevron{font-size:10px;color:var(--muted);transition:transform .2s;flex-shrink:0}
+.panel.collapsed>.panel-header>.chevron{transform:rotate(-90deg)}
+.panel.collapsed>.panel-body{display:none}
+.panel-body{padding:12px 13px}
+.panel-body.pad0{padding:0}
+
+/* Info rows */
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:.5px solid var(--border)}
+.info-row:last-child{border-bottom:none}
+.info-key{font-size:11px;color:var(--muted);font-weight:500}
+.info-val{font-size:11px;font-weight:600;text-align:right;word-break:break-all;max-width:200px;font-family:var(--mono);letter-spacing:.2px}
+
+/* Resource bars */
+.res-item{margin-bottom:10px}.res-item:last-child{margin-bottom:0}
+.res-header{display:flex;justify-content:space-between;margin-bottom:4px}
+.res-name{font-size:12px;font-weight:500}.res-val{font-size:13px;color:var(--muted);font-weight:700;font-family:var(--num)}
+.bar-track{height:5px;background:#1e2440;border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:width .5s}
+.bar-green{background:var(--green)}.bar-amber{background:var(--amber)}.bar-red{background:var(--red)}
+.barCls(p){return p>=85?'bar-red':p>=65?'bar-amber':'bar-green'}
+
+/* DDNS panel */
+.ddns-status{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:.5px solid var(--border)}
+.ddns-status:last-child{border-bottom:none}
+.ddns-icon{font-size:20px;flex-shrink:0}
+.ddns-body{flex:1;min-width:0}
+.ddns-host{font-size:13px;font-weight:600;font-family:var(--mono)}
+.ddns-meta{font-size:10px;color:var(--muted);margin-top:2px;font-family:var(--mono)}
+.ddns-badge{font-size:10px;padding:3px 9px;border-radius:6px;font-weight:600;white-space:nowrap;flex-shrink:0}
+.ddns-ok{background:#0d2d1e;color:var(--green);border:.5px solid #1a5c3a}
+.ddns-fail{background:#2d0d0d;color:var(--red);border:.5px solid #5c1a1a}
+.ddns-off{background:#252525;color:var(--muted);border:.5px solid #3a3a3a}
+
+/* WiFi card */
+.wifi-band{padding:10px 0;border-bottom:.5px solid var(--border)}
+.wifi-band:last-child{border-bottom:none}
+.wifi-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.wifi-name{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
+.wifi-ssid{font-size:12px;color:var(--accent);font-family:var(--mono);font-weight:500}
+.wifi-meta{font-size:10px;color:var(--muted);display:flex;gap:12px;font-family:var(--mono)}
+.badge-on{font-size:9px;padding:2px 6px;border-radius:4px;background:#0d2d1e;color:var(--green);border:.5px solid #1a5c3a;font-weight:600}
+.badge-off{font-size:9px;padding:2px 6px;border-radius:4px;background:#252525;color:var(--muted);border:.5px solid #3a3a3a;font-weight:600}
+
+/* BW Chart */
+.bw-panel-card{background:var(--card);border:.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:.7rem}
+.bw-header{padding:9px 13px;border-bottom:.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:background .15s}
+.bw-header:hover{background:#1e2035}
+.bw-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);display:flex;align-items:center;gap:7px}
+.bw-legend{display:flex;gap:12px;font-size:10px;align-items:center;font-weight:500}
+.bw-legend span{display:flex;align-items:center;gap:5px}
+.bw-dot{width:10px;height:3px;border-radius:2px;display:inline-block}
+.bw-body{padding:10px 13px 12px}
+#bw-canvas{width:100%;display:block}
+.bw-body.collapsed{display:none}
+#bw-rate{text-align:center;font-size:14px;color:var(--muted);margin-bottom:6px;font-family:var(--num);font-weight:600}
+
+/* Reboot button */
+.reboot-section{padding:12px 13px}
+.reboot-btn{
+  width:100%;padding:10px;border-radius:8px;
+  border:.5px solid #5c1a1a;background:#2d0d0d;
+  color:var(--red);font-size:13px;font-weight:600;
+  cursor:pointer;transition:all .2s;font-family:var(--font);
+  display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.reboot-btn:hover{background:#3d1010;border-color:var(--red)}
+.reboot-btn:disabled{opacity:.5;cursor:not-allowed}
+.reboot-confirm{display:none;margin-top:10px;text-align:center}
+.reboot-confirm p{font-size:12px;color:var(--muted);margin-bottom:8px}
+.reboot-confirm-btns{display:flex;gap:8px}
+.btn-confirm{flex:1;padding:7px;border-radius:7px;border:.5px solid #5c1a1a;background:var(--red);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)}
+.btn-cancel{flex:1;padding:7px;border-radius:7px;border:.5px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--font)}
+
+/* Skeleton */
+.skeleton{background:linear-gradient(90deg,#1a1d2e 25%,#22263a 50%,#1a1d2e 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:4px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.skel-line{height:10px;margin-bottom:7px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;animation:spin .8s linear infinite}
+.error-box{background:#1a0f0f;border:.5px solid #5c1a1a;border-radius:8px;padding:12px;color:var(--red);font-size:12px;text-align:center;grid-column:1/-1}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="hdr-left">
+    <button class="back-btn" onclick="history.back()">← Dashboard</button>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:18px">📡</span>
+      <div>
+        <div class="hdr-name">ASUS Router</div>
+        <div class="hdr-sub" id="hdr-sub">Loading...</div>
+      </div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <span class="last-update" id="last-update"></span>
+    <button class="refresh-btn" onclick="load()" id="refresh-btn">⟳ Refresh</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- Stats -->
+  <div class="stats-row" id="stats-row">
+    <div class="stat-card"><div class="stat-label">WAN</div><div class="skeleton skel-line" style="width:60%"></div></div>
+    <div class="stat-card"><div class="stat-label">DDNS</div><div class="skeleton skel-line" style="width:60%"></div></div>
+    <div class="stat-card"><div class="stat-label">CPU</div><div class="skeleton skel-line" style="width:50%"></div></div>
+    <div class="stat-card"><div class="stat-label">Memory</div><div class="skeleton skel-line" style="width:50%"></div></div>
+    <div class="stat-card"><div class="stat-label">WiFi Clients</div><div class="skeleton skel-line" style="width:50%"></div></div>
+    <div class="stat-card"><div class="stat-label">Uptime</div><div class="skeleton skel-line" style="width:70%"></div></div>
+  </div>
+
+  <!-- 3-column layout -->
+  <div class="main-grid">
+
+    <!-- Col 1: WAN + System Info -->
+    <div>
+      <div class="panel" id="panel-wan">
+        <div class="panel-header" onclick="togglePanel('panel-wan')">
+          <span class="panel-title">🌐 WAN Info</span>
+          <span class="panel-badge" id="wan-badge">—</span>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="panel-body" id="wan-panel"><div class="skeleton skel-line"></div></div>
+      </div>
+      <div class="panel" id="panel-sys">
+        <div class="panel-header" onclick="togglePanel('panel-sys')">
+          <span class="panel-title">⚙️ System Info</span>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="panel-body" id="sys-panel"><div class="skeleton skel-line"></div></div>
+      </div>
+      <div class="panel" id="panel-res">
+        <div class="panel-header" onclick="togglePanel('panel-res')">
+          <span class="panel-title">📈 Resources</span>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="panel-body" id="res-panel"><div class="skeleton skel-line"></div></div>
+      </div>
+    </div>
+
+    <!-- Col 2: DDNS + WiFi -->
+    <div>
+      <div class="panel" id="panel-ddns">
+        <div class="panel-header" onclick="togglePanel('panel-ddns')">
+          <span class="panel-title">🔗 DDNS</span>
+          <span class="panel-badge" id="ddns-badge">—</span>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="panel-body" id="ddns-panel"><div class="skeleton skel-line"></div></div>
+      </div>
+      <div class="panel" id="panel-wifi">
+        <div class="panel-header" onclick="togglePanel('panel-wifi')">
+          <span class="panel-title">📶 WiFi</span>
+          <span class="panel-badge" id="wifi-badge">—</span>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="panel-body" id="wifi-panel"><div class="skeleton skel-line"></div></div>
+      </div>
+
+      <!-- Reboot -->
+      <div class="panel">
+        <div class="panel-header" style="cursor:default">
+          <span class="panel-title">⚡ Actions</span>
+        </div>
+        <div class="reboot-section">
+          <button class="reboot-btn" id="reboot-btn" onclick="showRebootConfirm()">
+            🔄 Reboot Router
+          </button>
+          <div class="reboot-confirm" id="reboot-confirm">
+            <p>⚠️ Router sẽ reboot và mất kết nối ~60 giây</p>
+            <div class="reboot-confirm-btns">
+              <button class="btn-confirm" onclick="doReboot()">✓ Xác nhận Reboot</button>
+              <button class="btn-cancel"  onclick="hideRebootConfirm()">✕ Hủy</button>
+            </div>
+          </div>
+          <div id="reboot-msg" style="margin-top:8px;font-size:11px;text-align:center;color:var(--muted)"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Col 3: Bandwidth chart -->
+    <div>
+      <div class="bw-panel-card">
+        <div class="bw-header" onclick="toggleBw()">
+          <span class="bw-title">
+            <span id="bw-chevron" style="transition:transform .2s;display:inline-block">▼</span>
+            📶 WAN Bandwidth
+          </span>
+          <div class="bw-legend">
+            <span><span class="bw-dot" style="background:var(--green)"></span>↓ Download</span>
+            <span><span class="bw-dot" style="background:var(--accent)"></span>↑ Upload</span>
+          </div>
+        </div>
+        <div class="bw-body" id="bw-body">
+          <div id="bw-rate">Đang thu thập...</div>
+          <canvas id="bw-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ── Toggle ── */
+function togglePanel(id){document.getElementById(id)?.classList.toggle('collapsed');}
+let _bwOpen=true;
+function toggleBw(){
+  _bwOpen=!_bwOpen;
+  document.getElementById('bw-body').classList.toggle('collapsed',!_bwOpen);
+  document.getElementById('bw-chevron').style.transform=_bwOpen?'':'rotate(-90deg)';
+  if(_bwOpen)initCanvas();
+}
+
+/* ── BW chart ── */
+const BW={labels:[],rx:[],tx:[],maxPts:30};
+let prevWan=null;
+
+function initCanvas(){
+  const canvas=document.getElementById('bw-canvas');
+  if(!canvas)return;
+  const dpr=window.devicePixelRatio||1;
+  const rect=canvas.parentElement.getBoundingClientRect();
+  if(!rect.width)return;
+  canvas.width=rect.width*dpr;
+  canvas.height=180*dpr;
+  canvas.style.height='180px';
+  canvas.getContext('2d').scale(dpr,dpr);
+  drawChart(rect.width,180);
+}
+
+function updateBW(wan){
+  if(!wan)return;
+  const now=Date.now();
+  if(prevWan?.ts){
+    const dt=(now-prevWan.ts)/1000;
+    if(dt>0&&dt<120){
+      const rx=Math.max(0,(wan.rxBytes-prevWan.rx)*8/dt/1e6);
+      const tx=Math.max(0,(wan.txBytes-prevWan.tx)*8/dt/1e6);
+      const t=new Date().toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      BW.labels.push(t);BW.rx.push(+rx.toFixed(3));BW.tx.push(+tx.toFixed(3));
+      if(BW.labels.length>BW.maxPts){BW.labels.shift();BW.rx.shift();BW.tx.shift();}
+      const canvas=document.getElementById('bw-canvas');
+      if(canvas)drawChart(canvas.width/(window.devicePixelRatio||1),canvas.height/(window.devicePixelRatio||1));
+      document.getElementById('bw-rate').innerHTML=
+        '<span style="color:var(--green)">↓ <strong>'+rx.toFixed(2)+'</strong> Mbps</span>'
+        +'&emsp;<span style="color:var(--accent)">↑ <strong>'+tx.toFixed(2)+'</strong> Mbps</span>';
+    }
+  }
+  prevWan={ts:now,rx:wan.rxBytes,tx:wan.txBytes};
+}
+
+function drawChart(W,H){
+  const canvas=document.getElementById('bw-canvas');
+  if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  ctx.save();ctx.clearRect(0,0,W*(window.devicePixelRatio||1),H*(window.devicePixelRatio||1));
+  const PL=44,PR=8,PT=14,PB=18,cW=W-PL-PR,cH=H-PT-PB;
+  if(BW.rx.length<2){
+    ctx.fillStyle='#64748b';ctx.font='11px sans-serif';ctx.textAlign='center';
+    ctx.fillText('Đang thu thập... (30s/lần)',W/2,H/2);ctx.restore();return;
+  }
+  const maxVal=Math.max(...BW.rx,...BW.tx,0.1);
+  const niceCeil=v=>{const e=Math.pow(10,Math.floor(Math.log10(v)));return Math.ceil(v/e)*e;};
+  const yMax=niceCeil(maxVal*1.2);
+  for(let i=0;i<=4;i++){
+    const y=PT+cH-cH*i/4;
+    ctx.strokeStyle='#252840';ctx.lineWidth=.5;
+    ctx.beginPath();ctx.moveTo(PL,y);ctx.lineTo(PL+cW,y);ctx.stroke();
+    ctx.fillStyle='#64748b';ctx.font='9px sans-serif';ctx.textAlign='right';
+    ctx.fillText((yMax*i/4).toFixed(yMax<1?2:1)+'M',PL-3,y+3);
+  }
+  ctx.fillStyle='#64748b';ctx.font='9px sans-serif';ctx.textAlign='center';
+  BW.labels.forEach((l,i)=>{if(i%5===0){const x=PL+cW*i/(BW.maxPts-1);ctx.fillText(l,x,PT+cH+13);}});
+  const drawLine=(data,color)=>{
+    if(data.length<2)return;
+    ctx.beginPath();
+    data.forEach((v,i)=>{const x=PL+cW*i/(BW.maxPts-1),y=PT+cH-cH*v/yMax;if(i===0)ctx.moveTo(x,PT+cH);ctx.lineTo(x,y);});
+    ctx.lineTo(PL+cW*(data.length-1)/(BW.maxPts-1),PT+cH);
+    ctx.closePath();ctx.fillStyle=color+'28';ctx.fill();
+    ctx.beginPath();
+    data.forEach((v,i)=>{const x=PL+cW*i/(BW.maxPts-1),y=PT+cH-cH*v/yMax;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.stroke();
+  };
+  drawLine(BW.rx,'#34d399');drawLine(BW.tx,'#60a5fa');
+  ctx.restore();
+}
+
+/* ── Helpers ── */
+function fmtBytes(b){
+  if(!b&&b!==0)return'—';
+  if(b>=1e12)return(b/1e12).toFixed(2)+' TB';
+  if(b>=1e9)return(b/1e9).toFixed(2)+' GB';
+  if(b>=1e6)return(b/1e6).toFixed(1)+' MB';
+  if(b>=1e3)return(b/1e3).toFixed(0)+' KB';
+  return b+' B';
+}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function barCls(p){return p>=85?'bar-red':p>=65?'bar-amber':'bar-green';}
+function valCls(p){return p>=85?'c-red':p>=65?'c-amber':'c-green';}
+function infoRow(k,v){return`<div class="info-row"><span class="info-key">${k}</span><span class="info-val">${esc(v)}</span></div>`;}
+
+/* ── Reboot ── */
+function showRebootConfirm(){document.getElementById('reboot-confirm').style.display='block';}
+function hideRebootConfirm(){document.getElementById('reboot-confirm').style.display='none';}
+async function doReboot(){
+  hideRebootConfirm();
+  const btn=document.getElementById('reboot-btn');
+  const msg=document.getElementById('reboot-msg');
+  btn.disabled=true;
+  btn.innerHTML='<span class="spin">⟳</span> Đang gửi lệnh reboot...';
+  msg.textContent='';
+  try{
+    const r=await fetch('/api/asus/reboot',{method:'POST'});
+    const d=await r.json();
+    if(d.success){
+      btn.innerHTML='✓ Đã gửi lệnh reboot';
+      msg.style.color='var(--green)';
+      msg.textContent='Router đang reboot. Kết nối sẽ khôi phục sau ~60 giây.';
+      setTimeout(()=>{btn.innerHTML='🔄 Reboot Router';btn.disabled=false;msg.textContent='';},90000);
+    } else {
+      throw new Error(d.error||'Unknown error');
+    }
+  }catch(e){
+    btn.innerHTML='🔄 Reboot Router';
+    btn.disabled=false;
+    msg.style.color='var(--red)';
+    msg.textContent='Lỗi: '+e.message;
+  }
+}
+
+/* ── Render ── */
+function renderStats(d){
+  const s=d.stats||{}, wan=d.wan||{}, sys=d.system||{};
+  const wanOnline=s.wanOnline||wan.online;
+  const ddnsOk=s.ddnsWorking;
+  document.getElementById('stats-row').innerHTML=`
+    <div class="stat-card">
+      <div class="stat-label">WAN</div>
+      <div class="stat-value ${wanOnline?'c-green':'c-red'}">${wanOnline?'ON':'OFF'}</div>
+      <div class="stat-sub">${esc(wan.proto||'—')} · ${esc(wan.ip||'—')}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">DDNS</div>
+      <div class="stat-value ${ddnsOk?'c-green':d.ddns?.enabled?'c-red':'c-muted'}">${d.ddns?.enabled?(ddnsOk?'OK':'FAIL'):'OFF'}</div>
+      <div class="stat-sub">${esc(d.ddns?.hostname||'Disabled')}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">CPU</div>
+      <div class="stat-value ${valCls(s.cpuPct||0)}">${s.cpuPct??'—'}<span style="font-size:13px;color:var(--muted)">%</span></div>
+      <div class="stat-sub">Processor</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Memory</div>
+      <div class="stat-value ${valCls(s.memPct||0)}">${s.memPct??'—'}<span style="font-size:13px;color:var(--muted)">%</span></div>
+      <div class="stat-sub">RAM usage</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">WiFi Clients</div>
+      <div class="stat-value c-blue">${s.totalClients??'—'}</div>
+      <div class="stat-sub">${s.wifi24Clients??0} · 2.4G &nbsp; ${s.wifi5Clients??0} · 5G</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Uptime</div>
+      <div class="stat-value c-muted" style="font-size:16px">${esc(sys.uptime||'—')}</div>
+      <div class="stat-sub">Since last reboot</div>
+    </div>`;
+}
+
+function renderWan(wan){
+  const online=wan?.online;
+  document.getElementById('wan-badge').textContent=online?'Connected':'Offline';
+  document.getElementById('wan-badge').style.color=online?'var(--green)':'var(--red)';
+  if(!wan){document.getElementById('wan-panel').innerHTML='<div style="color:var(--muted);font-size:12px">No data</div>';return;}
+  document.getElementById('wan-panel').innerHTML=[
+    infoRow('Status', online?'🟢 Connected':'🔴 Offline'),
+    infoRow('WAN IP',  wan.ip    ||'—'),
+    infoRow('Protocol',wan.proto ||'—'),
+    infoRow('Gateway', wan.gateway||'—'),
+    infoRow('DNS',     wan.dns   ||'—'),
+    infoRow('↓ Total', fmtBytes(wan.rxBytes)),
+    infoRow('↑ Total', fmtBytes(wan.txBytes)),
+  ].join('');
+}
+
+function renderSys(sys){
+  if(!sys){document.getElementById('sys-panel').innerHTML='';return;}
+  document.getElementById('sys-panel').innerHTML=[
+    infoRow('Model',    sys.model   ||'—'),
+    infoRow('Firmware', sys.firmware||'—'),
+    infoRow('LAN IP',   sys.lanIp   ||'—'),
+    sys.mac ? infoRow('MAC', sys.mac) : '',
+  ].filter(Boolean).join('');
+  document.getElementById('hdr-sub').textContent=`${sys.model||'ASUS Router'} · ${sys.firmware||''}`;
+}
+
+function renderRes(r){
+  if(!r){document.getElementById('res-panel').innerHTML='';return;}
+  const items=[{label:'CPU',val:r.cpuPct},{label:'Memory',val:r.memPct}].filter(i=>i.val!=null);
+  document.getElementById('res-panel').innerHTML=items.map(i=>`<div class="res-item">
+    <div class="res-header"><span class="res-name">${i.label}</span><span class="res-val">${i.val}%</span></div>
+    <div class="bar-track"><div class="bar-fill ${barCls(i.val)}" style="width:${Math.min(i.val,100)}%"></div></div>
+  </div>`).join('');
+}
+
+function renderDDNS(ddns){
+  const el=document.getElementById('ddns-panel');
+  const badge=document.getElementById('ddns-badge');
+  if(!ddns||!ddns.enabled){
+    badge.textContent='Disabled';
+    badge.style.color='var(--muted)';
+    el.innerHTML='<div style="font-size:12px;color:var(--muted);text-align:center;padding:8px">DDNS is disabled</div>';
+    return;
+  }
+  const ok=ddns.working;
+  badge.textContent=ok?'✓ Working':'✗ Failed';
+  badge.style.color=ok?'var(--green)':'var(--red)';
+
+  el.innerHTML=`
+    <div class="ddns-status">
+      <div class="ddns-icon">${ok?'🟢':'🔴'}</div>
+      <div class="ddns-body">
+        <div class="ddns-host">${esc(ddns.hostname||'—')}</div>
+        <div class="ddns-meta">Provider: ${esc(ddns.server||'—')}</div>
+      </div>
+      <span class="ddns-badge ${ok?'ddns-ok':'ddns-fail'}">${ok?'ACTIVE':'FAILED'}</span>
+    </div>
+    ${infoRow('Registered IP', ddns.ip||'—')}
+    ${infoRow('Last Update',   ddns.updated||'—')}
+    <div style="margin-top:8px;padding:6px 8px;background:${ok?'#0d2d1e':'#2d0d0d'};border-radius:6px;font-size:10px;color:${ok?'var(--green)':'var(--red)'};font-family:var(--mono)">
+      ${ok?'✓ DDNS hostname đang hoạt động bình thường':'✗ DDNS chưa cập nhật hoặc có lỗi'}
+    </div>`;
+}
+
+function renderWifi(wifi,stats){
+  const band24=wifi?.band24||{},band5=wifi?.band5||{};
+  const total=(stats?.wifi24Clients||0)+(stats?.wifi5Clients||0);
+  document.getElementById('wifi-badge').textContent=`${total} clients`;
+  document.getElementById('wifi-panel').innerHTML=`
+    <div class="wifi-band">
+      <div class="wifi-row">
+        <div class="wifi-name">📡 2.4 GHz <span class="${band24.enabled?'badge-on':'badge-off'}">${band24.enabled?'ON':'OFF'}</span></div>
+        <span style="font-size:10px;color:var(--muted)">${stats?.wifi24Clients??0} clients · CH ${esc(band24.channel||'—')}</span>
+      </div>
+      <div class="wifi-ssid">${esc(band24.ssid||'—')}</div>
+    </div>
+    <div class="wifi-band">
+      <div class="wifi-row">
+        <div class="wifi-name">📡 5 GHz <span class="${band5.enabled?'badge-on':'badge-off'}">${band5.enabled?'ON':'OFF'}</span></div>
+        <span style="font-size:10px;color:var(--muted)">${stats?.wifi5Clients??0} clients · CH ${esc(band5.channel||'—')}</span>
+      </div>
+      <div class="wifi-ssid">${esc(band5.ssid||'—')}</div>
+    </div>`;
+}
+
+/* ── Load ── */
+async function load(){
+  const btn=document.getElementById('refresh-btn');
+  btn.innerHTML='<span class="spin">⟳</span>';btn.disabled=true;
+  try{
+    const r=await fetch('/api/asus');
+    const d=await r.json();
+    if(d.error){
+      document.getElementById('stats-row').innerHTML=`<div class="error-box">⚠️ ${esc(d.error)}</div>`;
+      return;
+    }
+    renderStats(d);
+    renderWan(d.wan);
+    renderSys(d.system);
+    renderRes(d.resources);
+    renderDDNS(d.ddns);
+    renderWifi(d.wifi,d.stats);
+    updateBW(d.wan);
+    document.getElementById('last-update').textContent='Updated '+new Date().toLocaleTimeString('vi-VN');
+  }catch(e){
+    document.getElementById('stats-row').innerHTML=`<div class="error-box">⚠️ ${esc(e.message)}</div>`;
+  }finally{
+    btn.innerHTML='⟳ Refresh';btn.disabled=false;
+  }
+}
+
+window.addEventListener('load',()=>{
+  initCanvas();
+  window.addEventListener('resize',initCanvas);
+  load();
+  setInterval(load,30000);
+});
+</script>
+</body>
+</html>
