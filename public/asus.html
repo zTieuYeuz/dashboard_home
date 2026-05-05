@@ -133,6 +133,27 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{display:inline-block;animation:spin .8s linear infinite}
 .error-box{background:#1a0f0f;border:.5px solid #5c1a1a;border-radius:8px;padding:12px;color:var(--red);font-size:12px;text-align:center;grid-column:1/-1}
+
+/* ── Clients table ── */
+.clients-panel{background:var(--card);border:.5px solid var(--border);border-radius:10px;overflow:hidden;margin-top:0}
+.clients-header{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;user-select:none}
+.clients-header:hover{background:rgba(255,255,255,.02)}
+.clients-title{font-size:13px;font-weight:600;flex:1}
+.clients-count{font-size:11px;padding:2px 8px;border-radius:10px;background:#1e3a5f;color:var(--accent);font-weight:600}
+.clients-table{width:100%;border-collapse:collapse;font-size:12px}
+.clients-table th{text-align:left;padding:7px 12px;font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:.5px solid var(--border);background:rgba(255,255,255,.02)}
+.clients-table td{padding:7px 12px;border-bottom:.5px solid rgba(37,40,64,.6);vertical-align:middle}
+.clients-table tr:last-child td{border-bottom:none}
+.clients-table tr:hover td{background:rgba(255,255,255,.02)}
+.ct-name{font-weight:500;color:var(--text);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ct-ip{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
+.ct-mac{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.ct-type{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:5px;white-space:nowrap}
+.ct-wired{background:rgba(96,165,250,.12);color:var(--accent)}
+.ct-24g{background:rgba(52,211,153,.12);color:var(--green)}
+.ct-5g{background:rgba(167,139,250,.12);color:var(--purple)}
+.ct-rssi{font-family:var(--mono);font-size:11px}
+.clients-body-wrap{overflow-x:auto}
 </style>
 </head>
 <body>
@@ -256,6 +277,32 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
     </div>
 
   </div>
+
+  <!-- Connected Devices -->
+  <div class="clients-panel" id="panel-clients">
+    <div class="clients-header" onclick="togglePanel('panel-clients')">
+      <span class="clients-title">🖥️ Connected Devices</span>
+      <span class="clients-count" id="clients-count">—</span>
+      <span class="chevron" style="margin-left:6px">▼</span>
+    </div>
+    <div class="panel-body" id="clients-body">
+      <div class="clients-body-wrap">
+        <table class="clients-table">
+          <thead><tr>
+            <th>Hostname</th>
+            <th>IP Address</th>
+            <th>MAC Address</th>
+            <th>Connection</th>
+            <th>Signal</th>
+          </tr></thead>
+          <tbody id="clients-tbody">
+            <tr><td colspan="5" style="text-align:center;padding:16px;color:var(--muted)"><span class="spin">⟳</span> Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -413,9 +460,9 @@ function renderStats(d){
       <div class="stat-sub">RAM usage</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">WiFi Clients</div>
+      <div class="stat-label">Devices</div>
       <div class="stat-value c-blue">${s.totalClients??'—'}</div>
-      <div class="stat-sub">${s.wifi24Clients??0} · 2.4G &nbsp; ${s.wifi5Clients??0} · 5G</div>
+      <div class="stat-sub">${s.wifi24Clients??0}·2.4G &nbsp; ${s.wifi5Clients??0}·5G &nbsp; ${s.wiredClients??0}·ETH</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Uptime</div>
@@ -510,6 +557,47 @@ function renderWifi(wifi,stats){
     </div>`;
 }
 
+/* ── Render Clients ── */
+function rssiBar(rssi){
+  if(!rssi||rssi===0)return'<span style="color:var(--muted)">—</span>';
+  const pct=Math.min(100,Math.max(0,2*(rssi+100)));
+  const col=rssi>=-60?'var(--green)':rssi>=-75?'var(--amber)':'var(--red)';
+  return`<span class="ct-rssi" style="color:${col}">${rssi} dBm</span>`;
+}
+function connBadge(type){
+  if(type==='Wired')return`<span class="ct-type ct-wired">🔌 Wired</span>`;
+  if(type==='2.4G') return`<span class="ct-type ct-24g">📶 2.4G</span>`;
+  if(type==='5G'||type==='5G-2')return`<span class="ct-type ct-5g">📶 ${type}</span>`;
+  return`<span class="ct-type ct-wired">${esc(type)}</span>`;
+}
+function renderClients(clients,stats){
+  const list=Array.isArray(clients)?clients:[];
+  const total=list.length;
+  document.getElementById('clients-count').textContent=
+    `${total} total · ${stats?.wifi24Clients||0} 2.4G · ${stats?.wifi5Clients||0} 5G · ${stats?.wiredClients||0} Wired`;
+
+  if(!total){
+    document.getElementById('clients-tbody').innerHTML=
+      '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--muted)">No devices found</td></tr>';
+    return;
+  }
+  // Sort: wired first, then 2.4G, then 5G, then by IP
+  const order={Wired:0,'2.4G':1,'5G':2,'5G-2':3};
+  const sorted=[...list].sort((a,b)=>{
+    const od=(order[a.type]??9)-(order[b.type]??9);
+    if(od!==0)return od;
+    return(a.ip||'').localeCompare(b.ip||'',undefined,{numeric:true});
+  });
+  document.getElementById('clients-tbody').innerHTML=sorted.map(c=>`
+    <tr>
+      <td class="ct-name" title="${esc(c.mac)}">${esc(c.name||'Unknown')}</td>
+      <td class="ct-ip">${esc(c.ip||'—')}</td>
+      <td class="ct-mac">${esc(c.mac||'—')}</td>
+      <td>${connBadge(c.type)}</td>
+      <td>${c.type==='Wired'?'<span style="color:var(--muted)">—</span>':rssiBar(c.rssi)}</td>
+    </tr>`).join('');
+}
+
 /* ── Load ── */
 async function load(){
   const btn=document.getElementById('refresh-btn');
@@ -527,6 +615,7 @@ async function load(){
     renderRes(d.resources);
     renderDDNS(d.ddns);
     renderWifi(d.wifi,d.stats);
+    renderClients(d.clients,d.stats);
     updateBW(d.wan);
     document.getElementById('last-update').textContent='Updated '+new Date().toLocaleTimeString('vi-VN');
   }catch(e){

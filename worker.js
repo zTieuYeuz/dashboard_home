@@ -948,30 +948,66 @@ async function handleAsus(env) {
   const token = await asusLogin(env);
   if (!token) return json({ error: 'ASUS router login failed — check credentials' }, 502);
 
-  // Build hook query: nvram_get() + appobj calls
+  // Build hook query: nvram_get() + appobj calls + client list
   const hookVars = [
     'cpu_usage(appobj)', 'memory_usage(appobj)', 'netdev(appobj)',
+    'get_clientlist()',
     'nvram_get(wan_ipaddr)', 'nvram_get(wan_gateway)', 'nvram_get(wan_dns)',
     'nvram_get(wan_proto)', 'nvram_get(link_internet)',
     'nvram_get(ddns_enable_x)', 'nvram_get(ddns_hostname_x)',
     'nvram_get(ddns_server_x)', 'nvram_get(ddns_ipaddr)', 'nvram_get(ddns_updated)',
-    'nvram_get(wl0_ssid)', 'nvram_get(wl0_channel)', 'nvram_get(wl0_radio)', 'nvram_get(wl0_sta_list)',
-    'nvram_get(wl1_ssid)', 'nvram_get(wl1_channel)', 'nvram_get(wl1_radio)', 'nvram_get(wl1_sta_list)',
+    'nvram_get(wl0_ssid)', 'nvram_get(wl0_channel)', 'nvram_get(wl0_radio)',
+    'nvram_get(wl1_ssid)', 'nvram_get(wl1_channel)', 'nvram_get(wl1_radio)',
     'nvram_get(productid)', 'nvram_get(firmver)', 'nvram_get(buildno)',
     'nvram_get(lan_ipaddr)', 'nvram_get(uptime)', 'nvram_get(label_mac)',
   ].join(';');
 
-  const [appRes, sysinfoRes, clientRes] = await Promise.all([
-    asusRequest('/appGet.cgi', 'POST', `hook=${encodeURIComponent(hookVars)}`, token, env),
-    asusRequest('/ajax_sysinfo.asp', 'GET', null, token, env),
-    asusRequest('/update_clients.asp', 'GET', null, token, env),
-  ]);
+  const appRes = await asusRequest('/appGet.cgi', 'POST', `hook=${encodeURIComponent(hookVars)}`, token, env);
 
   let app = {};
   try { app = JSON.parse(appRes.text || '{}'); } catch {}
 
-  let sysinfo = {};
-  try { sysinfo = JSON.parse(sysinfoRes.text || '{}'); } catch {}
+  // ── Parse client list ──────────────────────────────────────────────────
+  // get_clientlist() returns either a string "<MAC>><name>><ip>><isWL>><rssi>><online>><ssid>>"
+  // or a JSON object { MAC: { mac, name, ip, isWL, rssi, online, ... } }
+  function connLabel(wl) {
+    const n = parseInt(wl || 0);
+    return n === 0 ? 'Wired' : n === 1 ? '2.4G' : n === 2 ? '5G' : n === 3 ? '5G-2' : 'Unknown';
+  }
+
+  function parseClientList(raw) {
+    if (!raw) return [];
+    // Format A: plain object { MAC: {...} }
+    if (typeof raw === 'object' && !Array.isArray(raw)) {
+      return Object.values(raw).map(c => ({
+        mac:    (c.mac   || c.MAC   || '').toUpperCase(),
+        name:   c.name   || c.nickName || c.NickName || '',
+        ip:     c.ip     || c.ipAddr   || '',
+        type:   connLabel(c.isWL ?? c.type ?? 0),
+        rssi:   parseInt(c.rssi  || 0),
+        online: c.online === true || c.online === '1' || c.online === 1,
+      })).filter(c => c.mac && c.mac.length >= 12);
+    }
+    // Format B: string "<MAC>><name>><ip>><isWL>><rssi>><online>><ssid>>"
+    if (typeof raw === 'string' && raw.trim()) {
+      return raw.replace(/^</, '').split('<').filter(Boolean).map(entry => {
+        const p = entry.split('>');
+        const mac = (p[0] || '').trim().toUpperCase();
+        if (!mac || mac.length < 12) return null;
+        return {
+          mac,
+          name:   (p[1] || '').trim(),
+          ip:     (p[2] || '').trim(),
+          type:   connLabel(p[3]),
+          rssi:   parseInt(p[4] || 0),
+          online: p[5] === '1',
+        };
+      }).filter(Boolean);
+    }
+    return [];
+  }
+
+  const clients = parseClientList(app.get_clientlist).filter(c => c.online || c.ip);
 
   // ── CPU ──
   const cpuObj = app.cpu_usage || {};
@@ -1012,24 +1048,20 @@ async function handleAsus(env) {
   const ddnsNotFailed = !ddnsUpdated.toLowerCase().match(/fail|error|n\/a|none/);
   const ddnsWorking  = ddnsEnabled && ddnsHasIp && ddnsNotFailed;
 
-  // ── WiFi client counts (wl0_sta_list / wl1_sta_list are MAC lists) ──
-  const countMacs = (s) => s ? s.split(' ').filter(m => m.trim().length > 0).length : 0;
-  const wifi24Clients = countMacs(app.wl0_sta_list);
-  const wifi5Clients  = countMacs(app.wl1_sta_list);
+  // ── WiFi client counts from parsed client list ──
+  const wifi24Clients = clients.filter(c => c.type === '2.4G').length;
+  const wifi5Clients  = clients.filter(c => c.type === '5G' || c.type === '5G-2').length;
+  const wiredClients  = clients.filter(c => c.type === 'Wired').length;
+  const totalClients  = clients.length;
 
   // ── Uptime ──
-  const uptimeSec  = parseInt(app.uptime || sysinfo.uptime || 0);
+  const uptimeSec  = parseInt(app.uptime || 0);
   const uptimeDays = Math.floor(uptimeSec / 86400);
   const uptimeHrs  = Math.floor((uptimeSec % 86400) / 3600);
   const uptimeMins = Math.floor((uptimeSec % 3600) / 60);
   const uptimeStr  = uptimeDays > 0 ? `${uptimeDays}d ${uptimeHrs}h ${uptimeMins}m`
                    : uptimeHrs  > 0 ? `${uptimeHrs}h ${uptimeMins}m`
                    : `${uptimeMins}m`;
-
-  // ── Total clients (sysinfo may have count) ──
-  let totalClients = wifi24Clients + wifi5Clients;
-  // Also try from sysinfo
-  if (sysinfo.client_count) totalClients = Math.max(totalClients, parseInt(sysinfo.client_count));
 
   // Logout fire-and-forget
   asusRequest('/Logout.asp', 'GET', null, token, env).catch(() => {});
@@ -1076,8 +1108,9 @@ async function handleAsus(env) {
     },
     stats: {
       wanOnline, ddnsWorking, cpuPct, memPct,
-      totalClients, wifi24Clients, wifi5Clients,
+      totalClients, wifi24Clients, wifi5Clients, wiredClients,
     },
+    clients,
   });
 }
 
