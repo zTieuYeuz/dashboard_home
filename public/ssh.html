@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SSH Terminal</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d14;--surface:#131620;--card:#1a1d2e;--border:#252840;
+  --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
+  --green:#34d399;--red:#f87171;--amber:#fbbf24;
+}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text)}
+
+/* ── Header ── */
+.header{
+  background:var(--surface);border-bottom:.5px solid var(--border);
+  padding:0 1.25rem;height:48px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:relative;z-index:10;flex-shrink:0;
+}
+.hdr-left{display:flex;align-items:center;gap:10px}
+.back-btn{
+  font-size:12px;padding:4px 10px;border-radius:6px;
+  border:.5px solid var(--border);background:transparent;
+  color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.back-btn:hover{color:var(--text);border-color:#3d4260}
+.hdr-title{display:flex;align-items:center;gap:8px}
+.hdr-name{font-size:14px;font-weight:600}
+.hdr-sub{font-size:11px;color:var(--muted)}
+
+.hdr-servers{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow-x:auto;max-width:600px}
+.server-chip{
+  font-size:11px;padding:3px 10px;border-radius:20px;
+  border:.5px solid var(--border);background:var(--card);
+  color:var(--muted);cursor:pointer;transition:all .15s;
+  white-space:nowrap;display:flex;align-items:center;gap:5px;flex-shrink:0;
+}
+.server-chip:hover{color:var(--text);border-color:#3d4260}
+.server-chip.active{background:#1e3a5f;color:var(--accent);border-color:var(--accent)}
+.server-chip .dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
+.server-chip .dot.red{background:var(--red)}
+.server-chip .dot.amber{background:var(--amber)}
+
+.hdr-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.open-btn{
+  font-size:12px;padding:4px 10px;border-radius:6px;
+  border:.5px solid var(--border);background:transparent;
+  color:var(--accent);cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.open-btn:hover{background:#1e3a5f;border-color:var(--accent)}
+.pop-btn{
+  font-size:12px;padding:4px 10px;border-radius:6px;
+  border:.5px solid var(--border);background:transparent;
+  color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.pop-btn:hover{color:var(--text)}
+
+/* ── Iframe wrapper ── */
+.iframe-wrap{
+  position:relative;
+  height:calc(100vh - 48px);
+  display:flex;flex-direction:column;
+}
+iframe{
+  width:100%;flex:1;border:none;display:block;
+  background:#000;
+}
+
+/* ── Blocked fallback ── */
+.blocked{
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;gap:16px;text-align:center;padding:2rem;
+}
+.blocked .icon{font-size:48px}
+.blocked h2{font-size:18px;font-weight:600}
+.blocked p{font-size:13px;color:var(--muted);max-width:400px;line-height:1.6}
+.blocked .btn{
+  font-size:13px;padding:8px 20px;border-radius:8px;
+  background:var(--accent);color:#0b0d14;border:none;
+  cursor:pointer;font-weight:600;text-decoration:none;display:inline-block;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="hdr-left">
+    <button class="back-btn" onclick="history.back()">← Dashboard</button>
+    <div class="hdr-title">
+      <span style="font-size:16px">🖧</span>
+      <div>
+        <div class="hdr-name">SSH Terminal</div>
+        <div class="hdr-sub" id="hdr-sub">Termix · Web SSH</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick-connect server chips -->
+  <div class="hdr-servers" id="server-chips">
+    <div class="server-chip active" onclick="connectTo('default')" data-key="default">
+      <span class="dot"></span> All Servers
+    </div>
+    <div class="server-chip" onclick="connectTo('casaos')" data-key="casaos">
+      <span class="dot"></span> CasaOS
+    </div>
+    <div class="server-chip" onclick="connectTo('cisco')" data-key="cisco">
+      <span class="dot"></span> Cisco-Home
+    </div>
+    <div class="server-chip" onclick="connectTo('openclaw')" data-key="openclaw">
+      <span class="dot"></span> Openclaw
+    </div>
+    <div class="server-chip" onclick="connectTo('yunohost')" data-key="yunohost">
+      <span class="dot red"></span> YunoHost
+    </div>
+  </div>
+
+  <div class="hdr-right">
+    <button class="pop-btn" onclick="openPopup()" title="Mở cửa sổ riêng">⛶ Pop out</button>
+    <a href="https://termix.home-server.id.vn" target="_blank">
+      <button class="open-btn">🔗 Mở Termix</button>
+    </a>
+  </div>
+</div>
+
+<div class="iframe-wrap">
+  <iframe
+    id="termix-frame"
+    src="https://termix.home-server.id.vn"
+    allow="clipboard-read; clipboard-write"
+    sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation"
+    title="Termix SSH Terminal"
+  ></iframe>
+
+  <!-- Fallback nếu iframe bị block -->
+  <div class="blocked" id="blocked-msg">
+    <div class="icon">🔒</div>
+    <h2>Không thể nhúng Termix</h2>
+    <p>Termix đang block iframe embedding. Anh có thể mở trực tiếp trong tab mới.</p>
+    <a href="https://termix.home-server.id.vn" target="_blank" class="btn">Mở Termix →</a>
+  </div>
+</div>
+
+<script>
+const TERMIX_BASE = 'https://termix.home-server.id.vn';
+
+// Mapping server chip → Termix URL
+// Chỉnh lại theo cấu trúc URL của Termix nếu cần
+const SERVER_URLS = {
+  default:   TERMIX_BASE,
+  casaos:    TERMIX_BASE,   // Termix tự nhớ connection cuối
+  cisco:     TERMIX_BASE,
+  openclaw:  TERMIX_BASE,
+  yunohost:  TERMIX_BASE,
+};
+
+let currentKey = 'default';
+
+function connectTo(key) {
+  currentKey = key;
+  // Update chips
+  document.querySelectorAll('.server-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.key === key);
+  });
+  // Update iframe
+  const url = SERVER_URLS[key] || TERMIX_BASE;
+  const frame = document.getElementById('termix-frame');
+  if (frame.src !== url) frame.src = url;
+  // Update subtitle
+  const chip = document.querySelector(`.server-chip[data-key="${key}"]`);
+  if (chip) {
+    document.getElementById('hdr-sub').textContent =
+      'Termix · ' + chip.textContent.trim();
+  }
+}
+
+function openPopup() {
+  const url = SERVER_URLS[currentKey] || TERMIX_BASE;
+  window.open(url, 'termix-popup',
+    'width=1200,height=800,menubar=no,toolbar=no,location=no,status=no');
+}
+
+// Detect if iframe was blocked (X-Frame-Options / CSP)
+const frame = document.getElementById('termix-frame');
+let loaded = false;
+
+frame.addEventListener('load', function() {
+  loaded = true;
+  // Try to detect blank/error page
+  try {
+    const doc = frame.contentDocument || frame.contentWindow?.document;
+    if (doc && (doc.body?.innerHTML === '' || doc.title === 'about:blank')) {
+      showBlocked();
+    }
+  } catch(e) {
+    // Cross-origin = frame loaded OK (expected for external sites)
+  }
+});
+
+// If no load event in 10s, assume blocked
+setTimeout(function() {
+  if (!loaded) showBlocked();
+}, 10000);
+
+function showBlocked() {
+  document.getElementById('termix-frame').style.display = 'none';
+  document.getElementById('blocked-msg').style.display = 'flex';
+}
+
+// Handle keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+  // Ctrl+Shift+T = open in new tab
+  if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+    window.open(SERVER_URLS[currentKey] || TERMIX_BASE, '_blank');
+  }
+});
+</script>
+</body>
+</html>
