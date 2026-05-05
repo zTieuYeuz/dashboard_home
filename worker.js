@@ -1152,6 +1152,17 @@ function json(data, status = 200) {
    Web Proxy — fetch any HTTPS URL, strip frame-blocking headers
    so it can be embedded in an iframe on the dashboard
    ═══════════════════════════════════════════════ */
+function proxyErr(msg, url) {
+  return new Response(
+    `<html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:2rem;background:#0b0d14;color:#e2e8f0">
+      <h2 style="color:#f87171;margin-bottom:1rem">⚠ Không thể kết nối</h2>
+      <p style="white-space:pre-line;line-height:1.7;color:#cbd5e1">${msg}</p>
+      ${url ? `<p style="margin-top:1rem;font-size:12px;color:#64748b">URL: ${url}</p>` : ''}
+    </body></html>`,
+    { status: 502, headers: { 'content-type': 'text/html;charset=utf-8' } }
+  );
+}
+
 async function handleProxy(request, env) {
   const reqUrl = new URL(request.url);
   const target = reqUrl.searchParams.get('url');
@@ -1162,7 +1173,15 @@ async function handleProxy(request, env) {
     return new Response('Invalid URL', { status: 400 });
   }
   if (targetUrl.protocol !== 'https:')
-    return new Response('Only HTTPS URLs are allowed', { status: 400 });
+    return proxyErr('Chỉ hỗ trợ URL HTTPS.', target);
+
+  // Block private/local IPs — Worker runs on Cloudflare Edge, cannot reach LAN
+  const h = targetUrl.hostname;
+  const isPrivate = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|localhost$)/i.test(h);
+  if (isPrivate) return proxyErr(
+    `"${h}" là địa chỉ IP nội bộ — Cloudflare Worker không thể kết nối tới LAN của anh.\n\n` +
+    `Để dùng tính năng này, anh cần tạo Cloudflare Tunnel cho dịch vụ này trước,\n` +
+    `rồi dùng URL tunnel (VD: https://fortigate-ui.home-server.id.vn) thay vì IP local.`, target);
 
   // Forward CF Access credentials for internal services
   const cfId  = env.CF_ACCESS_CLIENT_ID;
@@ -1211,14 +1230,7 @@ async function handleProxy(request, env) {
 
     return new Response(res.body, { status: res.status, headers: out });
   } catch (e) {
-    return new Response(
-      `<html><body style="font-family:sans-serif;padding:2rem;background:#0b0d14;color:#e2e8f0">
-        <h2 style="color:#f87171">⚠ Proxy Error</h2>
-        <p>${e.message}</p>
-        <p style="color:#64748b;font-size:13px">URL: ${target}</p>
-      </body></html>`,
-      { status: 502, headers: { 'content-type': 'text/html' } }
-    );
+    return proxyErr(`Lỗi kết nối: ${e.message}\n\nKiểm tra lại URL và đảm bảo dịch vụ đang chạy và có Cloudflare Tunnel.`, target);
   }
 }
 
