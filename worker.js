@@ -4,6 +4,7 @@ const SERVICES = [
   { id: 'casaos',      name: 'CasaOS',         checkUrl: 'https://casaos.home-server.id.vn' },
   { id: '9router',     name: '9Router',        checkUrl: 'https://9router.home-server.id.vn' },
   { id: 'uptime-kuma', name: 'Uptime Kuma',    checkUrl: null },
+  { id: 'ssh',         name: 'SSH Terminal',  checkUrl: 'https://termix.home-server.id.vn' },
 ];
 
 const N8N_BASE        = 'https://n8n-home.home-server.id.vn/api/v1';
