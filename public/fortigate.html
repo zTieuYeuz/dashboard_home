@@ -38,43 +38,22 @@ html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-se
 .stat-sub{font-size:9px;color:var(--muted);margin-top:2px}
 .c-green{color:var(--green)}.c-red{color:var(--red)}.c-amber{color:var(--amber)}.c-blue{color:var(--accent)}.c-purple{color:var(--purple)}
 
-/* ── BW Chart ── */
-.bw-panel{background:var(--card);border:.5px solid var(--border);border-radius:10px;margin-bottom:.85rem;overflow:hidden}
-.bw-header{padding:8px 14px;border-bottom:.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
-.bw-header:hover{background:#1e2035}
-.bw-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);display:flex;align-items:center;gap:8px}
-.bw-legend{display:flex;gap:12px;font-size:10px;align-items:center}
-.bw-legend span{display:flex;align-items:center;gap:4px}
-.bw-dot{width:8px;height:3px;border-radius:2px;display:inline-block}
-.bw-body{padding:6px 14px 10px}
-#bw-canvas{width:100%;height:110px;display:block}
-.bw-body.collapsed{display:none}
-
-/* ── Layout: sidebar + main ── */
+/* ── 3-column body grid ── */
+/*  col1: sidebar(220px) | col2: interfaces(1fr) | col3: bandwidth(420px) */
 .body-grid{
   display:grid;
-  grid-template-columns:240px 1fr;
+  grid-template-columns:220px 1fr 420px;
   gap:.85rem;
   align-items:start;
   margin-bottom:.85rem;
 }
-@media(max-width:900px){.body-grid{grid-template-columns:1fr}}
-
-/* sidebar: stacked compact panels */
-.sidebar{display:flex;flex-direction:column;gap:.6rem}
-
-/* main area: interfaces + ssl vpn side by side (auto-balance) */
-.main-area{display:flex;flex-direction:column;gap:.6rem}
-.main-top{
-  display:grid;
-  grid-template-columns:1fr 280px;
-  gap:.6rem;
-  align-items:start;
-}
-@media(max-width:700px){.main-top{grid-template-columns:1fr}}
+@media(max-width:1200px){.body-grid{grid-template-columns:200px 1fr 360px}}
+@media(max-width:900px){.body-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.body-grid{grid-template-columns:1fr}}
 
 /* ── Panel ── */
-.panel{background:var(--card);border:.5px solid var(--border);border-radius:10px;overflow:hidden}
+.panel{background:var(--card);border:.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:.65rem}
+.panel:last-child{margin-bottom:0}
 .panel-header{
   padding:7px 11px;border-bottom:.5px solid var(--border);
   display:flex;align-items:center;gap:6px;
@@ -89,6 +68,9 @@ html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-se
 .panel-body{padding:10px 11px}
 .panel-body.pad0{padding:0}
 
+/* ── Sidebar ── */
+.sidebar{display:flex;flex-direction:column}
+
 /* ── Resource bars ── */
 .res-item{margin-bottom:7px}.res-item:last-child{margin-bottom:0}
 .res-header{display:flex;justify-content:space-between;margin-bottom:3px}
@@ -101,38 +83,61 @@ html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-se
 .info-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:.5px solid var(--border)}
 .info-row:last-child{border-bottom:none}
 .info-key{font-size:10px;color:var(--muted)}
-.info-val{font-size:10px;font-weight:500;text-align:right;word-break:break-all;max-width:145px}
+.info-val{font-size:10px;font-weight:500;text-align:right;word-break:break-all;max-width:130px}
 
-/* ── Interface list ── */
-.iface-item{display:flex;align-items:center;padding:5px 0;border-bottom:.5px solid var(--border);gap:7px}
+/* ── Interfaces: 2-column grid inside panel ── */
+.iface-grid{display:grid;grid-template-columns:1fr 1fr}
+.iface-item{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 10px;
+  border-bottom:.5px solid #1e2440;
+  border-right:.5px solid #1e2440;
+  min-width:0;
+}
+.iface-item:nth-child(even){border-right:none}
+/* remove bottom border from last row */
+.iface-item:nth-last-child(-n+2){border-bottom:none}
+/* if odd total, last item spans nothing — keep border-bottom off for last */
 .iface-item:last-child{border-bottom:none}
 .dot8{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .dot8.up{background:var(--green)}.dot8.down{background:var(--red)}
-.iface-info{flex:1;min-width:0}
-.iface-name{font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px}
-.iface-ip{font-size:10px;color:var(--accent);font-family:monospace;margin-top:1px}
-.iface-right{text-align:right;font-size:9px;color:var(--muted);flex-shrink:0}
+.iface-info{flex:1;min-width:0;overflow:hidden}
+.iface-name{font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.iface-ip{font-size:9px;color:var(--accent);font-family:monospace;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iface-right{text-align:right;font-size:9px;color:var(--muted);flex-shrink:0;white-space:nowrap}
 .iface-speed{font-size:10px;font-weight:500;color:var(--text)}
 .badge-up{font-size:8px;padding:1px 4px;border-radius:3px;background:#0d2d1e;color:var(--green);border:.5px solid #1a5c3a}
 .badge-down{font-size:8px;padding:1px 4px;border-radius:3px;background:#2d0d0d;color:var(--red);border:.5px solid #5c1a1a}
 .badge-on{font-size:8px;padding:1px 4px;border-radius:3px;background:#0d1e2d;color:var(--accent);border:.5px solid #1a3a5c}
 
 /* ── SSL VPN ── */
-.ssl-user{padding:7px 0;border-bottom:.5px solid var(--border)}
+.ssl-user{padding:6px 0;border-bottom:.5px solid var(--border)}
 .ssl-user:last-child{border-bottom:none}
 .ssl-user-header{display:flex;align-items:center;justify-content:space-between;gap:6px}
 .ssl-user-name{font-size:11px;font-weight:600;display:flex;align-items:center;gap:5px}
-.ssl-user-meta{font-size:10px;color:var(--muted);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap}
-.ssl-empty{font-size:11px;color:var(--muted);text-align:center;padding:10px 6px}
+.ssl-user-meta{font-size:10px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap}
+.ssl-empty{font-size:11px;color:var(--muted);text-align:center;padding:8px 6px}
 
 /* ── VPN IPSec ── */
-.vpn-item{padding:6px 0;border-bottom:.5px solid var(--border)}
+.vpn-item{padding:5px 0;border-bottom:.5px solid var(--border)}
 .vpn-item:last-child{border-bottom:none}
 .vpn-header{display:flex;align-items:center;justify-content:space-between;gap:6px}
 .vpn-name{font-size:11px;font-weight:600;display:flex;align-items:center;gap:5px}
 .vpn-rgwy{font-size:9px;color:var(--muted);font-family:monospace}
 .vpn-tunnels{padding-left:10px;margin-top:2px}
 .vpn-tunnel-row{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);padding:1px 0}
+
+/* ── BW Chart panel (col 3) ── */
+.bw-panel-card{background:var(--card);border:.5px solid var(--border);border-radius:10px;overflow:hidden}
+.bw-header{padding:7px 11px;border-bottom:.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:background .15s}
+.bw-header:hover{background:#1e2035}
+.bw-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.bw-legend{display:flex;gap:10px;font-size:9px;align-items:center;flex-wrap:wrap}
+.bw-legend span{display:flex;align-items:center;gap:4px}
+.bw-dot{width:8px;height:3px;border-radius:2px;display:inline-block}
+.bw-body{padding:8px 11px 10px}
+#bw-canvas{width:100%;display:block}
+.bw-body.collapsed{display:none}
 
 /* ── Policy table ── */
 .policy-wrap{overflow-x:auto}
@@ -194,30 +199,11 @@ html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-se
     <div class="stat-card"><div class="stat-label">Policies</div><div class="skeleton skel-line" style="width:50%"></div></div>
   </div>
 
-  <!-- WAN1 Bandwidth (collapsible) -->
-  <div class="bw-panel">
-    <div class="bw-header" onclick="toggleBw()">
-      <span class="bw-title">
-        <span id="bw-chevron" style="font-size:10px;color:var(--muted);transition:transform .2s;display:inline-block">▼</span>
-        📶 WAN1 Bandwidth
-      </span>
-      <div class="bw-legend">
-        <span><span class="bw-dot" style="background:var(--green)"></span> Download</span>
-        <span><span class="bw-dot" style="background:var(--accent)"></span> Upload</span>
-        <span id="bw-current" style="color:var(--muted)">Đang thu thập...</span>
-      </div>
-    </div>
-    <div class="bw-body" id="bw-body">
-      <canvas id="bw-canvas"></canvas>
-    </div>
-  </div>
-
-  <!-- Sidebar + Main -->
+  <!-- 3-column body -->
   <div class="body-grid">
 
-    <!-- LEFT SIDEBAR: compact info panels -->
+    <!-- COL 1: Sidebar (compact info) -->
     <div class="sidebar">
-
       <div class="panel" id="panel-res">
         <div class="panel-header" onclick="togglePanel('panel-res')">
           <span class="panel-title">📈 Resources</span>
@@ -225,7 +211,6 @@ html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-se
         </div>
         <div class="panel-body" id="res-panel"><div class="skeleton skel-line"></div></div>
       </div>
-
       <div class="panel" id="panel-sys">
         <div class="panel-header" onclick="togglePanel('panel-sys')">
           <span class="panel-title">⚙️ System Info</span>
@@ -233,7 +218,6 @@ html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-se
         </div>
         <div class="panel-body" id="sys-panel"><div class="skeleton skel-line"></div></div>
       </div>
-
       <div class="panel" id="panel-ssl">
         <div class="panel-header" onclick="togglePanel('panel-ssl')">
           <span class="panel-title">🔐 SSL VPN</span>
@@ -242,7 +226,6 @@ html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-se
         </div>
         <div class="panel-body" id="ssl-panel"><div class="skeleton skel-line"></div></div>
       </div>
-
       <div class="panel" id="panel-vpn">
         <div class="panel-header" onclick="togglePanel('panel-vpn')">
           <span class="panel-title">🔒 VPN IPSec</span>
@@ -251,18 +234,39 @@ html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-se
         </div>
         <div class="panel-body" id="vpn-panel"><div class="skeleton skel-line"></div></div>
       </div>
-
     </div>
 
-    <!-- RIGHT MAIN: Interfaces (full height) -->
-    <div class="main-area">
+    <!-- COL 2: Interfaces (2-col grid, compact) -->
+    <div>
       <div class="panel" id="panel-iface">
         <div class="panel-header" onclick="togglePanel('panel-iface')">
           <span class="panel-title">🌐 Interfaces</span>
           <span class="panel-badge" id="iface-badge">—</span>
           <span class="chevron">▼</span>
         </div>
-        <div class="panel-body" id="iface-panel"><div class="skeleton skel-line"></div></div>
+        <div class="panel-body pad0" id="iface-panel">
+          <div class="iface-grid"><div style="padding:16px;color:var(--muted);font-size:11px">Đang tải...</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COL 3: WAN1 Bandwidth chart -->
+    <div>
+      <div class="bw-panel-card">
+        <div class="bw-header" onclick="toggleBw()">
+          <span class="bw-title">
+            <span id="bw-chevron" style="transition:transform .2s;display:inline-block">▼</span>
+            📶 WAN1 Bandwidth
+          </span>
+          <div class="bw-legend">
+            <span><span class="bw-dot" style="background:var(--green)"></span>↓</span>
+            <span><span class="bw-dot" style="background:var(--accent)"></span>↑</span>
+          </div>
+        </div>
+        <div class="bw-body" id="bw-body">
+          <div id="bw-rate" style="text-align:center;font-size:11px;color:var(--muted);margin-bottom:4px">Đang thu thập...</div>
+          <canvas id="bw-canvas"></canvas>
+        </div>
       </div>
     </div>
 
@@ -300,96 +304,95 @@ html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-se
 </div>
 
 <script>
-/* ── Toggle panels ── */
-function togglePanel(id) {
-  document.getElementById(id)?.classList.toggle('collapsed');
-}
-let _bwOpen = true;
-function toggleBw() {
-  _bwOpen = !_bwOpen;
-  document.getElementById('bw-body').classList.toggle('collapsed', !_bwOpen);
-  document.getElementById('bw-chevron').style.transform = _bwOpen ? '' : 'rotate(-90deg)';
-  if (_bwOpen) initCanvas();
+/* ── Toggle ── */
+function togglePanel(id){document.getElementById(id)?.classList.toggle('collapsed');}
+let _bwOpen=true;
+function toggleBw(){
+  _bwOpen=!_bwOpen;
+  document.getElementById('bw-body').classList.toggle('collapsed',!_bwOpen);
+  document.getElementById('bw-chevron').style.transform=_bwOpen?'':'rotate(-90deg)';
+  if(_bwOpen)initCanvas();
 }
 
 /* ── Bandwidth chart ── */
-const BW = { labels:[], rx:[], tx:[], maxPts:30 };
-let prevWan1 = null;
+const BW={labels:[],rx:[],tx:[],maxPts:30};
+let prevWan1=null;
 
-function initCanvas() {
-  const canvas = document.getElementById('bw-canvas');
-  if (!canvas) return;
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.parentElement.getBoundingClientRect();
-  if (!rect.width) return;
-  canvas.width  = rect.width * dpr;
-  canvas.height = 110 * dpr;
-  canvas.style.height = '110px';
-  const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-  drawBwChart(rect.width, 110);
+function initCanvas(){
+  const canvas=document.getElementById('bw-canvas');
+  if(!canvas)return;
+  const dpr=window.devicePixelRatio||1;
+  const rect=canvas.parentElement.getBoundingClientRect();
+  if(!rect.width)return;
+  canvas.width=rect.width*dpr;
+  canvas.height=160*dpr;
+  canvas.style.height='160px';
+  const ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  drawBwChart(rect.width,160);
 }
 
-function updateBandwidth(ifaces) {
-  const wan1 = (ifaces||[]).find(i=>i.name==='wan1');
-  if (!wan1) return;
-  const now = Date.now();
-  if (prevWan1?.ts) {
-    const dt = (now - prevWan1.ts) / 1000;
-    if (dt > 0 && dt < 120) {
-      const rxMbps = Math.max(0, (wan1.rxBytes - prevWan1.rx) * 8 / dt / 1e6);
-      const txMbps = Math.max(0, (wan1.txBytes - prevWan1.tx) * 8 / dt / 1e6);
-      const t = new Date().toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-      BW.labels.push(t); BW.rx.push(+rxMbps.toFixed(3)); BW.tx.push(+txMbps.toFixed(3));
-      if (BW.labels.length > BW.maxPts) { BW.labels.shift(); BW.rx.shift(); BW.tx.shift(); }
-      const canvas = document.getElementById('bw-canvas');
-      if (canvas) drawBwChart(canvas.width / (window.devicePixelRatio||1), canvas.height / (window.devicePixelRatio||1));
-      document.getElementById('bw-current').textContent =
-        '↓ ' + rxMbps.toFixed(2) + ' Mbps  ↑ ' + txMbps.toFixed(2) + ' Mbps';
+function updateBandwidth(ifaces){
+  const wan1=(ifaces||[]).find(i=>i.name==='wan1');
+  if(!wan1)return;
+  const now=Date.now();
+  if(prevWan1?.ts){
+    const dt=(now-prevWan1.ts)/1000;
+    if(dt>0&&dt<120){
+      const rxMbps=Math.max(0,(wan1.rxBytes-prevWan1.rx)*8/dt/1e6);
+      const txMbps=Math.max(0,(wan1.txBytes-prevWan1.tx)*8/dt/1e6);
+      const t=new Date().toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      BW.labels.push(t);BW.rx.push(+rxMbps.toFixed(3));BW.tx.push(+txMbps.toFixed(3));
+      if(BW.labels.length>BW.maxPts){BW.labels.shift();BW.rx.shift();BW.tx.shift();}
+      const canvas=document.getElementById('bw-canvas');
+      if(canvas)drawBwChart(canvas.width/(window.devicePixelRatio||1),canvas.height/(window.devicePixelRatio||1));
+      document.getElementById('bw-rate').innerHTML=
+        '<span style="color:var(--green)">↓ '+rxMbps.toFixed(2)+' Mbps</span>'
+        +'&nbsp;&nbsp;<span style="color:var(--accent)">↑ '+txMbps.toFixed(2)+' Mbps</span>';
     }
   }
-  prevWan1 = { ts: now, rx: wan1.rxBytes, tx: wan1.txBytes };
+  prevWan1={ts:now,rx:wan1.rxBytes,tx:wan1.txBytes};
 }
 
-function drawBwChart(W, H) {
-  const canvas = document.getElementById('bw-canvas');
-  if (!canvas) return;
-  const dpr = window.devicePixelRatio || 1;
-  const ctx = canvas.getContext('2d');
+function drawBwChart(W,H){
+  const canvas=document.getElementById('bw-canvas');
+  if(!canvas)return;
+  const dpr=window.devicePixelRatio||1;
+  const ctx=canvas.getContext('2d');
   ctx.save();
-  ctx.clearRect(0, 0, W*dpr, H*dpr);
-  const PAD_L=44,PAD_R=10,PAD_T=16,PAD_B=16;
-  const cW=W-PAD_L-PAD_R, cH=H-PAD_T-PAD_B;
-  if (BW.rx.length < 2) {
-    ctx.fillStyle='#64748b'; ctx.font='11px sans-serif'; ctx.textAlign='center';
-    ctx.fillText('Đang thu thập dữ liệu... (30s / lần)', W/2, H/2);
-    ctx.restore(); return;
+  ctx.clearRect(0,0,W*dpr,H*dpr);
+  const PAD_L=42,PAD_R=8,PAD_T=14,PAD_B=18;
+  const cW=W-PAD_L-PAD_R,cH=H-PAD_T-PAD_B;
+  if(BW.rx.length<2){
+    ctx.fillStyle='#64748b';ctx.font='11px sans-serif';ctx.textAlign='center';
+    ctx.fillText('Đang thu thập... (30s/lần)',W/2,H/2);
+    ctx.restore();return;
   }
-  const maxVal = Math.max(...BW.rx, ...BW.tx, 0.1);
-  const niceCeil = v => { const e=Math.pow(10,Math.floor(Math.log10(v))); return Math.ceil(v/e)*e; };
-  const yMax = niceCeil(maxVal*1.2);
-  for (let i=0;i<=4;i++) {
+  const maxVal=Math.max(...BW.rx,...BW.tx,0.1);
+  const niceCeil=v=>{const e=Math.pow(10,Math.floor(Math.log10(v)));return Math.ceil(v/e)*e;};
+  const yMax=niceCeil(maxVal*1.2);
+  for(let i=0;i<=4;i++){
     const y=PAD_T+cH-cH*i/4;
-    ctx.strokeStyle='#252840'; ctx.lineWidth=.5;
-    ctx.beginPath(); ctx.moveTo(PAD_L,y); ctx.lineTo(PAD_L+cW,y); ctx.stroke();
-    ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='right';
-    ctx.fillText((yMax*i/4).toFixed(yMax<1?2:1)+'M', PAD_L-3, y+3);
+    ctx.strokeStyle='#252840';ctx.lineWidth=.5;
+    ctx.beginPath();ctx.moveTo(PAD_L,y);ctx.lineTo(PAD_L+cW,y);ctx.stroke();
+    ctx.fillStyle='#64748b';ctx.font='9px sans-serif';ctx.textAlign='right';
+    ctx.fillText((yMax*i/4).toFixed(yMax<1?2:1)+'M',PAD_L-3,y+3);
   }
-  ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+  ctx.fillStyle='#64748b';ctx.font='9px sans-serif';ctx.textAlign='center';
   BW.labels.forEach((lbl,i)=>{
-    if(i%5===0){ const x=PAD_L+cW*i/(BW.maxPts-1); ctx.fillText(lbl, x, PAD_T+cH+12); }
+    if(i%5===0){const x=PAD_L+cW*i/(BW.maxPts-1);ctx.fillText(lbl,x,PAD_T+cH+13);}
   });
   const drawLine=(data,color)=>{
     if(data.length<2)return;
     ctx.beginPath();
-    data.forEach((v,i)=>{ const x=PAD_L+cW*i/(BW.maxPts-1),y=PAD_T+cH-cH*v/yMax; if(i===0)ctx.moveTo(x,PAD_T+cH); ctx.lineTo(x,y); });
-    ctx.lineTo(PAD_L+cW*(data.length-1)/(BW.maxPts-1), PAD_T+cH);
-    ctx.closePath(); ctx.fillStyle=color+'28'; ctx.fill();
+    data.forEach((v,i)=>{const x=PAD_L+cW*i/(BW.maxPts-1),y=PAD_T+cH-cH*v/yMax;if(i===0)ctx.moveTo(x,PAD_T+cH);ctx.lineTo(x,y);});
+    ctx.lineTo(PAD_L+cW*(data.length-1)/(BW.maxPts-1),PAD_T+cH);
+    ctx.closePath();ctx.fillStyle=color+'28';ctx.fill();
     ctx.beginPath();
-    data.forEach((v,i)=>{ const x=PAD_L+cW*i/(BW.maxPts-1),y=PAD_T+cH-cH*v/yMax; i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
-    ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.stroke();
+    data.forEach((v,i)=>{const x=PAD_L+cW*i/(BW.maxPts-1),y=PAD_T+cH-cH*v/yMax;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.stroke();
   };
-  drawLine(BW.rx,'#34d399'); drawLine(BW.tx,'#60a5fa');
+  drawLine(BW.rx,'#34d399');drawLine(BW.tx,'#60a5fa');
   ctx.restore();
 }
 
@@ -404,7 +407,7 @@ function fmtBytes(b){
 }
 function fmtDur(s){
   const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;
-  if(h>0)return`${h}h ${m}m`; if(m>0)return`${m}m ${sc}s`; return`${sc}s`;
+  if(h>0)return`${h}h ${m}m`;if(m>0)return`${m}m ${sc}s`;return`${sc}s`;
 }
 function barCls(p){return p>=85?'bar-red':p>=65?'bar-amber':'bar-green';}
 function valCls(p){return p>=85?'c-red':p>=65?'c-amber':'c-green';}
@@ -438,10 +441,10 @@ function filterPolicies(){
       <td>${p.nat==='enable'?'<span class="badge-on">NAT</span>':''}</td>
       <td>${p.status==='enable'?'<span class="badge-enable">ON</span>':'<span class="badge-disable">OFF</span>'}</td>
     </tr>`).join('')
-    :'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:16px">Không tìm thấy policy</td></tr>';
+    :'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:16px">Không tìm thấy</td></tr>';
 }
 
-/* ── Render functions ── */
+/* ── Render ── */
 function renderStats(d){
   const r=d.resources||{},s=d.stats||{};
   const cpu=r.cpuPct??'—',mem=r.memPct??'—';
@@ -487,7 +490,7 @@ function renderSSL(ssl){
   document.getElementById('ssl-panel').innerHTML=ssl.users.map(u=>`
     <div class="ssl-user">
       <div class="ssl-user-header">
-        <div class="ssl-user-name">👤 ${esc(u.user)} <span class="badge-enable">ONLINE</span></div>
+        <div class="ssl-user-name">👤 ${esc(u.user)} <span class="badge-on">ONLINE</span></div>
         <span style="font-size:10px;color:var(--muted)">${fmtDur(u.duration)}</span>
       </div>
       <div class="ssl-user-meta">
@@ -501,17 +504,24 @@ function renderSSL(ssl){
 
 function renderInterfaces(ifaces,stats){
   document.getElementById('iface-badge').textContent=`${stats?.ifaceUp??0} up / ${stats?.ifaceTotal??0}`;
-  if(!ifaces?.length){document.getElementById('iface-panel').innerHTML='<div class="ssl-empty">No data</div>';return;}
-  document.getElementById('iface-panel').innerHTML=ifaces.map(i=>{
+  const panel=document.getElementById('iface-panel');
+  if(!ifaces?.length){panel.innerHTML='<div style="padding:16px;color:var(--muted);font-size:11px">No data</div>';return;}
+  panel.innerHTML='<div class="iface-grid">'+ifaces.map(i=>{
     const speed=i.speed>0?(i.speed>=1000?(i.speed/1000)+'G':i.speed+'M'):'';
     const badge=i.status==='up'?'<span class="badge-up">UP</span>':'<span class="badge-down">DOWN</span>';
     const ip=i.ip&&i.ip!=='0.0.0.0'?`<div class="iface-ip">${i.ip}</div>`:'';
     return`<div class="iface-item">
       <div class="dot8 ${i.status}"></div>
-      <div class="iface-info"><div class="iface-name">${esc(i.name)} ${badge}</div>${ip}</div>
-      <div class="iface-right">${speed?`<div class="iface-speed">${speed}bps</div>`:''}<div>↓${fmtBytes(i.rxBytes)} ↑${fmtBytes(i.txBytes)}</div></div>
+      <div class="iface-info">
+        <div class="iface-name">${esc(i.name)} ${badge}</div>${ip}
+      </div>
+      <div class="iface-right">
+        ${speed?`<div class="iface-speed">${speed}bps</div>`:''}
+        <div>↓${fmtBytes(i.rxBytes)}</div>
+        <div>↑${fmtBytes(i.txBytes)}</div>
+      </div>
     </div>`;
-  }).join('');
+  }).join('')+'</div>';
 }
 
 function renderVPN(vpns,stats){
@@ -540,35 +550,26 @@ function renderPolicies(policies,stats){
 /* ── Main load ── */
 async function load(){
   const btn=document.getElementById('refresh-btn');
-  btn.innerHTML='<span class="spin">⟳</span>'; btn.disabled=true;
+  btn.innerHTML='<span class="spin">⟳</span>';btn.disabled=true;
   try{
     const r=await fetch('/api/fortigate');
     const d=await r.json();
-    if(d.error){
-      document.getElementById('stats-row').innerHTML=`<div class="error-box" style="grid-column:1/-1">⚠️ ${d.error}</div>`;
-      return;
-    }
-    renderStats(d);
-    renderResources(d.resources);
-    renderSysInfo(d.system);
-    renderSSL(d.ssl);
-    renderInterfaces(d.interfaces,d.stats);
-    renderVPN(d.vpn,d.stats);
-    renderPolicies(d.policies,d.stats);
+    if(d.error){document.getElementById('stats-row').innerHTML=`<div class="error-box" style="grid-column:1/-1">⚠️ ${d.error}</div>`;return;}
+    renderStats(d);renderResources(d.resources);renderSysInfo(d.system);
+    renderSSL(d.ssl);renderInterfaces(d.interfaces,d.stats);
+    renderVPN(d.vpn,d.stats);renderPolicies(d.policies,d.stats);
     updateBandwidth(d.interfaces);
     const sub=d.system?.hostname?`${d.system.hostname} · ${d.system.version}`:'FortiGate';
     document.getElementById('hdr-sub').textContent=sub;
     document.getElementById('last-update').textContent='Updated '+new Date().toLocaleTimeString('vi-VN');
   }catch(e){
     document.getElementById('stats-row').innerHTML=`<div class="error-box" style="grid-column:1/-1">⚠️ ${e.message}</div>`;
-  }finally{
-    btn.innerHTML='⟳ Refresh'; btn.disabled=false;
-  }
+  }finally{btn.innerHTML='⟳ Refresh';btn.disabled=false;}
 }
 
 window.addEventListener('load',()=>{
   initCanvas();
-  window.addEventListener('resize', initCanvas);
+  window.addEventListener('resize',initCanvas);
   load();
   setInterval(load,30000);
 });
