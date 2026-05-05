@@ -677,7 +677,7 @@ async function handleCasaOS(env) {
    FortiGate — REST API v2 (read-only token)
    Via Cloudflare Tunnel + CF Access Service Token
    ═══════════════════════════════════════════════ */
-async function handleFortigate(env) {
+async function handleFortigate(env, debug = false) {
   const base  = env.FORTIGATE_URL;
   const key   = env.FORTIGATE_API_KEY;
   const cfId  = env.CF_ACCESS_CLIENT_ID;
@@ -697,35 +697,79 @@ async function handleFortigate(env) {
 
   const opts = { headers, signal: AbortSignal.timeout(12000) };
 
-  const _debug = {};
+  const _debug = {
+    cfIdPresent:  !!(cfId  && cfId.length  > 0),
+    cfSecPresent: !!(cfSec && cfSec.length > 0),
+    baseUrl: base,
+  };
   const safeGet = async (path) => {
+    let status = null;
     try {
       const r = await fetch(`${base}${path}`, opts);
-      _debug[path] = { status: r.status, ok: r.ok };
-      if (!r.ok) {
-        try { _debug[path].body = (await r.text()).slice(0, 300); } catch {}
-        return null;
-      }
-      const d = await r.json();
-      return d?.results ?? d;
+      status = r.status;
+      const bodyText = await r.text();
+      const isHtml = bodyText.trimStart().startsWith('<');
+      _debug[path] = { status, ok: r.ok, isHtml };
+      if (!r.ok || isHtml) return null;
+      const parsed = JSON.parse(bodyText);
+      return (parsed?.results !== undefined) ? parsed.results : parsed;
     } catch(e) {
-      _debug[path] = { error: e.message };
+      _debug[path] = { status, error: e.message };
+      return null;
+    }
+  };
+
+  // safeGetFull: returns the full response body (not just .results)
+  // needed for system/status where serial/version/build are at top level
+  const safeGetFull = async (path) => {
+    let status = null;
+    try {
+      const r = await fetch(`${base}${path}`, opts);
+      status = r.status;
+      const bodyText = await r.text();
+      _debug[path + '_full'] = { status, ok: r.ok };
+      if (!r.ok) return null;
+      return JSON.parse(bodyText);
+    } catch(e) {
+      _debug[path + '_full'] = { status, error: e.message };
       return null;
     }
   };
 
   // Fetch all endpoints in parallel (all read-only)
-  const [sysStatus, resUsage, interfaces, vpnIpsec, fwPolicy] = await Promise.all([
-    safeGet('/api/v2/monitor/system/status'),
-    safeGet('/api/v2/monitor/system/resource/usage?resource=cpu,mem,netsession,disk&interval=1min&period=1min'),
-    safeGet('/api/v2/monitor/system/interface?include_aggregate=false'),
+  const [sysRaw, resUsage, resSession, resUptime, ifaceRaw2, vpnIpsec] = await Promise.all([
+    safeGetFull('/api/v2/monitor/system/status'),
+    safeGet('/api/v2/monitor/system/resource/usage'),
+    safeGet('/api/v2/monitor/system/resource/usage?resource=netsession'),
+    safeGet('/api/v2/monitor/system/resource/usage?resource=uptime'),
+    safeGet('/api/v2/monitor/system/interface'),
     safeGet('/api/v2/monitor/vpn/ipsec'),
-    safeGet('/api/v2/monitor/firewall/policy/lookup'),  // may be null, fine
   ]);
+
+  // Merge top-level (serial, version, build) + results (hostname, model) for system status
+  const sysStatus = sysRaw ? { ...(sysRaw.results || {}), ...sysRaw } : null;
 
   // ── System info ──
   const sys = sysStatus || {};
-  const upSec = sys.uptime_seconds ?? sys.uptime ?? 0;
+
+  // ── Resource usage — FortiOS may return array of datapoints or single object ──
+  const lastVal = (v) => {
+    if (v === null || v === undefined) return null;
+    if (Array.isArray(v)) return v[v.length - 1]?.current ?? null;
+    if (typeof v === 'object') return v.current ?? v.value ?? null;
+    if (typeof v === 'number') return v;
+    return null;
+  };
+  const res = resUsage || {};
+  const cpuPct   = lastVal(res.cpu);
+  const memPct   = lastVal(res.mem);
+  const sessions = lastVal(res.netsession) ?? lastVal(resSession?.netsession);
+  const diskPct  = lastVal(res.disk);
+  // uptime: try dedicated call, then combined, then system status top-level
+  const uptimeFromRes = lastVal(resUptime?.uptime) ?? lastVal(res.uptime);
+  const upSec = uptimeFromRes ?? sysRaw?.uptime ?? sysRaw?.results?.uptime ?? 0;
+
+  // ── Uptime string ──
   const uptimeDays  = Math.floor(upSec / 86400);
   const uptimeHours = Math.floor((upSec % 86400) / 3600);
   const uptimeMins  = Math.floor((upSec % 3600)  / 60);
@@ -733,16 +777,10 @@ async function handleFortigate(env) {
     ? `${uptimeDays}d ${uptimeHours}h ${uptimeMins}m`
     : `${uptimeHours}h ${uptimeMins}m`;
 
-  // ── Resource usage — last datapoint in each array ──
-  const lastVal = (arr) => Array.isArray(arr) ? (arr[arr.length - 1]?.current ?? null) : null;
-  const res = resUsage || {};
-  const cpuPct  = lastVal(res.cpu);
-  const memPct  = lastVal(res.mem);
-  const sessions= lastVal(res.netsession);
-  const diskPct = lastVal(res.disk);
-
-  // ── Interfaces ──
-  const ifaceRaw = Array.isArray(interfaces) ? interfaces : [];
+  // ── Interfaces ── FortiOS returns object {wan1:{...}, lan:{...}} not array
+  const ifaceRaw = ifaceRaw2
+    ? (Array.isArray(ifaceRaw2) ? ifaceRaw2 : Object.values(ifaceRaw2))
+    : [];
   const ifaces = ifaceRaw
     .filter(i => i.name && !i.name.startsWith('naf.') && !i.name.startsWith('ssl.'))
     .map(i => ({
@@ -816,7 +854,7 @@ async function handleFortigate(env) {
       vpnTotal: vpns.length,
       sessions,
     },
-    _debug,
+    ...(debug ? { _debug } : {}),
   });
 }
 
@@ -837,7 +875,7 @@ export default {
     if (url.pathname === '/api/esxi')        return handleESXi(env);
     if (url.pathname === '/api/esxi/power')  return handleESXiPower(request, env);
     if (url.pathname === '/api/casaos')      return handleCasaOS(env);
-    if (url.pathname === '/api/fortigate')   return handleFortigate(env);
+    if (url.pathname === '/api/fortigate')   return handleFortigate(env, url.searchParams.has('debug'));
     return env.ASSETS.fetch(request);
   },
 };
