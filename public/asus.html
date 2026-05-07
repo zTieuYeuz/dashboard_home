@@ -578,6 +578,16 @@ function renderWifi(wifi,stats){
     </div>`;
 }
 
+/* ── Permission check ── */
+const __USER__ = window.__USER__ || { role:'user', permissions:{}, isAdmin:false };
+const __PERM__  = __USER__.isAdmin ? 'write' : (__USER__.permissions['asus'] || 'read');
+if (__PERM__ !== 'write') {
+  window.addEventListener('DOMContentLoaded', function(){
+    var rb = document.getElementById('reboot-btn');
+    if (rb) { rb.disabled = true; rb.textContent = '🔒 Reboot (Read only)'; rb.title = 'Bạn chỉ có quyền xem'; }
+  });
+}
+
 /* ── Polling control ── */
 let _pollTimer = null;
 let _lastClients = null; // cache last known good client list

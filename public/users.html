@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Quản lý Users — Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#09090b;--surface:#18181b;--card:#18181b;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa;--accent:#60a5fa;--green:#10b981;--red:#ef4444;--amber:#f59e0b}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.header{background:rgba(24,24,27,.8);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 2rem;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header-left{display:flex;align-items:center;gap:12px}
+.back-btn{font-size:13px;color:var(--muted);padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;transition:all .15s;text-decoration:none}
+.back-btn:hover{color:var(--text);border-color:#3f3f46}
+.page-title{font-size:16px;font-weight:700}
+.container{max-width:900px;margin:0 auto;padding:2rem 1.5rem;display:flex;flex-direction:column;gap:24px}
+.panel{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.panel-header{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.panel-title{font-size:15px;font-weight:700}
+.btn{font-size:13px;font-weight:600;padding:7px 16px;border-radius:8px;border:none;cursor:pointer;transition:all .15s}
+.btn-primary{background:#3b82f6;color:#fff}.btn-primary:hover{background:#2563eb}
+.btn-danger{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}.btn-danger:hover{background:var(--red);color:#fff}
+.btn-outline{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-outline:hover{color:var(--text);border-color:#3f3f46}
+.user-row{display:flex;align-items:center;gap:16px;padding:1rem 1.5rem;border-bottom:1px solid var(--border)}
+.user-row:last-child{border-bottom:none}
+.user-avatar{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
+.user-info{flex:1;min-width:0}
+.user-name{font-size:14px;font-weight:600}
+.user-role{font-size:12px;color:var(--muted);margin-top:2px}
+.role-badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
+.role-admin{background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3)}
+.role-user{background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.2)}
+.perm-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.perm-chip{display:flex;align-items:center;gap:4px;font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:var(--surface)}
+.perm-chip.read{border-color:rgba(245,158,11,.3);color:var(--amber);background:rgba(245,158,11,.08)}
+.perm-chip.write{border-color:rgba(16,185,129,.3);color:var(--green);background:rgba(16,185,129,.08)}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:1000;backdrop-filter:blur(4px)}
+.modal-overlay.hidden{display:none}
+.modal{background:#18181b;border:1px solid var(--border);border-radius:16px;padding:1.75rem;width:480px;max-width:95vw;box-shadow:0 25px 50px rgba(0,0,0,.5)}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:1.5rem}
+.form-group{margin-bottom:1rem}
+.label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;display:block}
+.input{width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:#09090b;color:var(--text);font-size:13px;outline:none;transition:border-color .15s}
+.input:focus{border-color:#3b82f6}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:1.5rem}
+
+/* Permissions table */
+.perm-table{width:100%;border-collapse:collapse;margin-top:1rem}
+.perm-table th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)}
+.perm-table td{padding:8px;border-bottom:1px solid var(--border);font-size:13px}
+.perm-table tr:last-child td{border-bottom:none}
+.perm-select{font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#09090b;color:var(--text);cursor:pointer}
+.empty{padding:2rem;text-align:center;color:var(--muted);font-size:13px}
+.err{font-size:12px;color:var(--red);margin-top:8px}
+.toast{position:fixed;bottom:24px;right:24px;background:#18181b;border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:9999;display:none}
+.toast.show{display:block}
+.toast.ok{border-color:rgba(16,185,129,.4);color:var(--green)}
+.toast.fail{border-color:rgba(239,68,68,.4);color:var(--red)}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="header-left">
+    <a class="back-btn" href="/">← Dashboard</a>
+    <div class="page-title">👥 Quản lý Users</div>
+  </div>
+  <div id="current-user-info" style="font-size:13px;color:var(--muted)"></div>
+</header>
+
+<div class="container">
+  <!-- Users list -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">Danh sách Users</div>
+      <button class="btn btn-primary" onclick="openCreateModal()">+ Tạo user mới</button>
+    </div>
+    <div id="user-list"><div class="empty">Đang tải...</div></div>
+  </div>
+
+  <!-- Change own password -->
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">🔑 Đổi mật khẩu của tôi</div></div>
+    <div style="padding:1.25rem 1.5rem">
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end">
+        <div>
+          <label class="label">Mật khẩu mới</label>
+          <input class="input" id="my-pw" type="password" placeholder="Tối thiểu 4 ký tự"/>
+        </div>
+        <div>
+          <label class="label">Xác nhận</label>
+          <input class="input" id="my-pw2" type="password" placeholder="Nhập lại"/>
+        </div>
+        <button class="btn btn-primary" onclick="changeMyCw()">Lưu</button>
+      </div>
+      <div class="err" id="my-pw-err"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Create user modal -->
+<div class="modal-overlay hidden" id="create-modal" onclick="closeOnBg(event,'create-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">➕ Tạo user mới</div>
+    <div class="form-group">
+      <label class="label">Username</label>
+      <input class="input" id="new-username" type="text" placeholder="vd: giang (3-32 ký tự, a-z 0-9 _ -)"/>
+    </div>
+    <div class="form-group">
+      <label class="label">Mật khẩu</label>
+      <input class="input" id="new-password" type="password" placeholder="Tối thiểu 4 ký tự"/>
+    </div>
+    <div class="err" id="create-err"></div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal('create-modal')">Hủy</button>
+      <button class="btn btn-primary" onclick="createUser()">Tạo user</button>
+    </div>
+  </div>
+</div>
+
+<!-- Permissions modal -->
+<div class="modal-overlay hidden" id="perm-modal" onclick="closeOnBg(event,'perm-modal')">
+  <div class="modal" onclick="event.stopPropagation()" style="width:540px">
+    <div class="modal-title">🛡️ Phân quyền: <span id="perm-username"></span></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">
+      <b>none</b> = không thấy service · <b>read</b> = chỉ xem · <b>write</b> = xem + dùng như admin
+    </div>
+    <table class="perm-table" id="perm-table">
+      <thead><tr><th>Service</th><th>Quyền</th></tr></thead>
+      <tbody id="perm-tbody"></tbody>
+    </table>
+    <div class="err" id="perm-err"></div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal('perm-modal')">Hủy</button>
+      <button class="btn btn-primary" onclick="savePermissions()">Lưu quyền</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var ALL_SERVICES = [
+  {id:'esxi',name:'VMware ESXi'},
+  {id:'n8n',name:'n8n Automation'},
+  {id:'casaos',name:'CasaOS'},
+  {id:'9router',name:'9Router'},
+  {id:'fortigate',name:'FortiGate'},
+  {id:'asus',name:'ASUS Router'},
+  {id:'ssh',name:'SSH Terminal'},
+  {id:'uptime-kuma',name:'Uptime Kuma'},
+];
+
+var currentUser = window.__USER__ || {};
+var editingUser = null;
+
+document.getElementById('current-user-info').textContent = '👤 ' + (currentUser.username || '');
+
+if (currentUser.role !== 'admin') {
+  // Non-admins: hide create user, show only password change
+  document.querySelector('.panel').style.display = 'none';
+}
+
+function toast(msg, ok) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (ok ? 'ok' : 'fail');
+  setTimeout(function(){ t.classList.remove('show'); }, 3000);
+}
+
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+function closeOnBg(e, id) { if (e.target.id === id) closeModal(id); }
+
+function permLabel(p) {
+  if (p === 'write') return '<span style="color:var(--green)">write</span>';
+  if (p === 'read')  return '<span style="color:var(--amber)">read</span>';
+  return '<span style="color:var(--muted)">none</span>';
+}
+
+function renderUsers(users) {
+  if (!users.length) {
+    document.getElementById('user-list').innerHTML = '<div class="empty">Chưa có user nào</div>';
+    return;
+  }
+  document.getElementById('user-list').innerHTML = users.map(function(u) {
+    var isAdmin = u.role === 'admin';
+    var perms = Object.entries(u.permissions || {})
+      .filter(function(e){ return e[1] && e[1] !== 'none'; })
+      .map(function(e){ return '<span class="perm-chip '+e[1]+'">'+e[0]+': '+e[1]+'</span>'; }).join('');
+    if (!perms && !isAdmin) perms = '<span style="color:var(--muted);font-size:11px">Chưa có quyền nào</span>';
+    if (isAdmin) perms = '<span style="color:#818cf8;font-size:11px">Toàn quyền tất cả services</span>';
+    return '<div class="user-row">'
+      + '<div class="user-avatar">' + u.username[0].toUpperCase() + '</div>'
+      + '<div class="user-info">'
+        + '<div class="user-name">' + u.username + ' <span class="role-badge role-' + u.role + '">' + u.role + '</span></div>'
+        + '<div class="perm-grid" style="margin-top:6px">' + perms + '</div>'
+      + '</div>'
+      + (isAdmin ? '' :
+          '<div style="display:flex;gap:6px;flex-shrink:0">'
+          + '<button class="btn btn-outline" onclick="openPermModal(\'' + u.username + '\')" style="font-size:12px;padding:5px 12px">🛡️ Quyền</button>'
+          + '<button class="btn btn-danger" onclick="deleteUser(\'' + u.username + '\')" style="font-size:12px;padding:5px 12px">🗑️ Xoá</button>'
+        + '</div>'
+      )
+      + '</div>';
+  }).join('');
+}
+
+function loadUsers() {
+  fetch('/api/admin/users')
+    .then(function(r){ return r.json(); })
+    .then(function(d){ renderUsers(d.users || []); })
+    .catch(function(){ document.getElementById('user-list').innerHTML = '<div class="empty">Lỗi tải danh sách</div>'; });
+}
+
+function openCreateModal() {
+  document.getElementById('new-username').value = '';
+  document.getElementById('new-password').value = '';
+  document.getElementById('create-err').textContent = '';
+  document.getElementById('create-modal').classList.remove('hidden');
+  setTimeout(function(){ document.getElementById('new-username').focus(); }, 50);
+}
+
+function createUser() {
+  var u = document.getElementById('new-username').value.trim();
+  var p = document.getElementById('new-password').value;
+  var err = document.getElementById('create-err');
+  if (!u || !p) { err.textContent = 'Vui lòng điền đầy đủ'; return; }
+  if (p.length < 4) { err.textContent = 'Mật khẩu tối thiểu 4 ký tự'; return; }
+  err.textContent = '';
+  fetch('/api/admin/users', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({username:u, password:p})
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if (d.success) { closeModal('create-modal'); toast('Tạo user thành công!', true); loadUsers(); }
+    else err.textContent = d.error || 'Lỗi tạo user';
+  }).catch(function(e){ err.textContent = 'Lỗi: ' + e.message; });
+}
+
+function deleteUser(username) {
+  if (!confirm('Xoá user "' + username + '"? Thao tác này không thể hoàn tác.')) return;
+  fetch('/api/admin/users/' + username, {method:'DELETE'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.success) { toast('Đã xoá user ' + username, true); loadUsers(); }
+      else toast(d.error || 'Lỗi xoá user', false);
+    }).catch(function(){ toast('Lỗi kết nối', false); });
+}
+
+function openPermModal(username) {
+  editingUser = username;
+  document.getElementById('perm-username').textContent = username;
+  document.getElementById('perm-err').textContent = '';
+  // Load current permissions
+  fetch('/api/admin/users')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var u = (d.users||[]).find(function(x){ return x.username === username; });
+      var perms = (u && u.permissions) || {};
+      document.getElementById('perm-tbody').innerHTML = ALL_SERVICES.map(function(s){
+        var cur = perms[s.id] || 'none';
+        return '<tr><td>' + s.name + '</td><td>'
+          + '<select class="perm-select" data-sid="' + s.id + '">'
+          + ['none','read','write'].map(function(v){
+              return '<option value="' + v + '"' + (cur===v?' selected':'') + '>' + v + '</option>';
+            }).join('')
+          + '</select></td></tr>';
+      }).join('');
+      document.getElementById('perm-modal').classList.remove('hidden');
+    });
+}
+
+function savePermissions() {
+  var perms = {};
+  document.querySelectorAll('#perm-tbody .perm-select').forEach(function(sel){
+    if (sel.value !== 'none') perms[sel.dataset.sid] = sel.value;
+  });
+  fetch('/api/admin/users/' + editingUser + '/permissions', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({permissions: perms})
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if (d.success) { closeModal('perm-modal'); toast('Đã lưu quyền cho ' + editingUser, true); loadUsers(); }
+    else document.getElementById('perm-err').textContent = d.error || 'Lỗi lưu quyền';
+  }).catch(function(e){ document.getElementById('perm-err').textContent = 'Lỗi: ' + e.message; });
+}
+
+function changeMyCw() {
+  var pw = document.getElementById('my-pw').value;
+  var pw2 = document.getElementById('my-pw2').value;
+  var err = document.getElementById('my-pw-err');
+  if (!pw || pw.length < 4) { err.textContent = 'Mật khẩu tối thiểu 4 ký tự'; return; }
+  if (pw !== pw2) { err.textContent = 'Mật khẩu xác nhận không khớp'; return; }
+  err.textContent = '';
+  fetch('/api/admin/users/' + currentUser.username, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({password: pw})
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if (d.success) { document.getElementById('my-pw').value=''; document.getElementById('my-pw2').value=''; toast('Đổi mật khẩu thành công!', true); }
+    else err.textContent = d.error || 'Lỗi đổi mật khẩu';
+  }).catch(function(e){ err.textContent = 'Lỗi: ' + e.message; });
+}
+
+// Init
+if (currentUser.role === 'admin') loadUsers();
+</script>
+</body>
+</html>

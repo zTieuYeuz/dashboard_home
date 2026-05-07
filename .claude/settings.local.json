@@ -59,7 +59,9 @@
       "Bash(gh api *)",
       "Bash(curl -s \"https://api.github.com/repos/Vaskivskyi/asusrouter/git/trees/main?recursive=1\")",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(x['path']\\) for x in d.get\\('tree',[]\\) if x['type']=='blob']\")",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:docs.termix.site)",
+      "WebFetch(domain:dev.to)"
     ]
   }
 }

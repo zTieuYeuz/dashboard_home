@@ -265,6 +265,11 @@ a { color: inherit; text-decoration: none; }
     <span class="auto-badge" id="autoLabel">● Auto 60s</span>
     <span class="clock" id="clock">--:--:--</span>
     <button class="refresh-btn" onclick="runChecks()">&#8635; Refresh</button>
+    <div id="user-menu" style="display:flex;align-items:center;gap:8px">
+      <span id="user-badge" style="font-size:12px;padding:4px 10px;border-radius:20px;background:#27272a;color:var(--muted);font-weight:500;display:flex;align-items:center;gap:6px"></span>
+      <a id="admin-link" href="/users.html" style="display:none;font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);color:var(--muted);text-decoration:none;transition:all .15s" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">👥 Users</a>
+      <button onclick="doLogout()" style="font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s" onmouseover="this.style.color='var(--red)';this.style.borderColor='rgba(239,68,68,.4)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">↩ Đăng xuất</button>
+    </div>
   </div>
 </header>
 
@@ -385,7 +390,26 @@ window.addEventListener('DOMContentLoaded', function() {
     resultEl.textContent = 'Không đo được';
   });
 });
-var SERVICES = [
+// ── User session ──
+var __USER__ = window.__USER__ || { username:'?', role:'user', permissions:{}, isAdmin:false };
+(function initUserUI() {
+  var badge = document.getElementById('user-badge');
+  badge.innerHTML = ((__USER__.isAdmin ? '👑 ' : '👤 ') + __USER__.username);
+  if (__USER__.isAdmin) {
+    badge.style.color = '#818cf8';
+    badge.style.background = 'rgba(99,102,241,.12)';
+    badge.style.border = '1px solid rgba(99,102,241,.25)';
+    document.getElementById('admin-link').style.display = '';
+  }
+})();
+
+function doLogout() {
+  fetch('/api/auth/logout', {method:'POST'}).finally(function(){
+    window.location.href = '/login.html';
+  });
+}
+
+var ALL_SERVICES_DEF = [
   { id:'esxi',        name:'VMware ESXi',    icon:'🖥️', desc:'Hypervisor - Bare Metal',      url:'https://esxi.home-server.id.vn',             local:false, detailPage:'/esxi.html' },
   { id:'n8n',         name:'n8n Automation', icon:'⚡', desc:'Workflow & Bot Automation',     url:'https://n8n-home.home-server.id.vn',          local:false, detailPage:'/n8n.html' },
   { id:'casaos',      name:'CasaOS',         icon:'🏠', desc:'Home Server OS Dashboard',      url:'https://casaos.home-server.id.vn',            local:false, detailPage:'/casaos.html' },
@@ -395,6 +419,13 @@ var SERVICES = [
   { id:'fortigate',   name:'FortiGate',    icon:'🔥', desc:'Firewall · Security Gateway',     url:'http://192.168.110.1',                        local:true,  detailPage:'/fortigate.html' },
   { id:'asus',        name:'ASUS Router',  icon:'📡', desc:'ASUS Router · Home Network',       url:'http://192.168.10.1:8443',                    local:true,  detailPage:'/asus.html' }
 ];
+
+// Filter services based on user permissions
+var SERVICES = __USER__.isAdmin
+  ? ALL_SERVICES_DEF
+  : ALL_SERVICES_DEF.filter(function(s){
+      return !!__USER__.permissions[s.id]; // 'read' or 'write' = visible
+    });
 
 var prev = {}, checks = {}, onlineCnt = {}, log = [], totalChecks = 0;
 SERVICES.forEach(function(s){ checks[s.id]=0; onlineCnt[s.id]=0; });

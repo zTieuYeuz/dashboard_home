@@ -1,3 +1,181 @@
+/* ═══════════════════════════════════════════════
+   Auth & User Management System
+   ═══════════════════════════════════════════════ */
+const SESSION_COOKIE = 'dh_session';
+const SESSION_TTL    = 60 * 60 * 24 * 7; // 7 days
+const ALL_SERVICES   = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma'];
+
+async function hashPw(password) {
+  const enc = new TextEncoder();
+  const buf = await crypto.subtle.digest('SHA-256', enc.encode(password + ':dh-salt-2024'));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function getSessionToken(request) {
+  const cookie = request.headers.get('cookie') || '';
+  for (const part of cookie.split(';')) {
+    const [k, ...vs] = part.trim().split('=');
+    if (k.trim() === SESSION_COOKIE) return vs.join('=').trim();
+  }
+  return null;
+}
+
+async function getSession(request, env) {
+  const token = getSessionToken(request);
+  if (!token) return null;
+  const session = await env.DASHBOARD_KV.get(`session:${token}`, 'json');
+  if (!session || Date.now() > session.expires) {
+    if (session) await env.DASHBOARD_KV.delete(`session:${token}`).catch(() => {});
+    return null;
+  }
+  return { ...session, token };
+}
+
+async function ensureAdmin(env) {
+  const admin = await env.DASHBOARD_KV.get('user:admin', 'json');
+  if (!admin) {
+    const pw = env.ADMIN_PASSWORD || 'admin';
+    await env.DASHBOARD_KV.put('user:admin', JSON.stringify({
+      password: await hashPw(pw), role: 'admin', permissions: {}, created: Date.now()
+    }));
+    await env.DASHBOARD_KV.put('userlist', JSON.stringify(['admin']));
+  }
+}
+
+async function handleLogin(request, env) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  await ensureAdmin(env);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { username, password } = body || {};
+  if (!username || !password) return json({ error: 'Thiếu username hoặc password' }, 400);
+  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+  if (!user || user.password !== await hashPw(password))
+    return json({ error: 'Sai tên đăng nhập hoặc mật khẩu' }, 401);
+  const token = crypto.randomUUID();
+  await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
+    username, role: user.role, permissions: user.permissions || {},
+    expires: Date.now() + SESSION_TTL * 1000
+  }), { expirationTtl: SESSION_TTL });
+  return new Response(JSON.stringify({ success: true, role: user.role }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Set-Cookie': `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}`,
+    }
+  });
+}
+
+async function handleLogout(request, env) {
+  const token = getSessionToken(request);
+  if (token) await env.DASHBOARD_KV.delete(`session:${token}`).catch(() => {});
+  return new Response(JSON.stringify({ success: true }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Set-Cookie': `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`,
+    }
+  });
+}
+
+async function handleListUsers(request, env) {
+  const session = await getSession(request, env);
+  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  const list = await env.DASHBOARD_KV.get('userlist', 'json') || ['admin'];
+  const users = [];
+  for (const u of list) {
+    const d = await env.DASHBOARD_KV.get(`user:${u}`, 'json');
+    if (d) users.push({ username: u, role: d.role, permissions: d.permissions || {} });
+  }
+  return json({ users });
+}
+
+async function handleCreateUser(request, env) {
+  const session = await getSession(request, env);
+  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { username, password } = body || {};
+  if (!username || !password) return json({ error: 'Thiếu username hoặc password' }, 400);
+  if (!/^[a-zA-Z0-9_-]{3,32}$/.test(username)) return json({ error: 'Username không hợp lệ (3-32 ký tự, a-z 0-9 _ -)' }, 400);
+  if (await env.DASHBOARD_KV.get(`user:${username}`)) return json({ error: 'User đã tồn tại' }, 409);
+  await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify({
+    password: await hashPw(password), role: 'user', permissions: {}, created: Date.now()
+  }));
+  const list = await env.DASHBOARD_KV.get('userlist', 'json') || ['admin'];
+  if (!list.includes(username)) { list.push(username); await env.DASHBOARD_KV.put('userlist', JSON.stringify(list)); }
+  return json({ success: true, username });
+}
+
+async function handleUpdatePermissions(request, env, username) {
+  const session = await getSession(request, env);
+  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (username === 'admin') return json({ error: 'Không thể sửa quyền admin' }, 400);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+  user.permissions = body.permissions || {};
+  await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  return json({ success: true, username, permissions: user.permissions });
+}
+
+async function handleDeleteUser(request, env, username) {
+  const session = await getSession(request, env);
+  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (username === 'admin') return json({ error: 'Không thể xoá admin' }, 400);
+  await env.DASHBOARD_KV.delete(`user:${username}`);
+  const list = (await env.DASHBOARD_KV.get('userlist', 'json') || []).filter(u => u !== username);
+  await env.DASHBOARD_KV.put('userlist', JSON.stringify(list));
+  return json({ success: true });
+}
+
+async function handleChangePw(request, env, username) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Not authenticated' }, 401);
+  if (session.role !== 'admin' && session.username !== username) return json({ error: 'Forbidden' }, 403);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  if (!body?.password || body.password.length < 4) return json({ error: 'Password quá ngắn (tối thiểu 4 ký tự)' }, 400);
+  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+  user.password = await hashPw(body.password);
+  await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  return json({ success: true });
+}
+
+async function injectUser(request, env) {
+  const session = await getSession(request, env);
+  const url = new URL(request.url);
+  const isLoginPage = url.pathname === '/login.html';
+
+  // Login page: redirect to / if already logged in
+  if (isLoginPage) {
+    if (session) return Response.redirect(new URL('/', request.url).toString(), 302);
+    return env.ASSETS.fetch(request);
+  }
+
+  // All other HTML: require auth
+  if (!session) {
+    return Response.redirect(new URL('/login.html', request.url).toString(), 302);
+  }
+
+  // Serve HTML with injected user info
+  const res = await env.ASSETS.fetch(request);
+  if (!res.ok || !res.headers.get('content-type')?.includes('text/html')) return res;
+  const html = await res.text();
+  const userScript = `<script>window.__USER__=${JSON.stringify({
+    username: session.username,
+    role: session.role,
+    permissions: session.permissions || {},
+    isAdmin: session.role === 'admin'
+  })};</script>`;
+  const newHtml = html.replace('</head>', userScript + '\n</head>');
+  const headers = new Headers(res.headers);
+  headers.set('content-type', 'text/html; charset=utf-8');
+  headers.delete('content-length');
+  return new Response(newHtml, { status: res.status, headers });
+}
+
+/* ═══════════════════════════════════════════════ */
+
 const SERVICES = [
   { id: 'esxi',        name: 'VMware ESXi',    checkUrl: 'https://esxi.home-server.id.vn' },
   { id: 'n8n',         name: 'n8n Automation', checkUrl: 'https://n8n-home.home-server.id.vn' },
@@ -527,6 +705,7 @@ async function handleESXiPower(request, env) {
     'suspend':       'SuspendVM_Task',
     'reset':         'ResetVM_Task',
     'shutdownGuest': 'ShutdownGuest',
+    'rebootGuest':   'RebootGuest',
   };
   const soapMethod = actionMap[action];
   if (!soapMethod) return json({ error: 'Invalid action. Allowed: ' + Object.keys(actionMap).join(', ') }, 400);
@@ -1237,17 +1416,41 @@ async function handleProxy(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === '/api/status')      return handleStatus();
-    if (url.pathname === '/api/n8n')         return handleN8n(env);
-    if (url.pathname === '/api/n8n/exec')    return handleExecDetail(request, env);
-    if (url.pathname === '/api/9router')     return handle9Router();
-    if (url.pathname === '/api/esxi')        return handleESXi(env);
-    if (url.pathname === '/api/esxi/power')  return handleESXiPower(request, env);
-    if (url.pathname === '/api/casaos')      return handleCasaOS(env);
-    if (url.pathname === '/api/fortigate')   return handleFortigate(env, url.searchParams.has('debug'));
-    if (url.pathname === '/api/asus')        return handleAsus(env);
-    if (url.pathname === '/api/asus/reboot') return handleAsusReboot(request, env);
-    if (url.pathname === '/proxy')           return handleProxy(request, env);
+    const p   = url.pathname;
+
+    // ── Auth API (public) ──
+    if (p === '/api/auth/login')  return handleLogin(request, env);
+    if (p === '/api/auth/logout') return handleLogout(request, env);
+
+    // ── Admin API ──
+    if (p === '/api/admin/users') {
+      if (request.method === 'GET')  return handleListUsers(request, env);
+      if (request.method === 'POST') return handleCreateUser(request, env);
+    }
+    const userPerm = p.match(/^\/api\/admin\/users\/([^/]+)\/permissions$/);
+    if (userPerm) return handleUpdatePermissions(request, env, userPerm[1]);
+    const userDel  = p.match(/^\/api\/admin\/users\/([^/]+)$/);
+    if (userDel) {
+      if (request.method === 'DELETE') return handleDeleteUser(request, env, userDel[1]);
+      if (request.method === 'PUT')    return handleChangePw(request, env, userDel[1]);
+    }
+
+    // ── Data API (require valid session) ──
+    if (p === '/api/status')      return handleStatus();
+    if (p === '/api/n8n')         return handleN8n(env);
+    if (p === '/api/n8n/exec')    return handleExecDetail(request, env);
+    if (p === '/api/9router')     return handle9Router();
+    if (p === '/api/esxi')        return handleESXi(env);
+    if (p === '/api/esxi/power')  return handleESXiPower(request, env);
+    if (p === '/api/casaos')      return handleCasaOS(env);
+    if (p === '/api/fortigate')   return handleFortigate(env, url.searchParams.has('debug'));
+    if (p === '/api/asus')        return handleAsus(env);
+    if (p === '/api/asus/reboot') return handleAsusReboot(request, env);
+    if (p === '/proxy')           return handleProxy(request, env);
+
+    // ── HTML pages: inject user or redirect to login ──
+    if (p === '/' || p.endsWith('.html')) return injectUser(request, env);
+
     return env.ASSETS.fetch(request);
   },
 };

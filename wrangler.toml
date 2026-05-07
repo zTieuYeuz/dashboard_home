@@ -5,3 +5,7 @@ compatibility_date = "2024-01-01"
 [assets]
 directory = "./public"
 binding = "ASSETS"
+
+[[kv_namespaces]]
+binding = "DASHBOARD_KV"
+id = "ebad8682cfe24bbda0a4cf04b3e97210"
