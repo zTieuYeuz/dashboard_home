@@ -341,7 +341,7 @@ function updateBW(wan){
   const now=Date.now();
   if(prevWan?.ts){
     const dt=(now-prevWan.ts)/1000;
-    if(dt>0&&dt<120){
+    if(dt>0&&dt<300){
       const rx=Math.max(0,(wan.rxBytes-prevWan.rx)*8/dt/1e6);
       const tx=Math.max(0,(wan.txBytes-prevWan.tx)*8/dt/1e6);
       const t=new Date().toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -365,7 +365,7 @@ function drawChart(W,H){
   const PL=44,PR=8,PT=14,PB=18,cW=W-PL-PR,cH=H-PT-PB;
   if(BW.rx.length<2){
     ctx.fillStyle='#64748b';ctx.font='11px sans-serif';ctx.textAlign='center';
-    ctx.fillText('Đang thu thập... (30s/lần)',W/2,H/2);ctx.restore();return;
+    ctx.fillText('Đang thu thập... (2 phút/lần)',W/2,H/2);ctx.restore();return;
   }
   const maxVal=Math.max(...BW.rx,...BW.tx,0.1);
   const niceCeil=v=>{const e=Math.pow(10,Math.floor(Math.log10(v)));return Math.ceil(v/e)*e;};
@@ -579,7 +579,10 @@ function renderWifi(wifi,stats){
 }
 
 /* ── Permission check ── */
-const __USER__ = window.__USER__ || { role:'user', permissions:{}, isAdmin:false };
+function _readUserCookie() {
+  try { var m = document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/); return m ? JSON.parse(decodeURIComponent(m[1])) : null; } catch(e) { return null; }
+}
+const __USER__ = window.__USER__ || _readUserCookie() || { role:'user', permissions:{}, isAdmin:false };
 const __PERM__  = __USER__.isAdmin ? 'write' : (__USER__.permissions['asus'] || 'read');
 if (__PERM__ !== 'write') {
   window.addEventListener('DOMContentLoaded', function(){

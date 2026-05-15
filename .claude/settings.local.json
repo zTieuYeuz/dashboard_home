@@ -61,7 +61,21 @@
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(x['path']\\) for x in d.get\\('tree',[]\\) if x['type']=='blob']\")",
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:docs.termix.site)",
-      "WebFetch(domain:dev.to)"
+      "WebFetch(domain:dev.to)",
+      "Read(//c/Users/Administrator/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/e0184b04-2f4f-44d7-a00f-e7abf747fed1/5b99e058-77fd-4351-8bc9-2a3d24c6905f/skills/web-artifacts-builder/homelab-dashboard/**)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Read(//c/Users/Administrator/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/e0184b04-2f4f-44d7-a00f-e7abf747fed1/5b99e058-77fd-4351-8bc9-2a3d24c6905f/skills/web-artifacts-builder/**)",
+      "Bash(bash scripts/bundle-artifact.sh)",
+      "Bash(bash ../scripts/bundle-artifact.sh)",
+      "Bash(npx pnpm *)",
+      "Bash(dir dist\\\\assets)",
+      "Bash(npx vite *)",
+      "Bash(curl -s -u \"admin:Itadmin@2023\" \"https://n8n.movi-finance.com/webhook/8e83df3c-d3ad-48ae-ae1c-11fd5733d147\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('Total clients:', d[0]['total'] if isinstance\\(d,list\\) else d.get\\('total'\\)\\)\")",
+      "Bash(curl -sv -u \"admin:Itadmin@2023\" \"https://n8n.movi-finance.com/webhook-test/c65756f7-f228-4668-8d47-79efd543f234\")",
+      "Bash(curl -s -u \"admin:Itadmin@2023\" \"https://n8n.movi-finance.com/webhook-test/3019c3e2-5725-40b5-95e4-f4a8d5a3d326\")",
+      "Bash(curl -s -u \"admin:Itadmin@2023\" \"https://n8n.movi-finance.com/webhook-test/105904c4-2578-4bd7-98c9-bc226bf8f655\")"
     ]
   }
 }

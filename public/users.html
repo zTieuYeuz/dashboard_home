@@ -98,6 +98,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="err" id="my-pw-err"></div>
     </div>
   </div>
+
+  <!-- MFA Panel -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">🔐 Xác thực hai bước (MFA)</div>
+      <div id="mfa-status-badge"><span style="font-size:12px;color:var(--muted)">Đang tải...</span></div>
+    </div>
+    <div style="padding:1.25rem 1.5rem">
+      <p id="mfa-desc" style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6"></p>
+      <div style="display:flex;gap:8px">
+        <button id="btn-enable-mfa" class="btn btn-primary" onclick="startMfaSetup()" style="display:none;width:auto;padding:8px 18px">🔐 Thiết lập MFA</button>
+        <button id="btn-disable-mfa" class="btn btn-danger" onclick="openDisableMfa()" style="display:none;width:auto;padding:8px 18px">🔓 Tắt MFA</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Create user modal -->
@@ -139,6 +154,68 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<!-- MFA Setup Modal -->
+<div class="modal-overlay hidden" id="mfa-setup-modal" onclick="closeOnBg(event,'mfa-setup-modal')">
+  <div class="modal" onclick="event.stopPropagation()" style="width:440px">
+    <!-- Step 1: QR code -->
+    <div id="mfa-s1">
+      <div class="modal-title">📱 Thiết lập MFA — Bước 1/2</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6">
+        Mở <strong style="color:var(--text)">Microsoft Authenticator</strong> hoặc Google Authenticator → Thêm tài khoản → Quét mã QR bên dưới.
+      </p>
+      <div style="display:flex;justify-content:center;margin-bottom:1rem">
+        <img id="mfa-qr-img" src="" width="180" height="180" style="border-radius:10px;background:#fff;padding:6px"/>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em">Hoặc nhập thủ công (Secret Key):</div>
+      <div id="mfa-secret-box" style="font-family:'IBM Plex Mono',monospace;font-size:13px;background:#09090b;padding:9px 12px;border-radius:8px;border:1px solid var(--border);letter-spacing:3px;word-break:break-all;text-align:center;cursor:pointer;user-select:all" title="Click để copy"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:5px;text-align:center">Click để copy secret key</div>
+      <div class="modal-btns" style="margin-top:1.25rem">
+        <button class="btn btn-outline" onclick="closeModal('mfa-setup-modal')">Hủy</button>
+        <button class="btn btn-primary" onclick="goMfaStep2()">Tiếp theo →</button>
+      </div>
+    </div>
+    <!-- Step 2: Verify code -->
+    <div id="mfa-s2" style="display:none">
+      <div class="modal-title">📱 Thiết lập MFA — Bước 2/2</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem;line-height:1.6">
+        Nhập mã <strong style="color:var(--text)">6 chữ số</strong> từ app Authenticator để xác nhận thiết lập thành công.
+      </p>
+      <div class="form-group">
+        <label class="label">Mã OTP</label>
+        <input class="input" id="mfa-setup-code" type="text" inputmode="numeric"
+               maxlength="6" placeholder="000000" autocomplete="one-time-code"
+               style="text-align:center;font-size:22px;font-weight:700;letter-spacing:8px"/>
+      </div>
+      <div class="err" id="mfa-setup-err"></div>
+      <div class="modal-btns">
+        <button class="btn btn-outline" onclick="backMfaStep1()">← Quay lại</button>
+        <button class="btn btn-primary" onclick="confirmEnableMfa()">✓ Bật MFA</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MFA Disable Modal -->
+<div class="modal-overlay hidden" id="mfa-disable-modal" onclick="closeOnBg(event,'mfa-disable-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">🔓 Tắt MFA</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem;line-height:1.6">
+      Nhập mã OTP từ Authenticator để xác nhận tắt bảo vệ hai bước.
+    </p>
+    <div class="form-group">
+      <label class="label">Mã OTP xác nhận</label>
+      <input class="input" id="mfa-disable-code" type="text" inputmode="numeric"
+             maxlength="6" placeholder="000000"
+             style="text-align:center;font-size:22px;font-weight:700;letter-spacing:8px"/>
+    </div>
+    <div class="err" id="mfa-disable-err"></div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal('mfa-disable-modal')">Hủy</button>
+      <button class="btn btn-danger" onclick="confirmDisableMfa()">Tắt MFA</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -151,9 +228,13 @@ var ALL_SERVICES = [
   {id:'asus',name:'ASUS Router'},
   {id:'ssh',name:'SSH Terminal'},
   {id:'uptime-kuma',name:'Uptime Kuma'},
+  {id:'meraki',name:'Meraki-Network'},
 ];
 
-var currentUser = window.__USER__ || {};
+function _readUserCookie() {
+  try { var m = document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/); return m ? JSON.parse(decodeURIComponent(m[1])) : null; } catch(e) { return null; }
+}
+var currentUser = window.__USER__ || _readUserCookie() || {};
 var editingUser = null;
 
 document.getElementById('current-user-info').textContent = '👤 ' + (currentUser.username || '');
@@ -306,6 +387,128 @@ function changeMyCw() {
 
 // Init
 if (currentUser.role === 'admin') loadUsers();
+
+/* ── MFA Management ── */
+var _mfaSecret = null;
+
+function loadMfaStatus() {
+  fetch('/api/auth/mfa/status')
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      var on = d.enabled;
+      document.getElementById('mfa-status-badge').innerHTML = on
+        ? '<span class="role-badge role-user" style="font-size:12px;padding:3px 12px">✓ Đang bật</span>'
+        : '<span class="role-badge" style="font-size:12px;padding:3px 12px;background:rgba(161,161,170,.08);color:var(--muted);border:1px solid #3f3f46">✗ Chưa bật</span>';
+      document.getElementById('mfa-desc').textContent = on
+        ? 'Tài khoản của bạn đang được bảo vệ bởi xác thực hai bước (Microsoft/Google Authenticator).'
+        : 'Bật MFA để tăng bảo mật. Mỗi lần đăng nhập sẽ cần thêm mã 6 chữ số từ Authenticator.';
+      document.getElementById('btn-enable-mfa').style.display  = on ? 'none' : '';
+      document.getElementById('btn-disable-mfa').style.display = on ? '' : 'none';
+    })
+    .catch(function(){});
+}
+
+function startMfaSetup() {
+  fetch('/api/auth/mfa/setup', { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      _mfaSecret = d.secret;
+      var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=0&data=' + encodeURIComponent(d.otpauth);
+      document.getElementById('mfa-qr-img').src = qrUrl;
+      document.getElementById('mfa-secret-box').textContent = d.secret;
+      // Copy on click
+      document.getElementById('mfa-secret-box').onclick = function() {
+        navigator.clipboard.writeText(d.secret).then(function(){ toast('Đã copy secret key!', true); }).catch(function(){});
+      };
+      document.getElementById('mfa-s1').style.display = '';
+      document.getElementById('mfa-s2').style.display = 'none';
+      document.getElementById('mfa-setup-modal').classList.remove('hidden');
+    })
+    .catch(function(e){ toast('Lỗi khởi tạo MFA: ' + e.message, false); });
+}
+
+function goMfaStep2() {
+  document.getElementById('mfa-s1').style.display = 'none';
+  document.getElementById('mfa-s2').style.display = '';
+  document.getElementById('mfa-setup-code').value = '';
+  document.getElementById('mfa-setup-err').textContent = '';
+  setTimeout(function(){ document.getElementById('mfa-setup-code').focus(); }, 60);
+}
+
+function backMfaStep1() {
+  document.getElementById('mfa-s2').style.display = 'none';
+  document.getElementById('mfa-s1').style.display = '';
+}
+
+function confirmEnableMfa() {
+  var code = document.getElementById('mfa-setup-code').value.trim();
+  var err  = document.getElementById('mfa-setup-err');
+  if (!/^\d{6}$/.test(code)) { err.textContent = 'Mã OTP phải có đúng 6 chữ số'; return; }
+  err.textContent = '';
+  fetch('/api/auth/mfa/enable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret: _mfaSecret, code: code })
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (d.success) {
+      closeModal('mfa-setup-modal');
+      toast('✓ MFA đã được bật thành công!', true);
+      loadMfaStatus();
+    } else {
+      err.textContent = d.error || 'Mã OTP không đúng';
+      document.getElementById('mfa-setup-code').value = '';
+      document.getElementById('mfa-setup-code').focus();
+    }
+  }).catch(function(e){ err.textContent = 'Lỗi: ' + e.message; });
+}
+
+function openDisableMfa() {
+  document.getElementById('mfa-disable-code').value = '';
+  document.getElementById('mfa-disable-err').textContent = '';
+  document.getElementById('mfa-disable-modal').classList.remove('hidden');
+  setTimeout(function(){ document.getElementById('mfa-disable-code').focus(); }, 60);
+}
+
+function confirmDisableMfa() {
+  var code = document.getElementById('mfa-disable-code').value.trim();
+  var err  = document.getElementById('mfa-disable-err');
+  if (!/^\d{6}$/.test(code)) { err.textContent = 'Mã OTP phải có đúng 6 chữ số'; return; }
+  err.textContent = '';
+  fetch('/api/auth/mfa/disable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: code })
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (d.success) {
+      closeModal('mfa-disable-modal');
+      toast('MFA đã được tắt', true);
+      loadMfaStatus();
+    } else {
+      err.textContent = d.error || 'Mã OTP không đúng';
+      document.getElementById('mfa-disable-code').value = '';
+      document.getElementById('mfa-disable-code').focus();
+    }
+  }).catch(function(e){ err.textContent = 'Lỗi: ' + e.message; });
+}
+
+// Auto-submit OTP when 6 digits entered in setup/disable modals
+document.addEventListener('DOMContentLoaded', function() {
+  ['mfa-setup-code', 'mfa-disable-code'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', function() {
+      this.value = this.value.replace(/\D/g, '');
+    });
+    el.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        if (id === 'mfa-setup-code') confirmEnableMfa();
+        else confirmDisableMfa();
+      }
+    });
+  });
+});
+
+loadMfaStatus();
 </script>
 </body>
 </html>

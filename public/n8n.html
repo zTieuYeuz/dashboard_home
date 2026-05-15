@@ -62,10 +62,19 @@ a{color:inherit;text-decoration:none}
 .search-icon{position:absolute;left:18px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px;pointer-events:none}
 
 /* Filter row */
-.filter-row{display:flex;gap:5px;padding:.625rem 1rem;border-bottom:0.5px solid var(--border);flex-wrap:wrap}
+.filter-row{display:flex;gap:5px;padding:.625rem 1rem;border-bottom:0.5px solid var(--border);flex-wrap:wrap;align-items:center}
 .filter-btn{font-size:11px;padding:3px 10px;border-radius:20px;border:0.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
 .filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .filter-btn:hover:not(.active){border-color:#3d4260;color:var(--text)}
+/* Sort select */
+.sort-select{margin-left:auto;font-size:11px;padding:3px 8px;border-radius:20px;border:0.5px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;outline:none;font-family:inherit;transition:all .15s}
+.sort-select:hover,.sort-select:focus{border-color:#3d4260;color:var(--text)}
+/* Running pulse */
+@keyframes runPulse{0%,100%{opacity:1}50%{opacity:.4}}
+.ex-icon.running{animation:runPulse 1.2s ease-in-out infinite}
+/* Refresh button spin */
+.refresh-icon{display:inline-block}
+.btn.refreshing .refresh-icon{animation:spin .6s linear infinite;display:inline-block}
 
 /* List body */
 .list-body{max-height:460px;overflow-y:auto}
@@ -164,6 +173,33 @@ a{color:inherit;text-decoration:none}
 
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 @media(max-width:900px){.two-col{grid-template-columns:1fr}.stats{grid-template-columns:repeat(4,1fr)}.cred-grid{grid-template-columns:repeat(2,1fr)}.drawer{width:100%}}
+@media(max-width:620px){
+  .header{height:auto;flex-wrap:wrap;padding:.625rem .75rem;gap:6px}
+  .header-left{gap:8px}
+  .header-right{width:100%;flex-wrap:wrap;gap:6px}
+  .svc-url{display:none}
+  .container{padding:1rem .75rem}
+  .stats{grid-template-columns:repeat(4,1fr);gap:5px}
+  .stat-value{font-size:18px}
+  .stat{padding:.5rem .625rem}
+  .tabs{width:100%;overflow-x:auto;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{font-size:12px;padding:5px 10px;white-space:nowrap;flex-shrink:0}
+  .filter-row{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;padding:.5rem .75rem}
+  .filter-row::-webkit-scrollbar{display:none}
+  .filter-btn,.sort-select{flex-shrink:0;white-space:nowrap}
+  .panel-header{flex-wrap:wrap;gap:6px}
+  .panel-title{font-size:12px}
+  .cred-grid{grid-template-columns:1fr 1fr}
+  .drawer{width:100%;left:0}
+  .list-body{max-height:400px}
+  #autoRefreshLabel{font-size:10px;width:100%}
+  .drawer-meta{grid-template-columns:1fr}
+}
+@media(max-width:400px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .stat-value{font-size:20px}
+}
 </style>
 </head>
 <body>
@@ -180,7 +216,7 @@ a{color:inherit;text-decoration:none}
   <div class="header-right">
     <div class="status-dot" id="statusDot"></div>
     <span class="status-label">Online</span>
-    <button class="btn btn-muted" onclick="loadData()">↻ Refresh</button>
+    <button class="btn btn-muted" id="refreshBtn" onclick="loadData()"><span class="refresh-icon">↻</span> Refresh</button>
     <a class="btn btn-accent" href="https://n8n-home.home-server.id.vn" target="_blank" rel="noopener">↗ Mở n8n</a>
   </div>
 </header>
@@ -219,6 +255,12 @@ a{color:inherit;text-decoration:none}
         <button class="filter-btn active" onclick="setFilter('wf','all',this)">Tất cả</button>
         <button class="filter-btn" onclick="setFilter('wf','active',this)">Active</button>
         <button class="filter-btn" onclick="setFilter('wf','inactive',this)">Inactive</button>
+        <select class="sort-select" id="wfSortSel" onchange="wfSort=this.value;renderWorkflows()">
+          <option value="updated">↕ Cập nhật</option>
+          <option value="name-asc">A→Z Tên</option>
+          <option value="name-desc">Z→A Tên</option>
+          <option value="active">Active trước</option>
+        </select>
       </div>
       <div class="list-body" id="wfList"><div class="loading"><div class="spin"></div>Đang tải...</div></div>
     </div>
@@ -235,8 +277,8 @@ a{color:inherit;text-decoration:none}
 <div class="tab-content" id="tab-executions">
   <div class="panel">
     <div class="panel-header">
-      <div class="panel-title">📋 Lịch sử chạy <span class="count-badge" id="exCount">—</span></div>
-      <span style="font-size:11px;color:var(--muted)">Click hàng lỗi để xem chi tiết</span>
+      <div class="panel-title">📋 Lịch sử chạy <span class="count-badge" id="exCount">—</span><span id="runningBadge" style="display:none;margin-left:6px;font-size:10px;padding:2px 7px;border-radius:20px;background:var(--amber-dim);color:var(--amber);border:0.5px solid #5a3f00;animation:runPulse 1.2s ease-in-out infinite">⟳ Running</span></div>
+      <span style="font-size:11px;color:var(--muted)" id="autoRefreshLabel">Click hàng để xem chi tiết</span>
     </div>
     <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" id="exSearch" placeholder="Tìm tên workflow..." oninput="renderExecutions()"/></div>
     <div class="filter-row">
@@ -244,6 +286,12 @@ a{color:inherit;text-decoration:none}
       <button class="filter-btn" onclick="setFilter('ex','success',this)">✓ OK</button>
       <button class="filter-btn" onclick="setFilter('ex','error',this)">✗ Lỗi</button>
       <button class="filter-btn" onclick="setFilter('ex','running',this)">⟳ Running</button>
+      <select class="sort-select" id="exSortSel" onchange="exSort=this.value;renderExecutions()">
+        <option value="time-desc">↓ Mới nhất</option>
+        <option value="time-asc">↑ Cũ nhất</option>
+        <option value="name-asc">A→Z Tên</option>
+        <option value="name-desc">Z→A Tên</option>
+      </select>
     </div>
     <div class="list-body" style="max-height:560px" id="exList"><div class="loading"><div class="spin"></div>Đang tải...</div></div>
   </div>
@@ -297,7 +345,11 @@ a{color:inherit;text-decoration:none}
 var N8N_URL = 'https://n8n-home.home-server.id.vn';
 var allWf = [], allEx = [], allCreds = [], allVars = [], allTags = [], lastRun = {};
 var wfFilter = 'all', exFilter = 'all';
+var wfSort   = 'updated';   // 'updated' | 'name-asc' | 'name-desc' | 'active'
+var exSort   = 'time-desc'; // 'time-desc' | 'time-asc' | 'name-asc' | 'name-desc'
 var selectedWf = null;
+var _refreshTimer = null;
+var _refreshCountdown = 120;
 
 /* ── Tabs ── */
 function switchTab(name, btn) {
@@ -357,6 +409,14 @@ function renderWorkflows() {
     if (wfFilter==='active'&&!w.active) return false;
     if (wfFilter==='inactive'&&w.active) return false;
     return !q || w.name.toLowerCase().includes(q) || w.id.toLowerCase().includes(q);
+  });
+  // Sort
+  list.sort(function(a, b) {
+    if (wfSort === 'name-asc')  return a.name.localeCompare(b.name);
+    if (wfSort === 'name-desc') return b.name.localeCompare(a.name);
+    if (wfSort === 'active')    { var d = (b.active?1:0)-(a.active?1:0); return d!==0?d:new Date(b.updatedAt)-new Date(a.updatedAt); }
+    // default: updated (newest first)
+    return new Date(b.updatedAt) - new Date(a.updatedAt);
   });
   document.getElementById('wfCount').textContent = list.length+'/'+allWf.length;
   if (!list.length){ document.getElementById('wfList').innerHTML='<div class="empty">Không tìm thấy workflow</div>'; return; }
@@ -425,6 +485,19 @@ function renderExecutions() {
     if (exFilter==='error'   && e.status!=='error' && e.status!=='failed') return false;
     if (exFilter==='running' && e.status!=='running') return false;
     return !q || e.workflowName.toLowerCase().includes(q);
+  });
+  // Sort
+  list.sort(function(a, b) {
+    if (exSort === 'time-asc')  return new Date(a.startedAt) - new Date(b.startedAt);
+    if (exSort === 'name-asc')  return a.workflowName.localeCompare(b.workflowName);
+    if (exSort === 'name-desc') return b.workflowName.localeCompare(a.workflowName);
+    // Running luôn lên đầu khi sort mới nhất
+    if (exSort === 'time-desc') {
+      var aR = a.status==='running', bR = b.status==='running';
+      if (aR && !bR) return -1;
+      if (!aR && bR) return 1;
+    }
+    return new Date(b.startedAt) - new Date(a.startedAt);
   });
   document.getElementById('exCount').textContent = list.length+'/'+allEx.length;
   if (!list.length){ document.getElementById('exList').innerHTML='<div class="empty">Không tìm thấy execution</div>'; return; }
@@ -552,9 +625,17 @@ function closeDrawer() {
 
 /* ── Load Data ── */
 function loadData() {
+  var _rBtn = document.getElementById('refreshBtn');
+  if (_rBtn) _rBtn.classList.add('refreshing');
+  var _t0 = Date.now();
+  var _stopSpin = function() {
+    var delay = Math.max(0, 700 - (Date.now() - _t0));
+    setTimeout(function(){ if (_rBtn) _rBtn.classList.remove('refreshing'); }, delay);
+  };
   fetch('/api/n8n', {cache:'no-store'})
     .then(function(r){ return r.json(); })
     .then(function(data){
+      _stopSpin();
       if (data.error){ showError(data.error); return; }
       var s = data.stats||{};
       document.getElementById('st-total').textContent   = s.total||0;
@@ -577,13 +658,40 @@ function loadData() {
       document.getElementById('varCount').textContent  = allVars.length;
       document.getElementById('tagCount').textContent  = allTags.length;
 
+      // Show/hide running badge
+      var hasRunning = allEx.some(function(e){ return e.status==='running'; });
+      document.getElementById('runningBadge').style.display = hasRunning ? '' : 'none';
+
       renderWorkflows();
       renderExecutions();
       renderCredentials();
       renderVariables();
       renderTags();
+
+      // Smart auto-refresh: 15s when any running, otherwise 120s
+      scheduleRefresh(hasRunning ? 15 : 120);
     })
-    .catch(function(e){ showError(e.message); });
+    .catch(function(e){ _stopSpin(); showError(e.message); });
+}
+
+/* ── Smart auto-refresh ── */
+function scheduleRefresh(seconds) {
+  clearInterval(_refreshTimer);
+  _refreshCountdown = seconds;
+  var lbl = document.getElementById('autoRefreshLabel');
+  _refreshTimer = setInterval(function() {
+    _refreshCountdown--;
+    if (_refreshCountdown <= 0) {
+      clearInterval(_refreshTimer);
+      lbl.textContent = 'Đang tải...';
+      loadData();
+    } else {
+      var msg = allEx.some(function(e){ return e.status==='running'; })
+        ? '⟳ Có workflow đang chạy — refresh sau ' + _refreshCountdown + 's'
+        : 'Click hàng để xem chi tiết · refresh sau ' + _refreshCountdown + 's';
+      lbl.textContent = msg;
+    }
+  }, 1000);
 }
 
 function showError(msg) {
@@ -593,7 +701,6 @@ function showError(msg) {
 }
 
 loadData();
-setInterval(loadData, 120000);
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeDrawer(); });
 </script>
 </body>

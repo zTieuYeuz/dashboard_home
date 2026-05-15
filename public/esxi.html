@@ -208,7 +208,10 @@ a{color:inherit;text-decoration:none}
 </div>
 
 <script>
-var __USER__ = window.__USER__ || { role:'user', permissions:{}, isAdmin:false };
+function _readUserCookie() {
+  try { var m = document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/); return m ? JSON.parse(decodeURIComponent(m[1])) : null; } catch(e) { return null; }
+}
+var __USER__ = window.__USER__ || _readUserCookie() || { role:'user', permissions:{}, isAdmin:false };
 var __PERM__  = __USER__.isAdmin ? 'write' : (__USER__.permissions['esxi'] || 'read');
 var allVMs = [], hostData = null, datastores = [];
 

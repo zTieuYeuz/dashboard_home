@@ -1,9 +1,69 @@
 /* ═══════════════════════════════════════════════
    Auth & User Management System
    ═══════════════════════════════════════════════ */
-const SESSION_COOKIE = 'dh_session';
-const SESSION_TTL    = 60 * 60 * 24 * 7; // 7 days
-const ALL_SERVICES   = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma'];
+const SESSION_COOKIE    = 'dh_session';
+const SESSION_TTL       = 60 * 60 * 24 * 7; // 7 days
+const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma'];
+const IDLE_TIMEOUT_MS   = 30 * 60 * 1000;   // auto-logout after 30 min inactivity
+const IDLE_WARN_MS      = 25 * 60 * 1000;   // show warning 5 min before logout
+
+/* Idle-timer script injected into every authenticated HTML page */
+const IDLE_SCRIPT = `<script>(function(){
+  var T=${IDLE_TIMEOUT_MS},W=${IDLE_WARN_MS},last=Date.now(),bn=null,tk=null;
+
+  /* Reset timer on any user interaction */
+  window._idleReset = function() {
+    last = Date.now();
+    if (bn) { bn.style.display = 'none'; clearInterval(tk); tk = null; }
+  };
+  ['mousemove','mousedown','keydown','scroll','touchstart','click','pointerdown'].forEach(function(e) {
+    document.addEventListener(e, window._idleReset, { passive: true, capture: true });
+  });
+
+  function fmt(ms) {
+    var s = Math.ceil(ms / 1000), m = Math.floor(s / 60); s %= 60;
+    return (m ? m + ' phút ' : '') + s + ' giây';
+  }
+
+  function showBanner() {
+    if (!bn) {
+      bn = document.createElement('div');
+      bn.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;'
+        + 'background:#7c2d12;color:#fed7aa;'
+        + 'padding:12px 20px;display:flex;align-items:center;'
+        + 'justify-content:space-between;gap:12px;'
+        + 'font-family:system-ui,sans-serif;font-size:13px;font-weight:500;'
+        + 'box-shadow:0 2px 14px rgba(0,0,0,.55);';
+      bn.innerHTML =
+        '<span>⚠️ Phiên không hoạt động — tự đăng xuất sau <strong id="_ic"></strong></span>'
+        + '<div style="display:flex;gap:8px;flex-shrink:0">'
+        + '<button onclick="window._idleReset()" style="background:#ea580c;color:#fff;border:none;padding:6px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">Gia hạn phiên</button>'
+        + '</div>';
+      document.body.appendChild(bn);
+    }
+    bn.style.display = 'flex';
+    /* Update countdown every second */
+    clearInterval(tk);
+    tk = setInterval(function() {
+      var r = T - (Date.now() - last);
+      var el = document.getElementById('_ic');
+      if (el) el.textContent = fmt(Math.max(0, r));
+      if (r <= 0) clearInterval(tk);
+    }, 1000);
+  }
+
+  /* Check idle state every 10 seconds */
+  setInterval(function() {
+    var idle = Date.now() - last;
+    if (idle >= T) {
+      fetch('/api/auth/logout', { method: 'POST' }).finally(function() {
+        window.location.href = '/login.html?reason=idle';
+      });
+    } else if (idle >= W) {
+      showBanner();
+    }
+  }, 10000);
+})();<\/script>`;
 
 async function hashPw(password) {
   const enc = new TextEncoder();
@@ -48,33 +108,53 @@ async function handleLogin(request, env) {
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const { username, password } = body || {};
   if (!username || !password) return json({ error: 'Thiếu username hoặc password' }, 400);
+  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
   const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
-  if (!user || user.password !== await hashPw(password))
+  if (!user || user.password !== await hashPw(password)) {
+    await logActivity(env, { action: 'login_fail', username, ip, success: false, detail: 'Wrong credentials' });
     return json({ error: 'Sai tên đăng nhập hoặc mật khẩu' }, 401);
+  }
+
+  // If MFA is enabled for this user, don't create session yet — return temp token
+  if (user.mfaEnabled && user.mfaSecret) {
+    const tempToken = crypto.randomUUID();
+    await env.DASHBOARD_KV.put(`mfa_temp:${tempToken}`, JSON.stringify({
+      username, expires: Date.now() + 300_000 // 5 minutes
+    }), { expirationTtl: 300 });
+    await logActivity(env, { action: 'login_mfa', username, ip, success: true, detail: 'MFA required' });
+    return json({ mfaRequired: true, tempToken });
+  }
+
   const token = crypto.randomUUID();
   await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
     username, role: user.role, permissions: user.permissions || {},
     expires: Date.now() + SESSION_TTL * 1000
   }), { expirationTtl: SESSION_TTL });
-  return new Response(JSON.stringify({ success: true, role: user.role }), {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/json',
-      'Set-Cookie': `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}`,
-    }
-  });
+
+  // Set both: HttpOnly session cookie + readable user-info cookie for client JS
+  const userInfo = encodeURIComponent(JSON.stringify({
+    username, role: user.role,
+    permissions: user.permissions || {},
+    isAdmin: user.role === 'admin'
+  }));
+  const h = new Headers({ 'Content-Type': 'application/json' });
+  h.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}`);
+  h.append('Set-Cookie', `dh_user=${userInfo}; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}`);
+  await logActivity(env, { action: 'login_success', username, ip, success: true });
+  return new Response(JSON.stringify({ success: true, role: user.role }), { status: 200, headers: h });
 }
 
 async function handleLogout(request, env) {
+  const session = await getSession(request, env);
+  const logUser = session?.username || 'unknown';
+  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
   const token = getSessionToken(request);
   if (token) await env.DASHBOARD_KV.delete(`session:${token}`).catch(() => {});
-  return new Response(JSON.stringify({ success: true }), {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/json',
-      'Set-Cookie': `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`,
-    }
-  });
+  await logActivity(env, { action: 'logout', username: logUser, ip, success: true });
+  const h = new Headers({ 'Content-Type': 'application/json' });
+  h.append('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`);
+  h.append('Set-Cookie', `dh_user=; Secure; SameSite=Lax; Path=/; Max-Age=0`);
+  return new Response(JSON.stringify({ success: true }), { status: 200, headers: h });
 }
 
 async function handleListUsers(request, env) {
@@ -141,6 +221,147 @@ async function handleChangePw(request, env, username) {
   return json({ success: true });
 }
 
+/* ═══════════════════════════════════════════════
+   TOTP / MFA — RFC 6238 (SHA-1, 30s window, 6 digits)
+   Compatible with Microsoft Authenticator, Google Authenticator
+   ═══════════════════════════════════════════════ */
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+function b32Decode(s) {
+  s = s.toUpperCase().replace(/=+$/, '').replace(/\s/g, '');
+  let bits = 0, val = 0;
+  const out = [];
+  for (const c of s) {
+    const i = B32.indexOf(c);
+    if (i < 0) continue;
+    val = (val << 5) | i;
+    bits += 5;
+    if (bits >= 8) { out.push((val >>> (bits - 8)) & 0xff); bits -= 8; }
+  }
+  return new Uint8Array(out);
+}
+
+function b32Encode(bytes) {
+  let bits = 0, val = 0, out = '';
+  for (const b of bytes) {
+    val = (val << 8) | b;
+    bits += 8;
+    while (bits >= 5) { out += B32[(val >>> (bits - 5)) & 31]; bits -= 5; }
+  }
+  if (bits > 0) out += B32[(val << (5 - bits)) & 31];
+  return out;
+}
+
+async function totpCode(secret, windowOffset = 0) {
+  const key = b32Decode(secret);
+  const counter = Math.floor(Date.now() / 1000 / 30) + windowOffset;
+  const buf = new ArrayBuffer(8);
+  new DataView(buf).setBigUint64(0, BigInt(counter), false);
+  const ck = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+  const hmac = new Uint8Array(await crypto.subtle.sign('HMAC', ck, buf));
+  const off = hmac[19] & 0xf;
+  const code = (((hmac[off] & 0x7f) << 24) | (hmac[off+1] << 16) | (hmac[off+2] << 8) | hmac[off+3]) % 1000000;
+  return code.toString().padStart(6, '0');
+}
+
+async function verifyTotp(secret, code) {
+  if (!secret || !code || String(code).length !== 6) return false;
+  for (let w = -1; w <= 1; w++) {
+    if (await totpCode(secret, w) === String(code)) return true;
+  }
+  return false;
+}
+
+/* ── MFA API handlers ── */
+
+async function handleMfaSetup(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Not authenticated' }, 401);
+  const raw = crypto.getRandomValues(new Uint8Array(20));
+  const secret = b32Encode(raw);
+  const label   = encodeURIComponent(`HomeLab:${session.username}`);
+  const issuer  = encodeURIComponent('HomeLab Dashboard');
+  const otpauth = `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
+  return json({ secret, otpauth });
+}
+
+async function handleMfaEnable(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Not authenticated' }, 401);
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { secret, code } = body || {};
+  if (!secret || !code) return json({ error: 'Thiếu secret hoặc code' }, 400);
+  if (!(await verifyTotp(secret, code)))
+    return json({ error: 'Mã OTP không đúng. Kiểm tra đồng hồ thiết bị.' }, 400);
+  const user = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+  user.mfaEnabled = true;
+  user.mfaSecret  = secret;
+  await env.DASHBOARD_KV.put(`user:${session.username}`, JSON.stringify(user));
+  return json({ success: true });
+}
+
+async function handleMfaDisable(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Not authenticated' }, 401);
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { code } = body || {};
+  if (!code) return json({ error: 'Vui lòng nhập mã OTP để xác nhận' }, 400);
+  const user = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+  if (!user.mfaEnabled) return json({ error: 'MFA chưa được bật' }, 400);
+  if (!(await verifyTotp(user.mfaSecret, code))) return json({ error: 'Mã OTP không đúng' }, 400);
+  user.mfaEnabled = false;
+  user.mfaSecret  = null;
+  await env.DASHBOARD_KV.put(`user:${session.username}`, JSON.stringify(user));
+  return json({ success: true });
+}
+
+async function handleMfaStatus(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Not authenticated' }, 401);
+  const user = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
+  return json({ enabled: !!(user && user.mfaEnabled) });
+}
+
+async function handleMfaVerify(request, env) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { tempToken, code } = body || {};
+  if (!tempToken || !code) return json({ error: 'Thiếu tempToken hoặc code' }, 400);
+  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
+  const temp = await env.DASHBOARD_KV.get(`mfa_temp:${tempToken}`, 'json');
+  if (!temp || Date.now() > temp.expires) {
+    if (temp) await env.DASHBOARD_KV.delete(`mfa_temp:${tempToken}`).catch(() => {});
+    return json({ error: 'Phiên xác thực đã hết hạn. Vui lòng đăng nhập lại.' }, 401);
+  }
+  const user = await env.DASHBOARD_KV.get(`user:${temp.username}`, 'json');
+  if (!user || !user.mfaEnabled) return json({ error: 'Lỗi xác thực MFA' }, 400);
+  if (!(await verifyTotp(user.mfaSecret, code))) {
+    await logActivity(env, { action: 'mfa_fail', username: temp?.username, ip, success: false, detail: 'Wrong OTP' });
+    return json({ error: 'Mã OTP không đúng' }, 400);
+  }
+  await env.DASHBOARD_KV.delete(`mfa_temp:${tempToken}`).catch(() => {});
+  // Create full session
+  const token = crypto.randomUUID();
+  await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
+    username: temp.username, role: user.role, permissions: user.permissions || {},
+    expires: Date.now() + SESSION_TTL * 1000
+  }), { expirationTtl: SESSION_TTL });
+  const userInfo = encodeURIComponent(JSON.stringify({
+    username: temp.username, role: user.role,
+    permissions: user.permissions || {},
+    isAdmin: user.role === 'admin'
+  }));
+  const h = new Headers({ 'Content-Type': 'application/json' });
+  h.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}`);
+  h.append('Set-Cookie', `dh_user=${userInfo}; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}`);
+  await logActivity(env, { action: 'mfa_success', username: temp.username, ip, success: true });
+  return new Response(JSON.stringify({ success: true, role: user.role }), { status: 200, headers: h });
+}
+
 async function injectUser(request, env) {
   const session = await getSession(request, env);
   const url = new URL(request.url);
@@ -157,21 +378,26 @@ async function injectUser(request, env) {
     return Response.redirect(new URL('/login.html', request.url).toString(), 302);
   }
 
-  // Serve HTML with injected user info
-  const res = await env.ASSETS.fetch(request);
-  if (!res.ok || !res.headers.get('content-type')?.includes('text/html')) return res;
+  // Serve HTML with injected user info (use clean GET request to avoid ASSETS quirks)
+  const cleanReq = new Request(request.url, { method: 'GET', headers: { 'Accept': 'text/html' } });
+  const res = await env.ASSETS.fetch(cleanReq);
+  const ct = res.headers.get('content-type') || '';
+  if (!res.ok || (!ct.includes('text/html') && !ct.includes('application/octet-stream'))) return res;
   const html = await res.text();
   const userScript = `<script>window.__USER__=${JSON.stringify({
     username: session.username,
     role: session.role,
     permissions: session.permissions || {},
     isAdmin: session.role === 'admin'
-  })};</script>`;
-  const newHtml = html.replace('</head>', userScript + '\n</head>');
-  const headers = new Headers(res.headers);
-  headers.set('content-type', 'text/html; charset=utf-8');
-  headers.delete('content-length');
-  return new Response(newHtml, { status: res.status, headers });
+  })};</script>` + IDLE_SCRIPT;
+  // Case-insensitive replace, fallback to prepend body if no </head>
+  const newHtml = /<\/head>/i.test(html)
+    ? html.replace(/<\/head>/i, userScript + '\n</head>')
+    : html.replace(/<body/i, userScript + '\n<body');
+  return new Response(newHtml, {
+    status: res.status,
+    headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store, no-cache' }
+  });
 }
 
 /* ═══════════════════════════════════════════════ */
@@ -185,6 +411,7 @@ const SERVICES = [
   { id: 'ssh',         name: 'SSH Terminal',   checkUrl: 'https://termix.home-server.id.vn' },
   { id: 'fortigate',   name: 'FortiGate',      checkUrl: null },
   { id: 'asus',        name: 'ASUS Router',    checkUrl: null },
+  { id: 'camera',      name: 'Camera',         checkUrl: 'https://camera.home-server.id.vn' },
 ];
 
 const N8N_BASE        = 'https://n8n-home.home-server.id.vn/api/v1';
@@ -221,16 +448,23 @@ async function handleN8n(env) {
   const opts = (extra = {}) => ({ headers: h, signal: AbortSignal.timeout(10000), ...extra });
 
   try {
-    const [wfRes, exRes, credRes, varRes, tagRes] = await Promise.all([
+    // Fetch running executions separately — n8n default list only returns finished ones
+    const [wfRes, exRes, exRunRes, credRes, varRes, tagRes] = await Promise.all([
       fetch(`${N8N_BASE}/workflows?limit=100`, opts()),
       fetch(`${N8N_BASE}/executions?limit=50&includeData=false`, opts()),
+      fetch(`${N8N_BASE}/executions?limit=20&includeData=false&status=running`, opts()),
       fetch(`${N8N_BASE}/credentials`, opts()),
       fetch(`${N8N_BASE}/variables`, opts()),
       fetch(`${N8N_BASE}/tags?limit=100`, opts()),
     ]);
 
-    const [wfData, exData, credData, varData, tagData] = await Promise.all([
-      wfRes.json(), exRes.json(), credRes.json(), varRes.json(), tagRes.json(),
+    const [wfData, exData, exRunData, credData, varData, tagData] = await Promise.all([
+      wfRes.json(),
+      exRes.json(),
+      exRunRes.ok ? exRunRes.json() : { data: [] },
+      credRes.json(),
+      varRes.json(),
+      tagRes.json(),
     ]);
 
     const workflows = (wfData.data || []).map(w => ({
@@ -243,7 +477,16 @@ async function handleN8n(env) {
     const wfNameMap = {};
     workflows.forEach(w => { wfNameMap[w.id] = w.name; });
 
-    const executions = (exData.data || []).map(e => ({
+    // Merge running (first) + finished, deduplicate by ID, sort newest first
+    const seenIds = new Set();
+    const mergedRaw = [...(exRunData.data || []), ...(exData.data || [])].filter(e => {
+      if (seenIds.has(e.id)) return false;
+      seenIds.add(e.id);
+      return true;
+    });
+    mergedRaw.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+
+    const executions = mergedRaw.map(e => ({
       id: e.id,
       workflowName: wfNameMap[e.workflowId] || e.workflowData?.name || '(không rõ)',
       workflowId: e.workflowId,
@@ -398,6 +641,228 @@ async function handle9Router() {
   } catch (e) {
     return json({ error: e.message }, 502);
   }
+}
+
+/* ═══════════════════════════════════════════════
+   Bookmarks — per-user, stored in KV
+   ═══════════════════════════════════════════════ */
+
+async function handleGetBookmarks(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Not authenticated' }, 401);
+  const list = await env.DASHBOARD_KV.get(`bookmarks:${session.username}`, 'json') || [];
+  return json({ bookmarks: list });
+}
+
+async function handleSaveBookmarks(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Not authenticated' }, 401);
+  if (request.method !== 'PUT') return json({ error: 'PUT required' }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const raw = body.bookmarks;
+  // Accept both v2 object { v:2, folders:[...] } and legacy array
+  if (!raw) return json({ error: 'Missing bookmarks field' }, 400);
+  await env.DASHBOARD_KV.put(`bookmarks:${session.username}`, JSON.stringify(raw));
+  const count = Array.isArray(raw) ? raw.length
+    : (raw.folders ? raw.folders.reduce((s,f) => s + (f.items||[]).length, 0) : 0);
+  return json({ success: true, count });
+}
+
+
+/* ── Activity Log ── */
+async function logActivity(env, { action, username, ip, success, detail }) {
+  try {
+    const log = await env.DASHBOARD_KV.get('activity_log', 'json') || [];
+    log.unshift({ ts: Date.now(), action, username: username||'?', ip: ip||'?', success: !!success, detail: detail||'' });
+    if (log.length > 200) log.length = 200;
+    await env.DASHBOARD_KV.put('activity_log', JSON.stringify(log), { expirationTtl: 60*60*24*30 });
+  } catch(e) { /* non-critical */ }
+}
+
+/* ── Meraki Devices Proxy ── */
+async function handleMerakiDevices(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/c65756f7-f228-4668-8d47-79efd543f234';
+  const N8N_AUTH = 'Basic ' + btoa('admin:Itadmin@2023');
+
+  try {
+    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH } });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw = await resp.json();
+
+    // n8n trả raw array, transform thành format chuẩn
+    const list = Array.isArray(raw) ? raw : (raw.devices || []);
+    const TYPE_ICON = { switch: '🔀', wireless: '📡', appliance: '🔥', camera: '📷' };
+
+    const devices = list.map(function(d) {
+      const ip = d.lanIp || d.wan1Ip || d.wan2Ip || '—';
+      // Nếu firmware chứa "Not running configured version" → coi là cần chú ý
+      const firmwareOk = d.firmware && !d.firmware.includes('Not running');
+      return {
+        name:       d.name || '—',
+        model:      d.model || '—',
+        serial:     d.serial || '—',
+        lanIp:      ip,
+        productType: d.productType || 'switch',
+        typeIcon:   TYPE_ICON[d.productType] || '📦',
+        tags:       (d.tags || []).join(', '),
+        firmware:   d.firmware || '—',
+        firmwareOk: firmwareOk,
+        status:     firmwareOk ? 'online' : 'alerting',
+        lastReportedAt: d.configurationUpdatedAt || null,
+        url:        d.url || null,
+      };
+    });
+
+    return json({ devices, total: devices.length, fetchedAt: new Date().toISOString() });
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ── Meraki Clients Proxy ── */
+async function handleMerakiClients(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/8e83df3c-d3ad-48ae-ae1c-11fd5733d147';
+  const N8N_AUTH = 'Basic ' + btoa('admin:Itadmin@2023');
+
+  try {
+    const resp = await fetch(N8N_URL, {
+      headers: { 'Authorization': N8N_AUTH },
+      cf: { cacheTtl: 60, cacheEverything: false },
+    });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const data = await resp.json();
+    // n8n trả array, lấy phần tử đầu
+    const payload = Array.isArray(data) ? data[0] : data;
+    return json(payload);
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ── Meraki Device Status Proxy ── */
+async function handleMerakiDeviceStatus(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/105904c4-2578-4bd7-98c9-bc226bf8f655';
+  const N8N_AUTH = 'Basic ' + btoa('admin:Itadmin@2023');
+
+  try {
+    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH } });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw = await resp.json();
+    // n8n trả [{ devices: [...] }] hoặc raw array
+    const first = Array.isArray(raw) ? raw[0] : raw;
+    const list = (first && first.devices) || (first && first.statuses) || (Array.isArray(raw) ? raw : []);
+
+    const statuses = list.map(d => ({
+      name:           d.name || '—',
+      serial:         d.serial || '—',
+      model:          d.model || '—',
+      productType:    d.productType || '—',
+      status:         d.status || 'offline',
+      publicIp:       d.publicIp || '—',
+      lastReportedAt: d.lastReportedAt || null,
+    }));
+
+    const online   = statuses.filter(d => d.status === 'online').length;
+    const offline  = statuses.filter(d => d.status === 'offline').length;
+    const alerting = statuses.filter(d => d.status === 'alerting').length;
+    const dormant  = statuses.filter(d => d.status === 'dormant').length;
+
+    return json({ statuses, total: statuses.length, online, offline, alerting, dormant, fetchedAt: new Date().toISOString() });
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ── Meraki Switch Ports (via n8n webhook) ── */
+async function handleMerakiSwitchPorts(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/35e2fe08-836e-49de-b029-3d6f4f59ff78';
+  const N8N_AUTH = 'Basic ' + btoa('admin:Itadmin@2023');
+  try {
+    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(50000) });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw = await resp.json();
+    const switches = Array.isArray(raw) ? raw : [raw];
+    const totalPorts     = switches.reduce((s, sw) => s + (sw.totalPorts || 0), 0);
+    const connectedPorts = switches.reduce((s, sw) => s + (sw.connectedPorts || 0), 0);
+    const errorPorts     = switches.reduce((s, sw) => s + (sw.errorPorts || 0), 0);
+    const deadSwitches   = switches.filter(sw => sw.connectedPorts === 0).length;
+    return json({ switches, totalSwitches: switches.length, totalPorts, connectedPorts, errorPorts, deadSwitches, fetchedAt: new Date().toISOString() });
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ── Meraki Switch Port Configs (W5b) ── */
+async function handleMerakiSwitchPortConfigs(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/aa72618f-47a8-44cb-a58b-d77be06ee3d7';
+  const N8N_AUTH = 'Basic ' + btoa('admin:Itadmin@2023');
+  try {
+    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(50000) });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw = await resp.json();
+    const configs = Array.isArray(raw) ? raw : [raw];
+    return json({ configs, fetchedAt: new Date().toISOString() });
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ── Meraki Events Proxy ── */
+async function handleMerakiEvents(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/3019c3e2-5725-40b5-95e4-f4a8d5a3d326';
+  const N8N_AUTH = 'Basic ' + btoa('admin:Itadmin@2023');
+
+  try {
+    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH } });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw = await resp.json();
+    // Code Node trả { events, total, high, medium, fetchedAt }
+    const payload = Array.isArray(raw) ? raw[0] : raw;
+    return json(payload);
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+async function handleGetActivity(request, env) {
+  const session = await getSession(request, env);
+  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  const log = await env.DASHBOARD_KV.get('activity_log', 'json') || [];
+  return json({ log: log.slice(0, 100) });
+}
+
+/* ── User Shortcuts ── */
+async function handleGetShortcuts(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Not authenticated' }, 401);
+  const list = await env.DASHBOARD_KV.get(`shortcuts:${session.username}`, 'json') || [];
+  return json({ shortcuts: list });
+}
+
+async function handleSaveShortcuts(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Not authenticated' }, 401);
+  if (request.method !== 'PUT') return json({ error: 'PUT required' }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const list = (Array.isArray(body.shortcuts) ? body.shortcuts : []).slice(0, 24);
+  await env.DASHBOARD_KV.put(`shortcuts:${session.username}`, JSON.stringify(list));
+  return json({ success: true, count: list.length });
 }
 
 /* ═══════════════════════════════════════════════
@@ -1419,8 +1884,15 @@ export default {
     const p   = url.pathname;
 
     // ── Auth API (public) ──
-    if (p === '/api/auth/login')  return handleLogin(request, env);
-    if (p === '/api/auth/logout') return handleLogout(request, env);
+    if (p === '/api/auth/login')      return handleLogin(request, env);
+    if (p === '/api/auth/logout')     return handleLogout(request, env);
+    if (p === '/api/auth/mfa/verify') return handleMfaVerify(request, env);
+
+    // ── MFA API (require session) ──
+    if (p === '/api/auth/mfa/status') return handleMfaStatus(request, env);
+    if (p === '/api/auth/mfa/setup')  return handleMfaSetup(request, env);
+    if (p === '/api/auth/mfa/enable') return handleMfaEnable(request, env);
+    if (p === '/api/auth/mfa/disable')return handleMfaDisable(request, env);
 
     // ── Admin API ──
     if (p === '/api/admin/users') {
@@ -1436,6 +1908,22 @@ export default {
     }
 
     // ── Data API (require valid session) ──
+    if (p === '/api/bookmarks') {
+      if (request.method === 'GET') return handleGetBookmarks(request, env);
+      if (request.method === 'PUT') return handleSaveBookmarks(request, env);
+    }
+    if (p === '/api/shortcuts') {
+      if (request.method === 'GET') return handleGetShortcuts(request, env);
+      if (request.method === 'PUT') return handleSaveShortcuts(request, env);
+    }
+    if (p === '/api/activity') return handleGetActivity(request, env);
+    if (p === '/api/meraki-clients')       return handleMerakiClients(request, env);
+    if (p === '/api/meraki-devices')       return handleMerakiDevices(request, env);
+    if (p === '/api/meraki-device-status') return handleMerakiDeviceStatus(request, env);
+    if (p === '/api/meraki-events')        return handleMerakiEvents(request, env);
+    if (p === '/api/meraki-switch-ports')  return handleMerakiSwitchPorts(request, env);
+    if (p === '/api/meraki-port-configs')  return handleMerakiSwitchPortConfigs(request, env);
+
     if (p === '/api/status')      return handleStatus();
     if (p === '/api/n8n')         return handleN8n(env);
     if (p === '/api/n8n/exec')    return handleExecDetail(request, env);

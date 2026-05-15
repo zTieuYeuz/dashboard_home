@@ -13,16 +13,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .logo{width:44px;height:44px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 12px rgba(59,130,246,.35);}
 .logo-text{font-size:18px;font-weight:700;letter-spacing:-.02em;}
 .title{font-size:22px;font-weight:700;text-align:center;margin-bottom:.5rem;letter-spacing:-.02em;}
-.sub{font-size:13px;color:#71717a;text-align:center;margin-bottom:2rem;}
+.sub{font-size:13px;color:#71717a;text-align:center;margin-bottom:2rem;line-height:1.5}
 .label{font-size:12px;font-weight:600;color:#a1a1aa;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:block;}
 .input{width:100%;padding:10px 14px;border-radius:10px;border:1px solid #27272a;background:#09090b;color:#f4f4f5;font-size:14px;outline:none;transition:border-color .15s;}
 .input:focus{border-color:#3b82f6;}
+.input-otp{text-align:center;font-size:22px;font-weight:700;letter-spacing:8px;font-family:'IBM Plex Mono',monospace;}
 .form-group{margin-bottom:1.25rem;}
 .btn{width:100%;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .15s;margin-top:.5rem;}
 .btn:hover{opacity:.9;}
 .btn:disabled{opacity:.5;cursor:not-allowed;}
+.btn-ghost{width:100%;padding:9px;border-radius:10px;border:1px solid #27272a;background:transparent;color:#71717a;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;margin-top:8px;}
+.btn-ghost:hover{color:#f4f4f5;border-color:#3f3f46}
 .err{font-size:13px;color:#ef4444;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:10px 12px;margin-top:1rem;display:none;}
 .err.show{display:block;}
+.mfa-icon{font-size:36px;text-align:center;margin-bottom:.5rem}
+.mfa-hint{font-size:11.5px;color:#52525b;text-align:center;margin-top:12px;line-height:1.6}
 </style>
 </head>
 <body>
@@ -31,24 +36,59 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="logo">🖥️</div>
     <div class="logo-text">Home Lab</div>
   </div>
-  <div class="title">Đăng nhập</div>
-  <div class="sub">Nhập thông tin để truy cập dashboard</div>
 
-  <form onsubmit="doLogin(event)">
-    <div class="form-group">
-      <label class="label">Tên đăng nhập</label>
-      <input class="input" id="username" type="text" autocomplete="username" placeholder="admin" required autofocus/>
+  <!-- ── Step 1: Username / Password ── -->
+  <div id="step-login">
+    <div class="title">Đăng nhập</div>
+    <div class="sub" id="login-sub">Nhập thông tin để truy cập dashboard</div>
+    <!-- Idle-logout notice (shown when ?reason=idle) -->
+    <div id="idle-notice" style="display:none;margin-bottom:1.25rem;padding:10px 14px;border-radius:10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);font-size:13px;color:#fbbf24;line-height:1.5;text-align:center">
+      ⏱ Phiên làm việc đã hết hạn do không có hoạt động trong <strong>30 phút</strong>.<br>Vui lòng đăng nhập lại.
     </div>
-    <div class="form-group">
-      <label class="label">Mật khẩu</label>
-      <input class="input" id="password" type="password" autocomplete="current-password" placeholder="••••••••" required/>
+    <form onsubmit="doLogin(event)">
+      <div class="form-group">
+        <label class="label">Tên đăng nhập</label>
+        <input class="input" id="username" type="text" autocomplete="username" placeholder="admin" required autofocus/>
+      </div>
+      <div class="form-group">
+        <label class="label">Mật khẩu</label>
+        <input class="input" id="password" type="password" autocomplete="current-password" placeholder="••••••••" required/>
+      </div>
+      <button class="btn" type="submit" id="loginBtn">Đăng nhập →</button>
+      <div class="err" id="errMsg"></div>
+    </form>
+  </div>
+
+  <!-- ── Step 2: MFA / OTP ── -->
+  <div id="step-mfa" style="display:none">
+    <div class="mfa-icon">🔐</div>
+    <div class="title">Xác thực hai bước</div>
+    <div class="sub">Mở Microsoft Authenticator hoặc Google Authenticator, nhập mã 6 chữ số.</div>
+    <div class="form-group" style="margin-top:1.5rem">
+      <label class="label" style="text-align:center;display:block">Mã xác thực (OTP)</label>
+      <input class="input input-otp" id="mfa-code" type="text" inputmode="numeric"
+             maxlength="6" placeholder="000000" autocomplete="one-time-code"/>
     </div>
-    <button class="btn" type="submit" id="loginBtn">Đăng nhập →</button>
-    <div class="err" id="errMsg"></div>
-  </form>
+    <button class="btn" id="mfaBtn" onclick="doMfaVerify()">Xác nhận →</button>
+    <button class="btn-ghost" onclick="backToLogin()">← Đăng nhập lại</button>
+    <div class="err" id="mfaErr"></div>
+    <div class="mfa-hint">Mã hết hạn sau 30 giây. Nếu sai, hãy đợi mã mới.</div>
+  </div>
 </div>
 
 <script>
+var _tempToken = null;
+
+// Show idle-logout notice if redirected from auto-logout
+(function() {
+  if (new URLSearchParams(window.location.search).get('reason') === 'idle') {
+    document.getElementById('idle-notice').style.display = 'block';
+    document.getElementById('login-sub').style.display = 'none';
+    // Clean up URL without reload
+    history.replaceState(null, '', '/login.html');
+  }
+})();
+
 async function doLogin(e) {
   e.preventDefault();
   const btn = document.getElementById('loginBtn');
@@ -66,7 +106,15 @@ async function doLogin(e) {
       })
     });
     const data = await res.json();
-    if (res.ok && data.success) {
+    if (res.ok && data.mfaRequired) {
+      // Switch to MFA step
+      _tempToken = data.tempToken;
+      document.getElementById('step-login').style.display = 'none';
+      document.getElementById('step-mfa').style.display = '';
+      document.getElementById('mfa-code').value = '';
+      document.getElementById('mfaErr').classList.remove('show');
+      setTimeout(function(){ document.getElementById('mfa-code').focus(); }, 80);
+    } else if (res.ok && data.success) {
       window.location.href = '/';
     } else {
       err.textContent = data.error || 'Đăng nhập thất bại';
@@ -79,6 +127,68 @@ async function doLogin(e) {
     btn.disabled = false;
     btn.textContent = 'Đăng nhập →';
   }
+}
+
+async function doMfaVerify() {
+  var code = document.getElementById('mfa-code').value.trim();
+  var err  = document.getElementById('mfaErr');
+  var btn  = document.getElementById('mfaBtn');
+  if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+    err.textContent = 'Mã OTP phải có đúng 6 chữ số';
+    err.classList.add('show');
+    return;
+  }
+  err.classList.remove('show');
+  btn.disabled = true;
+  btn.textContent = 'Đang xác thực...';
+  try {
+    var res = await fetch('/api/auth/mfa/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tempToken: _tempToken, code: code })
+    });
+    var data = await res.json();
+    if (res.ok && data.success) {
+      window.location.href = '/';
+    } else if (res.status === 401) {
+      // Session expired — force back to login
+      err.textContent = data.error || 'Phiên hết hạn. Vui lòng đăng nhập lại.';
+      err.classList.add('show');
+      setTimeout(backToLogin, 2500);
+    } else {
+      err.textContent = data.error || 'Mã OTP không đúng';
+      err.classList.add('show');
+      document.getElementById('mfa-code').value = '';
+      document.getElementById('mfa-code').focus();
+    }
+  } catch(ex) {
+    err.textContent = 'Lỗi kết nối: ' + ex.message;
+    err.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Xác nhận →';
+  }
+}
+
+// Allow Enter key in OTP input
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('mfa-code').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doMfaVerify();
+  });
+  // Auto-submit when 6 digits entered
+  document.getElementById('mfa-code').addEventListener('input', function() {
+    var v = this.value.replace(/\D/g, '');
+    this.value = v;
+    if (v.length === 6) doMfaVerify();
+  });
+});
+
+function backToLogin() {
+  _tempToken = null;
+  document.getElementById('step-mfa').style.display = 'none';
+  document.getElementById('step-login').style.display = '';
+  document.getElementById('mfaErr').classList.remove('show');
+  document.getElementById('mfa-code').value = '';
 }
 </script>
 </body>

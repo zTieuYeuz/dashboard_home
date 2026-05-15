@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Bookmarks — Home Lab</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d14;--surface:#131620;--card:#1a1d2e;--border:#252840;
+  --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
+  --green:#34d399;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh}
+a{text-decoration:none;color:inherit}
+button{cursor:pointer;font-family:var(--font)}
+
+/* ── Header ── */
+.header{background:var(--surface);border-bottom:.5px solid var(--border);padding:0 1.5rem;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.hdr-left{display:flex;align-items:center;gap:10px}
+.back-btn{font-size:12px;padding:5px 12px;border-radius:6px;border:.5px solid var(--border);background:transparent;color:var(--muted);transition:all .15s}
+.back-btn:hover{color:var(--text);border-color:#3d4260;background:var(--card)}
+.hdr-title{font-size:15px;font-weight:600}
+.hdr-right{display:flex;align-items:center;gap:8px}
+.edit-toggle{font-size:12px;padding:5px 12px;border-radius:6px;border:.5px solid var(--border);background:transparent;color:var(--muted);transition:all .15s}
+.edit-toggle:hover{color:var(--text);border-color:#3d4260}
+.edit-toggle.active{color:var(--amber);border-color:var(--amber);background:#2d1f00}
+.user-badge{font-size:12px;color:var(--muted);padding:4px 10px;border-radius:6px;background:var(--card);border:.5px solid var(--border)}
+
+/* ── Hero ── */
+.hero{padding:2.5rem 1.5rem 2rem;display:flex;flex-direction:column;align-items:center;gap:1.25rem;background:linear-gradient(180deg,#0c0e1a 0%,var(--bg) 100%)}
+.clock-wrap{text-align:center}
+.clock{font-size:56px;font-weight:700;letter-spacing:-3px;line-height:1;font-variant-numeric:tabular-nums;color:var(--text)}
+.clock-date{font-size:13px;color:var(--muted);margin-top:4px;letter-spacing:.02em}
+.search-wrap{display:flex;align-items:stretch;background:var(--card);border:.5px solid var(--border);border-radius:12px;width:100%;max-width:620px;overflow:hidden;transition:border-color .2s}
+.search-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(96,165,250,.12)}
+.engine-sel{font-size:13px;padding:0 14px;background:var(--surface);border:none;border-right:.5px solid var(--border);color:var(--muted);cursor:pointer;outline:none;font-family:var(--font);min-width:120px}
+.search-input{flex:1;padding:0 16px;height:48px;background:transparent;border:none;outline:none;font-size:15px;color:var(--text);font-family:var(--font)}
+.search-input::placeholder{color:var(--muted)}
+.search-btn{padding:0 20px;background:var(--accent);border:none;color:#fff;font-size:15px;font-weight:600;transition:opacity .15s}
+.search-btn:hover{opacity:.85}
+
+/* ── Page ── */
+.page{padding:1.25rem 1.5rem 4rem;max-width:1700px;margin:0 auto}
+.folders-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;align-items:start}
+
+/* ── Folder ── */
+.folder{background:var(--card);border:.5px solid var(--border);border-radius:12px;overflow:hidden}
+.folder-header{display:flex;align-items:center;gap:8px;padding:.6rem .9rem;border-bottom:.5px solid var(--border)}
+.folder-icon-disp{font-size:16px;line-height:1;flex-shrink:0}
+.folder-color-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.folder-name{font-size:11.5px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
+.folder-acts{display:flex;gap:3px;opacity:0;transition:opacity .15s;flex-shrink:0}
+.folder:hover .folder-acts{opacity:1}
+.f-btn{font-size:11px;padding:2px 7px;border-radius:5px;border:.5px solid var(--border);background:transparent;color:var(--muted);transition:all .15s;line-height:1.5}
+.f-btn:hover{color:var(--text);border-color:#3d4260;background:var(--surface)}
+.f-btn.add{color:var(--accent);border-color:var(--accent)}.f-btn.add:hover{background:#0c1a2e}
+.f-btn.del:hover{color:var(--red);border-color:var(--red);background:#2d0a0a}
+.bm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:4px;padding:.6rem}
+.bm-empty{padding:1.5rem .75rem;text-align:center;font-size:12px;color:var(--muted);line-height:1.6}
+
+/* ── Bookmark tile ── */
+.bm-tile{display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 4px 8px;border-radius:8px;border:.5px solid transparent;position:relative;transition:all .15s;cursor:pointer;color:var(--text)}
+.bm-tile:hover{background:var(--surface);border-color:var(--border)}
+.bm-tile:active{transform:scale(.96)}
+.bm-favicon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden;background:var(--surface);flex-shrink:0;border:.5px solid var(--border)}
+.bm-favicon img{width:36px;height:36px;border-radius:8px;object-fit:cover}
+.bm-tname{font-size:10px;color:var(--muted);text-align:center;width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;line-height:1.3;padding:0 2px}
+.bm-tile:hover .bm-tname{color:var(--text)}
+.bm-tile-btns{display:none;position:absolute;top:-5px;right:-5px;flex-direction:column;gap:2px;z-index:5}
+.edit-mode .bm-tile-btns{display:flex}
+.tb-btn{width:18px;height:18px;border-radius:4px;border:none;font-size:9px;display:flex;align-items:center;justify-content:center;line-height:1}
+.tb-btn.e{background:#1e3a5f;color:var(--accent)}.tb-btn.d{background:#2d0a0a;color:var(--red)}
+.tb-btn:hover{filter:brightness(1.25)}
+
+/* ── Add folder ── */
+.add-folder-wrap{margin-top:12px}
+.add-folder-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:.75rem 1rem;border-radius:10px;border:.5px dashed var(--border);background:transparent;color:var(--muted);font-size:13px;transition:all .15s;width:100%;cursor:pointer}
+.add-folder-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(96,165,250,.06)}
+
+/* ── Modals ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:1000;padding:1rem}
+.modal-bg.hidden{display:none}
+.modal{background:var(--surface);border:.5px solid var(--border);border-radius:14px;width:100%;max-width:420px;padding:1.5rem;box-shadow:0 24px 80px rgba(0,0,0,.5);max-height:90vh;overflow-y:auto}
+.modal-title{font-size:16px;font-weight:600;margin-bottom:1.25rem}
+.form-group{margin-bottom:.85rem}
+.form-label{font-size:11px;color:var(--muted);margin-bottom:5px;display:block;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.form-input{width:100%;padding:9px 12px;border-radius:8px;border:.5px solid var(--border);background:var(--card);color:var(--text);font-size:14px;font-family:var(--font);outline:none;transition:border-color .15s}
+.form-input:focus{border-color:var(--accent)}
+
+/* ── Color picker ── */
+.color-row{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px}
+.c-dot{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:border-color .15s,transform .1s;flex-shrink:0}
+.c-dot:hover,.c-dot.sel{border-color:var(--text);transform:scale(1.18)}
+
+/* ── Icon picker ── */
+.icon-picker-wrap{margin-top:6px}
+.icon-search{width:100%;padding:6px 10px;border-radius:7px;border:.5px solid var(--border);background:var(--card);color:var(--text);font-size:13px;font-family:var(--font);outline:none;margin-bottom:7px;transition:border-color .15s}
+.icon-search:focus{border-color:var(--accent)}
+.icon-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:3px;max-height:150px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.icon-grid::-webkit-scrollbar{width:4px}.icon-grid::-webkit-scrollbar-track{background:transparent}.icon-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.ic-btn{width:34px;height:34px;border-radius:7px;border:.5px solid transparent;background:transparent;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;flex-shrink:0}
+.ic-btn:hover{background:var(--card);border-color:var(--border);transform:scale(1.12)}
+.ic-btn.sel{background:rgba(96,165,250,.18);border-color:var(--accent)}
+.icon-preview{display:flex;align-items:center;gap:8px;margin-top:5px;font-size:12px;color:var(--muted)}
+.icon-preview-em{font-size:22px;line-height:1}
+
+/* ── Modal buttons ── */
+.modal-btns{display:flex;gap:8px;margin-top:1.25rem;flex-wrap:wrap}
+.btn{font-size:13px;padding:8px 16px;border-radius:8px;border:.5px solid var(--border);background:transparent;transition:all .15s;font-family:var(--font)}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}.btn-primary:hover{opacity:.85}
+.btn-ghost{color:var(--muted)}.btn-ghost:hover{color:var(--text);border-color:#3d4260}
+.btn-danger{color:var(--red);border-color:var(--red);margin-left:auto}.btn-danger:hover{background:#2d0a0a}
+
+/* Tooltip */
+.bm-tile[data-url]:hover::after{content:attr(data-url);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:#111827;border:.5px solid var(--border);color:var(--muted);font-size:10px;padding:3px 8px;border-radius:5px;white-space:nowrap;pointer-events:none;z-index:10;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="hdr-left">
+    <button class="back-btn" onclick="location.href='/'">← Dashboard</button>
+    <div class="hdr-title">📌 Bookmarks</div>
+  </div>
+  <div class="hdr-right">
+    <button class="edit-toggle" id="edit-toggle" onclick="toggleEditMode()">✏️ Chỉnh sửa</button>
+    <span class="user-badge" id="user-badge"></span>
+  </div>
+</div>
+
+<!-- Hero: Clock + Search -->
+<div class="hero">
+  <div class="clock-wrap">
+    <div class="clock" id="clock">00:00:00</div>
+    <div class="clock-date" id="clock-date"></div>
+  </div>
+  <form class="search-wrap" onsubmit="doSearch(event)">
+    <select class="engine-sel" id="engine-sel" onchange="saveEngine()">
+      <option value="google">🔍 Google</option>
+      <option value="ddg">🦆 DuckDuckGo</option>
+      <option value="bing">🌐 Bing</option>
+    </select>
+    <input class="search-input" id="search-q" type="text" placeholder="Tìm kiếm hoặc nhập URL..." autocomplete="off"/>
+    <button class="search-btn" type="submit">→</button>
+  </form>
+</div>
+
+<!-- Folders -->
+<div class="page">
+  <div class="folders-grid" id="folders-grid"></div>
+  <div class="add-folder-wrap">
+    <button class="add-folder-btn" onclick="openFolderModal(null)">＋ Thêm nhóm mới</button>
+  </div>
+</div>
+
+<!-- Modal: Folder -->
+<div class="modal-bg hidden" id="folder-modal" onclick="bgClose(event,'folder-modal')">
+  <div class="modal">
+    <div class="modal-title" id="fm-title">Thêm nhóm</div>
+    <div class="form-group">
+      <label class="form-label">Tên nhóm</label>
+      <input class="form-input" id="fm-name" placeholder="Ví dụ: HomeServer" maxlength="40"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Icon nhóm</label>
+      <div class="icon-picker-wrap" id="fm-icon-picker"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Màu sắc</label>
+      <div class="color-row" id="fm-colors"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-primary" onclick="saveFolder()">Lưu</button>
+      <button class="btn btn-ghost" onclick="closeModal('folder-modal')">Hủy</button>
+      <button class="btn btn-danger" id="fm-del" style="display:none" onclick="deleteFolder()">Xóa nhóm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Bookmark -->
+<div class="modal-bg hidden" id="bm-modal" onclick="bgClose(event,'bm-modal')">
+  <div class="modal">
+    <div class="modal-title" id="bm-title">Thêm bookmark</div>
+    <div class="form-group">
+      <label class="form-label">Tên</label>
+      <input class="form-input" id="bm-name" placeholder="Gmail, ESXi…" maxlength="60"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">URL</label>
+      <input class="form-input" id="bm-url" placeholder="https://..." type="url"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Icon <span style="font-weight:400;text-transform:none">(để trống = tự lấy favicon từ URL)</span></label>
+      <div class="icon-picker-wrap" id="bm-icon-picker"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nhóm</label>
+      <select class="form-input" id="bm-folder-sel" style="cursor:pointer"></select>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-primary" onclick="saveBm()">Lưu</button>
+      <button class="btn btn-ghost" onclick="closeModal('bm-modal')">Hủy</button>
+      <button class="btn btn-danger" id="bm-del" style="display:none" onclick="deleteBm()">Xóa</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════
+   ICON LIBRARY — IT Categories
+   ══════════════════════════════ */
+var ICON_LIBRARY = [
+  /* Server & Infrastructure */
+  { e:'🖥️', t:'server' },  { e:'🗄️', t:'database storage' },
+  { e:'💾', t:'storage disk' }, { e:'🖧',  t:'network' },
+  { e:'📡', t:'antenna network wifi' }, { e:'🔌', t:'power plugin' },
+  { e:'⚡', t:'power speed' }, { e:'🔋', t:'battery power ups' },
+  /* Cloud & Virtualization */
+  { e:'☁️', t:'cloud' }, { e:'🐳', t:'docker container' },
+  { e:'📦', t:'package container deploy' }, { e:'🚀', t:'deploy launch ci cd' },
+  { e:'🏗️', t:'build infrastructure' }, { e:'🌐', t:'web internet global dns' },
+  /* Security */
+  { e:'🔒', t:'security lock' }, { e:'🔓', t:'unlock open' },
+  { e:'🛡️', t:'shield firewall security' }, { e:'🔑', t:'key auth password' },
+  { e:'🔐', t:'auth vault secret' }, { e:'👁️', t:'monitor watch ids' },
+  /* Monitoring & Analytics */
+  { e:'📊', t:'analytics chart monitor' }, { e:'📈', t:'uptime metrics growth' },
+  { e:'📉', t:'down decrease' }, { e:'🔔', t:'alert notification' },
+  { e:'🚨', t:'alarm critical alert' }, { e:'🌡️', t:'temperature sensor' },
+  { e:'🔭', t:'monitor observe' }, { e:'📡', t:'signal probe' },
+  /* Networking */
+  { e:'🕸️', t:'mesh network topology' }, { e:'🔗', t:'link tunnel proxy' },
+  { e:'🛣️', t:'route vpn tunnel' }, { e:'📶', t:'wifi signal wireless' },
+  { e:'🏠', t:'home local lan' }, { e:'🏢', t:'office wan corporate' },
+  /* Devices */
+  { e:'💻', t:'laptop workstation' }, { e:'🖨️', t:'printer' },
+  { e:'📱', t:'mobile phone' }, { e:'🖱️', t:'mouse input' },
+  { e:'⌨️', t:'keyboard input' }, { e:'📺', t:'display screen tv' },
+  { e:'📷', t:'camera cctv ip' }, { e:'🎮', t:'gaming controller' },
+  /* Dev & Automation */
+  { e:'⚙️', t:'settings config gear' }, { e:'🔧', t:'tools wrench fix' },
+  { e:'🛠️', t:'dev tools build' }, { e:'🎛️', t:'control panel dashboard' },
+  { e:'🤖', t:'bot automation ai' }, { e:'🧩', t:'plugin extension module' },
+  { e:'🧪', t:'test lab experiment' }, { e:'🐛', t:'bug debug' },
+  { e:'📝', t:'docs notes log' }, { e:'📋', t:'checklist task' },
+  { e:'🗂️', t:'files folder organize' }, { e:'📁', t:'folder directory' },
+  { e:'🗃️', t:'archive backup' }, { e:'🔄', t:'sync refresh update' },
+  /* Communication */
+  { e:'📧', t:'email mail' }, { e:'💬', t:'chat message slack' },
+  { e:'📞', t:'phone call voip' }, { e:'📟', t:'pager' },
+  /* Other useful */
+  { e:'🎯', t:'target goal' }, { e:'📌', t:'pin bookmark' },
+  { e:'🏷️', t:'tag label' }, { e:'🔍', t:'search find' },
+  { e:'🧠', t:'ai ml brain' }, { e:'🌍', t:'earth global' },
+  { e:'🔥', t:'hot performance' }, { e:'❄️', t:'cool backup cold' },
+  { e:'🎪', t:'lab demo test' }, { e:'🐧', t:'linux penguin' },
+  { e:'🪟', t:'windows' }, { e:'🍎', t:'apple mac' },
+];
+
+/* ── Auth ── */
+function _readUserCookie() {
+  try { var m = document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/); return m ? JSON.parse(decodeURIComponent(m[1])) : null; } catch(e) { return null; }
+}
+var __USER__ = window.__USER__ || _readUserCookie() || { role:'user', permissions:{}, isAdmin:false };
+document.getElementById('user-badge').textContent = __USER__.username || '';
+
+/* ── Clock ── */
+var DAYS = ['Chủ nhật','Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy'];
+function tickClock() {
+  var n = new Date(), p = function(x){ return String(x).padStart(2,'0'); };
+  document.getElementById('clock').textContent = p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());
+  document.getElementById('clock-date').textContent =
+    DAYS[n.getDay()] + ', ngày ' + n.getDate() + ' tháng ' + (n.getMonth()+1) + ' năm ' + n.getFullYear();
+}
+tickClock(); setInterval(tickClock, 1000);
+
+/* ── Search ── */
+var ENGINES = { google:'https://www.google.com/search?q=', ddg:'https://duckduckgo.com/?q=', bing:'https://www.bing.com/search?q=' };
+function saveEngine(){ localStorage.setItem('bm_engine', document.getElementById('engine-sel').value); }
+(function(){ document.getElementById('engine-sel').value = localStorage.getItem('bm_engine') || 'google'; })();
+function doSearch(e) {
+  e.preventDefault();
+  var q = document.getElementById('search-q').value.trim(); if (!q) return;
+  var url = (/^https?:\/\//.test(q) || /^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(\/|$)/.test(q))
+    ? (q.startsWith('http') ? q : 'https://'+q)
+    : (ENGINES[document.getElementById('engine-sel').value] || ENGINES.google) + encodeURIComponent(q);
+  window.open(url, '_blank', 'noopener');
+}
+
+/* ── Data ── */
+var COLORS = ['#60a5fa','#34d399','#f87171','#fbbf24','#a78bfa','#f472b6','#38bdf8','#fb923c','#6ee7b7','#c4b5fd'];
+var _data = { v:2, folders:[] };
+var _editMode = false;
+var _curFolderIdx = null;
+var _curBmFolder  = null;
+var _curBmIdx     = null;
+var _fmIcon = '📁';      // selected icon for folder modal
+var _bmIconSel = '';     // selected icon for bm modal (empty = auto favicon)
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function faviconUrl(url){ try{ return 'https://www.google.com/s2/favicons?domain='+new URL(url).hostname+'&sz=64'; }catch(e){ return null; } }
+
+/* ── Migrate old → v2 ── */
+function migrate(raw) {
+  if (!raw) return { v:2, folders:[] };
+  if (Array.isArray(raw)) {
+    if (!raw.length) return { v:2, folders:[] };
+    return { v:2, folders:[{ id:uid(), name:'Bookmarks', icon:'📌', color:'#60a5fa',
+      items: raw.map(function(b){ return { id:uid(), name:b.name||'', url:b.url||'', icon:b.icon||'' }; }) }] };
+  }
+  if (raw.v === 2 && Array.isArray(raw.folders)) return raw;
+  return { v:2, folders:[] };
+}
+
+/* ── Load / Save ── */
+var CACHE_KEY = 'homelab_bm_v2';
+function loadData() {
+  try { var c = JSON.parse(localStorage.getItem(CACHE_KEY)); if(c){ _data=migrate(c); renderFolders(); } } catch(e){}
+  fetch('/api/bookmarks',{credentials:'include'})
+    .then(function(r){ return r.ok?r.json():null; })
+    .then(function(d){
+      if(!d) return;
+      _data = migrate(d.bookmarks);
+      try{ localStorage.setItem(CACHE_KEY,JSON.stringify(_data)); }catch(e){}
+      renderFolders();
+    }).catch(function(){});
+}
+function persist() {
+  try{ localStorage.setItem(CACHE_KEY,JSON.stringify(_data)); }catch(e){}
+  fetch('/api/bookmarks',{ method:'PUT', credentials:'include',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify({bookmarks:_data})
+  }).catch(function(){});
+}
+
+/* ── Render ── */
+function renderFolders() {
+  var g = document.getElementById('folders-grid');
+  if (!_data.folders.length) {
+    g.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:2rem 0;grid-column:1/-1">Chưa có nhóm nào. Nhấn <b>+ Thêm nhóm mới</b> bên dưới.</div>';
+    return;
+  }
+  g.innerHTML = _data.folders.map(function(f, fi){
+    var items = f.items || [];
+    var folderIcon = f.icon || '📁';
+    var folderColor = f.color || '#60a5fa';
+    var bmHtml = items.length ? items.map(function(bm, bi){
+      var fav = faviconUrl(bm.url);
+      var iconHtml = (bm.icon && bm.icon.trim())
+        ? '<span style="font-size:20px;line-height:36px">'+esc(bm.icon)+'</span>'
+        : (fav
+          ? '<img src="'+esc(fav)+'" loading="lazy" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\'"/><span style="display:none;font-size:18px">🌐</span>'
+          : '<span style="font-size:18px">🌐</span>');
+      return '<a class="bm-tile'+((_editMode)?' edit-mode':'')+'" href="'+esc(bm.url)+'" target="_blank" rel="noopener" data-url="'+esc(bm.url)+'" onclick="tileClick(event,'+fi+','+bi+')">'
+        +'<div class="bm-favicon">'+iconHtml+'</div>'
+        +'<div class="bm-tname" title="'+esc(bm.name)+'">'+esc(bm.name)+'</div>'
+        +'<div class="bm-tile-btns">'
+        +'<button class="tb-btn e" onclick="openBmEdit(event,'+fi+','+bi+')" title="Sửa">✏</button>'
+        +'<button class="tb-btn d" onclick="delBmDirect(event,'+fi+','+bi+')" title="Xóa">✕</button>'
+        +'</div></a>';
+    }).join('') : '<div class="bm-empty">Chưa có bookmark.<br>Nhấn <b style="color:var(--accent)">+</b> để thêm.</div>';
+
+    return '<div class="folder" id="f'+fi+'">'
+      +'<div class="folder-header" style="border-left:3px solid '+folderColor+'">'
+      +'<span class="folder-icon-disp">'+esc(folderIcon)+'</span>'
+      +'<div class="folder-name">'+esc(f.name)+'</div>'
+      +'<div class="folder-acts">'
+      +'<button class="f-btn add" onclick="openBmAdd('+fi+')" title="Thêm bookmark">+</button>'
+      +'<button class="f-btn" onclick="openFolderModal('+fi+')" title="Sửa nhóm">✏</button>'
+      +'<button class="f-btn del" onclick="delFolderDirect('+fi+')" title="Xóa nhóm">✕</button>'
+      +'</div></div>'
+      +'<div class="bm-grid">'+bmHtml+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+/* ── Edit mode ── */
+function toggleEditMode() {
+  _editMode = !_editMode;
+  var btn = document.getElementById('edit-toggle');
+  btn.classList.toggle('active', _editMode);
+  btn.textContent = _editMode ? '✅ Xong' : '✏️ Chỉnh sửa';
+  renderFolders();
+}
+function tileClick(e, fi, bi) {
+  if (_editMode) { e.preventDefault(); openBmEdit(e, fi, bi); }
+}
+
+/* ══════════════════════════════
+   ICON PICKER BUILDER
+   ══════════════════════════════ */
+/**
+ * Build icon picker into containerId.
+ * onPick(emoji) called when user clicks an icon.
+ * clearBtn: show "Xóa icon" button (for bookmark, to use auto favicon).
+ */
+function buildIconPicker(containerId, currentIcon, onPick, clearBtn) {
+  var wrap = document.getElementById(containerId);
+  var filteredIcons = ICON_LIBRARY;
+
+  function render(icons) {
+    var noSel = (!currentIcon || currentIcon === '');
+    wrap.innerHTML =
+      '<input class="icon-search" type="text" placeholder="🔍  Tìm icon... (server, cloud, lock…)" oninput="iconSearch(\''+containerId+'\', this.value)"/>'
+      +'<div class="icon-grid">'
+      + (clearBtn ? '<button class="ic-btn'+(noSel?' sel':'')+'" title="Tự động (favicon)" onclick="iconPickerSelect(\''+containerId+'\',\'\')">🔗</button>' : '')
+      + icons.map(function(ic){
+          var sel = (ic.e === currentIcon) ? ' sel' : '';
+          // escape for onclick attr: use data approach
+          return '<button class="ic-btn'+sel+'" title="'+esc(ic.t)+'" data-em="'+esc(ic.e)+'" onclick="iconPickerSelect(\''+containerId+'\',this.dataset.em)">'+ic.e+'</button>';
+        }).join('')
+      +'</div>'
+      +(clearBtn
+        ? '<div class="icon-preview"><span class="icon-preview-em" id="'+containerId+'-prev">'+(currentIcon||'🔗')+'</span><span>'+(currentIcon?'Icon đã chọn':'Tự động lấy favicon từ URL')+'</span></div>'
+        : '<div class="icon-preview"><span class="icon-preview-em" id="'+containerId+'-prev">'+currentIcon+'</span><span>Icon nhóm đã chọn</span></div>'
+      );
+  }
+
+  render(filteredIcons);
+
+  // store callback & clearBtn flag on element for reuse
+  wrap._onPick = onPick;
+  wrap._clearBtn = clearBtn;
+  wrap._allIcons = filteredIcons;
+}
+
+function iconSearch(containerId, q) {
+  var wrap = document.getElementById(containerId);
+  q = q.toLowerCase().trim();
+  var icons = q ? ICON_LIBRARY.filter(function(ic){ return ic.t.indexOf(q) >= 0 || ic.e === q; }) : ICON_LIBRARY;
+  var grid = wrap.querySelector('.icon-grid');
+  var clearBtn = wrap._clearBtn;
+  var cur = (containerId === 'fm-icon-picker') ? _fmIcon : _bmIconSel;
+  var noSel = (!cur || cur === '');
+  grid.innerHTML =
+    (clearBtn ? '<button class="ic-btn'+(noSel?' sel':'')+'" title="Tự động (favicon)" onclick="iconPickerSelect(\''+containerId+'\',\'\')">🔗</button>' : '')
+    + icons.map(function(ic){
+        var sel = (ic.e === cur) ? ' sel' : '';
+        return '<button class="ic-btn'+sel+'" data-em="'+esc(ic.e)+'" onclick="iconPickerSelect(\''+containerId+'\',this.dataset.em)">'+ic.e+'</button>';
+      }).join('');
+}
+
+function iconPickerSelect(containerId, em) {
+  if (containerId === 'fm-icon-picker') {
+    _fmIcon = em;
+  } else {
+    _bmIconSel = em;
+  }
+  // Update selected state in grid
+  var wrap = document.getElementById(containerId);
+  wrap.querySelectorAll('.ic-btn').forEach(function(btn){
+    var isClear = btn.textContent === '🔗';
+    btn.classList.toggle('sel', em === '' ? isClear : btn.dataset.em === em);
+  });
+  // Update preview
+  var prev = document.getElementById(containerId+'-prev');
+  if (prev) prev.textContent = em || (containerId==='bm-icon-picker' ? '🔗' : '📁');
+}
+
+/* ── Color picker ── */
+var _selectedColor = COLORS[0];
+function buildColors(sel) {
+  _selectedColor = sel || COLORS[0];
+  document.getElementById('fm-colors').innerHTML = COLORS.map(function(c){
+    return '<div class="c-dot'+(c===_selectedColor?' sel':'')+'" style="background:'+c+'" onclick="pickColor(this,\''+c+'\')"></div>';
+  }).join('');
+}
+function pickColor(el, c) {
+  document.querySelectorAll('#fm-colors .c-dot').forEach(function(d){ d.classList.remove('sel'); });
+  el.classList.add('sel'); _selectedColor = c;
+}
+
+/* ── Folder modal ── */
+function openFolderModal(fi) {
+  _curFolderIdx = fi;
+  var isNew = (fi === null);
+  document.getElementById('fm-title').textContent = isNew ? 'Thêm nhóm' : 'Sửa nhóm';
+  document.getElementById('fm-name').value = isNew ? '' : _data.folders[fi].name;
+  document.getElementById('fm-del').style.display = isNew ? 'none' : '';
+  _fmIcon = isNew ? '📁' : (_data.folders[fi].icon || '📁');
+  buildIconPicker('fm-icon-picker', _fmIcon, function(em){ _fmIcon = em; }, false);
+  buildColors(isNew ? COLORS[0] : (_data.folders[fi].color || COLORS[0]));
+  document.getElementById('folder-modal').classList.remove('hidden');
+  setTimeout(function(){ document.getElementById('fm-name').focus(); }, 60);
+}
+function saveFolder() {
+  var name = document.getElementById('fm-name').value.trim();
+  if (!name) { document.getElementById('fm-name').focus(); return; }
+  if (_curFolderIdx === null) {
+    _data.folders.push({ id:uid(), name:name, icon:_fmIcon||'📁', color:_selectedColor, items:[] });
+  } else {
+    _data.folders[_curFolderIdx].name  = name;
+    _data.folders[_curFolderIdx].icon  = _fmIcon || '📁';
+    _data.folders[_curFolderIdx].color = _selectedColor;
+  }
+  persist(); renderFolders(); closeModal('folder-modal');
+}
+function deleteFolder() {
+  if (!confirm('Xóa nhóm "'+_data.folders[_curFolderIdx].name+'" và tất cả bookmarks trong đó?')) return;
+  _data.folders.splice(_curFolderIdx, 1);
+  persist(); renderFolders(); closeModal('folder-modal');
+}
+function delFolderDirect(fi) {
+  var f = _data.folders[fi];
+  if (!confirm('Xóa nhóm "'+f.name+'"'+(f.items&&f.items.length?' ('+f.items.length+' bookmarks)':'')+' ?')) return;
+  _data.folders.splice(fi, 1); persist(); renderFolders();
+}
+
+/* ── Bookmark modal ── */
+function buildFolderSel(selectedFi) {
+  document.getElementById('bm-folder-sel').innerHTML = _data.folders.map(function(f,i){
+    return '<option value="'+i+'"'+(i===selectedFi?' selected':'')+'>'+esc(f.icon||'📁')+' '+esc(f.name)+'</option>';
+  }).join('');
+}
+function openBmAdd(fi) {
+  _curBmFolder = fi; _curBmIdx = null;
+  _bmIconSel = '';
+  document.getElementById('bm-title').textContent = 'Thêm bookmark';
+  document.getElementById('bm-name').value = '';
+  document.getElementById('bm-url').value  = '';
+  document.getElementById('bm-del').style.display = 'none';
+  buildIconPicker('bm-icon-picker', '', function(em){ _bmIconSel = em; }, true);
+  buildFolderSel(fi);
+  document.getElementById('bm-modal').classList.remove('hidden');
+  setTimeout(function(){ document.getElementById('bm-name').focus(); }, 60);
+}
+function openBmEdit(e, fi, bi) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  _curBmFolder = fi; _curBmIdx = bi;
+  var bm = _data.folders[fi].items[bi];
+  _bmIconSel = bm.icon || '';
+  document.getElementById('bm-title').textContent = 'Sửa bookmark';
+  document.getElementById('bm-name').value = bm.name;
+  document.getElementById('bm-url').value  = bm.url;
+  document.getElementById('bm-del').style.display = '';
+  buildIconPicker('bm-icon-picker', _bmIconSel, function(em){ _bmIconSel = em; }, true);
+  buildFolderSel(fi);
+  document.getElementById('bm-modal').classList.remove('hidden');
+  setTimeout(function(){ document.getElementById('bm-name').focus(); }, 60);
+}
+function saveBm() {
+  var name     = document.getElementById('bm-name').value.trim();
+  var url      = document.getElementById('bm-url').value.trim();
+  var toFolder = parseInt(document.getElementById('bm-folder-sel').value, 10);
+  if (!name || !url) { alert('Nhập tên và URL.'); return; }
+  if (!url.startsWith('http')) url = 'https://'+url;
+  var bm = { id:uid(), name:name, url:url, icon:_bmIconSel };
+  if (_curBmIdx !== null) _data.folders[_curBmFolder].items.splice(_curBmIdx, 1);
+  _data.folders[toFolder].items.push(bm);
+  persist(); renderFolders(); closeModal('bm-modal');
+}
+function deleteBm() {
+  _data.folders[_curBmFolder].items.splice(_curBmIdx, 1);
+  persist(); renderFolders(); closeModal('bm-modal');
+}
+function delBmDirect(e, fi, bi) {
+  e.preventDefault(); e.stopPropagation();
+  _data.folders[fi].items.splice(bi, 1); persist(); renderFolders();
+}
+
+/* ── Modal helpers ── */
+function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+function bgClose(e, id){ if (e.target === document.getElementById(id)) closeModal(id); }
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape'){ closeModal('folder-modal'); closeModal('bm-modal'); }
+  if ((e.ctrlKey||e.metaKey) && e.key==='k'){ document.getElementById('search-q').focus(); e.preventDefault(); }
+});
+
+/* ── Init ── */
+loadData();
+</script>
+</body>
+</html>

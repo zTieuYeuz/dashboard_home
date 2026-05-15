@@ -32,18 +32,21 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .hdr-name{font-size:14px;font-weight:600}
 .hdr-sub{font-size:11px;color:var(--muted)}
 
-.hdr-servers{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow-x:auto;max-width:600px}
-.server-chip{
-  font-size:11px;padding:3px 10px;border-radius:20px;
+.hdr-shortcuts{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;overflow-x:auto}
+.shortcut-item{
+  display:flex;align-items:center;gap:5px;
+  font-size:11px;color:var(--muted);
+  padding:3px 10px;border-radius:20px;
   border:.5px solid var(--border);background:var(--card);
-  color:var(--muted);cursor:pointer;transition:all .15s;
-  white-space:nowrap;display:flex;align-items:center;gap:5px;flex-shrink:0;
+  white-space:nowrap;flex-shrink:0;
 }
-.server-chip:hover{color:var(--text);border-color:#3d4260}
-.server-chip.active{background:#1e3a5f;color:var(--accent);border-color:var(--accent)}
-.server-chip .dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
-.server-chip .dot.red{background:var(--red)}
-.server-chip .dot.amber{background:var(--amber)}
+.shortcut-item kbd{
+  display:inline-block;font-size:10px;padding:1px 5px;border-radius:4px;
+  background:#252840;border:.5px solid #3d4260;color:var(--text);
+  font-family:'IBM Plex Mono',monospace;letter-spacing:0;line-height:1.4;
+}
+.shortcut-item .sh-label{color:#94a3b8}
+.shortcut-sep{color:#2d3150;font-size:14px;flex-shrink:0;margin:0 1px}
 
 .hdr-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .open-btn{
@@ -99,22 +102,22 @@ iframe{
     </div>
   </div>
 
-  <!-- Quick-connect server chips -->
-  <div class="hdr-servers" id="server-chips">
-    <div class="server-chip active" onclick="connectTo('default')" data-key="default">
-      <span class="dot"></span> All Servers
+  <!-- Keyboard shortcut hints -->
+  <div class="hdr-shortcuts">
+    <div class="shortcut-item">
+      <kbd>LShift</kbd><kbd>LShift</kbd><span class="sh-label">Command Palette</span>
     </div>
-    <div class="server-chip" onclick="connectTo('casaos')" data-key="casaos">
-      <span class="dot"></span> CasaOS
+    <span class="shortcut-sep">|</span>
+    <div class="shortcut-item">
+      <kbd>Ctrl</kbd><kbd>Insert</kbd><span class="sh-label">Copy</span>
     </div>
-    <div class="server-chip" onclick="connectTo('cisco')" data-key="cisco">
-      <span class="dot"></span> Cisco-Home
+    <span class="shortcut-sep">|</span>
+    <div class="shortcut-item">
+      <kbd>Shift</kbd><kbd>Insert</kbd><span class="sh-label">Paste</span>
     </div>
-    <div class="server-chip" onclick="connectTo('openclaw')" data-key="openclaw">
-      <span class="dot"></span> Openclaw
-    </div>
-    <div class="server-chip" onclick="connectTo('yunohost')" data-key="yunohost">
-      <span class="dot red"></span> YunoHost
+    <span class="shortcut-sep">|</span>
+    <div class="shortcut-item">
+      <kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>T</kbd><span class="sh-label">Pop out</span>
     </div>
   </div>
 
@@ -147,39 +150,8 @@ iframe{
 <script>
 const TERMIX_BASE = 'https://termix.home-server.id.vn';
 
-// Mapping server chip → Termix URL
-// Chỉnh lại theo cấu trúc URL của Termix nếu cần
-const SERVER_URLS = {
-  default:   TERMIX_BASE,
-  casaos:    TERMIX_BASE,   // Termix tự nhớ connection cuối
-  cisco:     TERMIX_BASE,
-  openclaw:  TERMIX_BASE,
-  yunohost:  TERMIX_BASE,
-};
-
-let currentKey = 'default';
-
-function connectTo(key) {
-  currentKey = key;
-  // Update chips
-  document.querySelectorAll('.server-chip').forEach(c => {
-    c.classList.toggle('active', c.dataset.key === key);
-  });
-  // Update iframe
-  const url = SERVER_URLS[key] || TERMIX_BASE;
-  const frame = document.getElementById('termix-frame');
-  if (frame.src !== url) frame.src = url;
-  // Update subtitle
-  const chip = document.querySelector(`.server-chip[data-key="${key}"]`);
-  if (chip) {
-    document.getElementById('hdr-sub').textContent =
-      'Termix · ' + chip.textContent.trim();
-  }
-}
-
 function openPopup() {
-  const url = SERVER_URLS[currentKey] || TERMIX_BASE;
-  window.open(url, 'termix-popup',
+  window.open(TERMIX_BASE, 'termix-popup',
     'width=1200,height=800,menubar=no,toolbar=no,location=no,status=no');
 }
 

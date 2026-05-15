@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Camera Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d14;--surface:#131620;--card:#1a1d2e;--border:#252840;
+  --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
+  --green:#34d399;--red:#f87171;--amber:#fbbf24;
+  --font:'Inter',system-ui,sans-serif;
+}
+html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100%;-webkit-font-smoothing:antialiased}
+
+.header{background:var(--surface);border-bottom:.5px solid var(--border);padding:0 1.25rem;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.hdr-left{display:flex;align-items:center;gap:12px}
+.back-btn{font-size:12px;padding:5px 12px;border-radius:7px;border:.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;font-family:var(--font);font-weight:500}
+.back-btn:hover{color:var(--text);border-color:#3d4260}
+.hdr-name{font-size:15px;font-weight:700;letter-spacing:-.2px}
+.hdr-sub{font-size:11.5px;color:var(--muted);margin-top:1px}
+.hdr-right{display:flex;align-items:center;gap:8px}
+.hdr-badge{font-size:11px;padding:3px 10px;border-radius:20px;background:#1e2440;color:var(--accent);border:.5px solid #2d3a6a;white-space:nowrap}
+.ctrl-btn{font-size:12px;padding:5px 12px;border-radius:7px;border:.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;font-family:var(--font);font-weight:500;white-space:nowrap}
+.ctrl-btn:hover{color:var(--text);border-color:#3d4260}
+.open-btn{font-size:12px;padding:5px 12px;border-radius:7px;border:.5px solid var(--border);background:transparent;color:var(--accent);cursor:pointer;transition:all .15s;font-family:var(--font);font-weight:500;text-decoration:none;display:inline-block;white-space:nowrap}
+.open-btn:hover{background:#1e3a5f;border-color:var(--accent)}
+
+.page{padding:1rem 1.25rem;max-width:1600px;margin:0 auto}
+.cam-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.85rem}
+@media(max-width:1100px){.cam-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:650px){.cam-grid{grid-template-columns:1fr}}
+
+.cam-cell{background:var(--card);border:.5px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .2s}
+.cam-cell.cam-off{border-color:#1e2035}
+.cam-cell.cam-unconfigured{opacity:.55}
+
+.cam-label{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface);border-bottom:.5px solid var(--border)}
+.cam-name{font-size:12px;font-weight:600;letter-spacing:.2px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cam-type{font-size:10px;padding:2px 7px;border-radius:8px;font-weight:500;border:.5px solid;white-space:nowrap;flex-shrink:0}
+.cam-type.analog{background:#1a2e1a;color:var(--green);border-color:#2d5a2d}
+.cam-type.ip{background:#1e2440;color:var(--accent);border-color:#2d3a6a}
+.cam-type.unknown{background:#2e1a1a;color:var(--muted);border-color:#5a2d2d}
+
+/* Toggle button */
+.toggle-btn{
+  flex-shrink:0;
+  display:flex;align-items:center;gap:4px;
+  font-size:11px;font-weight:600;font-family:var(--font);
+  padding:3px 9px;border-radius:20px;border:.5px solid;
+  cursor:pointer;transition:all .2s;white-space:nowrap;
+  background:transparent;
+}
+.toggle-btn.is-on{color:var(--green);border-color:#2d5a2d;background:#0f1f0f}
+.toggle-btn.is-on:hover{background:#1a2e1a}
+.toggle-btn.is-off{color:var(--muted);border-color:#252840;background:#111318}
+.toggle-btn.is-off:hover{color:var(--text);border-color:#3d4260}
+.toggle-dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+/* Frame */
+.cam-frame{position:relative;width:100%;padding-top:56.25%}
+.cam-frame iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none;background:#000}
+
+/* Overlays */
+.cam-overlay{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:10px;
+}
+.cam-overlay.paused{background:#0b0d14}
+.cam-overlay.unconfigured{background:#0d0f1a}
+.cam-overlay .ico{font-size:30px;opacity:.35}
+.cam-overlay .msg{font-size:12px;color:var(--muted);text-align:center;line-height:1.7}
+.cam-overlay .resume-btn{
+  font-size:11px;padding:4px 14px;border-radius:20px;
+  border:.5px solid #2d5a2d;background:#0f1f0f;color:var(--green);
+  cursor:pointer;font-family:var(--font);font-weight:600;transition:all .2s;
+}
+.cam-overlay .resume-btn:hover{background:#1a2e1a}
+
+/* Bottom bar */
+.bottom-bar{margin-top:.85rem;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--card);border:.5px solid var(--border);border-radius:10px;flex-wrap:wrap;gap:8px}
+.bar-info{font-size:11.5px;color:var(--muted)}
+.bar-info strong{color:var(--text)}
+.legend{display:flex;gap:14px;flex-wrap:wrap}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.leg-dot{width:8px;height:8px;border-radius:50%}
+@media(max-width:700px){
+  .header{height:auto;flex-wrap:wrap;padding:.625rem .75rem;gap:6px}
+  .hdr-left{width:100%;gap:8px}
+  .hdr-name{font-size:13px}
+  .hdr-sub{display:none}
+  .hdr-right{width:100%;overflow-x:auto;flex-wrap:nowrap;gap:6px;padding-bottom:2px;scrollbar-width:none}
+  .hdr-right::-webkit-scrollbar{display:none}
+  .back-btn,.ctrl-btn,.open-btn,.hdr-badge{flex-shrink:0;white-space:nowrap}
+  .page{padding:.75rem}
+  .cam-grid{grid-template-columns:1fr !important}
+  .bottom-bar{flex-direction:column;align-items:flex-start;gap:10px}
+  .legend{gap:10px}
+}
+@media(max-width:400px){
+  .hdr-right .ctrl-btn:not(:first-child){display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="hdr-left">
+    <a class="back-btn" href="/" target="_blank" rel="noopener">← Dashboard</a>
+    <div>
+      <div class="hdr-name">📷 Camera Dashboard</div>
+      <div class="hdr-sub">go2rtc · WebRTC / MSE Stream</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <span class="hdr-badge" id="status-badge">5 / 6 online</span>
+    <button class="ctrl-btn" onclick="setAll(true)">▶ Bật tất cả</button>
+    <button class="ctrl-btn" onclick="setAll(false)">⏸ Tắt tất cả</button>
+    <button class="ctrl-btn" onclick="openPopout()" title="Tách cửa sổ — PiP vẫn chạy khi bạn về Dashboard">⧉ Pop out</button>
+    <a class="open-btn" href="https://camera.home-server.id.vn" target="_blank" rel="noopener">🔗 go2rtc</a>
+  </div>
+</div>
+
+<div class="page">
+  <div class="cam-grid" id="cam-grid"></div>
+
+  <div class="bottom-bar">
+    <div class="bar-info">Stream qua <strong>go2rtc</strong> → Cloudflare Tunnel → Browser · Độ trễ ~0.5–2s</div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="font-size:11px;color:var(--muted);background:#111318;border:.5px solid #252840;border-radius:8px;padding:4px 10px;white-space:nowrap">
+        💡 Dùng <strong style="color:var(--text)">⧉ Pop out</strong> để PiP vẫn chạy khi về Dashboard
+      </div>
+      <div class="legend">
+        <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Analog</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--accent)"></div>IP Camera</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--muted)"></div>Chờ cấu hình</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── Auth ── */
+function _readUserCookie(){
+  try{var m=document.cookie.match(/dh_user=([^;]+)/);if(!m)return null;return JSON.parse(decodeURIComponent(m[1]));}catch{return null;}
+}
+if(typeof window.__USER__==='undefined'){
+  var _u=_readUserCookie();
+  if(_u)window.__USER__=_u;
+  else{window.location.href='/login.html';}
+}
+
+/* ── Camera definitions ── */
+const BASE = 'https://camera.home-server.id.vn';
+const MODE = 'webrtc,mse,hls,mjpeg';
+
+const CAMERAS = [
+  { id:'cam01', name:'Camera 01',          type:'analog', label:'Analog · A1',     src:'cam01' },
+  { id:'cam03', name:'Camera 03',          type:'analog', label:'Analog · A3',     src:'cam03' },
+  { id:'cam04', name:'Camera 04',          type:'ip',     label:'IP · D1 · 130.2', src:'cam04' },
+  { id:'cam05', name:'Camera 05',          type:'ip',     label:'IP · D2 · 130.5', src:'cam05' },
+  { id:'cam06', name:'Camera 06',          type:'ip',     label:'IP · D3 · 130.6', src:'cam06' },
+  { id:'cam07', name:'Camera Phòng Khách', type:'unknown',label:'IP · D4 · 130.10',src:null    },
+];
+
+/* ── State (persisted in localStorage) ── */
+const LS_KEY = 'cam_state_v1';
+function loadState(){
+  try{ return JSON.parse(localStorage.getItem(LS_KEY)||'{}'); }catch{ return {}; }
+}
+function saveState(state){ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+
+// Default: all configured cameras ON
+let state = loadState();
+CAMERAS.forEach(function(c){
+  if(!(c.id in state)) state[c.id] = c.src !== null; // unconfigured = off by default
+});
+
+/* ── Render grid ── */
+function render(){
+  const grid = document.getElementById('cam-grid');
+  grid.innerHTML = CAMERAS.map(function(c){
+    const isOn  = state[c.id];
+    const isUnconfigured = c.src === null;
+    const cellCls = isUnconfigured ? 'cam-cell cam-unconfigured' : isOn ? 'cam-cell' : 'cam-cell cam-off';
+
+    const toggleHTML = isUnconfigured ? '' :
+      '<button class="toggle-btn '+(isOn?'is-on':'is-off')+'" onclick="toggle(\''+c.id+'\')">'
+      +'<span class="toggle-dot"></span>'+(isOn?'ON':'OFF')+'</button>';
+
+    const frameContent = isUnconfigured
+      ? '<div class="cam-overlay unconfigured"><div class="ico">🔒</div><div class="msg">Chưa cấu hình<br><small>Cần cập nhật mật khẩu</small></div></div>'
+      : isOn
+        ? '<iframe id="frame-'+c.id+'" src="'+BASE+'/stream.html?src='+c.src+'&mode='+MODE+'" allow="autoplay" allowfullscreen></iframe>'
+        : '<div class="cam-overlay paused"><div class="ico">⏸</div><div class="msg">Stream đã tắt</div>'
+          +'<button class="resume-btn" onclick="toggle(\''+c.id+'\')">▶ Bật lại</button></div>';
+
+    return '<div class="'+cellCls+'" id="cell-'+c.id+'">'
+      +'<div class="cam-label">'
+        +'<span class="cam-name">'+c.name+'</span>'
+        +'<span class="cam-type '+c.type+'">'+c.label+'</span>'
+        +toggleHTML
+      +'</div>'
+      +'<div class="cam-frame">'+frameContent+'</div>'
+      +'</div>';
+  }).join('');
+
+  updateBadge();
+}
+
+/* ── Toggle single camera ── */
+function toggle(id){
+  const cam = CAMERAS.find(function(c){ return c.id===id; });
+  if(!cam || cam.src===null) return;
+  state[id] = !state[id];
+  saveState(state);
+  render();
+}
+
+/* ── Set all on/off ── */
+function setAll(on){
+  CAMERAS.forEach(function(c){ if(c.src!==null) state[c.id]=on; });
+  saveState(state);
+  render();
+}
+
+/* ── Badge count ── */
+function updateBadge(){
+  const configured = CAMERAS.filter(function(c){ return c.src!==null; });
+  const on = configured.filter(function(c){ return state[c.id]; });
+  document.getElementById('status-badge').textContent = on.length+' / '+CAMERAS.length+' streaming';
+}
+
+render();
+
+/* ── Navigation helpers ── */
+function goBack() {
+  window.location.href = '/';
+}
+
+function openPopout() {
+  // Save current state so popup inherits it
+  saveState(state);
+  var w = screen.width  * 0.72 | 0;
+  var h = screen.height * 0.80 | 0;
+  var l = ((screen.width  - w) / 2) | 0;
+  var t = ((screen.height - h) / 2) | 0;
+  window.open(
+    window.location.href,
+    'camera-popout',
+    'width='+w+',height='+h+',left='+l+',top='+t+',menubar=no,toolbar=no,location=no,status=no,scrollbars=yes'
+  );
+}
+
+/* ── Cảnh báo khi stream đang chạy mà navigate hoặc đóng tab ── */
+window.addEventListener('beforeunload', function(e) {
+  var anyStreaming = CAMERAS.some(function(c){ return c.src !== null && state[c.id]; });
+  if (anyStreaming) {
+    e.preventDefault();
+    // returnValue required for Chrome/Edge to show native dialog
+    e.returnValue = 'Stream camera đang chạy. Bạn có chắc muốn rời trang?';
+    return e.returnValue;
+  }
+});
+</script>
+</body>
+</html>

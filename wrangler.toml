@@ -9,3 +9,8 @@ binding = "ASSETS"
 [[kv_namespaces]]
 binding = "DASHBOARD_KV"
 id = "ebad8682cfe24bbda0a4cf04b3e97210"
+
+# Custom domain — trỏ dashboard.home-server.id.vn → Worker này
+[[routes]]
+pattern = "dashboard.home-server.id.vn"
+custom_domain = true
