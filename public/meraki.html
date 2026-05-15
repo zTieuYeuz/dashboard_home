@@ -448,7 +448,7 @@ a{color:inherit;text-decoration:none}
     </div>
     <div class="panel-body">
       <div class="toolbar">
-        <button class="filter-btn active" id="topo-basic"    onclick="setTopoMode('basic')">📊 Cơ bản (Sếp)</button>
+        <button class="filter-btn active" id="topo-basic"    onclick="setTopoMode('basic')">📊 Cơ bản</button>
         <button class="filter-btn"        id="topo-advanced" onclick="setTopoMode('advanced')">🔧 Nâng cao (IT)</button>
       </div>
       <div class="topo-wrap" id="topoContainer">
@@ -892,10 +892,8 @@ function loadSwitchPortConfigs(){
 }
 
 /* ── Network Topology ── */
-var T_CORE_Y=95,T_DIST_Y=215,T_ACC_Y=345,T_ACC2_Y=445;
-var T_NW=108,T_NH=34,T_AW=94,T_AH=28;
 var T_FCX={F1:110,F2:330,F3:550,F4:770,F5:985};
-var T_STACK_CX=530; // logical center of CoreSW-01+CoreSW-02 stack
+var T_STACK_CX=530;
 var T_LINKS=[
   {f:'XEN-SW',t:'CoreSW-02',tp:'sc'},
   {f:'CoreSW-01',t:'F1-SW1',tp:'cd'},{f:'CoreSW-01',t:'F2-SW1',tp:'cd'},
@@ -907,19 +905,29 @@ var T_LINKS=[
   {f:'F4-SW1',t:'F4-SW2',tp:'da'},{f:'F4-SW1',t:'F4-SW3',tp:'da'},
   {f:'F5-SW1',t:'F5-SW2',tp:'da'},{f:'F5-SW1',t:'F5-SW3',tp:'da'},
 ];
+var T_ROLE_C={core:'#3b82f6',dist:'#8b5cf6',access:'#475569',srv:'#06b6d4'};
+
+function getTopoLayout(){
+  var adv=topoMode==='advanced';
+  return{adv:adv,
+    nw:adv?130:108, nh:adv?52:34,
+    aw:adv?114:94,  ah:adv?40:28,
+    coreY:100, distY:adv?265:215, accY:adv?420:345, acc2Y:adv?530:445};
+}
 
 function topoNodes(){
+  var L=getTopoLayout();
   var nd=[];
-  nd.push({key:'CoreSW-01',role:'core',cx:450,cy:T_CORE_Y,w:T_NW,h:T_NH});
-  nd.push({key:'CoreSW-02',role:'core',cx:610,cy:T_CORE_Y,w:T_NW,h:T_NH});
-  nd.push({key:'XEN-SW',   role:'srv', cx:1130,cy:T_CORE_Y,w:T_NW,h:T_NH});
+  nd.push({key:'CoreSW-01',role:'core',cx:450, cy:L.coreY,w:L.nw,h:L.nh});
+  nd.push({key:'CoreSW-02',role:'core',cx:610, cy:L.coreY,w:L.nw,h:L.nh});
+  nd.push({key:'XEN-SW',   role:'srv', cx:1130,cy:L.coreY,w:L.nw,h:L.nh});
   Object.keys(T_FCX).forEach(function(f){
     var cx=T_FCX[f];
-    nd.push({key:f+'-SW1',role:'dist',  floor:f,cx:cx,   cy:T_DIST_Y,w:T_NW,h:T_NH});
-    nd.push({key:f+'-SW2',role:'access',floor:f,cx:cx-50,cy:T_ACC_Y, w:T_AW, h:T_AH});
-    nd.push({key:f+'-SW3',role:'access',floor:f,cx:cx+50,cy:T_ACC_Y, w:T_AW, h:T_AH});
+    nd.push({key:f+'-SW1',role:'dist',  floor:f,cx:cx,   cy:L.distY,w:L.nw,h:L.nh});
+    nd.push({key:f+'-SW2',role:'access',floor:f,cx:cx-50,cy:L.accY, w:L.aw,h:L.ah});
+    nd.push({key:f+'-SW3',role:'access',floor:f,cx:cx+50,cy:L.accY, w:L.aw,h:L.ah});
   });
-  nd.push({key:'F1-SW4',role:'access',floor:'F1',cx:110,cy:T_ACC2_Y,w:T_AW,h:T_AH});
+  nd.push({key:'F1-SW4',role:'access',floor:'F1',cx:110,cy:L.acc2Y,w:L.aw,h:L.ah});
   return nd;
 }
 
@@ -935,6 +943,42 @@ function matchTopoKey(name){
 
 function escSvg(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
+/* Build CDP/LLDP port connection map */
+function buildPortLinks(){
+  var links={};
+  var nameMap={};
+  allSwitches.forEach(function(sw){
+    var k=matchTopoKey(sw.switchName);
+    [sw.switchName,sw.switchName.toLowerCase(),k,k.toLowerCase(),
+     sw.switchName.toLowerCase().replace(/-poe\d*|-test/gi,'')
+    ].forEach(function(a){if(a)nameMap[a]=k;});
+  });
+  allSwitches.forEach(function(sw){
+    var srcKey=matchTopoKey(sw.switchName);
+    (sw.ports||[]).forEach(function(p){
+      if(!p.neighborDevice||p.status!=='Connected')return;
+      var nd2=(p.neighborDevice||'').toLowerCase().trim();
+      var dstKey=nameMap[nd2]||nameMap[matchTopoKey(p.neighborDevice).toLowerCase()]||nameMap[matchTopoKey(p.neighborDevice)];
+      if(!dstKey&&nd2.length>3){
+        Object.keys(nameMap).forEach(function(k){if(!dstKey&&k.length>3&&(nd2.indexOf(k)!==-1||k.indexOf(nd2)!==-1))dstKey=nameMap[k];});
+      }
+      if(!dstKey||dstKey===srcKey)return;
+      var sorted=[srcKey,dstKey].sort();
+      var lkKey=sorted.join('::');
+      if(!links[lkKey])links[lkKey]={sw1:sorted[0],sw2:sorted[1],portSw1:'',portSw2:'',speed:p.speed,proto:p.neighborProto||''};
+      var isSw1=srcKey===links[lkKey].sw1;
+      var mySide=isSw1?'portSw1':'portSw2',nbrSide=isSw1?'portSw2':'portSw1';
+      if(!links[lkKey][mySide])links[lkKey][mySide]='P'+p.portId;
+      if(!links[lkKey][nbrSide]&&p.neighborPort){
+        var np=String(p.neighborPort||'');
+        var pm=np.match(/(\d+)$/);
+        links[lkKey][nbrSide]=pm?('P'+pm[1]):(np.replace(/\s+/g,'').slice(0,7)||'P?');
+      }
+    });
+  });
+  return links;
+}
+
 function setTopoMode(m){
   topoMode=m;
   ['basic','advanced'].forEach(function(v){
@@ -944,127 +988,167 @@ function setTopoMode(m){
 }
 
 function renderTopoPanel(){
+  var L=getTopoLayout();
   var nodes=topoNodes();
   var byKey={};nodes.forEach(function(n){byKey[n.key]=n;});
   var swMap={};allSwitches.forEach(function(sw){swMap[matchTopoKey(sw.switchName)]=sw;});
-  var svgW=1220,svgH=480;
+  var portLinks=L.adv?buildPortLinks():{};
+  var svgW=1220,svgH=L.acc2Y+L.ah/2+32;
   var p=[];
 
-  /* Floor group backgrounds */
+  /* ── Floor group backgrounds ── */
   Object.keys(T_FCX).forEach(function(f){
     var cx=T_FCX[f];
     var isF1=f==='F1';
-    var ry=T_DIST_Y-T_NH/2-10;
-    var rh=(isF1?T_ACC2_Y+T_AH/2:T_ACC_Y+T_AH/2)+10-ry;
+    var ry=L.distY-L.nh/2-12;
+    var rb=(isF1?L.acc2Y+L.ah/2:L.accY+L.ah/2)+12;
     var allDead=true,hasData=false;
     ['SW1','SW2','SW3'].concat(isF1?['SW4']:[]).forEach(function(s){
-      var sw=swMap[f+'-'+s];
-      if(sw){hasData=true;if(sw.connectedPorts>0)allDead=false;}
+      var sw=swMap[f+'-'+s];if(sw){hasData=true;if(sw.connectedPorts>0)allDead=false;}
     });
-    var fillC=hasData&&allDead?'rgba(248,113,113,.06)':'rgba(30,34,53,.5)';
-    var strokeC=hasData&&allDead?'rgba(248,113,113,.2)':'#252840';
-    p.push('<rect x="'+(cx-100)+'" y="'+ry+'" width="200" height="'+rh+'" rx="10" fill="'+fillC+'" stroke="'+strokeC+'" stroke-width="1"/>');
-    var flLabel=topoMode==='basic'?'Tầng '+f.slice(1):f;
-    p.push('<text x="'+cx+'" y="'+(ry+12)+'" text-anchor="middle" font-size="9" fill="#3d4a58" font-weight="700" font-family="sans-serif">'+escSvg(flLabel)+'</text>');
-  });
-
-  /* Links */
-  T_LINKS.forEach(function(lk){
-    var fn=byKey[lk.f],tn=byKey[lk.t];
-    if(!fn||!tn)return;
-    var swF=swMap[lk.f],swT=swMap[lk.t];
-    var dead=(swF&&swF.connectedPorts===0)||(swT&&swT.connectedPorts===0);
-    var stroke=dead?'#3a1f1f':lk.tp==='sc'?'#2d4050':'#253040';
-    var sw2=lk.tp==='sc'?2:1.5;
-    if(lk.tp==='sc'){
-      // XEN-SW → CoreSW-02 (right side of stack), horizontal dashed
-      p.push('<line x1="'+(fn.cx-fn.w/2)+'" y1="'+fn.cy+'" x2="'+(tn.cx+tn.w/2)+'" y2="'+tn.cy+'" stroke="'+stroke+'" stroke-width="'+sw2+'" stroke-dasharray="6,3"/>');
+    var fillC=hasData&&allDead?'rgba(248,113,113,.05)':'rgba(18,22,40,.7)';
+    var strokeC=hasData&&allDead?'rgba(248,113,113,.22)':'#1a1f38';
+    p.push('<rect x="'+(cx-107)+'" y="'+ry+'" width="214" height="'+(rb-ry)+'" rx="12" fill="'+fillC+'" stroke="'+strokeC+'" stroke-width="1"/>');
+    if(L.adv){
+      p.push('<text x="'+cx+'" y="'+(ry-4)+'" text-anchor="middle" font-size="9" fill="#2d3f5a" font-weight="700" font-family="sans-serif">'+f+'</text>');
     }else{
-      // c-d and d-a: originate from stack center for core sources
-      var isCoreFrom=lk.f==='CoreSW-01'||lk.f==='CoreSW-02';
-      var x1=isCoreFrom?T_STACK_CX:fn.cx,y1=fn.cy+fn.h/2,x2=tn.cx,y2=tn.cy-tn.h/2,my=(y1+y2)/2;
-      p.push('<path d="M'+x1+','+y1+' C'+x1+','+my+' '+x2+','+my+' '+x2+','+y2+'" fill="none" stroke="'+stroke+'" stroke-width="'+sw2+'"/>');
+      p.push('<text x="'+cx+'" y="'+(ry+13)+'" text-anchor="middle" font-size="9" fill="#2a3555" font-weight="700" font-family="sans-serif">Tầng '+f.slice(1)+'</text>');
     }
   });
 
-  /* Core Stack group background (drawn before nodes so it sits behind) */
-  var stGrpX=T_FCX.F1<110?388:388, stGrpW=290;
-  var stGrpY=T_CORE_Y-T_NH/2-10, stGrpH=T_NH+20;
+  /* ── Core Stack group ── */
+  var stGrpX=450-L.nw/2-10, stGrpW=610+L.nw/2+10-stGrpX;
+  var stGrpY=L.coreY-L.nh/2-13, stGrpH=L.nh+26;
+  var trunkY=stGrpY+stGrpH;
   var swC1=swMap['CoreSW-01'],swC2=swMap['CoreSW-02'];
   var stackDead=(swC1&&swC1.connectedPorts===0)&&(swC2&&swC2.connectedPorts===0);
-  var stackBg=stackDead?'rgba(248,113,113,.08)':'rgba(15,35,55,.7)';
-  var stackBrd=stackDead?'rgba(248,113,113,.35)':'#1d4060';
-  p.push('<rect x="'+stGrpX+'" y="'+stGrpY+'" width="'+stGrpW+'" height="'+stGrpH+'" rx="12" fill="'+stackBg+'" stroke="'+stackBrd+'" stroke-width="1.5"/>');
-  var stackLbl=topoMode==='basic'?'⬛ Core Stack (2 × MS350-24)':'⬛ STACK: CoreSW-01 + CoreSW-02';
-  p.push('<text x="'+T_STACK_CX+'" y="'+(stGrpY-5)+'" text-anchor="middle" font-size="9" fill="#1e6a9a" font-weight="700" font-family="sans-serif">'+escSvg(stackLbl)+'</text>');
-  // Trunk line from stack bottom down (visual connector before the fan-out)
-  var trunkY=stGrpY+stGrpH;
-  p.push('<line x1="'+T_STACK_CX+'" y1="'+trunkY+'" x2="'+T_STACK_CX+'" y2="'+(trunkY+18)+'" stroke="#1d4060" stroke-width="2"/>');
+  p.push('<rect x="'+stGrpX+'" y="'+stGrpY+'" width="'+stGrpW+'" height="'+stGrpH+'" rx="14"'
+    +' fill="'+(stackDead?'rgba(248,113,113,.08)':'rgba(8,25,48,.9)')+'"'
+    +' stroke="'+(stackDead?'rgba(248,113,113,.3)':'#1a4a72')+'" stroke-width="1.5"/>');
+  var stackLbl=L.adv?'STACK · CoreSW-01 + CoreSW-02 (MS350-24 × 2)':'Core Switch Stack';
+  p.push('<text x="'+T_STACK_CX+'" y="'+(stGrpY-8)+'" text-anchor="middle" font-size="9" fill="#1e70a0" font-weight="700" font-family="sans-serif">'+escSvg(stackLbl)+'</text>');
+  p.push('<line x1="'+T_STACK_CX+'" y1="'+trunkY+'" x2="'+T_STACK_CX+'" y2="'+(trunkY+22)+'" stroke="#1a4a72" stroke-width="3"/>');
 
-  /* WAN/Internet label — connected to top of Core Stack */
-  var wanY=stGrpY;
-  p.push('<text x="'+T_STACK_CX+'" y="'+(wanY-18)+'" text-anchor="middle" font-size="10" fill="#475569" font-family="sans-serif">🌐 Internet / WAN</text>');
-  p.push('<line x1="'+T_STACK_CX+'" y1="'+(wanY-10)+'" x2="'+T_STACK_CX+'" y2="'+wanY+'" stroke="#2d3454" stroke-width="1.5" stroke-dasharray="4,3"/>');
+  /* ── WAN ── */
+  p.push('<text x="'+T_STACK_CX+'" y="'+(stGrpY-24)+'" text-anchor="middle" font-size="11" fill="#475569" font-family="sans-serif">🌐 Internet / WAN</text>');
+  p.push('<line x1="'+T_STACK_CX+'" y1="'+(stGrpY-16)+'" x2="'+T_STACK_CX+'" y2="'+stGrpY+'" stroke="#2d3454" stroke-width="1.5" stroke-dasharray="4,3"/>');
 
-  /* Layer labels (advanced only) */
-  if(topoMode==='advanced'){
-    p.push('<text x="5" y="'+(T_CORE_Y+4)+'" font-size="8" fill="#3d4a58" font-weight="700" font-family="sans-serif">CORE</text>');
-    p.push('<text x="5" y="'+(T_DIST_Y+4)+'" font-size="8" fill="#3d4a58" font-weight="700" font-family="sans-serif">DIST</text>');
-    p.push('<text x="5" y="'+(T_ACC_Y+4)+'" font-size="8" fill="#3d4a58" font-weight="700" font-family="sans-serif">ACCESS</text>');
+  /* ── Layer labels (advanced) ── */
+  if(L.adv){
+    [[L.coreY,'CORE'],[L.distY,'DISTRIBUTION'],[L.accY,'ACCESS']].forEach(function(r){
+      p.push('<text x="5" y="'+(r[0]+4)+'" font-size="7.5" fill="#1e3550" font-weight="700" font-family="sans-serif" letter-spacing="0.5">'+r[1]+'</text>');
+    });
   }
 
-  /* Nodes */
-  nodes.forEach(function(nd){
-    var sw=swMap[nd.key];
-    var rx=nd.cx-nd.w/2,ry=nd.cy-nd.h/2;
-    var bg='#1a1d2e',border='#3d4260',nc='#94a3b8';
-    if(sw){
-      var pct=sw.totalPorts?sw.connectedPorts/sw.totalPorts:0;
-      if(sw.connectedPorts===0){bg='rgba(248,113,113,.1)';border='rgba(248,113,113,.4)';nc='#f87171';}
-      else if(pct>=0.5){bg='rgba(52,211,153,.08)';border='rgba(52,211,153,.3)';nc='#34d399';}
-      else{bg='rgba(251,191,36,.08)';border='rgba(251,191,36,.3)';nc='#fbbf24';}
-    }
-    p.push('<rect x="'+rx+'" y="'+ry+'" width="'+nd.w+'" height="'+nd.h+'" rx="7" fill="'+bg+'" stroke="'+border+'" stroke-width="1.5"/>');
-    p.push('<circle cx="'+(rx+9)+'" cy="'+nd.cy+'" r="3" fill="'+nc+'"/>');
+  /* ── Links ── */
+  T_LINKS.forEach(function(lk){
+    var fn=byKey[lk.f],tn=byKey[lk.t];if(!fn||!tn)return;
+    var swF=swMap[lk.f],swT=swMap[lk.t];
+    var dead=(swF&&swF.connectedPorts===0)||(swT&&swT.connectedPorts===0);
+    var LCLR={sc:'#144060',cd:'#1a4878',da:'#1c2f58'};
+    var stroke=dead?'rgba(220,50,50,.2)':(LCLR[lk.tp]||'#1c2f58');
+    var lw=lk.tp==='cd'?2:1.5;
 
-    /* Switch name */
-    var dispName=nd.key;
-    var isAcc=nd.role==='access';
-    var adv=topoMode==='advanced'&&sw;
-    if(sw&&topoMode==='basic'){
-      dispName=sw.switchName.replace(/-PoE\d*$/i,'').replace(/-POE\d*$/i,'').replace(/-Test$/i,'');
-    }
-    var nameY=nd.cy+(adv&&!isAcc?-4:0)+3;
-    var fs=isAcc?8:9;
-    p.push('<text x="'+(nd.cx+3)+'" y="'+nameY+'" text-anchor="middle" font-size="'+fs+'" fill="'+nc+'" font-family="SF Mono,Fira Code,monospace" font-weight="600">'+escSvg(dispName)+'</text>');
+    if(lk.tp==='sc'){
+      p.push('<line x1="'+(fn.cx-fn.w/2)+'" y1="'+fn.cy+'" x2="'+(tn.cx+tn.w/2)+'" y2="'+tn.cy+'" stroke="'+stroke+'" stroke-width="'+lw+'" stroke-dasharray="7,4"/>');
+    }else{
+      var isCoreFrom=lk.f==='CoreSW-01'||lk.f==='CoreSW-02';
+      var x1=isCoreFrom?T_STACK_CX:fn.cx;
+      var y1=isCoreFrom?(trunkY+22):fn.cy+fn.h/2;
+      var x2=tn.cx,y2=tn.cy-tn.h/2,my=(y1+y2)/2;
+      p.push('<path d="M'+x1+','+y1+' C'+x1+','+my+' '+x2+','+my+' '+x2+','+y2+'" fill="none" stroke="'+stroke+'" stroke-width="'+lw+'"/>');
 
-    if(sw){
-      var portTxt=sw.connectedPorts+'/'+sw.totalPorts;
-      if(adv&&!isAcc){
-        p.push('<text x="'+nd.cx+'" y="'+(nd.cy+6)+'" text-anchor="middle" font-size="7" fill="#64748b" font-family="SF Mono,Fira Code,monospace">'+escSvg(portTxt)+' · '+escSvg(sw.switchModel||'')+'</text>');
-        var bW=nd.w-14,bX=rx+7,bY=ry+nd.h-5,pct2=sw.totalPorts?sw.connectedPorts/sw.totalPorts:0;
-        var fc2=pct2>=0.5?'#34d399':pct2>0?'#fbbf24':'#f87171';
-        p.push('<rect x="'+bX+'" y="'+bY+'" width="'+bW+'" height="3" rx="1.5" fill="#252840"/>');
-        p.push('<rect x="'+bX+'" y="'+bY+'" width="'+(bW*pct2).toFixed(1)+'" height="3" rx="1.5" fill="'+fc2+'"/>');
-      }else{
-        p.push('<text x="'+nd.cx+'" y="'+(nd.cy+11)+'" text-anchor="middle" font-size="7" fill="#64748b" font-family="SF Mono,Fira Code,monospace">'+escSvg(portTxt)+'</text>');
+      /* Port labels from CDP/LLDP (advanced only) */
+      if(L.adv){
+        var sorted=[lk.f,lk.t].sort();
+        var pl=portLinks[sorted.join('::')];
+        if(pl&&(pl.portSw1||pl.portSw2)){
+          var fromP=lk.f===sorted[0]?pl.portSw1:pl.portSw2;
+          var toP  =lk.t===sorted[1]?pl.portSw2:pl.portSw1;
+          var lbl=(fromP||'?')+'↔'+(toP||'?');
+          var lx=(x1+x2)/2,ly=my;
+          var lbW=lbl.length*5.5+12;
+          p.push('<rect x="'+(lx-lbW/2).toFixed(0)+'" y="'+(ly-8)+'" width="'+lbW.toFixed(0)+'" height="14" rx="4" fill="#06090f" stroke="#1e3a60" stroke-width="0.8"/>');
+          p.push('<text x="'+lx+'" y="'+(ly+3.5)+'" text-anchor="middle" font-size="8" fill="#60a5fa" font-family="SF Mono,Fira Code,monospace" font-weight="600">'+escSvg(lbl)+'</text>');
+          if(pl.proto&&pl.proto!==''){
+            p.push('<text x="'+lx+'" y="'+(ly+15)+'" text-anchor="middle" font-size="6.5" fill="#334466" font-family="SF Mono,Fira Code,monospace">'+escSvg(pl.proto)+'</text>');
+          }
+        }
       }
     }
   });
 
+  /* ── Nodes ── */
+  nodes.forEach(function(nd){
+    var sw=swMap[nd.key];
+    var rx=nd.cx-nd.w/2,ry=nd.cy-nd.h/2;
+    var roleC=T_ROLE_C[nd.role]||'#475569';
+    var bg='#0d1120',border='#1e2540',nc='#64748b';
+    if(sw){
+      var pct=sw.totalPorts?sw.connectedPorts/sw.totalPorts:0;
+      if(sw.connectedPorts===0){bg='rgba(28,5,5,.98)'; border='rgba(239,68,68,.4)';  nc='#f87171';}
+      else if(pct>=0.5)        {bg='rgba(4,20,16,.98)';border='rgba(34,197,94,.28)'; nc='#4ade80';}
+      else                     {bg='rgba(20,14,3,.98)'; border='rgba(234,179,8,.28)';nc='#facc15';}
+    }
+    /* Node body + role stripe */
+    p.push('<rect x="'+rx+'" y="'+ry+'" width="'+nd.w+'" height="'+nd.h+'" rx="7" fill="'+bg+'" stroke="'+border+'" stroke-width="1.5"/>');
+    p.push('<rect x="'+rx+'" y="'+ry+'" width="4" height="'+nd.h+'" rx="2" fill="'+roleC+'" opacity="0.85"/>');
+
+    var isAcc=nd.role==='access';
+    if(L.adv&&sw){
+      /* ── Advanced layout ── */
+      var errC=(sw.ports||[]).filter(function(pp){return(pp.errors||[]).some(function(e){return e&&e!=='Port disconnected';});}).length;
+      var fullName=sw.switchName;if(fullName.length>17)fullName=fullName.slice(0,16)+'…';
+      /* Status dot */
+      p.push('<circle cx="'+(rx+13)+'" cy="'+(ry+12)+'" r="3.5" fill="'+nc+'"/>');
+      /* Name */
+      p.push('<text x="'+(rx+22)+'" y="'+(ry+15)+'" font-size="9.5" fill="'+nc+'" font-family="SF Mono,Fira Code,monospace" font-weight="700">'+escSvg(fullName)+'</text>');
+      if(!isAcc){
+        /* Model + serial */
+        var serial=sw.switchSerial?(' #'+sw.switchSerial.slice(-7)):'';
+        p.push('<text x="'+(rx+22)+'" y="'+(ry+26)+'" font-size="7.5" fill="#2d4060" font-family="SF Mono,Fira Code,monospace">'+escSvg((sw.switchModel||'')+serial)+'</text>');
+        /* Ports + errors */
+        var ptxt=sw.connectedPorts+'/'+sw.totalPorts+' ports'+(errC?' · ⚠ '+errC+' err':'');
+        p.push('<text x="'+(rx+22)+'" y="'+(ry+37)+'" font-size="8" fill="'+(errC?'#facc15':nc)+'" font-family="SF Mono,Fira Code,monospace">'+escSvg(ptxt)+'</text>');
+      }else{
+        var ptxt2=sw.connectedPorts+'/'+sw.totalPorts+(errC?' ⚠'+errC:'');
+        p.push('<text x="'+(rx+22)+'" y="'+(ry+27)+'" font-size="8" fill="'+(errC?'#facc15':nc)+'" font-family="SF Mono,Fira Code,monospace">'+escSvg(ptxt2)+'</text>');
+      }
+      /* Util bar */
+      var bW=nd.w-9,bX=rx+5,bY=ry+nd.h-5;
+      var pct2=sw.totalPorts?sw.connectedPorts/sw.totalPorts:0;
+      var fc2=pct2>=0.5?'#22c55e':pct2>0?'#eab308':'#ef4444';
+      p.push('<rect x="'+bX+'" y="'+bY+'" width="'+bW+'" height="3.5" rx="1.75" fill="#111827"/>');
+      p.push('<rect x="'+bX+'" y="'+bY+'" width="'+(bW*pct2).toFixed(1)+'" height="3.5" rx="1.75" fill="'+fc2+'"/>');
+    }else{
+      /* ── Basic layout ── */
+      var dispName=nd.key;
+      if(sw)dispName=sw.switchName.replace(/-PoE\d*$/i,'').replace(/-POE\d*$/i,'').replace(/-Test$/i,'');
+      if(dispName.length>13)dispName=dispName.slice(0,12)+'…';
+      p.push('<circle cx="'+(rx+9)+'" cy="'+nd.cy+'" r="3" fill="'+nc+'"/>');
+      p.push('<text x="'+(nd.cx+4)+'" y="'+(nd.cy+(sw?-2:3))+'" text-anchor="middle" font-size="'+(isAcc?8.5:9)+'" fill="'+nc+'" font-family="SF Mono,Fira Code,monospace" font-weight="600">'+escSvg(dispName)+'</text>');
+      if(sw)p.push('<text x="'+nd.cx+'" y="'+(nd.cy+10)+'" text-anchor="middle" font-size="7.5" fill="#2a3a52" font-family="SF Mono,Fira Code,monospace">'+sw.connectedPorts+'/'+sw.totalPorts+'</text>');
+    }
+  });
+
   document.getElementById('topoContainer').innerHTML='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'" style="min-width:'+svgW+'px;display:block">'+p.join('')+'</svg>';
-  document.getElementById('badge-topo').textContent=allSwitches.length?allSwitches.length+' switches':'Chờ dữ liệu…';
+  document.getElementById('badge-topo').textContent=allSwitches.length?allSwitches.length+' switches · '+topoMode:'Chờ dữ liệu…';
   document.getElementById('badge-topo').className=allSwitches.length?'panel-badge green':'panel-badge';
   renderTopoLegend();
 }
 
 function renderTopoLegend(){
-  var items=[['#34d399','Hoạt động bình thường (>50% ports)'],['#fbbf24','Hoạt động một phần'],['#f87171','Offline (0 ports)'],['#94a3b8','Không có dữ liệu']];
-  var html=items.map(function(it){
-    return'<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:'+it[0]+';flex-shrink:0;display:inline-block"></span><span>'+esc(it[1])+'</span></span>';
-  }).join('');
-  if(topoMode==='advanced')html+='<span style="display:flex;align-items:center;gap:4px"><span style="border-top:2px dashed #475569;width:18px;display:inline-block"></span><span>Kết nối server</span></span>';
-  document.getElementById('topoLegend').innerHTML=html;
+  var roleItems=[[T_ROLE_C.core,'Core'],[T_ROLE_C.dist,'Distribution'],[T_ROLE_C.access,'Access'],[T_ROLE_C.srv,'Server']].map(function(it){
+    return'<span style="display:flex;align-items:center;gap:4px"><span style="width:4px;height:14px;border-radius:2px;background:'+it[0]+';display:inline-block;flex-shrink:0"></span><span>'+esc(it[1])+'</span></span>';
+  });
+  var stItems=[['#4ade80','Online (>50% ports)'],['#facc15','Partial (<50%)'],['#f87171','Offline']].map(function(it){
+    return'<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:'+it[0]+';display:inline-block;flex-shrink:0"></span><span>'+esc(it[1])+'</span></span>';
+  });
+  var ext=topoMode==='advanced'?[
+    '<span style="display:flex;align-items:center;gap:4px"><span style="font-size:9px;color:#60a5fa;font-family:monospace;white-space:nowrap">P1↔P24</span><span>Port từ CDP/LLDP</span></span>',
+    '<span style="display:flex;align-items:center;gap:4px"><span style="border-top:2px dashed #475569;width:18px;display:inline-block"></span><span>Server uplink</span></span>'
+  ]:[];
+  document.getElementById('topoLegend').innerHTML=roleItems.concat(stItems).concat(ext).join('');
 }
 
 function loadAll(silent){
