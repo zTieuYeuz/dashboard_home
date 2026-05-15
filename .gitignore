@@ -1,0 +1,12 @@
+# Claude Code worktrees & local settings
+.claude/
+
+# Wrangler local cache
+.wrangler/
+
+# Node modules (nếu sau này thêm)
+node_modules/
+
+# Env files
+.env
+.env.local
