@@ -65,10 +65,55 @@ const IDLE_SCRIPT = `<script>(function(){
   }, 10000);
 })();<\/script>`;
 
+/* ── Password hashing ──
+   New format (string): "pbkdf2$<iter>$<saltHex>$<hashHex>"
+   Legacy format: bare 64-hex SHA-256(pw + ':dh-salt-2024'). Verified for
+   backward-compat, then transparently re-hashed to PBKDF2 on next login. */
+const PW_PBKDF2_ITER = 210000;
+
+function _bytesToHex(buf) {
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function _hexToBytes(hex) {
+  return Uint8Array.from((hex.match(/../g) || []).map(h => parseInt(h, 16)));
+}
+function _constEq(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+
+async function _sha256Hex(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return _bytesToHex(buf);
+}
+async function _pbkdf2Hex(password, saltHex, iter) {
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: _hexToBytes(saltHex), iterations: iter },
+    key, 256);
+  return _bytesToHex(bits);
+}
+
+// Produce a fresh strong hash string (per-user random salt).
 async function hashPw(password) {
-  const enc = new TextEncoder();
-  const buf = await crypto.subtle.digest('SHA-256', enc.encode(password + ':dh-salt-2024'));
-  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,'0')).join('');
+  const saltHex = _bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+  const hash = await _pbkdf2Hex(password, saltHex, PW_PBKDF2_ITER);
+  return `pbkdf2$${PW_PBKDF2_ITER}$${saltHex}$${hash}`;
+}
+
+// Verify a password against a stored hash (new or legacy format).
+async function verifyPw(password, stored) {
+  if (!stored || typeof stored !== 'string') return false;
+  if (stored.startsWith('pbkdf2$')) {
+    const [, iterS, saltHex, hashHex] = stored.split('$');
+    const iter = parseInt(iterS, 10) || PW_PBKDF2_ITER;
+    return _constEq(await _pbkdf2Hex(password, saltHex, iter), hashHex);
+  }
+  // Legacy SHA-256 + static salt
+  return _constEq(await _sha256Hex(password + ':dh-salt-2024'), stored);
 }
 
 function getSessionToken(request) {
@@ -91,15 +136,31 @@ async function getSession(request, env) {
   return { ...session, token };
 }
 
+/* ── Brute-force throttle (KV-backed, best-effort) ── */
+async function rlGet(env, key) {
+  return parseInt(await env.DASHBOARD_KV.get(`rl:${key}`) || '0', 10);
+}
+async function rlBump(env, key, windowSec) {
+  const n = (await rlGet(env, key)) + 1;
+  await env.DASHBOARD_KV.put(`rl:${key}`, String(n), { expirationTtl: windowSec });
+  return n;
+}
+async function rlClear(env, key) {
+  await env.DASHBOARD_KV.delete(`rl:${key}`).catch(() => {});
+}
+
 async function ensureAdmin(env) {
   const admin = await env.DASHBOARD_KV.get('user:admin', 'json');
   if (!admin) {
-    const pw = env.ADMIN_PASSWORD || 'admin';
+    // Fail closed: never auto-create a weak default admin. Operator must set
+    // the ADMIN_PASSWORD secret to bootstrap the first admin account.
+    if (!env.ADMIN_PASSWORD || String(env.ADMIN_PASSWORD).length < 10) return false;
     await env.DASHBOARD_KV.put('user:admin', JSON.stringify({
-      password: await hashPw(pw), role: 'admin', permissions: {}, created: Date.now()
+      password: await hashPw(env.ADMIN_PASSWORD), role: 'admin', permissions: {}, created: Date.now()
     }));
     await env.DASHBOARD_KV.put('userlist', JSON.stringify(['admin']));
   }
+  return true;
 }
 
 async function handleLogin(request, env) {
@@ -109,11 +170,28 @@ async function handleLogin(request, env) {
   const { username, password } = body || {};
   if (!username || !password) return json({ error: 'Thiếu username hoặc password' }, 400);
   const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
+
+  // Rate limit: per-IP (20 / 15min) and per-IP+user (8 / 15min)
+  const WIN = 900;
+  if ((await rlGet(env, `ip:${ip}`)) >= 20 || (await rlGet(env, `u:${ip}:${username}`)) >= 8) {
+    await logActivity(env, { action: 'login_blocked', username, ip, success: false, detail: 'Rate limited' });
+    return json({ error: 'Quá nhiều lần thử. Vui lòng chờ ~15 phút rồi thử lại.' }, 429);
+  }
+
   const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
-  if (!user || user.password !== await hashPw(password)) {
+  if (!user || !(await verifyPw(password, user.password))) {
+    await rlBump(env, `ip:${ip}`, WIN);
+    await rlBump(env, `u:${ip}:${username}`, WIN);
     await logActivity(env, { action: 'login_fail', username, ip, success: false, detail: 'Wrong credentials' });
     return json({ error: 'Sai tên đăng nhập hoặc mật khẩu' }, 401);
   }
+  // Transparently migrate legacy SHA-256 hashes to PBKDF2 on successful login
+  if (!String(user.password || '').startsWith('pbkdf2$')) {
+    try { user.password = await hashPw(password);
+      await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user)); } catch {}
+  }
+  await rlClear(env, `ip:${ip}`);
+  await rlClear(env, `u:${ip}:${username}`);
 
   // If MFA is enabled for this user, don't create session yet — return temp token
   if (user.mfaEnabled && user.mfaSecret) {
@@ -164,7 +242,13 @@ async function handleListUsers(request, env) {
   const users = [];
   for (const u of list) {
     const d = await env.DASHBOARD_KV.get(`user:${u}`, 'json');
-    if (d) users.push({ username: u, role: d.role, permissions: d.permissions || {} });
+    if (d) users.push({
+      username: u, role: d.role,
+      permissions: d.permissions || {},
+      panels: d.panels || {},
+      cameras: d.cameras || [],
+      groups: d.groups || []
+    });
   }
   return json({ users });
 }
@@ -219,6 +303,142 @@ async function handleChangePw(request, env, username) {
   user.password = await hashPw(body.password);
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
   return json({ success: true });
+}
+
+/* ═══════════════════════════════════════════════
+   Policy Groups & Granular Permissions
+   ═══════════════════════════════════════════════ */
+
+async function computeEffectivePermissions(env, username) {
+  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+  if (!user) return null;
+  const eff = {
+    permissions: { ...(user.permissions || {}) },
+    panels: { ...(user.panels || {}) },
+    cameras: [...(user.cameras || [])],
+    groups: [...(user.groups || [])]
+  };
+  for (const gid of eff.groups) {
+    const g = await env.DASHBOARD_KV.get(`policy_group:${gid}`, 'json');
+    if (!g) continue;
+    for (const [k, v] of Object.entries(g.permissions || {})) {
+      const cur = eff.permissions[k];
+      if (!cur || cur === 'none') eff.permissions[k] = v;
+      else if (cur === 'read' && v === 'write') eff.permissions[k] = 'write';
+    }
+    for (const [k, v] of Object.entries(g.panels || {})) { if (v) eff.panels[k] = true; }
+    for (const c of (g.cameras || [])) { if (!eff.cameras.includes(c)) eff.cameras.push(c); }
+  }
+  return eff;
+}
+
+async function handleListGroups(request, env) {
+  const session = await getSession(request, env);
+  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  const ids = await env.DASHBOARD_KV.get('policy_groups', 'json') || [];
+  const groups = [];
+  for (const id of ids) {
+    const g = await env.DASHBOARD_KV.get(`policy_group:${id}`, 'json');
+    if (g) groups.push(g);
+  }
+  return json({ groups });
+}
+
+async function handleCreateGroup(request, env) {
+  const session = await getSession(request, env);
+  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const name = String(body?.name || '').trim();
+  if (!name || name.length > 64) return json({ error: 'Tên group không hợp lệ' }, 400);
+  const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || ('g-' + Date.now());
+  if (await env.DASHBOARD_KV.get(`policy_group:${id}`)) return json({ error: 'Group đã tồn tại' }, 409);
+  const group = {
+    id, name,
+    description: String(body?.description || ''),
+    permissions: body?.permissions || {},
+    panels: body?.panels || {},
+    cameras: body?.cameras || [],
+    created: Date.now()
+  };
+  await env.DASHBOARD_KV.put(`policy_group:${id}`, JSON.stringify(group));
+  const ids = await env.DASHBOARD_KV.get('policy_groups', 'json') || [];
+  if (!ids.includes(id)) { ids.push(id); await env.DASHBOARD_KV.put('policy_groups', JSON.stringify(ids)); }
+  return json({ success: true, group });
+}
+
+async function handleUpdateGroup(request, env, groupId) {
+  const session = await getSession(request, env);
+  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  const group = await env.DASHBOARD_KV.get(`policy_group:${groupId}`, 'json');
+  if (!group) return json({ error: 'Group not found' }, 404);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  if (body.name !== undefined) group.name = String(body.name).trim();
+  if (body.description !== undefined) group.description = String(body.description);
+  if (body.permissions !== undefined) group.permissions = body.permissions;
+  if (body.panels !== undefined) group.panels = body.panels;
+  if (body.cameras !== undefined) group.cameras = body.cameras;
+  await env.DASHBOARD_KV.put(`policy_group:${groupId}`, JSON.stringify(group));
+  return json({ success: true, group });
+}
+
+async function handleDeleteGroup(request, env, groupId) {
+  const session = await getSession(request, env);
+  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  await env.DASHBOARD_KV.delete(`policy_group:${groupId}`);
+  const ids = (await env.DASHBOARD_KV.get('policy_groups', 'json') || []).filter(id => id !== groupId);
+  await env.DASHBOARD_KV.put('policy_groups', JSON.stringify(ids));
+  const userlist = await env.DASHBOARD_KV.get('userlist', 'json') || [];
+  for (const u of userlist) {
+    const user = await env.DASHBOARD_KV.get(`user:${u}`, 'json');
+    if (user && user.groups && user.groups.includes(groupId)) {
+      user.groups = user.groups.filter(g => g !== groupId);
+      await env.DASHBOARD_KV.put(`user:${u}`, JSON.stringify(user));
+    }
+  }
+  return json({ success: true });
+}
+
+async function handleUpdateUserGroups(request, env, username) {
+  const session = await getSession(request, env);
+  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (username === 'admin') return json({ error: 'Không thể sửa admin' }, 400);
+  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  user.groups = Array.isArray(body.groups) ? body.groups : [];
+  await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  return json({ success: true, username, groups: user.groups });
+}
+
+async function handleUpdateUserPanels(request, env, username) {
+  const session = await getSession(request, env);
+  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (username === 'admin') return json({ error: 'Không thể sửa admin' }, 400);
+  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  user.panels = body.panels || {};
+  user.cameras = Array.isArray(body.cameras) ? body.cameras : (user.cameras || []);
+  await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  return json({ success: true, username, panels: user.panels, cameras: user.cameras });
+}
+
+async function handleCameraList(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (request.method === 'GET') {
+    const list = await env.DASHBOARD_KV.get('camera_list', 'json') || [];
+    return json({ cameras: list });
+  }
+  if (request.method === 'PUT') {
+    if (session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+    let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+    const cameras = Array.isArray(body.cameras) ? body.cameras : [];
+    await env.DASHBOARD_KV.put('camera_list', JSON.stringify(cameras));
+    return json({ success: true, cameras });
+  }
+  return json({ error: 'Method not allowed' }, 405);
 }
 
 /* ═══════════════════════════════════════════════
@@ -337,12 +557,20 @@ async function handleMfaVerify(request, env) {
     if (temp) await env.DASHBOARD_KV.delete(`mfa_temp:${tempToken}`).catch(() => {});
     return json({ error: 'Phiên xác thực đã hết hạn. Vui lòng đăng nhập lại.' }, 401);
   }
+  // Cap OTP guesses per temp token (TOTP = 1e6 space); burn token after 6 misses
+  if ((await rlGet(env, `mfa:${tempToken}`)) >= 6) {
+    await env.DASHBOARD_KV.delete(`mfa_temp:${tempToken}`).catch(() => {});
+    await logActivity(env, { action: 'mfa_blocked', username: temp?.username, ip, success: false, detail: 'Too many OTP attempts' });
+    return json({ error: 'Sai mã quá nhiều lần. Vui lòng đăng nhập lại.' }, 429);
+  }
   const user = await env.DASHBOARD_KV.get(`user:${temp.username}`, 'json');
   if (!user || !user.mfaEnabled) return json({ error: 'Lỗi xác thực MFA' }, 400);
   if (!(await verifyTotp(user.mfaSecret, code))) {
+    await rlBump(env, `mfa:${tempToken}`, 360);
     await logActivity(env, { action: 'mfa_fail', username: temp?.username, ip, success: false, detail: 'Wrong OTP' });
     return json({ error: 'Mã OTP không đúng' }, 400);
   }
+  await rlClear(env, `mfa:${tempToken}`);
   await env.DASHBOARD_KV.delete(`mfa_temp:${tempToken}`).catch(() => {});
   // Create full session
   const token = crypto.randomUUID();
@@ -361,6 +589,289 @@ async function handleMfaVerify(request, env) {
   await logActivity(env, { action: 'mfa_success', username: temp.username, ip, success: true });
   return new Response(JSON.stringify({ success: true, role: user.role }), { status: 200, headers: h });
 }
+
+/* Shared "Wayfinding" quick-switcher — injected into every authenticated page.
+   Lets users jump tool→tool and search without bouncing through the homepage.
+   Self-contained, namespaced (wf-), never touches page/map code. */
+const WAYFIND_NAV = `<style>
+#wf-fab{position:fixed;right:22px;bottom:22px;z-index:2147483000;display:flex;align-items:center;gap:9px;
+ font:700 13px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#eaf0fb;
+ background:linear-gradient(180deg,#1c2c52,#142037);border:1.5px solid #5b8cff;border-radius:13px;
+ padding:12px 17px;cursor:pointer;box-shadow:0 8px 26px rgba(20,40,90,.55),0 0 0 4px rgba(91,140,255,.08);
+ transition:all .15s;user-select:none}
+#wf-fab:hover{border-color:#8fb3ff;transform:translateY(-2px);box-shadow:0 12px 32px rgba(30,60,130,.65)}
+#wf-fab .wf-dot{width:8px;height:8px;border-radius:50%;background:#5b8cff;box-shadow:0 0 9px #5b8cff}
+#wf-fab .wf-k{font-family:JetBrains Mono,ui-monospace,monospace;font-size:11px;color:#bcd0ff;
+ border:1px solid #5b8cff;border-radius:6px;padding:3px 8px;background:rgba(91,140,255,.16)}
+@keyframes wfpulse{0%{box-shadow:0 8px 26px rgba(20,40,90,.55),0 0 0 0 rgba(91,140,255,.45)}
+ 70%{box-shadow:0 8px 26px rgba(20,40,90,.55),0 0 0 16px rgba(91,140,255,0)}
+ 100%{box-shadow:0 8px 26px rgba(20,40,90,.55),0 0 0 0 rgba(91,140,255,0)}}
+#wf-fab.wf-pulse{animation:wfpulse 1.8s ease-out 3}
+#wf-hint{position:fixed;right:22px;bottom:78px;z-index:2147483000;max-width:280px;
+ background:#0c1018;border:1px solid #5b8cff;border-radius:11px;padding:12px 14px;display:none;
+ font:13px/1.5 -apple-system,'Segoe UI',sans-serif;color:#cdd6e6;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+#wf-hint.on{display:block}
+#wf-hint b{color:#8fb3ff}
+#wf-hint .wf-x{position:absolute;top:6px;right:9px;color:#5e6f92;cursor:pointer;font-size:14px}
+#wf-ov{position:fixed;inset:0;z-index:2147483600;display:none;align-items:flex-start;justify-content:center;
+ background:rgba(4,6,11,.72);backdrop-filter:blur(3px)}
+#wf-ov.on{display:flex}
+#wf-panel{margin-top:11vh;width:min(680px,92vw);background:#0c1018;border:1px solid #283450;
+ border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.7);overflow:hidden;
+ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+#wf-search{width:100%;box-sizing:border-box;background:#0c1018;border:0;border-bottom:1px solid #1d2740;
+ color:#eef2fa;font-size:16px;padding:18px 20px;outline:none;font-family:inherit}
+#wf-search::placeholder{color:#46587a}
+#wf-list{max-height:56vh;overflow-y:auto;padding:8px}
+.wf-row{display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:10px;cursor:pointer;
+ color:#cdd6e6;text-decoration:none}
+.wf-row .wf-ic{width:30px;height:30px;flex:0 0 30px;display:flex;align-items:center;justify-content:center;
+ font-size:16px;background:#121a2c;border:1px solid #243049;border-radius:8px}
+.wf-row .wf-nm{font-size:13.5px;font-weight:600}
+.wf-row .wf-ds{font-size:11px;color:#5e6f92;margin-top:2px}
+.wf-row .wf-tag{margin-left:auto;font-size:10px;color:#5b8cff;font-family:JetBrains Mono,monospace;
+ border:1px solid #2b3a5c;border-radius:6px;padding:3px 7px;white-space:nowrap}
+.wf-row.sel,.wf-row:hover{background:#16203a}
+.wf-row.cur .wf-tag{color:#34d399;border-color:#2c5a44}
+#wf-foot{display:flex;gap:18px;padding:10px 18px;border-top:1px solid #1d2740;
+ font:11px JetBrains Mono,monospace;color:#46587a}
+#wf-foot b{color:#7c8baa;font-weight:600}
+@media(max-width:520px){#wf-fab .wf-lbl{display:none}}
+</style>
+</style>
+<div id="wf-fab" title="Chuyển nhanh giữa các trang (phím tắt: / )" onclick="window.__wfOpen&&window.__wfOpen()">
+ <span class="wf-dot"></span><span>Chuyển trang nhanh</span><span class="wf-k">/</span></div>
+<div id="wf-hint"><span class="wf-x" title="Đóng" onclick="document.getElementById('wf-hint').classList.remove('on')">&#x2715;</span>
+ &#x1F449; Bấm nút xanh này (hoặc phím <b>/</b>) để nhảy thẳng giữa các trang — Meraki, FortiGate, ESXi, MOVI… mà không cần quay về trang chủ.</div>
+<div id="wf-ov"><div id="wf-panel">
+ <input id="wf-search" placeholder="Tìm dịch vụ… (gõ để lọc, &#x2191;&#x2193; chọn, Enter mở)" autocomplete="off">
+ <div id="wf-list"></div>
+ <div id="wf-foot"><span><b>&#x2191;&#x2193;</b> di chuyển</span><span><b>Enter</b> mở</span><span><b>Esc</b> đóng</span><span style="margin-left:auto"><b>/</b> hoặc <b>g</b> mở bất kỳ đâu</span></div>
+</div></div>
+<script>(function(){
+ if(window.__wfNav)return; window.__wfNav=1;
+ if(location.pathname==='/login.html')return;
+ var U=(window.__USER__||{}), adm=!!U.isAdmin;
+ var S=[
+  {i:'\\u2316',n:'Dashboard',d:'Trang chủ · tất cả dịch vụ',h:'/'},
+  {i:'\\uD83C\\uDF10',n:'Meraki-Network',d:'Network client monitor · Cisco Meraki',h:'/meraki.html'},
+  {i:'\\uD83D\\uDDFA',n:'Movi Map Network',d:'Sơ đồ topology · route · dây switch',h:'/topology.html'},
+  {i:'\\uD83D\\uDD25',n:'FortiGate',d:'Firewall · security gateway',h:'/fortigate.html'},
+  {i:'\\uD83D\\uDDA5',n:'VMware ESXi',d:'Hypervisor · bare metal',h:'/esxi.html'},
+  {i:'\\uD83C\\uDFE0',n:'CasaOS',d:'Home server OS',h:'/casaos.html'},
+  {i:'\\uD83D\\uDCE1',n:'ASUS Router',d:'Home network router',h:'/asus.html'},
+  {i:'\\uD83D\\uDD00',n:'9Router',d:'Router & network management',h:'/9router.html'},
+  {i:'\\u26A1',n:'n8n Automation',d:'Workflow & bot automation',h:'/n8n.html'},
+  {i:'\\uD83D\\uDCF7',n:'Camera',d:'Hệ thống camera · go2rtc',h:'/hikvision.html'},
+  {i:'\\uD83D\\uDDA7',n:'SSH Terminal',d:'Web SSH · Termix',h:'/ssh.html'},
+  {i:'\\uD83D\\uDD16',n:'Bookmarks',d:'Liên kết nhanh',h:'/bookmarks.html'}
+ ];
+ if(adm){S.push({i:'\\uD83D\\uDC65',n:'Users',d:'Quản lý người dùng (admin)',h:'/users.html'});S.push({i:'\\uD83D\\uDEE1',n:'Policy',d:'Quyền hạn · nhóm · camera (admin)',h:'/policy.html'});}
+ var here=location.pathname.replace(/\\/index\\.html$/,'/')||'/';
+
+ var fab=document.getElementById('wf-fab'),
+     ov=document.getElementById('wf-ov'),
+     hint=document.getElementById('wf-hint'),
+     listEl=document.getElementById('wf-list'),
+     inEl=document.getElementById('wf-search'),
+     rows=[],sel=0;
+ if(!fab||!ov)return;
+
+ function render(q){
+  listEl.innerHTML='';
+  q=(q||'').trim().toLowerCase();
+  var items=S.filter(function(s){return !q||(s.n+' '+s.d).toLowerCase().indexOf(q)>=0;});
+  rows=items; sel=0;
+  if(!items.length){listEl.innerHTML='<div style="padding:26px;text-align:center;color:#46587a;font-size:13px">Không tìm thấy dịch vụ phù hợp</div>';return;}
+  items.forEach(function(s,idx){
+   var cur=s.h===here;
+   var a=document.createElement('a'); a.className='wf-row'+(idx===0?' sel':'')+(cur?' cur':'');
+   a.href=s.h;
+   a.innerHTML='<span class="wf-ic">'+s.i+'</span><span><div class="wf-nm">'+s.n+'</div><div class="wf-ds">'+s.d+'</div></span>'+
+     '<span class="wf-tag">'+(cur?'\\u25cf đang ở đây':'mở \\u2192')+'</span>';
+   a.addEventListener('click',function(e){if(cur){e.preventDefault();closeP();}});
+   listEl.appendChild(a);
+  });
+ }
+ function paint(){var r=listEl.querySelectorAll('.wf-row');r.forEach(function(x,i){x.classList.toggle('sel',i===sel);});
+  if(r[sel])r[sel].scrollIntoView({block:'nearest'});}
+ function openP(){if(hint)hint.classList.remove('on');fab.classList.remove('wf-pulse');ov.classList.add('on');inEl.value='';render('');setTimeout(function(){inEl.focus();},30);}
+ function closeP(){ov.classList.remove('on');}
+ window.__wfOpen=openP;
+ ov.addEventListener('click',function(e){if(e.target===ov)closeP();});
+ ov.addEventListener('input',function(e){if(e.target.id==='wf-search')render(e.target.value);});
+ document.addEventListener('keydown',function(e){
+  var t=e.target,tag=(t&&t.tagName||'').toLowerCase(),typing=tag==='input'||tag==='textarea'||(t&&t.isContentEditable);
+  if(!ov.classList.contains('on')){
+   if((e.key==='/'||e.key==='g')&&!typing&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();openP();}
+   return;
+  }
+  if(e.key==='Escape'){e.preventDefault();closeP();return;}
+  if(e.key==='ArrowDown'){e.preventDefault();sel=Math.min(sel+1,rows.length-1);paint();return;}
+  if(e.key==='ArrowUp'){e.preventDefault();sel=Math.max(sel-1,0);paint();return;}
+  if(e.key==='Enter'){var a=listEl.querySelectorAll('.wf-row')[sel];if(a){if(a.classList.contains('cur'))closeP();else location.href=a.getAttribute('href');}}
+ });
+ try{
+  if(!sessionStorage.getItem('wfHinted')){
+   sessionStorage.setItem('wfHinted','1');
+   fab.classList.add('wf-pulse');
+   if(hint){setTimeout(function(){hint.classList.add('on');},800);
+            setTimeout(function(){hint.classList.remove('on');},9000);}
+  }
+ }catch(e){}
+})();</script>`;
+
+/* Shared "Reload data" control — small button + progress bar + status text.
+   Calls the page's own data-loader so users refresh just the data, not the
+   whole page. Injected as static markup before </body>. */
+const DATA_REFRESH = `<style>
+#wf-bar{position:fixed;top:0;left:0;height:3px;width:0;z-index:2147483647;
+ background:linear-gradient(90deg,#5b8cff,#8fb3ff,#5b8cff);box-shadow:0 0 10px #5b8cff;
+ opacity:0;transition:opacity .2s}
+#wf-bar.on{opacity:1;animation:wfbar 1.1s ease-in-out infinite}
+#wf-bar.done{animation:none;width:100%!important;transition:width .25s ease-out}
+@keyframes wfbar{0%{width:8%}50%{width:72%}100%{width:92%}}
+#wf-rfab{position:fixed;right:22px;bottom:74px;z-index:2147483000;display:none;align-items:center;gap:9px;
+ font:700 13px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#cfe0d6;
+ background:linear-gradient(180deg,#143526,#0f261c);border:1.5px solid #2c8a5c;border-radius:13px;
+ padding:12px 16px;cursor:pointer;box-shadow:0 8px 24px rgba(10,50,30,.5);transition:all .15s;user-select:none}
+#wf-rfab:hover{border-color:#34d399;transform:translateY(-2px)}
+#wf-rfab.busy{opacity:.65;cursor:progress}
+#wf-rfab .wf-rk{font-family:JetBrains Mono,ui-monospace,monospace;font-size:11px;color:#7fe3b4;
+ border:1px solid #2c8a5c;border-radius:6px;padding:3px 8px;background:rgba(52,211,153,.14)}
+#wf-rspin{width:13px;height:13px;border:2px solid rgba(127,227,180,.3);border-top-color:#34d399;
+ border-radius:50%;display:none}
+#wf-rfab.busy #wf-rspin{display:inline-block;animation:wfspin .7s linear infinite}
+#wf-rfab.busy .wf-rdot{display:none}
+.wf-rdot{width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 9px #34d399}
+@keyframes wfspin{to{transform:rotate(360deg)}}
+#wf-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
+ z-index:2147483600;display:none;opacity:0;transition:all .25s;
+ font:600 13px/1.4 -apple-system,'Segoe UI',sans-serif;color:#dfe8f5;
+ background:#0c1018;border:1px solid #2b3a5c;border-radius:11px;padding:11px 18px;
+ box-shadow:0 12px 34px rgba(0,0,0,.6)}
+#wf-toast.on{display:block;opacity:1;transform:translateX(-50%) translateY(0)}
+#wf-toast.ok{border-color:#2c8a5c;color:#bff0d4}
+#wf-toast.err{border-color:#7a2d2d;color:#ffc4c4}
+</style>
+<div id="wf-bar"></div>
+<div id="wf-toast"></div>
+<div id="wf-rfab" title="Tải lại dữ liệu của trang này (phím tắt: r)" onclick="window.__wfData&&window.__wfData()">
+ <span class="wf-rdot"></span><span id="wf-rspin"></span><span>Tải lại dữ liệu</span><span class="wf-rk">r</span></div>
+<script>(function(){
+ if(window.__wfData)return;
+ if(location.pathname==='/login.html')return;
+ var MAP={'/':['runChecks'],'/index.html':['runChecks'],'/meraki.html':['loadAll'],
+  '/fortigate.html':['load'],'/esxi.html':['loadData'],'/casaos.html':['loadData'],
+  '/asus.html':['load'],'/9router.html':['loadData'],'/n8n.html':['loadData'],
+  '/hikvision.html':['loadState'],'/users.html':['loadUsers','loadMfaStatus'],
+  '/bookmarks.html':['loadData']};
+ var path=location.pathname.replace(/\\/index\\.html$/,'/');
+ var fns=MAP[path]||MAP[location.pathname];
+ var rfab=document.getElementById('wf-rfab'),bar=document.getElementById('wf-bar'),
+     toast=document.getElementById('wf-toast');
+ if(!fns||!rfab)return;
+ rfab.style.display='flex';
+ var busy=false,tHide=null;
+ function say(msg,cls,ms){
+  clearTimeout(tHide); toast.className=''; toast.textContent=msg;
+  if(cls)toast.classList.add(cls); toast.classList.add('on');
+  if(ms)tHide=setTimeout(function(){toast.classList.remove('on');},ms);
+ }
+ function barStart(){bar.classList.remove('done');bar.classList.add('on');}
+ function barDone(){bar.classList.remove('on');bar.classList.add('done');
+  setTimeout(function(){bar.classList.remove('done');bar.style.width='';},420);}
+ function run(){
+  if(busy)return; busy=true; rfab.classList.add('busy');
+  barStart(); say('\\u27F3 Đang tải lại dữ liệu…','',0);
+  var t0=Date.now(), ps=[], called=0;
+  fns.forEach(function(fn){
+   try{ if(typeof window[fn]==='function'){ called++; var r=window[fn](); if(r&&typeof r.then==='function')ps.push(r); } }catch(e){}
+  });
+  function finish(ok){
+   var wait=Math.max(0,900-(Date.now()-t0));
+   setTimeout(function(){
+    busy=false; rfab.classList.remove('busy'); barDone();
+    if(ok){var n=new Date();
+     say('\\u2713 Dữ liệu đã cập nhật · '+n.toLocaleTimeString('vi-VN',{hour12:false}),'ok',2800);}
+    else say('\\u26A0 Tải lại thất bại — thử lại sau','err',3400);
+   },wait);
+  }
+  if(!called){ /* loader not global → soft full reload as fallback */
+   say('\\u27F3 Đang tải lại trang…','',0);
+   setTimeout(function(){location.reload();},500); return;
+  }
+  if(ps.length) Promise.allSettled(ps).then(function(rs){
+   finish(rs.every(function(x){return x.status==='fulfilled';})||rs.some(function(x){return x.status==='fulfilled';}));
+  }); else finish(true);
+ }
+ window.__wfData=run;
+ document.addEventListener('keydown',function(e){
+  var t=e.target,tg=(t&&t.tagName||'').toLowerCase(),
+      typing=tg==='input'||tg==='textarea'||(t&&t.isContentEditable);
+  var ovOpen=(document.getElementById('wf-ov')||{}).classList&&document.getElementById('wf-ov').classList.contains('on');
+  if(e.key==='r'&&!typing&&!ovOpen&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();run();}
+ });
+})();</script>`;
+
+/* Per-panel reload — small ⟳ button inside each panel header that reloads
+   ONLY that panel's data (its own loader), with a per-panel progress bar. */
+const PANEL_REFRESH = `<style>
+.wf-pbtn{margin-left:7px;width:23px;height:23px;display:inline-flex;align-items:center;
+ justify-content:center;font-size:12px;color:#7fe3b4;border:1px solid #2c8a5c;border-radius:6px;
+ background:rgba(52,211,153,.10);cursor:pointer;flex-shrink:0;transition:all .15s;line-height:1}
+.wf-pbtn:hover{background:rgba(52,211,153,.22);border-color:#34d399;color:#aef3d2}
+.wf-pbtn.spin{animation:wfspin .7s linear infinite;pointer-events:none;opacity:.7}
+.wf-host{position:relative}
+.wf-pbar{position:absolute;left:0;right:0;bottom:0;height:2px;width:0;border-radius:2px;
+ background:linear-gradient(90deg,#34d399,#7fe3b4,#34d399);opacity:0;pointer-events:none}
+.wf-pbar.on{opacity:1;animation:wfbar 1.05s ease-in-out infinite}
+.wf-pbar.done{animation:none;width:100%!important;opacity:1;transition:width .2s,opacity .35s}
+</style>
+<script>(function(){
+ if(window.__wfPanel)return; window.__wfPanel=1;
+ var PMAP={'/meraki.html':{
+   'panel-clients':'loadClients','panel-devices':'loadDevices','panel-status':'loadDeviceStatus',
+   'panel-events':'loadEvents','panel-ports':'loadSwitchPorts','panel-uplinks':'loadUplinks',
+   'panel-vlans':'loadVlansRoutes','panel-routes':'loadVlansRoutes'}};
+ var cfg=PMAP[location.pathname]; if(!cfg)return;
+ function wire(){
+  Object.keys(cfg).forEach(function(pid){
+   var panel=document.getElementById(pid); if(!panel)return;
+   var hdr=panel.querySelector('.panel-header'); if(!hdr||hdr.querySelector('.wf-pbtn'))return;
+   hdr.classList.add('wf-host');
+   var btn=document.createElement('span');
+   btn.className='wf-pbtn'; btn.textContent='\\u27F3';
+   btn.title='Tải lại riêng bảng này';
+   var bar=document.createElement('div'); bar.className='wf-pbar';
+   var chev=hdr.querySelector('.chevron');
+   if(chev)hdr.insertBefore(btn,chev); else hdr.appendChild(btn);
+   hdr.appendChild(bar);
+   var busy=false;
+   btn.addEventListener('click',function(e){
+    e.stopPropagation(); e.preventDefault();
+    if(busy)return; busy=true;
+    if(panel.classList.contains('collapsed'))panel.classList.remove('collapsed');
+    btn.classList.add('spin'); bar.classList.remove('done'); bar.classList.add('on');
+    var fn=cfg[pid], t0=Date.now(), pr=null;
+    try{ if(typeof window[fn]==='function'){ var r=window[fn](); if(r&&typeof r.then==='function')pr=r; } }catch(x){}
+    function done(){
+     var wait=Math.max(0,760-(Date.now()-t0));
+     setTimeout(function(){
+      btn.classList.remove('spin'); bar.classList.remove('on'); bar.classList.add('done');
+      setTimeout(function(){bar.classList.remove('done');bar.style.width='';},360);
+      busy=false;
+     },wait);
+    }
+    if(pr&&pr.then)pr.then(done,done); else done();
+   });
+  });
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',wire);
+ else wire();
+ /* panels can be (re)built late — keep buttons present */
+ var n=0,iv=setInterval(function(){wire();if(++n>20)clearInterval(iv);},500);
+})();</script>`;
 
 async function injectUser(request, env) {
   const session = await getSession(request, env);
@@ -384,19 +895,51 @@ async function injectUser(request, env) {
   const ct = res.headers.get('content-type') || '';
   if (!res.ok || (!ct.includes('text/html') && !ct.includes('application/octet-stream'))) return res;
   const html = await res.text();
+  const isAdmin = session.role === 'admin';
+  let effPerms = { permissions: {}, panels: {}, cameras: [], groups: [] };
+  if (!isAdmin) {
+    const computed = await computeEffectivePermissions(env, session.username);
+    if (computed) effPerms = computed;
+  }
   const userScript = `<script>window.__USER__=${JSON.stringify({
     username: session.username,
     role: session.role,
-    permissions: session.permissions || {},
-    isAdmin: session.role === 'admin'
+    permissions: isAdmin ? {} : effPerms.permissions,
+    panels: isAdmin ? {} : effPerms.panels,
+    cameras: isAdmin ? [] : effPerms.cameras,
+    groups: isAdmin ? [] : effPerms.groups,
+    isAdmin
   })};</script>` + IDLE_SCRIPT;
-  // Case-insensitive replace, fallback to prepend body if no </head>
-  const newHtml = /<\/head>/i.test(html)
+  // Head: user + idle scripts.  Body end: the Wayfinding switcher as static
+  // markup (DOM-ready, immune to the page's own client-side re-rendering).
+  let newHtml = /<\/head>/i.test(html)
     ? html.replace(/<\/head>/i, userScript + '\n</head>')
     : html.replace(/<body/i, userScript + '\n<body');
+  const bodyEnd = WAYFIND_NAV + DATA_REFRESH + PANEL_REFRESH;
+  newHtml = /<\/body>/i.test(newHtml)
+    ? newHtml.replace(/<\/body>/i, bodyEnd + '\n</body>')
+    : newHtml + bodyEnd;
   return new Response(newHtml, {
     status: res.status,
-    headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store, no-cache' }
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store, no-cache',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      // App is heavily inline-scripted; 'unsafe-inline' is required to avoid
+      // breakage, but external script/object/frame sources are locked down.
+      'Content-Security-Policy':
+        "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline'; " +
+        "style-src 'self' 'unsafe-inline'; " +
+        "img-src 'self' data: https:; " +
+        // Allow same-origin + HTTPS APIs the dashboard legitimately calls
+        // (e.g. speed.cloudflare.com speed test). Plaintext/ws still blocked.
+        "connect-src 'self' https:; " +
+        "font-src 'self' data:; " +
+        "object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+    }
   });
 }
 
@@ -417,6 +960,16 @@ const SERVICES = [
 const N8N_BASE        = 'https://n8n-home.home-server.id.vn/api/v1';
 const NINEROUTER_BASE = 'https://9router.home-server.id.vn';
 const ESXI_SDK        = 'https://esxi.home-server.id.vn/sdk';
+
+/* ── Movi n8n webhook basic-auth (credentials from Cloudflare secrets) ──
+   Set via:  wrangler secret put MOVI_N8N_USER  /  MOVI_N8N_PASS
+   Never hardcode credentials in source. */
+function moviN8nAuth(env) {
+  const u = env && env.MOVI_N8N_USER;
+  const p = env && env.MOVI_N8N_PASS;
+  if (!u || !p) throw new Error('MOVI_N8N_USER / MOVI_N8N_PASS not configured');
+  return 'Basic ' + btoa(u + ':' + p);
+}
 
 async function checkService(service) {
   if (!service.checkUrl) return { id: service.id, status: 'local', ping: null };
@@ -685,7 +1238,7 @@ async function handleMerakiDevices(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
 
   const N8N_URL  = 'https://n8n.movi-finance.com/webhook/c65756f7-f228-4668-8d47-79efd543f234';
-  const N8N_AUTH = 'Basic ' + btoa('admin:Itadmin@2023');
+  const N8N_AUTH = moviN8nAuth(env);
 
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH } });
@@ -728,7 +1281,7 @@ async function handleMerakiClients(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
 
   const N8N_URL  = 'https://n8n.movi-finance.com/webhook/8e83df3c-d3ad-48ae-ae1c-11fd5733d147';
-  const N8N_AUTH = 'Basic ' + btoa('admin:Itadmin@2023');
+  const N8N_AUTH = moviN8nAuth(env);
 
   try {
     const resp = await fetch(N8N_URL, {
@@ -745,13 +1298,85 @@ async function handleMerakiClients(request, env) {
   }
 }
 
+/* ── Meraki Client Policy: block / unblock — ADMIN ONLY ── */
+async function handleMerakiClientPolicy(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+
+  let body;
+  try { body = await request.json(); } catch (e) { return json({ error: 'Invalid JSON body' }, 400); }
+  const mac = String((body && body.mac) || '').trim().toLowerCase();
+  const policy = String((body && body.policy) || '').trim();
+  const MAC_RE = /^[0-9a-f]{2}([:-]?)([0-9a-f]{2}\1){4}[0-9a-f]{2}$/;
+  if (!MAC_RE.test(mac)) return json({ error: 'MAC không hợp lệ' }, 400);
+  if (policy !== 'Blocked' && policy !== 'Normal') {
+    return json({ error: "policy phải là 'Blocked' hoặc 'Normal'" }, 400);
+  }
+
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/meraki-client-policy';
+  const N8N_AUTH = moviN8nAuth(env);
+  try {
+    const resp = await fetch(N8N_URL, {
+      method: 'POST',
+      headers: { 'Authorization': N8N_AUTH, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mac, policy }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const text = await resp.text();
+    if (!resp.ok) {
+      return json({ error: 'n8n upstream error', status: resp.status, detail: text.slice(0, 300) }, 502);
+    }
+    let data; try { data = JSON.parse(text); } catch (e) { data = { raw: text }; }
+    const payload = Array.isArray(data) ? data[0] : data;
+    // Persist blocked-clients list in KV
+    try {
+      const bl = await env.DASHBOARD_KV.get('meraki_blocked_clients', 'json') || [];
+      if (policy === 'Blocked') {
+        if (!bl.find(b => b.mac === mac)) {
+          bl.push({
+            mac,
+            name: String((body && body.name) || '').trim() || mac,
+            ip: String((body && body.ip) || '').trim() || '—',
+            blockedAt: new Date().toISOString(),
+            blockedBy: session.username,
+          });
+        }
+      } else {
+        const idx = bl.findIndex(b => b.mac === mac);
+        if (idx !== -1) bl.splice(idx, 1);
+      }
+      await env.DASHBOARD_KV.put('meraki_blocked_clients', JSON.stringify(bl));
+    } catch (e) {}
+    // Log the admin action for auditing
+    try {
+      const lg = await env.DASHBOARD_KV.get('activity_log', 'json') || [];
+      lg.unshift({ ts: Date.now(), user: session.username, action: 'meraki-client-policy', mac, policy });
+      await env.DASHBOARD_KV.put('activity_log', JSON.stringify(lg.slice(0, 200)));
+    } catch (e) {}
+    return json({ success: true, mac, policy, result: payload });
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ── Meraki Blocked Clients list (GET) — admin only ── */
+async function handleMerakiBlockedClients(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  const list = await env.DASHBOARD_KV.get('meraki_blocked_clients', 'json') || [];
+  return json({ blocked: list });
+}
+
 /* ── Meraki Device Status Proxy ── */
 async function handleMerakiDeviceStatus(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
 
   const N8N_URL  = 'https://n8n.movi-finance.com/webhook/105904c4-2578-4bd7-98c9-bc226bf8f655';
-  const N8N_AUTH = 'Basic ' + btoa('admin:Itadmin@2023');
+  const N8N_AUTH = moviN8nAuth(env);
 
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH } });
@@ -787,7 +1412,7 @@ async function handleMerakiSwitchPorts(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   const N8N_URL  = 'https://n8n.movi-finance.com/webhook/35e2fe08-836e-49de-b029-3d6f4f59ff78';
-  const N8N_AUTH = 'Basic ' + btoa('admin:Itadmin@2023');
+  const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(50000) });
     if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
@@ -808,7 +1433,7 @@ async function handleMerakiSwitchPortConfigs(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   const N8N_URL  = 'https://n8n.movi-finance.com/webhook/aa72618f-47a8-44cb-a58b-d77be06ee3d7';
-  const N8N_AUTH = 'Basic ' + btoa('admin:Itadmin@2023');
+  const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(50000) });
     if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
@@ -820,13 +1445,91 @@ async function handleMerakiSwitchPortConfigs(request, env) {
   }
 }
 
+/* ── Meraki Link Aggregations (W5c) ── */
+async function handleMerakiLinkAggregations(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/b1405e23-8260-433b-b295-8218fc22c024';
+  const N8N_AUTH = moviN8nAuth(env);
+  try {
+    const resp = await fetch(N8N_URL, {
+      headers: { 'Authorization': N8N_AUTH },
+      signal: AbortSignal.timeout(60000)   // 60s — loop qua nhiều networks có thể chậm hơn
+    });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw  = await resp.json();
+    const data = Array.isArray(raw) ? raw[0] : raw;
+    return json({
+      aggregations: data.aggregations || [],   // [ { id, label, networkId, memberCount, members[] } ]
+      portMap:      data.portMap      || {},    // { "serial:portId": { aggId, label, memberCount, members[] } }
+      aggIndex:     data.aggIndex     || {},    // { aggId: { label, networkId, members[] } }
+      totalGroups:  data.totalGroups  || 0,
+      totalPorts:   data.totalPorts   || 0,
+      fetchedAt:    data.fetchedAt    || new Date().toISOString()
+    });
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ── Meraki WAN Uplinks (W6a) ── */
+async function handleMerakiUplinks(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/3f478f32-1d89-4724-a052-e43da70ed922';
+  const N8N_AUTH = moviN8nAuth(env);
+  try {
+    const resp = await fetch(N8N_URL, {
+      headers: { 'Authorization': N8N_AUTH },
+      signal: AbortSignal.timeout(30000)
+    });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw  = await resp.json();
+    const data = Array.isArray(raw) ? raw[0] : raw;
+    return json({
+      devices:     data.devices     || [],
+      totalActive: data.totalActive || 0,
+      totalDown:   data.totalDown   || 0,
+      fetchedAt:   data.fetchedAt   || new Date().toISOString()
+    });
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ── Meraki L3 Switch Routing (W6b) — SVIs + Static Routes ── */
+async function handleMerakiL3Routing(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/03771442-1f75-4c8a-9c94-8c601796f79b';
+  const N8N_AUTH = moviN8nAuth(env);
+  try {
+    const resp = await fetch(N8N_URL, {
+      headers: { 'Authorization': N8N_AUTH },
+      signal: AbortSignal.timeout(60000)   // loop nhiều switches có thể chậm
+    });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw  = await resp.json();
+    const data = Array.isArray(raw) ? raw[0] : raw;
+    return json({
+      interfaces:    data.interfaces    || [],   // SVIs (VLAN interfaces với IP)
+      staticRoutes:  data.staticRoutes  || [],   // L3 static routes trên switch
+      totalInterfaces: data.totalInterfaces || 0,
+      totalRoutes:     data.totalRoutes     || 0,
+      fetchedAt:       data.fetchedAt       || new Date().toISOString()
+    });
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
 /* ── Meraki Events Proxy ── */
 async function handleMerakiEvents(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
 
   const N8N_URL  = 'https://n8n.movi-finance.com/webhook/3019c3e2-5725-40b5-95e4-f4a8d5a3d326';
-  const N8N_AUTH = 'Basic ' + btoa('admin:Itadmin@2023');
+  const N8N_AUTH = moviN8nAuth(env);
 
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH } });
@@ -1786,9 +2489,15 @@ async function handleAsusReboot(request, env) {
 }
 
 function json(data, status = 200) {
+  // No wildcard CORS: the dashboard is same-origin; cookie-auth'd JSON must
+  // not be readable by arbitrary cross-origin sites.
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
   });
 }
 
@@ -1808,6 +2517,11 @@ function proxyErr(msg, url) {
 }
 
 async function handleProxy(request, env) {
+  // Require an authenticated session — this endpoint can carry CF-Access
+  // service credentials, so it must never be reachable anonymously (SSRF).
+  const session = await getSession(request, env);
+  if (!session) return proxyErr('Bạn cần đăng nhập để dùng tính năng này.', '');
+
   const reqUrl = new URL(request.url);
   const target = reqUrl.searchParams.get('url');
   if (!target) return new Response('Missing ?url= parameter', { status: 400 });
@@ -1819,19 +2533,26 @@ async function handleProxy(request, env) {
   if (targetUrl.protocol !== 'https:')
     return proxyErr('Chỉ hỗ trợ URL HTTPS.', target);
 
-  // Block private/local IPs — Worker runs on Cloudflare Edge, cannot reach LAN
-  const h = targetUrl.hostname;
-  const isPrivate = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|localhost$)/i.test(h);
+  // Block private/local/link-local/loopback hosts (defence-in-depth vs SSRF)
+  const h = targetUrl.hostname.replace(/^\[|\]$/g, '');
+  const isPrivate =
+    /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|127\.|0\.)/.test(h) ||
+    /^(localhost|.*\.local|.*\.internal)$/i.test(h) ||
+    /^(::1?$|fc|fd|fe80:)/i.test(h) ||
+    h === '0.0.0.0';
   if (isPrivate) return proxyErr(
     `"${h}" là địa chỉ IP nội bộ — Cloudflare Worker không thể kết nối tới LAN của anh.\n\n` +
     `Để dùng tính năng này, anh cần tạo Cloudflare Tunnel cho dịch vụ này trước,\n` +
     `rồi dùng URL tunnel (VD: https://fortigate-ui.home-server.id.vn) thay vì IP local.`, target);
 
-  // Forward CF Access credentials for internal services
+  // Forward CF Access credentials ONLY to our own trusted domain
+  // (exact host or *.home-server.id.vn — note the leading dot to prevent
+  // an attacker-controlled "evilhome-server.id.vn" from matching).
   const cfId  = env.CF_ACCESS_CLIENT_ID;
   const cfSec = env.CF_ACCESS_CLIENT_SECRET;
+  const trusted = h === 'home-server.id.vn' || h.endsWith('.home-server.id.vn');
   const headers = { 'User-Agent': 'Mozilla/5.0 (HomeLabDashboard Proxy)' };
-  if (cfId && cfSec && targetUrl.hostname.endsWith('home-server.id.vn')) {
+  if (cfId && cfSec && trusted) {
     headers['CF-Access-Client-Id']     = cfId;
     headers['CF-Access-Client-Secret'] = cfSec;
   }
@@ -1901,11 +2622,29 @@ export default {
     }
     const userPerm = p.match(/^\/api\/admin\/users\/([^/]+)\/permissions$/);
     if (userPerm) return handleUpdatePermissions(request, env, userPerm[1]);
+    const userGrp = p.match(/^\/api\/admin\/users\/([^/]+)\/groups$/);
+    if (userGrp) return handleUpdateUserGroups(request, env, userGrp[1]);
+    const userPnl = p.match(/^\/api\/admin\/users\/([^/]+)\/panels$/);
+    if (userPnl) return handleUpdateUserPanels(request, env, userPnl[1]);
     const userDel  = p.match(/^\/api\/admin\/users\/([^/]+)$/);
     if (userDel) {
       if (request.method === 'DELETE') return handleDeleteUser(request, env, userDel[1]);
       if (request.method === 'PUT')    return handleChangePw(request, env, userDel[1]);
     }
+
+    // ── Policy Groups API ──
+    if (p === '/api/admin/groups') {
+      if (request.method === 'GET')  return handleListGroups(request, env);
+      if (request.method === 'POST') return handleCreateGroup(request, env);
+    }
+    const grpMatch = p.match(/^\/api\/admin\/groups\/([^/]+)$/);
+    if (grpMatch) {
+      if (request.method === 'PUT')    return handleUpdateGroup(request, env, grpMatch[1]);
+      if (request.method === 'DELETE') return handleDeleteGroup(request, env, grpMatch[1]);
+    }
+
+    // ── Camera list API ──
+    if (p === '/api/admin/cameras') return handleCameraList(request, env);
 
     // ── Data API (require valid session) ──
     if (p === '/api/bookmarks') {
@@ -1918,11 +2657,16 @@ export default {
     }
     if (p === '/api/activity') return handleGetActivity(request, env);
     if (p === '/api/meraki-clients')       return handleMerakiClients(request, env);
+    if (p === '/api/meraki-client-policy')    return handleMerakiClientPolicy(request, env);
+    if (p === '/api/meraki-blocked-clients')  return handleMerakiBlockedClients(request, env);
     if (p === '/api/meraki-devices')       return handleMerakiDevices(request, env);
     if (p === '/api/meraki-device-status') return handleMerakiDeviceStatus(request, env);
     if (p === '/api/meraki-events')        return handleMerakiEvents(request, env);
-    if (p === '/api/meraki-switch-ports')  return handleMerakiSwitchPorts(request, env);
-    if (p === '/api/meraki-port-configs')  return handleMerakiSwitchPortConfigs(request, env);
+    if (p === '/api/meraki-switch-ports')       return handleMerakiSwitchPorts(request, env);
+    if (p === '/api/meraki-port-configs')       return handleMerakiSwitchPortConfigs(request, env);
+    if (p === '/api/meraki-link-aggregations')  return handleMerakiLinkAggregations(request, env);
+    if (p === '/api/meraki-uplinks')            return handleMerakiUplinks(request, env);
+    if (p === '/api/meraki-l3-routing')          return handleMerakiL3Routing(request, env);
 
     if (p === '/api/status')      return handleStatus();
     if (p === '/api/n8n')         return handleN8n(env);

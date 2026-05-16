@@ -204,7 +204,7 @@ Giải pháp: **n8n làm proxy trung gian**. Key lưu trong n8n credential, Work
 meraki.html
     ↓ fetch /api/meraki-*
 Worker (Cloudflare)
-    ↓ fetch webhook URL + Basic Auth (admin:Itadmin@2023)
+    ↓ fetch webhook URL + Basic Auth (secrets: MOVI_N8N_USER / MOVI_N8N_PASS)
 n8n (https://n8n.movi-finance.com)
     ↓ HTTP Request node + Meraki API Key credential
 Meraki API v1 (https://api.meraki.com/api/v1)
@@ -225,7 +225,8 @@ meraki.html (render UI)
 | `/api/meraki-device-status` | `https://n8n.movi-finance.com/webhook/105904c4-2578-4bd7-98c9-bc226bf8f655` | `GET /organizations/{orgId}/devices/statuses` |
 | `/api/meraki-events` | `https://n8n.movi-finance.com/webhook/3019c3e2-5725-40b5-95e4-f4a8d5a3d326` | `GET /networks/{netId}/events` (2 nguồn merged) |
 
-**Auth n8n:** `Basic admin:Itadmin@2023`  
+**Auth n8n:** Basic Auth — credentials stored as Cloudflare secrets
+`MOVI_N8N_USER` / `MOVI_N8N_PASS` (set via `wrangler secret put`). Never commit credentials.
 **n8n URL:** `https://n8n.movi-finance.com`
 
 ### n8n Workflow Notes
@@ -413,14 +414,14 @@ docker run -d --name go2rtc --network=host \
 
 # /DATA/AppData/go2rtc/go2rtc.yaml
 streams:
-  camera01: rtsp://admin:Itadmin@#2023@192.168.130.3:554/Streaming/Channels/101
-  camera03: rtsp://admin:Itadmin@#2023@192.168.130.3:554/Streaming/Channels/301
-  # Chỉ kênh 1 và 3 có camera thật
+  camera01: rtsp://<DVR_USER>:<DVR_PASS>@<DVR_IP>:554/Streaming/Channels/101
+  camera03: rtsp://<DVR_USER>:<DVR_PASS>@<DVR_IP>:554/Streaming/Channels/301
+  # Chỉ kênh 1 và 3 có camera thật — thay <DVR_*> bằng giá trị thật, KHÔNG commit
 
-# Tunnel route: go2rtc.home-server.id.vn → http://192.168.110.21:1984
+# Tunnel route: go2rtc.home-server.id.vn → http://<go2rtc-host>:1984
 ```
 - Hikvision dùng **Digest auth** (không phải Basic)
-- User: `admin` | Pass: `Itadmin@#2023` | IP: `192.168.130.3`
+- Credentials: lưu trong Cloudflare secrets `HIKVISION_USER` / `HIKVISION_PASS` / `HIKVISION_URL` — KHÔNG ghi vào README/source
 
 ### Dọn dẹp nhỏ
 - [ ] Xóa route `cam.home-server.id.vn` khỏi Cloudflare Zero Trust

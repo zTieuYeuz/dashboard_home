@@ -529,6 +529,7 @@ var ALL_SERVICES_DEF = [
   { id:'asus',        name:'ASUS Router',    icon:'📡', desc:'ASUS Router · Home Network',    url:'http://192.168.10.1:8443',                    local:true,  detailPage:'/asus.html' },
   { id:'camera',      name:'Camera',         icon:'📷', desc:'Hệ thống camera · go2rtc WebRTC', url:'https://camera.home-server.id.vn',           local:false, detailPage:'/hikvision.html', newTab:true },
   { id:'meraki',      name:'Meraki-Network', icon:'🌐', desc:'Network Client Monitor · Cisco Meraki', url:'https://dashboard.meraki.com',             local:false, detailPage:'/meraki.html', noCheck:true },
+  { id:'movi',        name:'Movi Map Network', icon:'🗺️', desc:'Sơ đồ Topology Mạng · Cisco Meraki',   url:'/topology.html',                           local:false, detailPage:'/topology.html', noCheck:true },
 ];
 
 // ── Service categories ──
@@ -545,21 +546,23 @@ var SERVICE_CATEGORIES = [
     icon: '🎬',
     name: 'Service Movi',
     desc: 'Quản lý & Giám sát',
-    serviceIds: ['meraki']
+    serviceIds: ['meraki', 'movi']
   }
 ];
 
 // Filter services based on user permissions
+var _permMap = {movi:'topology'};
 var SERVICES = __USER__.isAdmin
   ? ALL_SERVICES_DEF
   : ALL_SERVICES_DEF.filter(function(s){
-      return !!__USER__.permissions[s.id];
+      var pid = _permMap[s.id] || s.id;
+      return !!__USER__.permissions[pid];
     });
 
 var prev = {}, checks = {}, onlineCnt = {}, log = [], totalChecks = 0;
 var pingHistory  = {};   // { id: [p1..p10] }
 var statusSince  = {};   // { id: { status, ts } }
-SERVICES.forEach(function(s){ checks[s.id]=0; onlineCnt[s.id]=0; pingHistory[s.id]=[]; });
+SERVICES.forEach(function(s){ checks[s.id]=0; onlineCnt[s.id]=0; pingHistory[s.id]=[]; if(s.noCheck){prev[s.id]='online';} });
 
 setInterval(function(){
   document.getElementById('clock').textContent = new Date().toLocaleTimeString('vi-VN',{hour12:false});
@@ -568,7 +571,9 @@ setInterval(function(){
 function makeSrvCard(s) {
   var href   = s.detailPage ? s.detailPage : s.url;
   var target = (s.newTab || !s.detailPage) ? '_blank' : '_self';
-  return '<a class="srv-card checking" id="card-'+s.id+'" href="'+href+'" target="'+target+'" rel="noopener" style="text-decoration:none;display:block;">'
+  var initSt = s.noCheck ? 'online' : 'checking';
+  var initLbl = s.noCheck ? 'Sẵn sàng' : 'Checking…';
+  return '<a class="srv-card '+initSt+'" id="card-'+s.id+'" href="'+href+'" target="'+target+'" rel="noopener" style="text-decoration:none;display:block;">'
     +'<div class="srv-header">'
       +'<div class="srv-icon">'+s.icon+'</div>'
       +'<span class="srv-link" onclick="event.preventDefault();window.open(\''+s.url+'\',\'_blank\',\'noopener\')">Mở ↗</span>'
@@ -579,8 +584,8 @@ function makeSrvCard(s) {
     +'</div>'
     +'<div class="srv-footer">'
       +'<div class="srv-status-wrap">'
-        +'<div class="srv-dot checking" id="dot-'+s.id+'"></div>'
-        +'<span class="srv-badge checking" id="badge-'+s.id+'">Checking…</span>'
+        +'<div class="srv-dot '+initSt+'" id="dot-'+s.id+'"></div>'
+        +'<span class="srv-badge '+initSt+'" id="badge-'+s.id+'">'+initLbl+'</span>'
       +'</div>'
       +'<span class="srv-ping" id="ping-'+s.id+'">—</span>'
     +'</div></a>';

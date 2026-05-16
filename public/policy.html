@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Quản lý Policy — Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#09090b;--surface:#18181b;--card:#18181b;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa;--accent:#60a5fa;--green:#10b981;--red:#ef4444;--amber:#f59e0b;--purple:#8b5cf6}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+.header{background:rgba(24,24,27,.8);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 2rem;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header-left{display:flex;align-items:center;gap:12px}
+.back-btn{font-size:13px;color:var(--muted);padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;transition:all .15s;text-decoration:none}
+.back-btn:hover{color:var(--text);border-color:#3f3f46}
+.page-title{font-size:16px;font-weight:700}
+.container{max-width:1100px;margin:0 auto;padding:2rem 1.5rem;display:flex;flex-direction:column;gap:24px}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:4px}
+.tab{font-size:13px;font-weight:600;padding:8px 18px;border-radius:8px;border:none;background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.tab.active{background:rgba(96,165,250,.12);color:var(--accent);border:1px solid rgba(96,165,250,.2)}
+.tab:hover:not(.active){color:var(--text)}
+
+/* Panel */
+.panel{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.panel-header{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.panel-title{font-size:15px;font-weight:700}
+.panel-desc{font-size:12px;color:var(--muted);margin-top:4px}
+.panel-body{padding:1.25rem 1.5rem}
+
+/* Buttons */
+.btn{font-size:13px;font-weight:600;padding:7px 16px;border-radius:8px;border:none;cursor:pointer;transition:all .15s}
+.btn-primary{background:#3b82f6;color:#fff}.btn-primary:hover{background:#2563eb}
+.btn-danger{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}.btn-danger:hover{background:var(--red);color:#fff}
+.btn-outline{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-outline:hover{color:var(--text);border-color:#3f3f46}
+.btn-sm{font-size:12px;padding:5px 12px}
+
+/* Group card */
+.grp-card{border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;background:var(--surface);transition:border-color .15s}
+.grp-card:hover{border-color:#3f3f46}
+.grp-name{font-size:14px;font-weight:600;margin-bottom:4px}
+.grp-desc{font-size:12px;color:var(--muted);margin-bottom:8px}
+.grp-meta{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:20px;border:1px solid var(--border);background:var(--bg);white-space:nowrap}
+.chip.page{border-color:rgba(96,165,250,.3);color:var(--accent);background:rgba(96,165,250,.06)}
+.chip.panel{border-color:rgba(139,92,246,.3);color:var(--purple);background:rgba(139,92,246,.06)}
+.chip.cam{border-color:rgba(245,158,11,.3);color:var(--amber);background:rgba(245,158,11,.06)}
+.grp-actions{display:flex;gap:6px;margin-top:10px}
+.grp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+
+/* Matrix table */
+.mx-table{width:100%;border-collapse:collapse;font-size:12px}
+.mx-table th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:8px;border-bottom:1px solid var(--border)}
+.mx-table td{padding:8px;border-bottom:1px solid var(--border)}
+.mx-table tr:last-child td{border-bottom:none}
+.mx-table tr:hover td{background:rgba(255,255,255,.02)}
+.mx-select{font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#09090b;color:var(--text);cursor:pointer}
+.mx-cb{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+
+/* User-group assign */
+.ug-row{display:flex;align-items:center;gap:14px;padding:.75rem 0;border-bottom:1px solid var(--border)}
+.ug-row:last-child{border-bottom:none}
+.ug-avatar{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}
+.ug-name{font-size:13px;font-weight:600;flex:1}
+.ug-chips{display:flex;flex-wrap:wrap;gap:4px;flex:2}
+.ug-select{font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#09090b;color:var(--text)}
+
+/* Camera list */
+.cam-row{display:flex;align-items:center;gap:10px;padding:.6rem 0;border-bottom:1px solid var(--border)}
+.cam-row:last-child{border-bottom:none}
+.cam-id{font-size:12px;color:var(--muted);font-family:monospace;min-width:80px}
+.cam-name{font-size:13px;font-weight:500;flex:1}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:1000;backdrop-filter:blur(4px)}
+.modal-overlay.hidden{display:none}
+.modal{background:#18181b;border:1px solid var(--border);border-radius:16px;padding:1.75rem;width:640px;max-width:95vw;max-height:85vh;overflow-y:auto;box-shadow:0 25px 50px rgba(0,0,0,.5)}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:1.5rem}
+.form-group{margin-bottom:1rem}
+.label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;display:block}
+.input{width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:#09090b;color:var(--text);font-size:13px;outline:none;transition:border-color .15s}
+.input:focus{border-color:#3b82f6}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:1.5rem}
+
+.section-label{font-size:12px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.05em;margin:1rem 0 .5rem;padding-bottom:6px;border-bottom:1px solid var(--border)}
+
+.empty{padding:2rem;text-align:center;color:var(--muted);font-size:13px}
+.err{font-size:12px;color:var(--red);margin-top:8px}
+.toast{position:fixed;bottom:24px;right:24px;background:#18181b;border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:9999;display:none}
+.toast.show{display:block}.toast.ok{border-color:rgba(16,185,129,.4);color:var(--green)}.toast.fail{border-color:rgba(239,68,68,.4);color:var(--red)}
+
+.tab-content{display:none}.tab-content.active{display:block}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="header-left">
+    <a class="back-btn" href="/users.html">← Users</a>
+    <a class="back-btn" href="/">← Dashboard</a>
+    <div class="page-title">🛡️ Quản lý Policy & Quyền hạn</div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('groups')">📋 Nhóm quyền</button>
+    <button class="tab" onclick="switchTab('assign')">👥 Gán nhóm cho User</button>
+    <button class="tab" onclick="switchTab('detail')">🔧 Quyền chi tiết</button>
+    <button class="tab" onclick="switchTab('cameras')">📷 Camera</button>
+  </div>
+
+  <!-- TAB: Groups -->
+  <div class="tab-content active" id="tc-groups">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Nhóm quyền (Policy Groups)</div>
+          <div class="panel-desc">Tạo nhóm → gán quyền trang + panel + camera → gán user vào nhóm</div>
+        </div>
+        <button class="btn btn-primary" onclick="openGroupModal()">+ Tạo nhóm mới</button>
+      </div>
+      <div class="panel-body">
+        <div class="grp-grid" id="grp-list"><div class="empty">Đang tải...</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Assign groups to users -->
+  <div class="tab-content" id="tc-assign">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Gán nhóm cho User</div>
+          <div class="panel-desc">Mỗi user có thể thuộc nhiều nhóm. Quyền = tổng hợp các nhóm + quyền trực tiếp</div>
+        </div>
+      </div>
+      <div class="panel-body" id="ug-list"><div class="empty">Đang tải...</div></div>
+    </div>
+  </div>
+
+  <!-- TAB: Detail permissions per user -->
+  <div class="tab-content" id="tc-detail">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Quyền chi tiết từng User</div>
+          <div class="panel-desc">Quyền trực tiếp (không qua nhóm) — trang, panel, camera cho từng user</div>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="form-group">
+          <label class="label">Chọn user</label>
+          <select class="input" id="detail-user" onchange="loadDetailUser()" style="max-width:260px"></select>
+        </div>
+        <div id="detail-body" style="display:none">
+          <div class="section-label">Quyền trang (Pages)</div>
+          <table class="mx-table" id="detail-pages"><thead><tr><th>Trang</th><th>Quyền</th></tr></thead><tbody></tbody></table>
+
+          <div class="section-label">Quyền panel (Meraki)</div>
+          <table class="mx-table" id="detail-meraki"><thead><tr><th>Panel</th><th>Hiển thị</th></tr></thead><tbody></tbody></table>
+
+          <div class="section-label">Quyền panel (Movi Map Network)</div>
+          <table class="mx-table" id="detail-topo"><thead><tr><th>Panel</th><th>Hiển thị</th></tr></thead><tbody></tbody></table>
+
+          <div class="section-label">Quyền camera</div>
+          <table class="mx-table" id="detail-cam"><thead><tr><th>Camera</th><th>Xem được</th></tr></thead><tbody></tbody></table>
+
+          <div style="margin-top:1rem;display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="saveDetail()">💾 Lưu quyền</button>
+          </div>
+          <div class="err" id="detail-err"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Camera management -->
+  <div class="tab-content" id="tc-cameras">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Danh sách Camera</div>
+          <div class="panel-desc">Quản lý danh sách camera. Sau đó gán quyền camera cho user/nhóm</div>
+        </div>
+        <button class="btn btn-primary" onclick="openCamModal()">+ Thêm camera</button>
+      </div>
+      <div class="panel-body" id="cam-list"><div class="empty">Đang tải...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Create/Edit Group Modal -->
+<div class="modal-overlay hidden" id="grp-modal" onclick="if(event.target.id==='grp-modal')closeModal('grp-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title" id="grp-modal-title">Tạo nhóm mới</div>
+    <div class="form-group">
+      <label class="label">Tên nhóm</label>
+      <input class="input" id="grp-name" placeholder="VD: network-viewers"/>
+    </div>
+    <div class="form-group">
+      <label class="label">Mô tả</label>
+      <input class="input" id="grp-desc" placeholder="VD: Nhóm xem thông tin mạng"/>
+    </div>
+
+    <div class="section-label">Quyền trang (Pages)</div>
+    <table class="mx-table"><thead><tr><th>Trang</th><th>Quyền</th></tr></thead><tbody id="grp-pages"></tbody></table>
+
+    <div class="section-label">Quyền panel — Meraki Network</div>
+    <table class="mx-table"><thead><tr><th>Panel</th><th>Hiển thị</th></tr></thead><tbody id="grp-meraki"></tbody></table>
+
+    <div class="section-label">Quyền panel — Movi Map Network</div>
+    <table class="mx-table"><thead><tr><th>Panel</th><th>Hiển thị</th></tr></thead><tbody id="grp-topo"></tbody></table>
+
+    <div class="section-label">Quyền camera</div>
+    <div id="grp-cams" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px"></div>
+
+    <div class="err" id="grp-err"></div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal('grp-modal')">Hủy</button>
+      <button class="btn btn-primary" id="grp-save-btn" onclick="saveGroup()">Tạo nhóm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Camera Modal -->
+<div class="modal-overlay hidden" id="cam-modal" onclick="if(event.target.id==='cam-modal')closeModal('cam-modal')">
+  <div class="modal" onclick="event.stopPropagation()" style="width:400px">
+    <div class="modal-title">Thêm Camera</div>
+    <div class="form-group">
+      <label class="label">Camera ID</label>
+      <input class="input" id="cam-id" placeholder="VD: cam-sanh, cam-kho"/>
+    </div>
+    <div class="form-group">
+      <label class="label">Tên camera</label>
+      <input class="input" id="cam-name-input" placeholder="VD: Camera Sảnh chính"/>
+    </div>
+    <div class="form-group">
+      <label class="label">Stream URL (tuỳ chọn)</label>
+      <input class="input" id="cam-stream" placeholder="rtsp:// hoặc http://"/>
+    </div>
+    <div class="err" id="cam-err"></div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal('cam-modal')">Hủy</button>
+      <button class="btn btn-primary" onclick="addCamera()">Thêm</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var ALL_PAGES = [
+  {id:'esxi',name:'VMware ESXi'},
+  {id:'n8n',name:'n8n Automation'},
+  {id:'casaos',name:'CasaOS'},
+  {id:'9router',name:'9Router'},
+  {id:'fortigate',name:'FortiGate'},
+  {id:'asus',name:'ASUS Router'},
+  {id:'ssh',name:'SSH Terminal'},
+  {id:'uptime-kuma',name:'Uptime Kuma'},
+  {id:'meraki',name:'Meraki Network'},
+  {id:'topology',name:'Movi Map Network'},
+  {id:'camera',name:'Camera'}
+];
+
+var MERAKI_PANELS = [
+  {id:'meraki.clients',name:'Clients đang kết nối'},
+  {id:'meraki.blocked',name:'Thiết bị đã bị chặn'},
+  {id:'meraki.devices',name:'Thiết bị Meraki (APs/Switches)'},
+  {id:'meraki.status',name:'Trạng thái thiết bị (Real-time)'},
+  {id:'meraki.events',name:'Network Events'},
+  {id:'meraki.ports',name:'Switch Ports'},
+  {id:'meraki.uplinks',name:'Uplinks'},
+  {id:'meraki.vlans',name:'VLANs'},
+  {id:'meraki.routes',name:'Static Routes'}
+];
+
+var TOPO_PANELS = [
+  {id:'topology.topo',name:'Sơ đồ Topology'},
+  {id:'topology.route',name:'Route Map'},
+  {id:'topology.wiring',name:'Sơ đồ dây switch'}
+];
+
+var groups = [], users = [], cameras = [];
+var editingGroupId = null;
+
+function toast(msg,ok){var t=document.getElementById('toast');t.textContent=msg;t.className='toast show '+(ok?'ok':'fail');setTimeout(function(){t.classList.remove('show');},3000);}
+function closeModal(id){document.getElementById(id).classList.add('hidden');}
+
+function switchTab(id){
+  document.querySelectorAll('.tab').forEach(function(t,i){
+    var tabs=['groups','assign','detail','cameras'];
+    t.classList.toggle('active',tabs[i]===id);
+  });
+  document.querySelectorAll('.tab-content').forEach(function(c){c.classList.remove('active');});
+  document.getElementById('tc-'+id).classList.add('active');
+}
+
+/* ── Data loading ── */
+function loadAll(){
+  fetch('/api/admin/groups').then(function(r){return r.json();}).then(function(d){groups=d.groups||[];renderGroups();});
+  fetch('/api/admin/users').then(function(r){return r.json();}).then(function(d){users=d.users||[];renderAssign();renderDetailSelect();});
+  fetch('/api/admin/cameras').then(function(r){return r.json();}).then(function(d){cameras=d.cameras||[];renderCameras();});
+}
+
+/* ── Groups tab ── */
+function renderGroups(){
+  var el=document.getElementById('grp-list');
+  if(!groups.length){el.innerHTML='<div class="empty">Chưa có nhóm nào. Bấm "Tạo nhóm mới" để bắt đầu.</div>';return;}
+  el.innerHTML=groups.map(function(g){
+    var chips='';
+    Object.keys(g.permissions||{}).forEach(function(k){
+      if(g.permissions[k]&&g.permissions[k]!=='none')chips+='<span class="chip page">'+k+': '+g.permissions[k]+'</span>';
+    });
+    Object.keys(g.panels||{}).forEach(function(k){
+      if(g.panels[k])chips+='<span class="chip panel">'+k+'</span>';
+    });
+    (g.cameras||[]).forEach(function(c){chips+='<span class="chip cam">📷 '+c+'</span>';});
+    var memberCount=users.filter(function(u){return(u.groups||[]).indexOf(g.id)>=0;}).length;
+    return '<div class="grp-card">'
+      +'<div class="grp-name">'+g.name+' <span style="font-size:11px;color:var(--muted);font-weight:400">· '+memberCount+' users</span></div>'
+      +'<div class="grp-desc">'+(g.description||'Không có mô tả')+'</div>'
+      +'<div class="grp-meta">'+(chips||'<span style="font-size:11px;color:var(--muted)">Chưa có quyền</span>')+'</div>'
+      +'<div class="grp-actions">'
+        +'<button class="btn btn-outline btn-sm" onclick="editGroup(\''+g.id+'\')">✏️ Sửa</button>'
+        +'<button class="btn btn-danger btn-sm" onclick="deleteGroup(\''+g.id+'\',\''+g.name+'\')">🗑️ Xoá</button>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+}
+
+function openGroupModal(gid){
+  editingGroupId=gid||null;
+  var g=gid?groups.find(function(x){return x.id===gid;}):null;
+  document.getElementById('grp-modal-title').textContent=g?'Sửa nhóm: '+g.name:'Tạo nhóm mới';
+  document.getElementById('grp-save-btn').textContent=g?'Lưu thay đổi':'Tạo nhóm';
+  document.getElementById('grp-name').value=g?g.name:'';
+  document.getElementById('grp-name').disabled=!!g;
+  document.getElementById('grp-desc').value=g?g.description||'':'';
+  document.getElementById('grp-err').textContent='';
+
+  var perms=g?g.permissions||{}:{};
+  var panels=g?g.panels||{}:{};
+  var gcams=g?g.cameras||[]:[];
+
+  document.getElementById('grp-pages').innerHTML=ALL_PAGES.map(function(p){
+    var cur=perms[p.id]||'none';
+    return '<tr><td>'+p.name+'</td><td><select class="mx-select" data-pid="'+p.id+'">'
+      +['none','read','write'].map(function(v){return '<option value="'+v+'"'+(cur===v?' selected':'')+'>'+v+'</option>';}).join('')
+      +'</select></td></tr>';
+  }).join('');
+
+  document.getElementById('grp-meraki').innerHTML=MERAKI_PANELS.map(function(p){
+    return '<tr><td>'+p.name+'</td><td><input type="checkbox" class="mx-cb" data-pnl="'+p.id+'"'+(panels[p.id]?' checked':'')+'></td></tr>';
+  }).join('');
+
+  document.getElementById('grp-topo').innerHTML=TOPO_PANELS.map(function(p){
+    return '<tr><td>'+p.name+'</td><td><input type="checkbox" class="mx-cb" data-pnl="'+p.id+'"'+(panels[p.id]?' checked':'')+'></td></tr>';
+  }).join('');
+
+  var camEl=document.getElementById('grp-cams');
+  if(!cameras.length){camEl.innerHTML='<span style="font-size:12px;color:var(--muted)">Chưa có camera. Thêm camera ở tab Camera trước.</span>';}
+  else{camEl.innerHTML=cameras.map(function(c){
+    return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:4px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg)">'
+      +'<input type="checkbox" class="mx-cb" data-cam="'+c.id+'"'+(gcams.indexOf(c.id)>=0?' checked':'')+'>'
+      +c.name+'</label>';
+  }).join('');}
+
+  document.getElementById('grp-modal').classList.remove('hidden');
+}
+
+function editGroup(gid){openGroupModal(gid);}
+
+function saveGroup(){
+  var name=document.getElementById('grp-name').value.trim();
+  var desc=document.getElementById('grp-desc').value.trim();
+  var err=document.getElementById('grp-err');
+  if(!name){err.textContent='Vui lòng nhập tên nhóm';return;}
+
+  var permissions={};
+  document.querySelectorAll('#grp-pages .mx-select').forEach(function(sel){
+    if(sel.value!=='none')permissions[sel.dataset.pid]=sel.value;
+  });
+  var panels={};
+  document.querySelectorAll('#grp-modal .mx-cb[data-pnl]').forEach(function(cb){
+    if(cb.checked)panels[cb.dataset.pnl]=true;
+  });
+  var cams=[];
+  document.querySelectorAll('#grp-modal .mx-cb[data-cam]').forEach(function(cb){
+    if(cb.checked)cams.push(cb.dataset.cam);
+  });
+
+  var url=editingGroupId?'/api/admin/groups/'+editingGroupId:'/api/admin/groups';
+  var method=editingGroupId?'PUT':'POST';
+  err.textContent='';
+  fetch(url,{method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,description:desc,permissions:permissions,panels:panels,cameras:cams})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.success){closeModal('grp-modal');toast(editingGroupId?'Đã cập nhật nhóm':'Đã tạo nhóm mới',true);loadAll();}
+      else err.textContent=d.error||'Lỗi';
+    }).catch(function(e){err.textContent='Lỗi: '+e.message;});
+}
+
+function deleteGroup(gid,name){
+  if(!confirm('Xoá nhóm "'+name+'"? Users thuộc nhóm này sẽ bị gỡ ra.'))return;
+  fetch('/api/admin/groups/'+gid,{method:'DELETE'}).then(function(r){return r.json();}).then(function(d){
+    if(d.success){toast('Đã xoá nhóm '+name,true);loadAll();}
+    else toast(d.error||'Lỗi',false);
+  });
+}
+
+/* ── Assign tab ── */
+function renderAssign(){
+  var el=document.getElementById('ug-list');
+  var nonAdmin=users.filter(function(u){return u.role!=='admin';});
+  if(!nonAdmin.length){el.innerHTML='<div class="empty">Chưa có user nào (ngoài admin)</div>';return;}
+  el.innerHTML=nonAdmin.map(function(u){
+    var uGroups=u.groups||[];
+    var chips=uGroups.map(function(gid){
+      var g=groups.find(function(x){return x.id===gid;});
+      return '<span class="chip page">'+(g?g.name:gid)+'</span>';
+    }).join('');
+    if(!chips)chips='<span style="font-size:11px;color:var(--muted)">Chưa thuộc nhóm nào</span>';
+    var opts=groups.map(function(g){
+      return '<option value="'+g.id+'"'+(uGroups.indexOf(g.id)>=0?' selected':'')+'>'+g.name+'</option>';
+    }).join('');
+    return '<div class="ug-row">'
+      +'<div class="ug-avatar">'+u.username[0].toUpperCase()+'</div>'
+      +'<div class="ug-name">'+u.username+'</div>'
+      +'<div class="ug-chips" id="ug-chips-'+u.username+'">'+chips+'</div>'
+      +'<select class="ug-select" multiple size="'+(Math.min(groups.length,4)||1)+'" data-user="'+u.username+'" onchange="assignGroups(this)" style="min-width:160px">'
+        +opts
+      +'</select>'
+    +'</div>';
+  }).join('');
+}
+
+function assignGroups(sel){
+  var username=sel.dataset.user;
+  var selected=[];
+  for(var i=0;i<sel.options.length;i++){if(sel.options[i].selected)selected.push(sel.options[i].value);}
+  fetch('/api/admin/users/'+username+'/groups',{
+    method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({groups:selected})
+  }).then(function(r){return r.json();}).then(function(d){
+    if(d.success){
+      toast('Đã cập nhật nhóm cho '+username,true);
+      var u=users.find(function(x){return x.username===username;});
+      if(u)u.groups=selected;
+      var chips=selected.map(function(gid){var g=groups.find(function(x){return x.id===gid;});return '<span class="chip page">'+(g?g.name:gid)+'</span>';}).join('');
+      var ce=document.getElementById('ug-chips-'+username);
+      if(ce)ce.innerHTML=chips||'<span style="font-size:11px;color:var(--muted)">Chưa thuộc nhóm nào</span>';
+    } else toast(d.error||'Lỗi',false);
+  });
+}
+
+/* ── Detail tab ── */
+function renderDetailSelect(){
+  var sel=document.getElementById('detail-user');
+  sel.innerHTML='<option value="">-- Chọn user --</option>'
+    +users.filter(function(u){return u.role!=='admin';}).map(function(u){return '<option value="'+u.username+'">'+u.username+'</option>';}).join('');
+  document.getElementById('detail-body').style.display='none';
+}
+
+var detailUser=null;
+function loadDetailUser(){
+  var username=document.getElementById('detail-user').value;
+  if(!username){document.getElementById('detail-body').style.display='none';return;}
+  detailUser=users.find(function(u){return u.username===username;});
+  if(!detailUser){document.getElementById('detail-body').style.display='none';return;}
+  document.getElementById('detail-body').style.display='';
+
+  var perms=detailUser.permissions||{};
+  var panels=detailUser.panels||{};
+  var ucams=detailUser.cameras||[];
+
+  document.querySelector('#detail-pages tbody').innerHTML=ALL_PAGES.map(function(p){
+    var cur=perms[p.id]||'none';
+    return '<tr><td>'+p.name+'</td><td><select class="mx-select" data-pid="'+p.id+'">'
+      +['none','read','write'].map(function(v){return '<option value="'+v+'"'+(cur===v?' selected':'')+'>'+v+'</option>';}).join('')
+      +'</select></td></tr>';
+  }).join('');
+
+  document.querySelector('#detail-meraki tbody').innerHTML=MERAKI_PANELS.map(function(p){
+    return '<tr><td>'+p.name+'</td><td><input type="checkbox" class="mx-cb" data-pnl="'+p.id+'"'+(panels[p.id]?' checked':'')+'></td></tr>';
+  }).join('');
+
+  document.querySelector('#detail-topo tbody').innerHTML=TOPO_PANELS.map(function(p){
+    return '<tr><td>'+p.name+'</td><td><input type="checkbox" class="mx-cb" data-pnl="'+p.id+'"'+(panels[p.id]?' checked':'')+'></td></tr>';
+  }).join('');
+
+  document.querySelector('#detail-cam tbody').innerHTML=cameras.map(function(c){
+    return '<tr><td>'+c.name+' <span style="color:var(--muted);font-size:11px">('+c.id+')</span></td>'
+      +'<td><input type="checkbox" class="mx-cb" data-cam="'+c.id+'"'+(ucams.indexOf(c.id)>=0?' checked':'')+'></td></tr>';
+  }).join('')||(cameras.length?'':'<tr><td colspan="2" style="color:var(--muted)">Chưa có camera nào</td></tr>');
+
+  document.getElementById('detail-err').textContent='';
+}
+
+function saveDetail(){
+  if(!detailUser)return;
+  var err=document.getElementById('detail-err');
+  var permissions={};
+  document.querySelectorAll('#detail-pages .mx-select').forEach(function(sel){
+    if(sel.value!=='none')permissions[sel.dataset.pid]=sel.value;
+  });
+  var panels={};
+  document.querySelectorAll('#tc-detail .mx-cb[data-pnl]').forEach(function(cb){
+    if(cb.checked)panels[cb.dataset.pnl]=true;
+  });
+  var cams=[];
+  document.querySelectorAll('#tc-detail .mx-cb[data-cam]').forEach(function(cb){
+    if(cb.checked)cams.push(cb.dataset.cam);
+  });
+
+  Promise.all([
+    fetch('/api/admin/users/'+detailUser.username+'/permissions',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({permissions:permissions})}),
+    fetch('/api/admin/users/'+detailUser.username+'/panels',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({panels:panels,cameras:cams})})
+  ]).then(function(res){return Promise.all(res.map(function(r){return r.json();}));}).then(function(ds){
+    var ok=ds.every(function(d){return d.success;});
+    if(ok){toast('Đã lưu quyền cho '+detailUser.username,true);loadAll();}
+    else{err.textContent=ds.find(function(d){return !d.success;})?.error||'Lỗi';}
+  }).catch(function(e){err.textContent='Lỗi: '+e.message;});
+}
+
+/* ── Camera tab ── */
+function renderCameras(){
+  var el=document.getElementById('cam-list');
+  if(!cameras.length){el.innerHTML='<div class="empty">Chưa có camera nào. Bấm "Thêm camera" để thêm.</div>';return;}
+  el.innerHTML=cameras.map(function(c,i){
+    return '<div class="cam-row">'
+      +'<span class="cam-id">'+c.id+'</span>'
+      +'<span class="cam-name">'+c.name+(c.stream?' <span style="font-size:11px;color:var(--muted)">· '+c.stream+'</span>':'')+'</span>'
+      +'<button class="btn btn-danger btn-sm" onclick="removeCam('+i+')">🗑️</button>'
+    +'</div>';
+  }).join('');
+}
+
+function openCamModal(){
+  document.getElementById('cam-id').value='';
+  document.getElementById('cam-name-input').value='';
+  document.getElementById('cam-stream').value='';
+  document.getElementById('cam-err').textContent='';
+  document.getElementById('cam-modal').classList.remove('hidden');
+}
+
+function addCamera(){
+  var id=document.getElementById('cam-id').value.trim().toLowerCase().replace(/[^a-z0-9_-]/g,'-');
+  var name=document.getElementById('cam-name-input').value.trim();
+  var stream=document.getElementById('cam-stream').value.trim();
+  var err=document.getElementById('cam-err');
+  if(!id||!name){err.textContent='Vui lòng nhập ID và tên camera';return;}
+  if(cameras.some(function(c){return c.id===id;})){err.textContent='Camera ID đã tồn tại';return;}
+  cameras.push({id:id,name:name,stream:stream||undefined});
+  saveCameras(function(){closeModal('cam-modal');toast('Đã thêm camera '+name,true);renderCameras();});
+}
+
+function removeCam(idx){
+  var c=cameras[idx];
+  if(!confirm('Xoá camera "'+c.name+'"?'))return;
+  cameras.splice(idx,1);
+  saveCameras(function(){toast('Đã xoá camera',true);renderCameras();});
+}
+
+function saveCameras(cb){
+  fetch('/api/admin/cameras',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({cameras:cameras})})
+    .then(function(r){return r.json();}).then(function(d){if(d.success&&cb)cb();else if(!d.success)toast(d.error||'Lỗi',false);})
+    .catch(function(e){toast('Lỗi: '+e.message,false);});
+}
+
+loadAll();
+</script>
+</body>
+</html>

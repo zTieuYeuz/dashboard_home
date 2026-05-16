@@ -7,6 +7,11 @@
 # Node modules (nếu sau này thêm)
 node_modules/
 
-# Env files
+# Env files / local secrets — never commit
 .env
 .env.local
+.dev.vars
+.dev.vars.*
+*.secret
+sp_tmp.json
+dev_tmp.json

@@ -67,7 +67,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <a class="back-btn" href="/">← Dashboard</a>
     <div class="page-title">👥 Quản lý Users</div>
   </div>
-  <div id="current-user-info" style="font-size:13px;color:var(--muted)"></div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <a href="/policy.html" class="back-btn" style="color:var(--accent);border-color:rgba(96,165,250,.3)">🛡️ Policy & Quyền hạn</a>
+    <span id="current-user-info" style="font-size:13px;color:var(--muted)"></span>
+  </div>
 </header>
 
 <div class="container">
@@ -228,7 +231,9 @@ var ALL_SERVICES = [
   {id:'asus',name:'ASUS Router'},
   {id:'ssh',name:'SSH Terminal'},
   {id:'uptime-kuma',name:'Uptime Kuma'},
-  {id:'meraki',name:'Meraki-Network'},
+  {id:'meraki',name:'Meraki Network'},
+  {id:'topology',name:'Movi Map Network'},
+  {id:'camera',name:'Camera'}
 ];
 
 function _readUserCookie() {
@@ -267,16 +272,18 @@ function renderUsers(users) {
   }
   document.getElementById('user-list').innerHTML = users.map(function(u) {
     var isAdmin = u.role === 'admin';
+    var grpChips = (u.groups||[]).map(function(g){ return '<span class="perm-chip" style="border-color:rgba(139,92,246,.3);color:#8b5cf6;background:rgba(139,92,246,.08)">📋 '+g+'</span>'; }).join('');
     var perms = Object.entries(u.permissions || {})
       .filter(function(e){ return e[1] && e[1] !== 'none'; })
       .map(function(e){ return '<span class="perm-chip '+e[1]+'">'+e[0]+': '+e[1]+'</span>'; }).join('');
-    if (!perms && !isAdmin) perms = '<span style="color:var(--muted);font-size:11px">Chưa có quyền nào</span>';
-    if (isAdmin) perms = '<span style="color:#818cf8;font-size:11px">Toàn quyền tất cả services</span>';
+    var allChips = grpChips + perms;
+    if (!allChips && !isAdmin) allChips = '<span style="color:var(--muted);font-size:11px">Chưa có quyền nào</span>';
+    if (isAdmin) allChips = '<span style="color:#818cf8;font-size:11px">Toàn quyền tất cả services</span>';
     return '<div class="user-row">'
       + '<div class="user-avatar">' + u.username[0].toUpperCase() + '</div>'
       + '<div class="user-info">'
         + '<div class="user-name">' + u.username + ' <span class="role-badge role-' + u.role + '">' + u.role + '</span></div>'
-        + '<div class="perm-grid" style="margin-top:6px">' + perms + '</div>'
+        + '<div class="perm-grid" style="margin-top:6px">' + allChips + '</div>'
       + '</div>'
       + (isAdmin ? '' :
           '<div style="display:flex;gap:6px;flex-shrink:0">'

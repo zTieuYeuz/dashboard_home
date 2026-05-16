@@ -338,12 +338,23 @@ function initCanvas(){
 }
 
 function updateBandwidth(ifaces){
-  const wan1=(ifaces||[]).find(i=>i.name==='wan1');
+  /* Ưu tiên: wan* → port1 → interface đầu tiên đang UP */
+  const wan1=(ifaces||[]).find(i=>/^wan/i.test(i.name)&&i.status==='up')
+    ||(ifaces||[]).find(i=>/^wan/i.test(i.name))
+    ||(ifaces||[]).find(i=>i.status==='up')
+    ||(ifaces||[])[0];
   if(!wan1)return;
+  /* Cập nhật title nếu WAN name khác 'wan1' */
+  const titleEl=document.querySelector('.bw-title');
+  if(titleEl&&!titleEl._nameSet){
+    titleEl._nameSet=true;
+    titleEl.childNodes.forEach(n=>{if(n.nodeType===3)n.textContent=' '+wan1.name.toUpperCase()+' Bandwidth';});
+  }
   const now=Date.now();
   if(prevWan1?.ts){
     const dt=(now-prevWan1.ts)/1000;
-    if(dt>0&&dt<120){
+    /* dt < 300 để cho phép interval 120s + độ trễ mạng */
+    if(dt>0&&dt<300){
       const rxMbps=Math.max(0,(wan1.rxBytes-prevWan1.rx)*8/dt/1e6);
       const txMbps=Math.max(0,(wan1.txBytes-prevWan1.tx)*8/dt/1e6);
       const t=new Date().toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -353,7 +364,8 @@ function updateBandwidth(ifaces){
       if(canvas)drawBwChart(canvas.width/(window.devicePixelRatio||1),canvas.height/(window.devicePixelRatio||1));
       document.getElementById('bw-rate').innerHTML=
         '<span style="color:var(--green)">↓ <strong>'+rxMbps.toFixed(2)+'</strong> Mbps</span>'
-        +'&emsp;<span style="color:var(--accent)">↑ <strong>'+txMbps.toFixed(2)+'</strong> Mbps</span>';
+        +'&emsp;<span style="color:var(--accent)">↑ <strong>'+txMbps.toFixed(2)+'</strong> Mbps</span>'
+        +'<span style="font-size:10px;color:var(--muted);margin-left:8px">'+wan1.name+'</span>';
     }
   }
   prevWan1={ts:now,rx:wan1.rxBytes,tx:wan1.txBytes};
@@ -370,7 +382,7 @@ function drawBwChart(W,H){
   const cW=W-PAD_L-PAD_R,cH=H-PAD_T-PAD_B;
   if(BW.rx.length<2){
     ctx.fillStyle='#64748b';ctx.font='11px sans-serif';ctx.textAlign='center';
-    ctx.fillText('Đang thu thập... (30s/lần)',W/2,H/2);
+    ctx.fillText('Đang thu thập dữ liệu... (~30s/điểm)',W/2,H/2);
     ctx.restore();return;
   }
   const maxVal=Math.max(...BW.rx,...BW.tx,0.1);
@@ -576,7 +588,7 @@ window.addEventListener('load',()=>{
   initCanvas();
   window.addEventListener('resize',initCanvas);
   load();
-  setInterval(load,120000);
+  setInterval(load,30000);  /* 30s — đủ nhanh cho bandwidth chart (maxPts=30 → 15 phút history) */
 });
 </script>
 </body>
