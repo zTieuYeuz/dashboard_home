@@ -287,6 +287,14 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-hei
       <label class="label">Stream URL (tuỳ chọn)</label>
       <input class="input" id="cam-stream" placeholder="rtsp:// hoặc http://"/>
     </div>
+    <div class="form-group">
+      <label class="label">Loại camera</label>
+      <select class="input" id="cam-type">
+        <option value="ip">IP Camera</option>
+        <option value="analog">Analog</option>
+        <option value="unknown">Chưa xác định</option>
+      </select>
+    </div>
     <div class="err" id="cam-err"></div>
     <div class="modal-btns">
       <button class="btn btn-outline" onclick="closeModal('cam-modal')">Hủy</button>
@@ -577,7 +585,10 @@ function renderCameras(){
   el.innerHTML=cameras.map(function(c,i){
     return '<div class="cam-row">'
       +'<span class="cam-id">'+c.id+'</span>'
-      +'<span class="cam-name">'+c.name+(c.stream?' <span style="font-size:11px;color:var(--muted)">· '+c.stream+'</span>':'')+'</span>'
+      +'<span class="cam-name">'+c.name
+        +(c.stream?' <span style="font-size:11px;color:var(--muted)">· '+c.stream+'</span>':'')
+        +(c.type&&c.type!=='ip'?' <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:color-mix(in oklch,var(--warn) 12%,transparent);color:var(--warn)">'+c.type+'</span>':'')
+      +'</span>'
       +'<button class="btn btn-danger btn-sm" onclick="removeCam('+i+')">🗑️</button>'
     +'</div>';
   }).join('');
@@ -587,6 +598,7 @@ function openCamModal(){
   document.getElementById('cam-id').value='';
   document.getElementById('cam-name-input').value='';
   document.getElementById('cam-stream').value='';
+  document.getElementById('cam-type').value='ip';
   document.getElementById('cam-err').textContent='';
   document.getElementById('cam-modal').classList.remove('hidden');
 }
@@ -595,10 +607,11 @@ function addCamera(){
   var id=document.getElementById('cam-id').value.trim().toLowerCase().replace(/[^a-z0-9_-]/g,'-');
   var name=document.getElementById('cam-name-input').value.trim();
   var stream=document.getElementById('cam-stream').value.trim();
+  var type=document.getElementById('cam-type').value||'ip';
   var err=document.getElementById('cam-err');
   if(!id||!name){err.textContent='Vui lòng nhập ID và tên camera';return;}
   if(cameras.some(function(c){return c.id===id;})){err.textContent='Camera ID đã tồn tại';return;}
-  cameras.push({id:id,name:name,stream:stream||undefined});
+  cameras.push({id:id,name:name,stream:stream||undefined,type:type});
   saveCameras(function(){closeModal('cam-modal');toast('Đã thêm camera '+name,true);renderCameras();});
 }
 

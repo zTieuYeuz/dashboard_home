@@ -181,14 +181,8 @@ if(typeof window.__USER__==='undefined'){
 const BASE = 'https://camera.home-server.id.vn';
 const MODE = 'webrtc,mse,hls,mjpeg';
 
-const CAMERAS = [
-  { id:'cam01', name:'Camera 01',          type:'analog', label:'Analog · A1',     src:'cam01' },
-  { id:'cam03', name:'Camera 03',          type:'analog', label:'Analog · A3',     src:'cam03' },
-  { id:'cam04', name:'Camera 04',          type:'ip',     label:'IP · D1 · 130.2', src:'cam04' },
-  { id:'cam05', name:'Camera 05',          type:'ip',     label:'IP · D2 · 130.5', src:'cam05' },
-  { id:'cam06', name:'Camera 06',          type:'ip',     label:'IP · D3 · 130.6', src:'cam06' },
-  { id:'cam07', name:'Camera Phòng Khách', type:'unknown',label:'IP · D4 · 130.10',src:null    },
-];
+var USER = (typeof window.__USER__ !== 'undefined') ? window.__USER__ : {};
+var CAMERAS = [];
 
 /* ── State (persisted in localStorage) ── */
 const LS_KEY = 'cam_state_v1';
@@ -199,9 +193,39 @@ function saveState(state){ localStorage.setItem(LS_KEY, JSON.stringify(state)); 
 
 // Default: all configured cameras ON
 let state = loadState();
-CAMERAS.forEach(function(c){
-  if(!(c.id in state)) state[c.id] = c.src !== null; // unconfigured = off by default
-});
+
+function initCameras() {
+  fetch('/api/admin/cameras')
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(d) {
+      var allCams = d.cameras || [];
+      // Filter by permission for non-admin users
+      var allowedIds = USER.isAdmin ? null : (USER.cameras || []);
+      var visible = allowedIds === null ? allCams
+        : allCams.filter(function(c){ return allowedIds.indexOf(c.id) >= 0; });
+
+      CAMERAS = visible.map(function(c) {
+        return {
+          id:    c.id,
+          name:  c.name || c.id,
+          type:  c.type || 'ip',
+          label: c.stream ? (c.type === 'analog' ? 'Analog · ' : 'IP · ') + c.stream : 'Stream: ' + c.id,
+          src:   c.stream || null
+        };
+      });
+
+      // Init state for any new camera not yet in localStorage
+      CAMERAS.forEach(function(c) {
+        if (!(c.id in state)) state[c.id] = c.src !== null;
+      });
+
+      render();
+    })
+    .catch(function() {
+      document.getElementById('cam-grid').innerHTML =
+        '<div style="padding:24px;text-align:center;color:var(--bad);font-size:13px">Không tải được danh sách camera</div>';
+    });
+}
 
 /* ── Render grid ── */
 function render(){
@@ -258,7 +282,7 @@ function updateBadge(){
   document.getElementById('status-badge').textContent = on.length+' / '+CAMERAS.length+' streaming';
 }
 
-render();
+initCameras();
 
 /* ── Navigation helpers ── */
 function goBack() {
