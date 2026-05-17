@@ -239,6 +239,60 @@ input { font: inherit; }
 .route-gw { font-family: var(--font-mono); color: var(--warn); font-weight: 600; }
 .route-row-off { opacity: 0.5; }
 
+/* ── SWITCH PORTS panel ── */
+.port-load-bar { padding: 10px 20px; border-bottom: 1px solid var(--border-soft); background: var(--surface-2); }
+.port-load-track { height: 5px; background: var(--track); border-radius: 3px; overflow: hidden; }
+.port-load-fill  { height: 100%; width: 0%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--violet)); transition: width .5s linear, background .4s; }
+.port-load-meta  { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11px; color: var(--muted); }
+.floor-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--border-soft); background: var(--surface-2); }
+.floor-card { display: flex; flex-direction: column; gap: 3px; padding: 8px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-soft); background: var(--card); min-width: 120px; cursor: pointer; transition: all .12s; }
+.floor-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.floor-card.dead { border-color: color-mix(in oklch, var(--bad) 35%, transparent); background: color-mix(in oklch, var(--bad) 4%, var(--card)); }
+.floor-card.ok   { border-color: color-mix(in oklch, var(--ok) 25%, transparent); }
+.floor-name { font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: .05em; }
+.floor-sw   { font-size: 10.5px; color: var(--muted); }
+.floor-bar  { height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; margin-top: 4px; }
+.floor-bar-fill { height: 100%; border-radius: 2px; transition: width .4s; }
+.analysis-wrap { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border-soft); }
+@media (max-width: 700px) { .analysis-wrap { grid-template-columns: 1fr; } }
+.analysis-col { padding: 14px 18px; }
+.analysis-col + .analysis-col { border-left: 1px solid var(--border-soft); }
+.analysis-title { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 10px; }
+.speed-row    { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 13px; }
+.speed-dot    { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.speed-cnt    { font-family: var(--font-mono); font-weight: 600; min-width: 28px; }
+.traffic-row  { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border-soft); font-size: 11.5px; }
+.traffic-row:last-child { border-bottom: none; }
+.traffic-rank { font-family: var(--font-mono); font-size: 10px; color: var(--muted); min-width: 18px; text-align: right; }
+.traffic-sw   { color: var(--text-2); font-size: 11px; min-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.traffic-bar-wrap { flex: 1; height: 5px; background: var(--track); border-radius: 3px; overflow: hidden; }
+.traffic-bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--violet)); }
+.sw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; padding: 14px; background: var(--bg); }
+.sw-card-port { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.sw-card-port.dead { border-color: color-mix(in oklch, var(--bad) 30%, var(--border)); background: color-mix(in oklch, var(--bad) 3%, var(--card)); }
+.sw-card-head { display: flex; align-items: center; gap: 10px; }
+.sw-card-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sw-card-model { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+.sw-card-cnt { text-align: right; flex-shrink: 0; }
+.sw-card-cnt-num { font-family: var(--font-mono); font-size: 16px; font-weight: 700; line-height: 1; }
+.sw-card-cnt-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.sw-card-warn { font-size: 10px; color: var(--bad); margin-left: 6px; }
+.sw-port-grid { display: flex; flex-wrap: wrap; gap: 3px; padding: 4px 0; }
+.sw-port-sq { width: 16px; height: 16px; border-radius: 3px; cursor: default; transition: transform .1s; position: relative; }
+.sw-port-sq:hover { transform: scale(1.4); z-index: 1; }
+.sw-port-sq.connected    { background: var(--ok); }
+.sw-port-sq.disconnected { background: var(--track); }
+.sw-port-sq.err          { background: var(--bad); }
+.sw-port-sq.warn         { background: var(--warn); }
+.sw-port-sq.uplink       { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sw-port-sq.speed-10     { background: var(--bad); }
+.sw-port-sq.speed-100    { background: var(--warn); }
+.sw-port-tbl { width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--font-mono); }
+.sw-port-tbl td { padding: 4px 8px; border-bottom: 1px solid var(--border-soft); white-space: nowrap; }
+.sw-port-tbl tr:last-child td { border-bottom: none; }
+.port-empty { padding: 40px 20px; text-align: center; color: var(--muted); grid-column: 1 / -1; }
+.port-empty b { color: var(--accent); }
+
 .footer { display: flex; justify-content: space-between; padding: 20px 4px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border-soft); }
 
 @media (max-width: 1100px) { .stats { grid-template-columns: repeat(2, 1fr); } .stat:nth-child(2) { border-right: none; } .stat { border-bottom: 1px solid var(--border); } }
@@ -411,9 +465,54 @@ input { font: inherit; }
     </div>
   </div>
 
+  <!-- PANEL: SWITCH PORTS -->
+  <div class="panel is-closed" id="panel-ports">
+    <div class="panel-head" onclick="togglePanel('panel-ports')">
+      <span class="panel-icon">🔀</span>
+      <div class="panel-text">
+        <div class="panel-title">Switch Ports — trạng thái cổng mạng</div>
+        <div class="panel-sub">Floor summary · speed anomaly · top traffic · port grid (mất ~50s)</div>
+      </div>
+      <span class="panel-badge" id="badge-ports">Chờ tải…</span>
+      <span class="panel-chev"><svg viewBox="0 0 12 12" width="11" height="11"><path d="M2 4 L6 8 L10 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    </div>
+    <div class="panel-body">
+      <div class="cmdbar">
+        <div class="cmdbar-search"><span class="cmdbar-prefix">🔍</span><input id="portSearch" placeholder="Tìm switch · model · serial · floor (vd: f1)…" oninput="filterSwitches()"/></div>
+        <div class="cmdbar-segment">
+          <button class="cmdseg active" id="psw-all"    onclick="setSwitchFilter('all')">All</button>
+          <button class="cmdseg"        id="psw-issues" onclick="setSwitchFilter('issues')">⚠ Có lỗi</button>
+          <button class="cmdseg"        id="psw-dead"   onclick="setSwitchFilter('dead')">⛔ Down</button>
+        </div>
+        <button class="btn ghost" id="btnLoadPorts" onclick="loadSwitchPorts()" style="margin-left:auto"><span class="ri">🎨</span> Tải sơ đồ ports</button>
+      </div>
+      <div class="port-load-bar" id="portsLoadBar" style="display:none">
+        <div class="port-load-track"><div class="port-load-fill" id="portsLoadFill"></div></div>
+        <div class="port-load-meta">
+          <span>Đang thu thập dữ liệu từ switches (~50s)…</span>
+          <span class="mono" id="portsLoadTimer">0s</span>
+        </div>
+      </div>
+      <div class="floor-row" id="floorSummary"></div>
+      <div class="analysis-wrap" id="analysisSection" style="display:none">
+        <div class="analysis-col">
+          <div class="analysis-title">Speed Anomaly · phát hiện port chậm</div>
+          <div id="speedStats"></div>
+        </div>
+        <div class="analysis-col">
+          <div class="analysis-title">Top Bandwidth Ports · 8 cổng tải cao</div>
+          <div id="topTraffic"></div>
+        </div>
+      </div>
+      <div class="sw-grid" id="switchGrid">
+        <div class="port-empty"><div style="font-size:32px;margin-bottom:8px">🔀</div>Nhấn <b>Tải sơ đồ ports</b> để bắt đầu (~50s)</div>
+      </div>
+    </div>
+  </div>
+
   <footer class="footer">
     <span>Meraki monitor · data proxied qua n8n · API key giữ bí mật trong credential</span>
-    <span class="mono">/api/meraki-clients · /api/meraki-devices · /api/meraki-events</span>
+    <span class="mono">/api/meraki-clients · /api/meraki-devices · /api/meraki-events · /api/meraki-switch-ports</span>
   </footer>
 </main>
 
@@ -714,6 +813,244 @@ function loadAll() {
   Promise.all([loadClients(), loadDevices(), loadStatus(), loadEvents()]).finally(function(){
     btn.classList.remove('refreshing'); btn.disabled = false;
   });
+  // Also refresh switch ports if they were already loaded once
+  if (allSwitches.length > 0) loadSwitchPorts();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SWITCH PORTS — preserved from original meraki.html
+   ═══════════════════════════════════════════════════════════════ */
+var allSwitches = [], activeSwitchFilter = 'all';
+var _portsBarIv = null, _portsBarT0 = 0;
+
+function fmtKb(kb) {
+  if (!kb) return '—';
+  if (kb > 1048576) return (kb / 1048576).toFixed(1) + ' GB';
+  if (kb > 1024)    return (kb / 1024).toFixed(0)    + ' MB';
+  return kb + ' KB';
+}
+function getFloor(name){
+  var m = (name || '').match(/^(F\d+)/i);
+  if (m) return m[1].toUpperCase();
+  if (/core/i.test(name)) return 'Core';
+  if (/xen/i.test(name))  return 'XEN';
+  return 'Khác';
+}
+function portSqClass(p){
+  var realErr = (p.errors || []).some(function(e){ return e && e !== 'Port disconnected'; });
+  if (realErr) return 'err';
+  if (p.warnings && p.warnings.length) return 'warn';
+  if (p.status !== 'Connected') return 'disconnected';
+  if (p.speed === '10 Mbps') return 'speed-10';
+  if (p.speed && p.speed.indexOf('100') !== -1) return 'speed-100';
+  return 'connected';
+}
+
+function startPortsProgressBar(){
+  _portsBarT0 = Date.now();
+  var el = document.getElementById('portsLoadBar');
+  el.style.display = '';
+  var fill = document.getElementById('portsLoadFill');
+  fill.style.background = 'linear-gradient(90deg,var(--accent),var(--violet))';
+  fill.style.width = '0%';
+  document.getElementById('portsLoadTimer').textContent = '0s';
+  if (_portsBarIv) clearInterval(_portsBarIv);
+  _portsBarIv = setInterval(function(){
+    var s = (Date.now() - _portsBarT0) / 1000;
+    document.getElementById('portsLoadFill').style.width = Math.min(s/50*95, 95).toFixed(1) + '%';
+    document.getElementById('portsLoadTimer').textContent = s.toFixed(0) + 's';
+  }, 300);
+}
+function stopPortsProgressBar(ok){
+  if (_portsBarIv) { clearInterval(_portsBarIv); _portsBarIv = null; }
+  var el = document.getElementById('portsLoadBar');
+  if (ok) {
+    var fill = document.getElementById('portsLoadFill');
+    fill.style.width = '100%';
+    fill.style.background = 'var(--ok)';
+    document.getElementById('portsLoadTimer').textContent = '✓ ' + ((Date.now() - _portsBarT0) / 1000).toFixed(1) + 's';
+    setTimeout(function(){ el.style.display = 'none'; }, 2500);
+  } else { el.style.display = 'none'; }
+}
+
+function renderFloorSummary(switches){
+  var floors = {}, order = [];
+  switches.forEach(function(sw){
+    var f = getFloor(sw.switchName);
+    if (!floors[f]) { floors[f] = { name:f, count:0, totalPorts:0, connectedPorts:0, dead:0 }; order.push(f); }
+    floors[f].count++;
+    floors[f].totalPorts += sw.totalPorts || 0;
+    floors[f].connectedPorts += sw.connectedPorts || 0;
+    if (sw.connectedPorts === 0) floors[f].dead++;
+  });
+  order.sort(function(a,b){
+    var fa = a.match(/^F(\d+)/), fb = b.match(/^F(\d+)/);
+    if (fa && fb) return parseInt(fa[1]) - parseInt(fb[1]);
+    if (fa) return -1; if (fb) return 1;
+    return a.localeCompare(b);
+  });
+  document.getElementById('floorSummary').innerHTML = order.map(function(f){
+    var fl = floors[f];
+    var allDead = fl.dead === fl.count;
+    var pct = fl.totalPorts ? Math.round(fl.connectedPorts / fl.totalPorts * 100) : 0;
+    var barColor = allDead ? 'var(--bad)' : pct > 50 ? 'var(--ok)' : 'var(--warn)';
+    var cls = 'floor-card' + (allDead ? ' dead' : pct === 100 ? ' ok' : '');
+    return '<div class="' + cls + '" onclick="document.getElementById(\'portSearch\').value=\'' + f.toLowerCase() + '\';filterSwitches()" title="Click để lọc">'
+      + '<div class="floor-name" style="color:' + (allDead ? 'var(--bad)' : pct > 50 ? 'var(--ok)' : 'var(--warn)') + '">' + esc(f) + '</div>'
+      + '<div class="floor-sw">' + fl.count + ' SW · ' + fl.connectedPorts + '/' + fl.totalPorts + ' ports</div>'
+      + '<div class="floor-bar"><div class="floor-bar-fill" style="width:' + pct + '%;background:' + barColor + '"></div></div>'
+      + '</div>';
+  }).join('');
+}
+
+function renderSpeedStats(switches){
+  var cnt = { '1 Gbps':0, '100 Mbps':0, '10 Mbps':0, 'Khác':0 };
+  switches.forEach(function(sw){
+    (sw.ports || []).filter(function(p){ return p.status === 'Connected'; }).forEach(function(p){
+      var s = p.speed || '';
+      if (s === '1 Gbps') cnt['1 Gbps']++;
+      else if (s.indexOf('100') >= 0) cnt['100 Mbps']++;
+      else if (s.indexOf('10 ') >= 0) cnt['10 Mbps']++;
+      else cnt['Khác']++;
+    });
+  });
+  var specs = [
+    { label:'1 Gbps',   key:'1 Gbps',   color:'var(--ok)',    note:'' },
+    { label:'100 Mbps', key:'100 Mbps', color:'var(--warn)',  note:' — kiểm tra cáp/NIC' },
+    { label:'10 Mbps',  key:'10 Mbps',  color:'var(--bad)',   note:' — cáp/NIC hỏng?' },
+    { label:'Khác',     key:'Khác',     color:'var(--muted)', note:'' },
+  ];
+  document.getElementById('speedStats').innerHTML = specs.filter(function(s){ return cnt[s.key] > 0; }).map(function(s){
+    return '<div class="speed-row">'
+      + '<div class="speed-dot" style="background:' + s.color + '"></div>'
+      + '<span class="speed-cnt" style="color:' + s.color + '">' + cnt[s.key] + '</span>'
+      + '<span style="color:var(--text)">' + s.label + '</span>'
+      + '<span class="muted small">' + s.note + '</span>'
+      + '</div>';
+  }).join('');
+}
+
+function renderTopTraffic(switches){
+  var ports = [];
+  switches.forEach(function(sw){
+    (sw.ports || []).filter(function(p){ return p.status === 'Connected' && (p.usageSentKb || p.usageRecvKb); }).forEach(function(p){
+      ports.push({ sw:sw.switchName, portId:p.portId, speed:p.speed, clients:p.clientCount,
+                   total:(p.usageSentKb || 0) + (p.usageRecvKb || 0),
+                   sent:p.usageSentKb || 0, recv:p.usageRecvKb || 0 });
+    });
+  });
+  ports.sort(function(a,b){ return b.total - a.total; });
+  var top = ports.slice(0, 8);
+  var max = top[0] ? top[0].total : 1;
+  document.getElementById('topTraffic').innerHTML = top.map(function(p, i){
+    var pct = Math.round(p.total / max * 100);
+    return '<div class="traffic-row">'
+      + '<span class="traffic-rank">' + (i+1) + '</span>'
+      + '<span class="traffic-sw" title="' + esc(p.sw) + '">' + esc(p.sw) + '</span>'
+      + '<span class="mono small" style="color:var(--accent);min-width:24px">P' + esc(p.portId) + '</span>'
+      + '<div class="traffic-bar-wrap"><div class="traffic-bar-fill" style="width:' + pct + '%"></div></div>'
+      + '<span class="mono small" style="color:var(--text);min-width:62px;text-align:right">' + fmtKb(p.total) + '</span>'
+      + '</div>';
+  }).join('') || '<div class="muted small">Không có dữ liệu lưu lượng</div>';
+}
+
+function renderSwitchCard(sw){
+  var isDead = sw.connectedPorts === 0;
+  var ports = sw.ports || [];
+  var has10M = ports.some(function(p){ return p.status === 'Connected' && p.speed === '10 Mbps'; });
+  var portSquares = ports.map(function(p){
+    var cls = portSqClass(p) + (p.isUplink ? ' uplink' : '');
+    var tip = 'Port ' + p.portId + ': ' + p.status;
+    if (p.status === 'Connected') tip += ' · ' + p.speed + ' · ' + p.clientCount + ' clients · ↑' + fmtKb(p.usageSentKb) + ' ↓' + fmtKb(p.usageRecvKb);
+    if ((p.errors || []).some(function(e){ return e && e !== 'Port disconnected'; })) tip += ' | Lỗi: ' + p.errors.join(', ');
+    return '<div class="sw-port-sq ' + cls + '" title="' + esc(tip) + '"></div>';
+  }).join('');
+
+  var connRows = ports.filter(function(p){ return p.status === 'Connected'; }).map(function(p){
+    var spColor = p.speed === '10 Mbps' ? 'color:var(--bad)' : (p.speed && p.speed.indexOf('100') >= 0) ? 'color:var(--warn)' : 'color:var(--muted)';
+    var realErr = (p.errors || []).some(function(e){ return e && e !== 'Port disconnected'; });
+    return '<tr>'
+      + '<td style="color:var(--accent)">P' + esc(p.portId) + (p.isUplink ? ' <span style="font-size:9px">↑</span>' : '') + '</td>'
+      + '<td style="' + spColor + '">' + esc(p.speed || '—') + '</td>'
+      + '<td class="muted">' + p.clientCount + ' cli</td>'
+      + '<td style="color:var(--ok)">↑' + fmtKb(p.usageSentKb) + '</td>'
+      + '<td style="color:var(--accent)">↓' + fmtKb(p.usageRecvKb) + '</td>'
+      + (realErr ? '<td style="color:var(--bad);font-size:10px">⚠ ' + esc(p.errors[0]) + '</td>' : '')
+      + '</tr>';
+  }).join('');
+
+  var warn = has10M ? '<span class="sw-card-warn">⚠ 10M port</span>' : '';
+  return '<div class="sw-card-port' + (isDead ? ' dead' : '') + '">'
+    + '<div class="sw-card-head">'
+      + '<span style="font-size:20px">' + (isDead ? '⛔' : '🔀') + '</span>'
+      + '<div style="flex:1;min-width:0">'
+        + '<div class="sw-card-name">' + esc(sw.switchName) + warn + '</div>'
+        + '<div class="sw-card-model">' + esc(sw.switchModel) + ' · ' + esc(sw.switchSerial) + '</div>'
+      + '</div>'
+      + '<div class="sw-card-cnt">'
+        + '<div class="sw-card-cnt-num" style="color:' + (isDead ? 'var(--bad)' : 'var(--ok)') + '">' + sw.connectedPorts + '<span class="muted small">/' + sw.totalPorts + '</span></div>'
+        + '<div class="sw-card-cnt-lbl">ports up</div>'
+      + '</div>'
+    + '</div>'
+    + '<div class="sw-port-grid">' + portSquares + '</div>'
+    + (connRows ? '<div style="overflow-x:auto"><table class="sw-port-tbl">' + connRows + '</table></div>' : '')
+    + '</div>';
+}
+
+function setSwitchFilter(v){
+  activeSwitchFilter = v;
+  ['all','issues','dead'].forEach(function(s){
+    document.getElementById('psw-' + s).className = 'cmdseg' + (v === s ? ' active' : '');
+  });
+  filterSwitches();
+}
+
+function filterSwitches(){
+  if (!allSwitches.length) return;
+  var q = (document.getElementById('portSearch').value || '').toLowerCase();
+  var rows = allSwitches.filter(function(sw){
+    if (activeSwitchFilter === 'dead' && sw.connectedPorts > 0) return false;
+    if (activeSwitchFilter === 'issues' && !(sw.ports || []).some(function(p){ return (p.errors || []).some(function(e){ return e && e !== 'Port disconnected'; }); })) return false;
+    if (!q) return true;
+    return (sw.switchName || '').toLowerCase().indexOf(q) >= 0
+        || (sw.switchModel || '').toLowerCase().indexOf(q) >= 0
+        || (sw.switchSerial || '').toLowerCase().indexOf(q) >= 0;
+  });
+  if (!rows.length) { document.getElementById('switchGrid').innerHTML = '<div class="port-empty">Không tìm thấy switch nào</div>'; return; }
+  document.getElementById('switchGrid').innerHTML = rows.map(renderSwitchCard).join('');
+}
+
+function loadSwitchPorts(){
+  document.getElementById('btnLoadPorts').disabled = true;
+  document.getElementById('btnLoadPorts').classList.add('refreshing');
+  document.getElementById('switchGrid').innerHTML = '<div class="port-empty"><span class="spinner"></span><br>Đang tải dữ liệu switch ports…</div>';
+  startPortsProgressBar();
+  fetch('/api/meraki-switch-ports', { cache:'no-store' })
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(d){
+      stopPortsProgressBar(true);
+      allSwitches = d.switches || [];
+      var dead = d.deadSwitches || 0;
+      document.getElementById('badge-ports').textContent = d.totalSwitches + ' switches · ' + d.connectedPorts + ' ports up' + (dead > 0 ? ' · ⛔ ' + dead + ' down' : '');
+      document.getElementById('badge-ports').className = dead > 0 ? 'panel-badge tone-bad' : 'panel-badge tone-ok';
+      renderFloorSummary(allSwitches);
+      renderSpeedStats(allSwitches);
+      renderTopTraffic(allSwitches);
+      document.getElementById('analysisSection').style.display = '';
+      filterSwitches();
+      document.getElementById('btnLoadPorts').disabled = false;
+      document.getElementById('btnLoadPorts').classList.remove('refreshing');
+      document.getElementById('btnLoadPorts').innerHTML = '<span class="ri">↻</span> Tải lại';
+    })
+    .catch(function(e){
+      stopPortsProgressBar(false);
+      document.getElementById('switchGrid').innerHTML = '<div class="port-empty" style="color:var(--bad)">⚠ Không tải được — ' + esc(String(e)) + '</div>';
+      document.getElementById('badge-ports').textContent = 'Lỗi';
+      document.getElementById('badge-ports').className = 'panel-badge tone-bad';
+      document.getElementById('btnLoadPorts').disabled = false;
+      document.getElementById('btnLoadPorts').classList.remove('refreshing');
+      document.getElementById('btnLoadPorts').innerHTML = '<span class="ri">🎨</span> Thử lại';
+    });
 }
 
 /* Auto-refresh */

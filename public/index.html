@@ -793,14 +793,13 @@ function renderServices() {
           + '</div>'
           + '<div class="svc-desc">' + esc(s.desc) + '</div>'
         + '</td>'
-        + '<td><span class="svc-host" title="' + esc(s.url) + '">' + esc((s.url || '').replace(/^https?:\/\//, '')) + '</span></td>'
         + '<td><span class="status-pip" style="--c:' + statusColor(r.status) + '"><i class="' + (r.status === 'checking' ? 'checking' : '') + '"></i><span>' + statusLabel(r.status) + '</span></span></td>'
         + '<td style="text-align:right"><span class="num">' + (r.ping ? r.ping + 'ms' : '—') + '</span></td>'
         + '<td>' + spark + '</td>'
         + '<td><span class="muted small">' + since + '</span></td>'
         + '<td style="text-align:right"><a class="row-action" href="' + href + '" target="' + target + '" rel="noopener">Open ↗</a></td>'
         + '</tr>';
-    }).join('') || '<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--muted)">Không có service khớp filter.</td></tr>';
+    }).join('') || '<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--muted)">Không có service khớp filter.</td></tr>';
 
     return ''
       + '<section class="svc-group ' + (savedOpen ? 'is-open' : 'is-closed') + '" style="--group-accent:' + cat.accent + '">'
@@ -822,7 +821,6 @@ function renderServices() {
           + '<thead><tr>'
             + '<th style="width:32px"></th>'
             + '<th>Service</th>'
-            + '<th>Endpoint</th>'
             + '<th>Status</th>'
             + '<th style="text-align:right">Latency</th>'
             + '<th>Trend (15m)</th>'
@@ -959,7 +957,7 @@ function updateMerakiCard() {
       var total = d.total || (d.clients || []).length;
       var row = document.getElementById('svc-row-meraki');
       if (row) {
-        var statusCell = row.querySelectorAll('td')[3];
+        var statusCell = row.querySelectorAll('td')[2];
         statusCell.innerHTML = '<span class="status-pip" style="--c:var(--ok)"><i></i><span>' + total + ' clients</span></span>';
       }
     })

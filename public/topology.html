@@ -319,12 +319,12 @@ function setBtnState(id, loading, label){
 /* ═══════════════════════════════════════════════════════════════
    TOPOLOGY constants/helpers — from original topology.html
    ═══════════════════════════════════════════════════════════════ */
-var T_FCX = { F1:150, F2:402, F3:654, F4:906, F5:1158 };
-var T_CORE_CX = { a:544, b:764 };
-var T_STACK_CX = 654, T_SRV_CX = 1014;
+var T_FCX = { F1:180, F2:480, F3:780, F4:1080, F5:1380 };
+var T_CORE_CX = { a:680, b:880 };
+var T_STACK_CX = 780, T_SRV_CX = 1200;
 var T_ROLE_C = { core:'#a78bfa', dist:'#c4b5fd', access:'#34d399', srv:'#22d3ee' };
 
-function getTopoLayout(){ return { adv:true, cw:200, nh:78, coreW:196, srvW:184, ah:62, step:92, zoneHalf:122, coreY:134, distY:358, accY:506 }; }
+function getTopoLayout(){ return { adv:true, cw:230, nh:100, coreW:220, srvW:200, ah:78, step:104, zoneHalf:138, coreY:160, distY:400, accY:570 }; }
 function topoNodes(){
   var L = getTopoLayout(), nd = [];
   nd.push({key:'CoreSW-01',role:'core',cx:T_CORE_CX.a,cy:L.coreY,w:L.coreW,h:L.nh});
@@ -349,13 +349,15 @@ function matchTopoKey(name){
 }
 function topoDefs(){
   return '<defs>'
-    +'<linearGradient id="gChassis" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2740"/><stop offset="1" stop-color="#1a1729"/></linearGradient>'
-    +'<linearGradient id="gCore"    x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a1f48"/><stop offset="1" stop-color="#1a1431"/></linearGradient>'
-    +'<linearGradient id="gSrv"     x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#142d34"/><stop offset="1" stop-color="#0f1f24"/></linearGradient>'
-    +'<linearGradient id="gCable"   x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#3d2c80"/></linearGradient>'
-    +'<linearGradient id="gCableDead" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a02030"/><stop offset="1" stop-color="#4a1018"/></linearGradient>'
-    +'<filter id="fSh" x="-25%" y="-25%" width="150%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="4.5" flood-color="#000" flood-opacity="0.5"/></filter>'
-    +'<pattern id="gridP" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M28 0H0V28" fill="none" stroke="#1f1b32" stroke-width="1"/></pattern>'
+    +'<linearGradient id="gChassis" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#262238"/><stop offset="1" stop-color="#1a1729"/></linearGradient>'
+    +'<linearGradient id="gCore"    x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#332650"/><stop offset="1" stop-color="#1a1431"/></linearGradient>'
+    +'<linearGradient id="gSrv"     x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#173640"/><stop offset="1" stop-color="#0f1f24"/></linearGradient>'
+    +'<linearGradient id="gCable"   x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7c5cff" stop-opacity="0.85"/><stop offset="1" stop-color="#6d4dee" stop-opacity="0.55"/></linearGradient>'
+    +'<linearGradient id="gCableDead" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#f87171" stop-opacity="0.7"/><stop offset="1" stop-color="#a02030" stop-opacity="0.4"/></linearGradient>'
+    +'<linearGradient id="gBg"      x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1729"/><stop offset="1" stop-color="#100c1c"/></linearGradient>'
+    +'<filter id="fSh" x="-25%" y="-25%" width="150%" height="160%"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.5"/></filter>'
+    +'<filter id="fGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3.5"/></filter>'
+    +'<pattern id="gridP" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#231d36" stroke-width="0.6"/></pattern>'
     +'</defs>';
 }
 function icoSwitch(cx,cy,c,stacked){
@@ -383,8 +385,8 @@ function icoCloud(cx,cy,c){
 function portStrip(sw,x,y,w,hh){
   var ports = (sw.ports || []).slice(0).sort(function(a,b){ return (parseInt(a.portId)||0) - (parseInt(b.portId)||0); });
   var n = ports.length; if (!n) return '';
-  var max = Math.min(n, 28), gap = 2;
-  var cw = (w-(max-1)*gap) / max; if (cw > 9) cw = 9; if (cw < 2) cw = 2;
+  var max = Math.min(n, 28), gap = 3;
+  var cw = (w-(max-1)*gap) / max; if (cw > 11) cw = 11; if (cw < 3) cw = 3;
   var totW = cw*max + gap*(max-1), sx = x + (w-totW)/2, s = [];
   for (var i = 0; i < max; i++) {
     var pp = ports[i], col = '#2a2740';
@@ -395,27 +397,27 @@ function portStrip(sw,x,y,w,hh){
     }
     var er = (pp.errors || []).some(function(e){ return e && e !== 'Port disconnected'; });
     var ex = (sx + i*(cw + gap)).toFixed(1);
-    s.push('<rect x="'+ex+'" y="'+y+'" width="'+cw.toFixed(1)+'" height="'+hh+'" rx="1.3" fill="'+col+'"'+(er?' stroke="#fca5a5" stroke-width="0.9"':'')+'/>');
+    s.push('<rect x="'+ex+'" y="'+y+'" width="'+cw.toFixed(1)+'" height="'+hh+'" rx="1.6" fill="'+col+'"'+(er?' stroke="#fca5a5" stroke-width="1.1"':'')+'/>');
     var isAggr = sw.switchSerial && linkAggPortMap[sw.switchSerial + ':' + pp.portId];
-    if (isAggr)    s.push('<rect x="'+ex+'" y="'+(y-5.2)+'" width="'+cw.toFixed(1)+'" height="2" rx="1" fill="#a78bfa"/>');
-    if (pp.isUplink) s.push('<rect x="'+ex+'" y="'+(y-2.6)+'" width="'+cw.toFixed(1)+'" height="2" rx="1" fill="#7c5cff"/>');
+    if (isAggr)    s.push('<rect x="'+ex+'" y="'+(y-6)+'" width="'+cw.toFixed(1)+'" height="2.5" rx="1" fill="#a78bfa"/>');
+    if (pp.isUplink) s.push('<rect x="'+ex+'" y="'+(y-3)+'" width="'+cw.toFixed(1)+'" height="2.5" rx="1" fill="#7c5cff"/>');
   }
-  if (n > max) s.push('<text x="'+(x+w+3)+'" y="'+(y+hh)+'" font-size="6.5" fill="#7a6c92" font-family="monospace">+'+(n-max)+'</text>');
+  if (n > max) s.push('<text x="'+(x+w+4)+'" y="'+(y+hh-1)+'" font-size="8" fill="#7a6c92" font-family="monospace">+'+(n-max)+'</text>');
   return s.join('');
 }
 function topoNode(nd,sw,L){
   var rx = nd.cx - nd.w/2, ry = nd.cy - nd.h/2, W = nd.w, H = nd.h, p = [];
   var roleC = T_ROLE_C[nd.role] || '#475569';
-  var nc = '#a0a0c0', brd = '#3a2f5a', grad = 'url(#gChassis)';
+  var nc = '#b5b5d0', brd = '#3a2f5a', grad = 'url(#gChassis)';
   if (nd.role === 'core') grad = 'url(#gCore)';
   if (nd.role === 'srv')  grad = 'url(#gSrv)';
   var pct = 0, er = 0;
   if (sw) {
     pct = sw.totalPorts ? sw.connectedPorts/sw.totalPorts : 0;
     er  = (sw.ports || []).filter(function(pp){ return (pp.errors||[]).some(function(e){return e && e !== 'Port disconnected';}); }).length;
-    if (sw.connectedPorts === 0) { nc = '#f87171'; brd = 'rgba(248,113,113,.5)'; }
-    else if (pct >= 0.5) { nc = '#34d399'; brd = 'rgba(52,211,153,.4)'; }
-    else { nc = '#fbbf24'; brd = 'rgba(251,191,36,.4)'; }
+    if (sw.connectedPorts === 0) { nc = '#fca5a5'; brd = 'rgba(248,113,113,.55)'; }
+    else if (pct >= 0.5) { nc = '#86efac'; brd = 'rgba(52,211,153,.45)'; }
+    else { nc = '#fcd34d'; brd = 'rgba(251,191,36,.45)'; }
   }
   var mono = 'IBM Plex Mono,monospace';
   var isAcc = nd.role === 'access', isSrv = nd.role === 'srv';
@@ -427,24 +429,40 @@ function topoNode(nd,sw,L){
   } else if (isSrv) ttl = 'XEN-SW\nSERVER\nHypervisor host (uplink → CoreSW-02)';
 
   p.push('<g><title>'+escSvg(ttl)+'</title>');
-  p.push('<rect x="'+rx+'" y="'+ry+'" width="'+W+'" height="'+H+'" rx="10" fill="'+grad+'" stroke="'+brd+'" stroke-width="1.6" filter="url(#fSh)"/>');
-  p.push('<rect x="'+rx+'" y="'+ry+'" width="5" height="'+H+'" rx="2.5" fill="'+roleC+'"/>');
-  var icy = ry + 22;
-  p.push(isSrv ? icoServer(rx+22,icy,nc) : icoSwitch(rx+22,icy,nc,nd.role==='core'));
-  var tx = rx + 44;
+  /* Card shadow + body */
+  p.push('<rect x="'+rx+'" y="'+ry+'" width="'+W+'" height="'+H+'" rx="14" fill="'+grad+'" stroke="'+brd+'" stroke-width="1.8" filter="url(#fSh)"/>');
+  /* Role accent bar (left) */
+  p.push('<rect x="'+rx+'" y="'+ry+'" width="6" height="'+H+'" rx="3" fill="'+roleC+'"/>');
+  /* Status pulse dot top-right */
+  var pulseColor = sw && sw.connectedPorts === 0 ? '#f87171' : pct >= 0.5 ? '#34d399' : pct > 0 ? '#fbbf24' : '#52525b';
+  p.push('<circle cx="'+(rx+W-14)+'" cy="'+(ry+14)+'" r="4" fill="'+pulseColor+'" filter="url(#fGlow)" opacity="0.6"/>');
+  p.push('<circle cx="'+(rx+W-14)+'" cy="'+(ry+14)+'" r="3" fill="'+pulseColor+'"/>');
+
+  var icy = ry + 26;
+  p.push(isSrv ? icoServer(rx+24,icy,nc) : icoSwitch(rx+24,icy,nc,nd.role==='core'));
+  var tx = rx + 52;
+
   var nm = sw ? sw.switchName : (isSrv ? 'XEN-SW' : nd.key);
   if (nm.length > 22) nm = nm.slice(0,21) + '…';
-  p.push('<text x="'+tx+'" y="'+(ry+18)+'" font-size="12" fill="'+nc+'" font-family="'+mono+'" font-weight="700">'+escSvg(nm)+'</text>');
+  /* Big name */
+  p.push('<text x="'+tx+'" y="'+(ry+22)+'" font-size="14" fill="'+nc+'" font-family="'+mono+'" font-weight="700">'+escSvg(nm)+'</text>');
   if (sw) {
-    p.push('<text x="'+(rx+W-10)+'" y="'+(ry+18)+'" text-anchor="end" font-size="10" fill="'+nc+'" font-family="'+mono+'" font-weight="700">'+sw.connectedPorts+'/'+sw.totalPorts+(er?'  ⚠'+er:'')+'</text>');
-    var ser = sw.switchSerial ? ('  ·  #'+sw.switchSerial.slice(-7)) : '';
-    p.push('<text x="'+tx+'" y="'+(ry+(isAcc?32:31))+'" font-size="8" fill="#7a6c92" font-family="'+mono+'">'+escSvg((sw.switchModel||'')+ser)+'</text>');
-    p.push(portStrip(sw,rx+10,ry+H-21,W-20,8));
-    var bw = W-16, bx = rx+8, by = ry+H-8, fc = pct>=0.5?'#34d399':pct>0?'#fbbf24':'#f87171';
-    p.push('<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="4" rx="2" fill="#15102a"/>');
-    p.push('<rect x="'+bx+'" y="'+by+'" width="'+(bw*pct).toFixed(1)+'" height="4" rx="2" fill="'+fc+'"/>');
+    /* port count badge below */
+    p.push('<text x="'+tx+'" y="'+(ry+38)+'" font-size="10.5" fill="#9088b5" font-family="'+mono+'">'+escSvg(sw.switchModel || '')+'</text>');
+    var ser = sw.switchSerial ? ('#'+sw.switchSerial.slice(-7)) : '';
+    if (ser) p.push('<text x="'+(rx+W-12)+'" y="'+(ry+38)+'" text-anchor="end" font-size="9.5" fill="#7a6c92" font-family="'+mono+'">'+escSvg(ser)+'</text>');
+    /* port LED strip */
+    p.push(portStrip(sw, rx+12, ry+H-30, W-24, 10));
+    /* footer: ports up + err */
+    var footY = ry + H - 11;
+    p.push('<text x="'+(rx+14)+'" y="'+footY+'" font-size="10.5" fill="'+nc+'" font-family="'+mono+'" font-weight="700">'+sw.connectedPorts+'<tspan fill="#7a6c92" font-weight="400">/'+sw.totalPorts+' up</tspan></text>');
+    if (er) p.push('<text x="'+(rx+W-12)+'" y="'+footY+'" text-anchor="end" font-size="10" fill="#fca5a5" font-family="'+mono+'" font-weight="600">⚠ '+er+' err</text>');
+    else if (pct > 0) {
+      var pctTxt = Math.round(pct * 100) + '%';
+      p.push('<text x="'+(rx+W-12)+'" y="'+footY+'" text-anchor="end" font-size="10" fill="#7a6c92" font-family="'+mono+'">'+pctTxt+'</text>');
+    }
   } else {
-    p.push('<text x="'+tx+'" y="'+(ry+31)+'" font-size="8" fill="#7a6c92" font-family="'+mono+'">'+(isSrv?'Hypervisor · uplink CoreSW-02':'Chờ dữ liệu…')+'</text>');
+    p.push('<text x="'+tx+'" y="'+(ry+38)+'" font-size="10.5" fill="#7a6c92" font-family="'+mono+'">'+(isSrv?'Hypervisor · uplink CoreSW-02':'Chờ dữ liệu…')+'</text>');
   }
   p.push('</g>');
   return p.join('');
@@ -489,54 +507,84 @@ function renderTopoPanel() {
   var portLinks = buildPortLinks();
   var ZH = L.zoneHalf, mono = 'IBM Plex Mono,monospace';
   var lastAccCy = L.accY + 2*L.step;
-  var svgW = T_FCX.F5 + ZH + 30;
-  var svgH = lastAccCy + L.ah/2 + 34;
+  var svgW = T_FCX.F5 + ZH + 60;
+  var svgH = lastAccCy + L.ah/2 + 50;
   var p = [];
 
   p.push(topoDefs());
-  p.push('<rect x="0" y="0" width="'+svgW+'" height="'+svgH+'" fill="#15102a"/>');
-  p.push('<rect x="0" y="0" width="'+svgW+'" height="'+svgH+'" fill="url(#gridP)" opacity="0.5"/>');
+  /* Background — soft gradient + grid */
+  p.push('<rect x="0" y="0" width="'+svgW+'" height="'+svgH+'" fill="url(#gBg)"/>');
+  p.push('<rect x="0" y="0" width="'+svgW+'" height="'+svgH+'" fill="url(#gridP)" opacity="0.6"/>');
 
+  /* ── Layer band labels (left side) ── */
+  [
+    [L.coreY, 'CORE',         '#a78bfa', 'Trung tâm điều phối'],
+    [L.distY, 'DISTRIBUTION', '#c4b5fd', 'Switch trung gian mỗi sàn'],
+    [L.accY + L.step,  'ACCESS', '#34d399', 'Switch tầng · end-user']
+  ].forEach(function(r){
+    p.push('<g>'
+      + '<rect x="14" y="'+(r[0]-12)+'" width="78" height="24" rx="12" fill="rgba(20,15,40,.6)" stroke="'+r[2]+'" stroke-width="1" stroke-opacity="0.5"/>'
+      + '<text x="53" y="'+(r[0]+4)+'" text-anchor="middle" font-size="10" font-weight="700" font-family="sans-serif" fill="'+r[2]+'" letter-spacing="1.2">'+r[1]+'</text>'
+      + '</g>');
+  });
+
+  /* ── Floor zones (background panels) ── */
   Object.keys(T_FCX).forEach(function(f){
     var cx = T_FCX[f], isF1 = f === 'F1';
     var zx = cx - ZH, zw = ZH*2;
-    var zy = L.distY - L.nh/2 - 26;
+    var zy = L.distY - L.nh/2 - 36;
     var lastCy = L.accY + (isF1 ? 2 : 1) * L.step;
-    var zb = lastCy + L.ah/2 + 16;
-    p.push('<rect x="'+zx+'" y="'+zy+'" width="'+zw+'" height="'+(zb-zy)+'" rx="16" fill="rgba(40,30,60,.4)" stroke="#332750" stroke-width="1.2"/>');
-    p.push('<rect x="'+(cx-66)+'" y="'+(zy-14)+'" width="132" height="22" rx="11" fill="#1a1429" stroke="#332750" stroke-width="1"/>');
-    p.push('<text x="'+cx+'" y="'+(zy+1)+'" text-anchor="middle" font-size="10.5" fill="#b5a0d6" font-weight="700" font-family="sans-serif">'+escSvg(f)+'</text>');
+    var zb = lastCy + L.ah/2 + 24;
+    var tp = 0, tc = 0;
+    ['SW1','SW2','SW3'].concat(isF1?['SW4']:[]).forEach(function(s){
+      var sw = swMap[f+'-'+s];
+      if (sw) { tp += sw.totalPorts || 0; tc += sw.connectedPorts || 0; }
+    });
+    var pct = tp ? Math.round(tc/tp*100) : 0;
+    /* Zone bg */
+    p.push('<rect x="'+zx+'" y="'+zy+'" width="'+zw+'" height="'+(zb-zy)+'" rx="20" fill="rgba(26,20,48,.5)" stroke="#332750" stroke-width="1.2"/>');
+    /* Floor pill */
+    p.push('<rect x="'+(cx-72)+'" y="'+(zy-16)+'" width="144" height="30" rx="15" fill="#1d1635" stroke="#5d3da0" stroke-width="1.2"/>');
+    p.push('<text x="'+(cx-50)+'" y="'+(zy+4)+'" font-size="13" font-weight="700" font-family="sans-serif" fill="#c4b5fd">Tầng '+f.replace('F','')+'</text>');
+    if (tp) p.push('<text x="'+(cx+58)+'" y="'+(zy+4)+'" text-anchor="end" font-size="10" fill="#9088b5" font-family="'+mono+'">'+tc+'/'+tp+'</text>');
   });
 
-  /* Core stack housing */
-  var stX = T_CORE_CX.a - L.coreW/2 - 16, stW = (T_CORE_CX.b + L.coreW/2 + 16) - stX;
-  var stY = L.coreY - L.nh/2 - 28, stH = L.nh + 44, trunkY = stY + stH;
-  p.push('<rect x="'+stX+'" y="'+stY+'" width="'+stW+'" height="'+stH+'" rx="18" fill="rgba(35,20,70,.55)" stroke="#5d3da0" stroke-width="1.6"/>');
-  p.push('<rect x="'+(T_STACK_CX-94)+'" y="'+(stY-14)+'" width="188" height="22" rx="11" fill="#2a1f4a" stroke="#5d3da0" stroke-width="1"/>');
-  p.push('<text x="'+T_STACK_CX+'" y="'+(stY+1)+'" text-anchor="middle" font-size="10.5" fill="#b89aff" font-weight="700" font-family="sans-serif">CORE STACK · MS350 ×2</text>');
-  p.push('<line x1="'+T_STACK_CX+'" y1="'+trunkY+'" x2="'+T_STACK_CX+'" y2="'+(trunkY+28)+'" stroke="#5d3da0" stroke-width="4" stroke-linecap="round"/>');
+  /* ── Core stack housing ── */
+  var stX = T_CORE_CX.a - L.coreW/2 - 24, stW = (T_CORE_CX.b + L.coreW/2 + 24) - stX;
+  var stY = L.coreY - L.nh/2 - 38, stH = L.nh + 62, trunkY = stY + stH;
+  p.push('<rect x="'+stX+'" y="'+stY+'" width="'+stW+'" height="'+stH+'" rx="22" fill="rgba(40,25,80,.45)" stroke="#7c5cff" stroke-width="1.6" stroke-opacity="0.6"/>');
+  p.push('<rect x="'+(T_STACK_CX-110)+'" y="'+(stY-16)+'" width="220" height="30" rx="15" fill="#2a1f4a" stroke="#7c5cff" stroke-width="1.2"/>');
+  p.push('<text x="'+T_STACK_CX+'" y="'+(stY+4)+'" text-anchor="middle" font-size="13" font-weight="700" font-family="sans-serif" fill="#c4b5fd">⛁ CORE STACK · MS350 ×2</text>');
+  /* trunk down */
+  p.push('<line x1="'+T_STACK_CX+'" y1="'+trunkY+'" x2="'+T_STACK_CX+'" y2="'+(trunkY+38)+'" stroke="#7c5cff" stroke-width="5" stroke-linecap="round" opacity="0.7"/>');
+  p.push('<circle cx="'+T_STACK_CX+'" cy="'+(trunkY+38)+'" r="5" fill="#7c5cff" filter="url(#fGlow)" opacity="0.6"/>');
+  p.push('<circle cx="'+T_STACK_CX+'" cy="'+(trunkY+38)+'" r="3.5" fill="#a78bfa"/>');
 
-  /* WAN */
-  var wanY = stY - 42;
-  p.push(icoCloud(T_STACK_CX, wanY, '#a0a0c0'));
-  p.push('<text x="'+T_STACK_CX+'" y="'+(wanY+23)+'" text-anchor="middle" font-size="10" fill="#a0a0c0" font-weight="600">Internet / WAN</text>');
-  p.push('<line x1="'+T_STACK_CX+'" y1="'+(wanY+9)+'" x2="'+T_STACK_CX+'" y2="'+stY+'" stroke="#473866" stroke-width="1.6" stroke-dasharray="4,3"/>');
+  /* ── WAN cloud above core ── */
+  var wanY = stY - 52;
+  p.push(icoCloud(T_STACK_CX, wanY, '#b5b5d0'));
+  p.push('<text x="'+T_STACK_CX+'" y="'+(wanY+26)+'" text-anchor="middle" font-size="11" fill="#b5b5d0" font-weight="600" font-family="sans-serif">Internet / WAN</text>');
+  p.push('<line x1="'+T_STACK_CX+'" y1="'+(wanY+9)+'" x2="'+T_STACK_CX+'" y2="'+stY+'" stroke="#473866" stroke-width="2" stroke-dasharray="5,4"/>');
 
-  /* XEN cable */
+  /* ── XEN server bridge ── */
   var xn = byKey['XEN-SW'], c2 = byKey['CoreSW-02'];
   var csx = stX + stW, csy = c2.cy, exx = xn.cx - xn.w/2, exy = xn.cy, cmx = (csx + exx)/2;
-  p.push('<path d="M'+csx+','+csy+' C'+cmx+','+csy+' '+cmx+','+exy+' '+exx+','+exy+'" fill="none" stroke="url(#gCable)" stroke-width="2.8" stroke-dasharray="7,4" stroke-linecap="round"/>');
+  p.push('<path d="M'+csx+','+csy+' C'+cmx+','+csy+' '+cmx+','+exy+' '+exx+','+exy+'" fill="none" stroke="url(#gCable)" stroke-width="3.4" stroke-dasharray="8,5" stroke-linecap="round"/>');
+  /* XEN label pill */
+  var xpl = portLinks[['CoreSW-02','XEN-SW'].sort().join('::')];
+  var xlbl = 'Server uplink';
+  if (xpl && (xpl.portSw1 || xpl.portSw2)) {
+    var xs = ['CoreSW-02','XEN-SW'].sort();
+    var cP = 'CoreSW-02' === xs[0] ? xpl.portSw1 : xpl.portSw2;
+    var sP = 'XEN-SW' === xs[1] ? xpl.portSw2 : xpl.portSw1;
+    xlbl = (cP || '?') + ' ↔ ' + (sP || '?');
+  }
 
-  /* Layer labels */
-  [[L.coreY,'CORE'],[L.distY,'DISTRIBUTION'],[L.accY+L.step/2,'ACCESS']].forEach(function(r){
-    p.push('<text x="6" y="'+(r[0]+3)+'" font-size="8" fill="#473866" font-weight="700" font-family="sans-serif" letter-spacing="1">'+r[1]+'</text>');
-  });
-
-  /* Core → SW1 */
+  /* ── Core → SW1 fans ── */
   Object.keys(T_FCX).forEach(function(f){
     var tn = byKey[f+'-SW1']; if (!tn) return;
-    var x1 = T_STACK_CX, y1 = trunkY + 28, x2 = tn.cx, y2 = tn.cy - tn.h/2, my = (y1+y2)/2;
-    p.push('<path d="M'+x1+','+y1+' C'+x1+','+my+' '+x2+','+my+' '+x2+','+y2+'" fill="none" stroke="url(#gCable)" stroke-width="2.6" stroke-linecap="round"/>');
+    var x1 = T_STACK_CX, y1 = trunkY + 38, x2 = tn.cx, y2 = tn.cy - tn.h/2, my = (y1+y2)/2;
+    p.push('<path d="M'+x1+','+y1+' C'+x1+','+my+' '+x2+','+my+' '+x2+','+y2+'" fill="none" stroke="url(#gCable)" stroke-width="2.8" stroke-linecap="round"/>');
     var coreKey = (f==='F4'||f==='F5') ? 'CoreSW-02' : 'CoreSW-01';
     var pl = portLinks[[coreKey, f+'-SW1'].sort().join('::')];
     if (pl && (pl.portSw1 || pl.portSw2)) {
@@ -544,40 +592,49 @@ function renderTopoPanel() {
       var fp = coreKey === st[0] ? pl.portSw1 : pl.portSw2;
       var tpp = (f+'-SW1') === st[1] ? pl.portSw2 : pl.portSw1;
       var lbl = (fp || '?') + ' ↔ ' + (tpp || '?');
-      var lx = x2, ly = y2 - 14, lbW = lbl.length * 5.2 + 12;
-      p.push('<rect x="'+(lx-lbW/2).toFixed(0)+'" y="'+(ly-9)+'" width="'+lbW.toFixed(0)+'" height="16" rx="5" fill="#0d0a1c" stroke="#5d3da0" stroke-width="0.8"/>');
-      p.push('<text x="'+lx+'" y="'+(ly+2)+'" text-anchor="middle" font-size="8" fill="#b89aff" font-family="'+mono+'" font-weight="600">'+escSvg(lbl)+'</text>');
+      var lx = x2, ly = y2 - 20, lbW = lbl.length * 6.4 + 16;
+      p.push('<rect x="'+(lx-lbW/2).toFixed(0)+'" y="'+(ly-10)+'" width="'+lbW.toFixed(0)+'" height="20" rx="10" fill="rgba(13,10,28,.95)" stroke="#7c5cff" stroke-width="1" stroke-opacity="0.6"/>');
+      p.push('<text x="'+lx+'" y="'+(ly+4)+'" text-anchor="middle" font-size="10" fill="#c4b5fd" font-family="'+mono+'" font-weight="600">'+escSvg(lbl)+'</text>');
     }
   });
 
-  /* Per-floor spine */
+  /* ── Per-floor spine (dist → access) ── */
   Object.keys(T_FCX).forEach(function(f){
     var d = byKey[f+'-SW1']; if (!d) return;
     var accs = ['SW2','SW3'].concat(f==='F1' ? ['SW4'] : []).map(function(k){ return byKey[f+'-'+k]; }).filter(Boolean);
     if (!accs.length) return;
-    var spineX = d.cx - L.cw/2 - 16;
+    var spineX = d.cx - L.cw/2 - 22;
     var topY = d.cy, botY = accs[accs.length-1].cy;
-    p.push('<path d="M'+spineX+','+topY+' V'+botY+'" stroke="url(#gCable)" stroke-width="2.4" fill="none"/>');
-    p.push('<path d="M'+(d.cx-L.cw/2)+','+topY+' H'+spineX+'" stroke="url(#gCable)" stroke-width="2.4" fill="none"/>');
+    p.push('<path d="M'+spineX+','+topY+' V'+botY+'" stroke="url(#gCable)" stroke-width="2.6" fill="none" stroke-linecap="round"/>');
+    p.push('<path d="M'+(d.cx-L.cw/2)+','+topY+' H'+spineX+'" stroke="url(#gCable)" stroke-width="2.6" fill="none"/>');
+    p.push('<circle cx="'+spineX+'" cy="'+topY+'" r="4.5" fill="#7c5cff" opacity="0.8"/>');
     accs.forEach(function(a){
-      p.push('<path d="M'+spineX+','+a.cy+' H'+(a.cx-L.cw/2)+'" stroke="url(#gCable)" stroke-width="2" fill="none"/>');
+      p.push('<path d="M'+spineX+','+a.cy+' H'+(a.cx-L.cw/2)+'" stroke="url(#gCable)" stroke-width="2.2" fill="none"/>');
+      p.push('<circle cx="'+spineX+'" cy="'+a.cy+'" r="3.5" fill="#7c5cff" opacity="0.7"/>');
       var pl = portLinks[[f+'-SW1', a.key].sort().join('::')];
       if (pl && (pl.portSw1 || pl.portSw2)) {
         var st = [f+'-SW1', a.key].sort();
         var fp = (f+'-SW1') === st[0] ? pl.portSw1 : pl.portSw2;
         var tpp = a.key === st[1] ? pl.portSw2 : pl.portSw1;
-        var lbl = (fp || '?') + '↔' + (tpp || '?');
-        var lx = (spineX + a.cx - L.cw/2)/2, lbW = lbl.length*5 + 10;
-        p.push('<rect x="'+(lx-lbW/2).toFixed(0)+'" y="'+(a.cy-16)+'" width="'+lbW.toFixed(0)+'" height="14" rx="4" fill="#0d0a1c" stroke="#5d3da0" stroke-width="0.7"/>');
-        p.push('<text x="'+lx+'" y="'+(a.cy-6)+'" text-anchor="middle" font-size="7.5" fill="#b89aff" font-family="'+mono+'" font-weight="600">'+escSvg(lbl)+'</text>');
+        var lbl = (fp || '?') + ' ↔ ' + (tpp || '?');
+        var lx = (spineX + a.cx - L.cw/2)/2, lbW = lbl.length*5.6 + 12;
+        p.push('<rect x="'+(lx-lbW/2).toFixed(0)+'" y="'+(a.cy-20)+'" width="'+lbW.toFixed(0)+'" height="18" rx="9" fill="rgba(13,10,28,.95)" stroke="#7c5cff" stroke-width="1" stroke-opacity="0.5"/>');
+        p.push('<text x="'+lx+'" y="'+(a.cy-8)+'" text-anchor="middle" font-size="9.5" fill="#c4b5fd" font-family="'+mono+'" font-weight="600">'+escSvg(lbl)+'</text>');
       }
     });
   });
 
-  /* Nodes */
+  /* ── Nodes (always last so they're on top) ── */
   nodes.forEach(function(nd){ p.push(topoNode(nd, swMap[nd.key], L)); });
 
-  document.getElementById('topoContainer').innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'" style="min-width:'+svgW+'px;display:block;border-radius:8px">'+p.join('')+'</svg>';
+  /* ── XEN label rendered AFTER nodes ── */
+  var xlw = xlbl.length * 6.4 + 16;
+  var xlx = csx + (exx - csx) * 0.35;
+  var xly = (csy + exy) / 2;
+  p.push('<rect x="'+(xlx-xlw/2)+'" y="'+(xly-10)+'" width="'+xlw+'" height="20" rx="10" fill="rgba(13,10,28,.95)" stroke="#22d3ee" stroke-width="1" stroke-opacity="0.6"/>');
+  p.push('<text x="'+xlx+'" y="'+(xly+4)+'" text-anchor="middle" font-size="10" fill="#67e8f9" font-family="'+mono+'" font-weight="600">'+escSvg(xlbl)+'</text>');
+
+  document.getElementById('topoContainer').innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'" style="min-width:'+svgW+'px;display:block;border-radius:12px">'+p.join('')+'</svg>';
 
   var total = allSwitches.length;
   var online = allSwitches.filter(function(sw){ return sw.connectedPorts > 0; }).length;
@@ -595,14 +652,17 @@ function renderTopoPanel() {
   document.getElementById('statPorts').textContent = totalPorts;
 
   document.getElementById('topoLegend').innerHTML =
-    '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#34d399;margin-right:4px"></span>Online (≥50%)</span>'
-    + '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#fbbf24;margin-right:4px"></span>Một phần</span>'
-    + '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#f87171;margin-right:4px"></span>Offline</span>'
+    '<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#34d399;margin-right:5px;box-shadow:0 0 6px #34d399"></span>Online (≥50% ports)</span>'
+    + '<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#fbbf24;margin-right:5px;box-shadow:0 0 6px #fbbf24"></span>Một phần</span>'
+    + '<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f87171;margin-right:5px"></span>Offline</span>'
     + '<span style="width:1px;height:14px;background:var(--border);display:inline-block"></span>'
-    + '<span>Port: <span style="display:inline-block;width:8px;height:11px;border-radius:2px;background:#34d399;margin:0 4px"></span>1G/10G · '
-    + '<span style="display:inline-block;width:8px;height:11px;border-radius:2px;background:#fbbf24;margin:0 4px"></span>100M · '
-    + '<span style="display:inline-block;width:8px;height:11px;border-radius:2px;background:#f87171;margin:0 4px"></span>10M · '
-    + '<span style="display:inline-block;width:8px;height:11px;border-radius:2px;background:#2a2740;margin:0 4px"></span>trống</span>'
+    + '<span>Port: <span style="display:inline-block;width:10px;height:11px;border-radius:2px;background:#34d399;margin:0 4px"></span>1G/10G '
+    + '<span style="display:inline-block;width:10px;height:11px;border-radius:2px;background:#fbbf24;margin:0 4px"></span>100M '
+    + '<span style="display:inline-block;width:10px;height:11px;border-radius:2px;background:#f87171;margin:0 4px"></span>10M '
+    + '<span style="display:inline-block;width:10px;height:11px;border-radius:2px;background:#2a2740;margin:0 4px"></span>trống</span>'
+    + '<span style="width:1px;height:14px;background:var(--border);display:inline-block"></span>'
+    + '<span><span style="display:inline-block;width:14px;height:3px;border-radius:1px;background:#7c5cff;margin:0 4px"></span>uplink</span>'
+    + '<span><span style="display:inline-block;width:14px;height:3px;border-radius:1px;background:#a78bfa;margin:0 4px"></span>LAG</span>'
     + '<span style="width:1px;height:14px;background:var(--border);display:inline-block"></span>'
     + '<span style="color:var(--muted)">🖱 Rê chuột vào switch để xem chi tiết</span>';
 }
