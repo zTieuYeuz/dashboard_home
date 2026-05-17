@@ -293,6 +293,25 @@ input { font: inherit; }
 .port-empty { padding: 40px 20px; text-align: center; color: var(--muted); grid-column: 1 / -1; }
 .port-empty b { color: var(--accent); }
 
+/* PORT TOOLTIP */
+#portTip { position: fixed; z-index: 9999; display: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; min-width: 220px; max-width: 300px; box-shadow: 0 12px 40px rgba(0,0,0,.55); font-size: 12px; line-height: 1.5; pointer-events: none; }
+#portTip .pt-head { font-weight: 700; font-size: 13px; margin-bottom: 6px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+#portTip .pt-badges { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 7px; }
+#portTip .pt-b { font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+#portTip .pt-b.trunk  { background: color-mix(in oklch, var(--accent) 12%, transparent); color: var(--accent); border: 1px solid color-mix(in oklch, var(--accent) 28%, transparent); }
+#portTip .pt-b.access { background: color-mix(in oklch, var(--ok) 8%, transparent);     color: var(--ok);     border: 1px solid color-mix(in oklch, var(--ok) 22%, transparent); }
+#portTip .pt-b.aggr   { background: color-mix(in oklch, var(--violet) 10%, transparent); color: var(--violet); border: 1px solid color-mix(in oklch, var(--violet) 28%, transparent); }
+#portTip .pt-b.uplink { background: color-mix(in oklch, var(--accent) 7%, transparent); color: var(--accent); border: 1px solid color-mix(in oklch, var(--accent) 18%, transparent); }
+#portTip .pt-sep { height: 1px; background: var(--border-soft); margin: 7px 0; }
+#portTip .pt-sec { color: var(--muted); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px; font-family: var(--font-mono); }
+#portTip .pt-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 2px; }
+#portTip .pt-lbl { color: var(--muted); font-size: 11px; white-space: nowrap; }
+#portTip .pt-val { color: var(--text-2); font-weight: 600; font-size: 11px; text-align: right; font-family: var(--font-mono); }
+#portTip .pt-status { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12px; color: var(--text); }
+#portTip .pt-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+#portTip .pt-member { color: var(--violet); font-size: 11px; font-family: var(--font-mono); line-height: 1.6; }
+#portTip .pt-err { color: var(--bad); font-size: 11px; margin-top: 2px; }
+
 .footer { display: flex; justify-content: space-between; padding: 20px 4px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border-soft); }
 
 @media (max-width: 1100px) { .stats { grid-template-columns: repeat(2, 1fr); } .stat:nth-child(2) { border-right: none; } .stat { border-bottom: 1px solid var(--border); } }
@@ -579,9 +598,13 @@ input { font: inherit; }
 
   <footer class="footer">
     <span>Meraki monitor · data proxied qua n8n · API key giữ bí mật trong credential</span>
+
     <span class="mono">/api/meraki-clients · /api/meraki-devices · /api/meraki-events · /api/meraki-uplinks · /api/meraki-l3-routing · /api/meraki-switch-ports</span>
   </footer>
 </main>
+
+<!-- Port tooltip overlay -->
+<div id="portTip"></div>
 
 <script>
 /* ═══════════════════════════════════════════════════════════════
@@ -612,6 +635,7 @@ setInterval(function(){ document.getElementById('clock').textContent = new Date(
    ═══════════════════════════════════════════════════════════════ */
 var clients = [], devices = [], deviceStatus = [], events = [];
 var uplinkDevices = [], vlansData = [], routesData = [];
+var portCfgData = [], portCfgMap = {}, statusPortMap = {}, linkAggPortMap = {};
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function timeAgoVN(ts) {
@@ -1161,10 +1185,8 @@ function renderSwitchCard(sw){
   var has10M = ports.some(function(p){ return p.status === 'Connected' && p.speed === '10 Mbps'; });
   var portSquares = ports.map(function(p){
     var cls = portSqClass(p) + (p.isUplink ? ' uplink' : '');
-    var tip = 'Port ' + p.portId + ': ' + p.status;
-    if (p.status === 'Connected') tip += ' · ' + p.speed + ' · ' + p.clientCount + ' clients · ↑' + fmtKb(p.usageSentKb) + ' ↓' + fmtKb(p.usageRecvKb);
-    if ((p.errors || []).some(function(e){ return e && e !== 'Port disconnected'; })) tip += ' | Lỗi: ' + p.errors.join(', ');
-    return '<div class="sw-port-sq ' + cls + '" title="' + esc(tip) + '"></div>';
+    var pk = sw.switchSerial + ':' + p.portId;
+    return '<div class="sw-port-sq ' + cls + '" data-pk="' + esc(pk) + '" onmouseenter="showPortTip(event,this)" onmouseleave="hidePortTip()"></div>';
   }).join('');
 
   var connRows = ports.filter(function(p){ return p.status === 'Connected'; }).map(function(p){
@@ -1231,6 +1253,7 @@ function loadSwitchPorts(){
     .then(function(d){
       stopPortsProgressBar(true);
       allSwitches = d.switches || [];
+      buildStatusPortMap();
       var dead = d.deadSwitches || 0;
       document.getElementById('badge-ports').textContent = d.totalSwitches + ' switches · ' + d.connectedPorts + ' ports up' + (dead > 0 ? ' · ⛔ ' + dead + ' down' : '');
       document.getElementById('badge-ports').className = dead > 0 ? 'panel-badge tone-bad' : 'panel-badge tone-ok';
@@ -1239,6 +1262,8 @@ function loadSwitchPorts(){
       renderTopTraffic(allSwitches);
       document.getElementById('analysisSection').style.display = '';
       filterSwitches();
+      loadSwitchPortConfigs();
+      loadLinkAggregations();
       document.getElementById('btnLoadPorts').disabled = false;
       document.getElementById('btnLoadPorts').classList.remove('refreshing');
       document.getElementById('btnLoadPorts').innerHTML = '<span class="ri">↻</span> Tải lại';
@@ -1252,6 +1277,119 @@ function loadSwitchPorts(){
       document.getElementById('btnLoadPorts').classList.remove('refreshing');
       document.getElementById('btnLoadPorts').innerHTML = '<span class="ri">🎨</span> Thử lại';
     });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PORT MAP BUILDERS
+   ═══════════════════════════════════════════════════════════════ */
+function buildStatusPortMap() {
+  statusPortMap = {};
+  allSwitches.forEach(function(sw) {
+    (sw.ports || []).forEach(function(p) { statusPortMap[sw.switchSerial + ':' + p.portId] = p; });
+  });
+}
+function buildPortCfgMap() {
+  portCfgMap = {};
+  portCfgData.forEach(function(sw) {
+    (sw.ports || []).forEach(function(p) { portCfgMap[sw.switchSerial + ':' + p.portId] = p; });
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PORT CONFIG + LINK AGGR LOADERS
+   ═══════════════════════════════════════════════════════════════ */
+function loadSwitchPortConfigs() {
+  fetch('/api/meraki-port-configs', { cache:'no-store' })
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(d){ portCfgData = d.configs || []; buildPortCfgMap(); if (allSwitches.length) filterSwitches(); })
+    .catch(function(){});
+}
+function loadLinkAggregations() {
+  fetch('/api/meraki-link-aggregations', { cache:'no-store' })
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(d){ linkAggPortMap = d.portMap || {}; if (allSwitches.length) filterSwitches(); })
+    .catch(function(){});
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PORT TOOLTIP
+   ═══════════════════════════════════════════════════════════════ */
+function showPortTip(e, el) {
+  var key = el.getAttribute('data-pk');
+  if (!key) return;
+  var sp = statusPortMap[key] || null;
+  var cp = portCfgMap[key] || null;
+  var ag = linkAggPortMap[key] || null;
+  var portId = key.split(':')[1];
+  var name = cp && cp.name ? cp.name : '';
+  var type = cp ? cp.type : '';
+  var vlan = cp ? (cp.vlan || '') : '';
+  var allowedVlans = cp ? (cp.allowedVlans || 'all') : '';
+  var voiceVlan = cp ? cp.voiceVlan : '';
+  var linkNeg = cp ? cp.linkNegotiation : '';
+  var isUplink = sp ? !!sp.isUplink : false;
+  var status = sp ? (sp.status || '—') : '—';
+  var speed = sp ? (sp.speed || '') : '';
+  var clients = sp ? sp.clientCount : 0;
+
+  var h = '<div class="pt-head">Port ' + esc(portId) + (name ? ' · ' + esc(name) : '') + '</div>';
+
+  var bd = '';
+  if (type === 'trunk')  bd += '<span class="pt-b trunk">TRUNK</span>';
+  else if (type === 'access') bd += '<span class="pt-b access">ACCESS</span>';
+  if (isUplink) bd += '<span class="pt-b uplink">↑ UPLINK</span>';
+  if (ag)       bd += '<span class="pt-b aggr">⚡ ' + esc(ag.label) + '</span>';
+  if (bd) h += '<div class="pt-badges">' + bd + '</div>';
+
+  h += '<div class="pt-sep"></div>';
+  if (type === 'trunk') {
+    h += '<div class="pt-row"><span class="pt-lbl">Native VLAN</span><span class="pt-val">' + esc(String(vlan || '—')) + '</span></div>';
+    h += '<div class="pt-row"><span class="pt-lbl">Allowed VLANs</span><span class="pt-val">' + esc(allowedVlans) + '</span></div>';
+  } else if (type === 'access') {
+    h += '<div class="pt-row"><span class="pt-lbl">VLAN</span><span class="pt-val">' + esc(String(vlan || '—')) + '</span></div>';
+    if (voiceVlan) h += '<div class="pt-row"><span class="pt-lbl">Voice VLAN</span><span class="pt-val">' + esc(String(voiceVlan)) + '</span></div>';
+  }
+
+  h += '<div class="pt-sep"></div><div class="pt-sec">Port status</div>';
+  var dotC = status === 'Connected' ? 'var(--ok)' : 'var(--bad)';
+  h += '<div class="pt-status"><div class="pt-dot" style="background:' + dotC + '"></div><span>' + esc(status) + (speed ? ' (' + esc(speed) + ')' : '') + '</span></div>';
+  if (status === 'Connected' && sp) {
+    if (clients > 0) h += '<div class="pt-row" style="margin-top:4px"><span class="pt-lbl">Clients</span><span class="pt-val">' + clients + '</span></div>';
+    h += '<div class="pt-row"><span class="pt-lbl">Traffic ↑/↓</span><span class="pt-val">' + fmtKb(sp.usageSentKb) + ' / ' + fmtKb(sp.usageRecvKb) + '</span></div>';
+  }
+
+  if (linkNeg) {
+    h += '<div class="pt-sep"></div><div class="pt-sec">Link negotiation</div>';
+    h += '<div style="font-weight:600;font-size:11px;color:var(--text-2)">' + esc(linkNeg) + '</div>';
+  }
+
+  if (ag && ag.members && ag.members.length) {
+    h += '<div class="pt-sep"></div><div class="pt-sec">' + esc(ag.label) + ' · ' + ag.memberCount + ' Members</div>';
+    ag.members.forEach(function(m) {
+      var msw = allSwitches.filter(function(s){ return s.switchSerial === m.serial; })[0];
+      var mn = msw ? msw.switchName : m.serial.slice(-9);
+      h += '<div class="pt-member">' + esc(mn) + ' / P' + esc(m.portId) + '</div>';
+    });
+  }
+
+  if (sp) {
+    var errs = (sp.errors || []).filter(function(e){ return e && e !== 'Port disconnected'; });
+    if (errs.length) h += '<div class="pt-sep"></div><div class="pt-err">⚠ ' + esc(errs[0]) + '</div>';
+  }
+
+  var tip = document.getElementById('portTip');
+  tip.innerHTML = h;
+  var x = e.clientX + 16, y = e.clientY - 8;
+  tip.style.visibility = 'hidden'; tip.style.display = 'block';
+  var tw = tip.offsetWidth || 240, th = tip.offsetHeight || 180;
+  if (x + tw > window.innerWidth - 12) x = e.clientX - tw - 12;
+  if (y + th > window.innerHeight - 12) y = e.clientY - th + 8;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  tip.style.visibility = 'visible';
+}
+function hidePortTip() {
+  var t = document.getElementById('portTip');
+  if (t) t.style.display = 'none';
 }
 
 /* Auto-refresh */
