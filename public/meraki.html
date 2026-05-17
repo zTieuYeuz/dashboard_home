@@ -239,6 +239,16 @@ input { font: inherit; }
 .route-gw { font-family: var(--font-mono); color: var(--warn); font-weight: 600; }
 .route-row-off { opacity: 0.5; }
 
+/* ── BLOCK / UNBLOCK (admin) ── */
+.cli-act { font-size: 11px; padding: 3px 9px; border-radius: 5px; cursor: pointer; font-weight: 600; border: 1px solid; transition: all .15s; white-space: nowrap; font-family: var(--font-sans); }
+.cli-act.blk   { background: color-mix(in oklch, var(--bad) 10%, transparent); color: var(--bad);  border-color: color-mix(in oklch, var(--bad) 35%, transparent); }
+.cli-act.blk:hover   { background: color-mix(in oklch, var(--bad) 18%, transparent); }
+.cli-act.unblk { background: color-mix(in oklch, var(--ok)  10%, transparent); color: var(--ok);   border-color: color-mix(in oklch, var(--ok)  35%, transparent); }
+.cli-act.unblk:hover { background: color-mix(in oklch, var(--ok)  18%, transparent); }
+.cli-act-prog { font-size: 11px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+.cli-spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+.blocked-badge { font-size: 10px; font-weight: 700; color: var(--bad); margin-left: 4px; }
+
 /* ── SWITCH PORTS panel ── */
 .port-load-bar { padding: 10px 20px; border-bottom: 1px solid var(--border-soft); background: var(--surface-2); }
 .port-load-track { height: 5px; background: var(--track); border-radius: 3px; overflow: hidden; }
@@ -396,9 +406,36 @@ input { font: inherit; }
           <thead><tr>
             <th>Thiết bị</th><th>IP</th><th class="hide-md">MAC</th><th>SSID / VLAN</th><th class="hide-md">VLAN</th>
             <th>Signal</th><th>Traffic</th><th class="hide-md">Hãng</th><th class="hide-md">OS</th><th style="text-align:right">Hoạt động</th>
+            <th id="th-block" style="display:none;text-align:right">Chặn</th>
           </tr></thead>
           <tbody id="clientBody"><tr><td colspan="10" class="tbl-empty"><span class="spinner"></span><br>Đang tải…</td></tr></tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL: BLOCKED CLIENTS (admin only) -->
+  <div class="panel is-closed" id="panel-blocked" style="display:none">
+    <div class="panel-head" onclick="togglePanel('panel-blocked')">
+      <span class="panel-icon">🚫</span>
+      <div class="panel-text">
+        <div class="panel-title">Thiết bị đã bị chặn</div>
+        <div class="panel-sub">Danh sách thiết bị bị chặn khỏi mạng Meraki</div>
+      </div>
+      <span class="panel-badge tone-bad" id="badge-blocked">Đang tải…</span>
+      <span class="panel-chev"><svg viewBox="0 0 12 12" width="11" height="11"><path d="M2 4 L6 8 L10 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    </div>
+    <div class="panel-body">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr>
+            <th>Tên thiết bị</th><th>MAC</th><th>IP (lúc chặn)</th><th>Chặn lúc</th><th>Hành động</th>
+          </tr></thead>
+          <tbody id="blockedBody"><tr><td colspan="5" class="tbl-empty"><span class="spinner"></span><br>Đang tải…</td></tr></tbody>
+        </table>
+      </div>
+      <div style="padding:8px 16px;border-top:1px solid var(--border-soft);font-size:11px;color:var(--muted)">
+        Admin có thể mở chặn thiết bị bất kỳ lúc nào, kể cả khi thiết bị đã offline
       </div>
     </div>
   </div>
@@ -627,6 +664,8 @@ function _readUserCookie() {
 }
 var __USER__ = window.__USER__ || _readUserCookie() || { role:'user', permissions:{}, isAdmin:false };
 var __PERM__ = __USER__.isAdmin ? 'write' : (__USER__.permissions['meraki'] || 'read');
+var ADM = __USER__.isAdmin;
+var clientPolicy = {};
 
 (function initTheme() {
   var saved = null;
@@ -714,8 +753,14 @@ function renderClients() {
       + '<span class="traffic-pip" data-on="' + (lvl >= 2 ? '1' : '0') + '"></span>'
       + '<span class="traffic-pip" data-on="' + (lvl >= 3 ? '1' : '0') + '"></span>'
       + '</span>';
+    var mac = (c.mac || '').toLowerCase();
+    var isBlocked = clientPolicy[mac] === 'Blocked';
+    var nameLbl = esc(c.name || '?') + (isBlocked ? ' <span class="blocked-badge">⛔ CHẶN</span>' : '');
+    var actCell = ADM && mac
+      ? '<td style="text-align:right" id="clipa-' + mac.replace(/[^a-z0-9]/g,'') + '">' + cliActHtml(mac, isBlocked, c.name, c.ip) + '</td>'
+      : (ADM ? '<td><span class="muted small">—</span></td>' : '');
     return '<tr>'
-      + '<td><div class="client-name-cell"><span class="os-glyph" title="' + esc(c.os || '') + '">' + osGlyph(c.os) + '</span><span class="svc-name">' + esc(c.name || '?') + '</span></div></td>'
+      + '<td><div class="client-name-cell"><span class="os-glyph" title="' + esc(c.os || '') + '">' + osGlyph(c.os) + '</span><span class="svc-name">' + nameLbl + '</span></div></td>'
       + '<td class="mono">' + esc(c.ip || '—') + '</td>'
       + '<td class="mono hide-md muted">' + esc(c.mac || '—') + '</td>'
       + '<td><span class="ssid-pill">' + esc(c.ssid || '—') + '</span></td>'
@@ -725,13 +770,104 @@ function renderClients() {
       + '<td class="hide-md">' + esc(c.manufacturer || '—') + '</td>'
       + '<td class="hide-md">' + esc(c.os || '—') + '</td>'
       + '<td class="small" style="text-align:right"><span class="' + (recent ? 'recent' : 'muted') + '">' + ago + ' trước</span></td>'
+      + actCell
       + '</tr>';
-  }).join('') || '<tr><td colspan="10" class="tbl-empty">Không có client khớp filter</td></tr>';
+  }).join('') || '<tr><td colspan="' + (ADM ? 11 : 10) + '" class="tbl-empty">Không có client khớp filter</td></tr>';
   document.getElementById('badge-clients').textContent = rows.length + ' / ' + clients.length + ' clients';
   document.getElementById('badge-clients').className = 'panel-badge tone-ok';
 }
 function filterClients() { _cliQ = document.getElementById('clientSearch').value.toLowerCase(); renderClients(); }
 function setSsidFilter(s) { _cliSsid = s; renderClients(); }
+
+/* ── Block / Unblock helpers (admin only) ── */
+function cliActHtml(mac, blocked, cName, cIp) {
+  var n  = esc(cName || '').replace(/'/g, "\\'");
+  var ip = esc(cIp  || '').replace(/'/g, "\\'");
+  if (blocked) return '<button class="cli-act unblk" onclick="cliPolicy(this,\'' + mac + '\',\'Normal\',\'' + n + '\',\'' + ip + '\')">✅ Mở chặn</button>';
+  return '<button class="cli-act blk" onclick="cliPolicy(this,\'' + mac + '\',\'Blocked\',\'' + n + '\',\'' + ip + '\')">⛔ Chặn</button>';
+}
+function cliToast(msg, ok) {
+  var t = document.getElementById('cliToast');
+  if (!t) {
+    t = document.createElement('div'); t.id = 'cliToast';
+    t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99999;padding:11px 22px;border-radius:9px;font-size:13px;font-weight:600;box-shadow:0 8px 28px rgba(0,0,0,.45);transition:opacity .25s;opacity:0;max-width:90vw;text-align:center';
+    document.body.appendChild(t);
+  }
+  t.style.background = ok ? 'color-mix(in oklch,var(--ok) 15%,var(--card))' : 'color-mix(in oklch,var(--bad) 15%,var(--card))';
+  t.style.color  = ok ? 'var(--ok)' : 'var(--bad)';
+  t.style.border = '1px solid ' + (ok ? 'color-mix(in oklch,var(--ok) 40%,transparent)' : 'color-mix(in oklch,var(--bad) 40%,transparent)');
+  t.textContent = msg; t.style.opacity = '1';
+  clearTimeout(window._cliToastT);
+  window._cliToastT = setTimeout(function(){ t.style.opacity = '0'; }, 3600);
+}
+function cliPolicy(btn, mac, policy, clientName, clientIp) {
+  var blocking = policy === 'Blocked';
+  var label = (clientName && clientName !== 'Không rõ') ? clientName + ' (' + mac + ')' : mac;
+  if (!confirm('Xác nhận ' + (blocking ? 'CHẶN' : 'MỞ CHẶN') + ' thiết bị ' + label + '?\n\n'
+    + (blocking ? 'Thiết bị sẽ KHÔNG truy cập mạng được nữa.' : 'Thiết bị sẽ được phép truy cập mạng trở lại.'))) return;
+  var cell = btn.parentNode;
+  cell.innerHTML = '<span class="cli-act-prog"><span class="cli-spin"></span>Đang ' + (blocking ? 'chặn' : 'mở') + '…</span>';
+  fetch('/api/meraki-client-policy', {
+    method: 'POST', cache: 'no-store',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mac: mac, policy: policy, name: clientName || mac, ip: clientIp || '—' })
+  }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, j: j }; }); })
+    .then(function(res) {
+      if (!res.ok || !res.j || res.j.success !== true) {
+        cliToast('✗ Thất bại: ' + ((res.j && (res.j.error || res.j.detail)) || 'HTTP error'), false);
+        cell.innerHTML = cliActHtml(mac, clientPolicy[mac] === 'Blocked');
+        return;
+      }
+      clientPolicy[mac] = policy;
+      cliToast(blocking ? ('⛔ Đã chặn ' + label) : ('✅ Đã mở chặn ' + label), true);
+      cell.innerHTML = cliActHtml(mac, blocking, clientName, clientIp);
+      filterClients();
+      if (ADM) loadBlockedList();
+    })
+    .catch(function(e) {
+      cliToast('✗ Lỗi: ' + e, false);
+      cell.innerHTML = cliActHtml(mac, clientPolicy[mac] === 'Blocked');
+    });
+}
+
+/* ── Blocked clients list (admin) ── */
+var blockedClients = [];
+function loadBlockedList() {
+  if (!ADM) return;
+  fetch('/api/meraki-blocked-clients', { cache: 'no-store' })
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(d){
+      blockedClients = d.blocked || [];
+      blockedClients.forEach(function(b){ clientPolicy[(b.mac || '').toLowerCase()] = 'Blocked'; });
+      renderBlockedList();
+      var badge = document.getElementById('badge-blocked');
+      if (badge) {
+        badge.textContent = blockedClients.length ? blockedClients.length + ' đã chặn' : 'Không có';
+        badge.className = blockedClients.length ? 'panel-badge tone-bad' : 'panel-badge tone-ok';
+      }
+      filterClients();
+    })
+    .catch(function(){});
+}
+function renderBlockedList() {
+  var el = document.getElementById('blockedBody');
+  if (!el) return;
+  if (!blockedClients.length) {
+    el.innerHTML = '<tr><td colspan="5" class="tbl-empty" style="color:var(--ok)">✅ Không có thiết bị nào bị chặn</td></tr>';
+    return;
+  }
+  el.innerHTML = blockedClients.map(function(b) {
+    var mac = (b.mac || '').toLowerCase();
+    var ago = b.blockedAt ? (function(){ var m=Math.floor((Date.now()-b.blockedAt)/60000); return m<60?m+'ph':Math.floor(m/60)+'h'; })() + ' trước' : '—';
+    return '<tr>'
+      + '<td class="svc-name">' + esc(b.name || b.mac) + '</td>'
+      + '<td class="mono muted small">' + esc(b.mac) + '</td>'
+      + '<td class="mono">' + esc(b.ip || '—') + '</td>'
+      + '<td class="small muted">' + ago + (b.blockedBy ? ' · ' + esc(b.blockedBy) : '') + '</td>'
+      + '<td>' + cliActHtml(mac, true, b.name || b.mac, b.ip) + '</td>'
+      + '</tr>';
+  }).join('');
+}
 
 /* ═══════════════════════════════════════════════════════════════
    DEVICES PANEL
@@ -1493,6 +1629,13 @@ setInterval(function() {
 }, 1000);
 
 /* Boot */
+if (ADM) {
+  var thBlock = document.getElementById('th-block');
+  if (thBlock) thBlock.style.display = '';
+  var panelBlocked = document.getElementById('panel-blocked');
+  if (panelBlocked) panelBlocked.style.display = '';
+  loadBlockedList();
+}
 loadAll();
 </script>
 </body>

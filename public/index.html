@@ -467,8 +467,6 @@ input { font: inherit; }
     </div>
     <nav class="topnav">
       <a class="topnav-item active" href="/">Overview</a>
-      <a class="topnav-item" href="/meraki.html">Meraki</a>
-      <a class="topnav-item" href="/topology.html">Topology</a>
       <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
       <a class="topnav-item" id="admin-link" href="/users.html" style="display:none">Users</a>
     </nav>
@@ -542,34 +540,14 @@ input { font: inherit; }
     </div>
   </section>
 
-  <!-- OFFLINE BANNER -->
-  <div id="offline-banner" style="display:none"></div>
-
-  <!-- SERVICES — grouped -->
-  <section class="card-flush">
-    <header class="card-head">
-      <div>
-        <div class="section-eyebrow">Services</div>
-        <div class="section-title">2 nhóm · <span id="totalSrvCount">—</span> entries</div>
-      </div>
-    </header>
-    <div class="cmdbar">
-      <div class="cmdbar-search">
-        <span class="cmdbar-prefix">/</span>
-        <input id="srv-search" placeholder="Lọc services, hosts, tags…" oninput="renderServices()"/>
-      </div>
-    </div>
-    <div class="grouped-services" id="catWrap"></div>
-  </section>
-
-  <!-- THROUGHPUT + NETWORK INFO -->
+  <!-- SPEEDTEST + NETWORK INFO (above services for quick glance) -->
   <div class="two-col">
     <!-- Speed -->
     <section class="card-flush">
       <header class="card-head">
         <div>
           <div class="section-eyebrow">Throughput</div>
-          <div class="section-title">Uplink to Cloudflare</div>
+          <div class="section-title">Speedtest Internet To Cloudflare</div>
         </div>
         <span class="muted small mono" id="speed-time">live · 3 MB test</span>
       </header>
@@ -598,9 +576,29 @@ input { font: inherit; }
     </section>
   </div>
 
+  <!-- OFFLINE BANNER -->
+  <div id="offline-banner" style="display:none"></div>
+
+  <!-- SERVICES — grouped -->
+  <section class="card-flush">
+    <header class="card-head">
+      <div>
+        <div class="section-eyebrow">Services</div>
+        <div class="section-title">2 nhóm · <span id="totalSrvCount">—</span> entries</div>
+      </div>
+    </header>
+    <div class="cmdbar">
+      <div class="cmdbar-search">
+        <span class="cmdbar-prefix">/</span>
+        <input id="srv-search" placeholder="Lọc services, hosts, tags…" oninput="renderServices()"/>
+      </div>
+    </div>
+    <div class="grouped-services" id="catWrap"></div>
+  </section>
+
   <!-- QUICK ACCESS + BLOCKED DEVICES + ACTIVITY -->
   <div class="two-col">
-    <!-- Quick Access + Blocked Devices -->
+    <!-- Quick Access -->
     <section class="card-flush">
       <header class="card-head">
         <div>
@@ -609,27 +607,6 @@ input { font: inherit; }
         </div>
       </header>
       <div class="qa-grid" id="qa-grid"></div>
-      <!-- Blocked Devices -->
-      <div class="blk-wrap">
-        <div class="blk-head">
-          <span class="blk-eyebrow">🚫 Thiết bị đã bị chặn</span>
-          <span class="mono small muted" id="blocked-count">Đang tải…</span>
-        </div>
-        <div class="blk-table-wrap">
-          <table class="blk-table">
-            <thead><tr>
-              <th>Thiết bị</th>
-              <th>MAC</th>
-              <th>IP</th>
-              <th>Chặn lúc</th>
-              <th>Hành động</th>
-            </tr></thead>
-            <tbody id="blocked-body">
-              <tr><td colspan="5" style="padding:14px 16px;text-align:center;color:var(--muted)">Đang tải…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
     </section>
 
     <!-- Activity log (admin only) -->
@@ -804,9 +781,13 @@ function renderServices() {
     if (lan)     pills += '<span class="tag-pill warn">' + lan     + ' LAN</span>';
     if (offline) pills += '<span class="tag-pill bad">'  + offline + ' offline</span>';
 
-    /* Restore open state */
-    var savedOpen = true;
-    try { if (localStorage.getItem('dh_cat_' + cat.id) === '0') savedOpen = false; } catch(e) {}
+    /* Open state: default collapsed; expand if searching; remember user preference */
+    var savedOpen = false;
+    if (q) {
+      savedOpen = filtered.length > 0; /* auto-expand if has matching results */
+    } else {
+      try { if (localStorage.getItem('dh_cat_' + cat.id) === '1') savedOpen = true; } catch(e) {}
+    }
 
     /* Service rows */
     var rows = filtered.map(function(s){
@@ -1186,7 +1167,6 @@ renderServices();
 renderQAGrid();
 runChecks();
 updateMerakiCard();
-loadBlockedClients();
 </script>
 </body>
 </html>
