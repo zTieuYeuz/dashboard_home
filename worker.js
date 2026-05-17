@@ -831,20 +831,19 @@ const PANEL_REFRESH = `<style>
 <script>(function(){
  if(window.__wfPanel)return; window.__wfPanel=1;
  var PMAP={'/meraki.html':{
-   'panel-clients':'loadClients','panel-devices':'loadDevices','panel-status':'loadDeviceStatus',
-   'panel-events':'loadEvents','panel-ports':'loadSwitchPorts','panel-uplinks':'loadUplinks',
-   'panel-vlans':'loadVlansRoutes','panel-routes':'loadVlansRoutes'}};
+   'panel-clients':'loadClients','panel-devices':'loadDevices','panel-status':'loadStatus',
+   'panel-events':'loadEvents','panel-ports':'loadSwitchPorts'}};
  var cfg=PMAP[location.pathname]; if(!cfg)return;
  function wire(){
   Object.keys(cfg).forEach(function(pid){
    var panel=document.getElementById(pid); if(!panel)return;
-   var hdr=panel.querySelector('.panel-header'); if(!hdr||hdr.querySelector('.wf-pbtn'))return;
+   var hdr=panel.querySelector('.panel-head,.panel-header'); if(!hdr||hdr.querySelector('.wf-pbtn'))return;
    hdr.classList.add('wf-host');
    var btn=document.createElement('span');
    btn.className='wf-pbtn'; btn.textContent='\\u27F3';
    btn.title='Tải lại riêng bảng này';
    var bar=document.createElement('div'); bar.className='wf-pbar';
-   var chev=hdr.querySelector('.chevron');
+   var chev=hdr.querySelector('.panel-chev,.chevron');
    if(chev)hdr.insertBefore(btn,chev); else hdr.appendChild(btn);
    hdr.appendChild(bar);
    var busy=false;
@@ -932,12 +931,15 @@ async function injectUser(request, env) {
       'Content-Security-Policy':
         "default-src 'self'; " +
         "script-src 'self' 'unsafe-inline'; " +
-        "style-src 'self' 'unsafe-inline'; " +
+        // Google Fonts stylesheet
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
         "img-src 'self' data: https:; " +
-        // Allow same-origin + HTTPS APIs the dashboard legitimately calls
-        // (e.g. speed.cloudflare.com speed test). Plaintext/ws still blocked.
-        "connect-src 'self' https:; " +
-        "font-src 'self' data:; " +
+        // Allow same-origin + HTTPS APIs + WebSocket for camera streaming
+        "connect-src 'self' https: wss:; " +
+        // Google Fonts files + data URIs
+        "font-src 'self' data: https://fonts.gstatic.com; " +
+        // Allow camera (go2rtc) and SSH terminal (termix) iframes
+        "frame-src 'self' https://camera.home-server.id.vn https://termix.home-server.id.vn; " +
         "object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
     }
   });
