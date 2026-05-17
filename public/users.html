@@ -1,50 +1,80 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Quản lý Users — Dashboard</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#09090b;--surface:#18181b;--card:#18181b;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa;--accent:#60a5fa;--green:#10b981;--red:#ef4444;--amber:#f59e0b}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.header{background:rgba(24,24,27,.8);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 2rem;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
-.header-left{display:flex;align-items:center;gap:12px}
-.back-btn{font-size:13px;color:var(--muted);padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;transition:all .15s;text-decoration:none}
-.back-btn:hover{color:var(--text);border-color:#3f3f46}
-.page-title{font-size:16px;font-weight:700}
+:root,[data-theme="dark"]{
+  --bg:oklch(0.18 0.012 250);--surface:oklch(0.22 0.012 250);--surface-2:oklch(0.26 0.012 250);
+  --card:oklch(0.21 0.012 250);--border:oklch(0.31 0.012 250);--border-soft:oklch(0.27 0.012 250);
+  --text:oklch(0.96 0.005 250);--text-2:oklch(0.86 0.008 250);--muted:oklch(0.62 0.012 250);
+  --accent:oklch(0.72 0.18 290);--ok:oklch(0.74 0.16 155);--warn:oklch(0.78 0.16 70);--bad:oklch(0.68 0.20 25);
+  --font-sans:'IBM Plex Sans',system-ui,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  --radius:12px;--radius-sm:8px;
+  /* legacy aliases used by JS-generated HTML */
+  --green:var(--ok);--red:var(--bad);--amber:var(--warn);
+}
+[data-theme="light"]{
+  --bg:oklch(0.985 0.003 250);--surface:oklch(1 0 0);--surface-2:oklch(0.965 0.005 250);
+  --card:oklch(1 0 0);--border:oklch(0.91 0.008 250);--border-soft:oklch(0.94 0.008 250);
+  --text:oklch(0.22 0.015 250);--text-2:oklch(0.36 0.015 250);--muted:oklch(0.55 0.012 250);
+  --accent:oklch(0.55 0.18 290);--ok:oklch(0.52 0.15 155);--warn:oklch(0.62 0.16 70);--bad:oklch(0.55 0.20 25);
+}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-height:100vh}
+/* ── Topbar ── */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:52px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+.topbar-left{display:flex;align-items:center;gap:28px}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:30px;height:30px;display:grid;place-items:center;background:var(--accent);color:var(--bg);border-radius:var(--radius-sm);flex-shrink:0}
+.brand-name{font-weight:600;font-size:14px;line-height:1.1}
+.brand-sub{font-size:11px;color:var(--muted);margin-top:1px}
+.topnav{display:flex;gap:2px}
+.topnav-item{font-size:13px;font-weight:500;color:var(--muted);padding:6px 12px;border-radius:var(--radius-sm);transition:all .12s;text-decoration:none;white-space:nowrap}
+.topnav-item:hover,.topnav-item.active{color:var(--text);background:var(--surface-2)}
+.clock{font-family:var(--font-mono);font-size:13px;color:var(--text-2);padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm)}
+.tbtn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);transition:all .12s;cursor:pointer;font-family:var(--font-sans);white-space:nowrap;text-decoration:none}
+.tbtn:hover{color:var(--text);border-color:var(--muted)}
+.tbtn.ghost{background:transparent;border-color:transparent}
+.theme-toggle{width:32px;height:32px;display:grid;place-items:center;padding:0;border:1px solid var(--border);background:var(--surface-2);border-radius:var(--radius-sm);cursor:pointer;color:var(--text-2)}
+.theme-toggle:hover{color:var(--text)}
 .container{max-width:900px;margin:0 auto;padding:2rem 1.5rem;display:flex;flex-direction:column;gap:24px}
 .panel{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
 .panel-header{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .panel-title{font-size:15px;font-weight:700}
-.btn{font-size:13px;font-weight:600;padding:7px 16px;border-radius:8px;border:none;cursor:pointer;transition:all .15s}
-.btn-primary{background:#3b82f6;color:#fff}.btn-primary:hover{background:#2563eb}
-.btn-danger{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}.btn-danger:hover{background:var(--red);color:#fff}
-.btn-outline{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-outline:hover{color:var(--text);border-color:#3f3f46}
+.btn{font-size:13px;font-weight:600;padding:7px 16px;border-radius:var(--radius-sm);border:none;cursor:pointer;transition:all .15s;font-family:var(--font-sans)}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{opacity:.85}
+.btn-danger{background:oklch(0.68 0.20 25 / .15);color:var(--bad);border:1px solid oklch(0.68 0.20 25 / .3)}.btn-danger:hover{background:var(--bad);color:#fff}
+.btn-outline{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-outline:hover{color:var(--text);border-color:var(--border-soft)}
 .user-row{display:flex;align-items:center;gap:16px;padding:1rem 1.5rem;border-bottom:1px solid var(--border)}
 .user-row:last-child{border-bottom:none}
-.user-avatar{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
+.user-avatar{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,var(--accent),oklch(0.60 0.18 310));display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
 .user-info{flex:1;min-width:0}
 .user-name{font-size:14px;font-weight:600}
 .user-role{font-size:12px;color:var(--muted);margin-top:2px}
 .role-badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
-.role-admin{background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3)}
-.role-user{background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.2)}
+.role-admin{background:oklch(0.60 0.18 310 / .15);color:oklch(0.75 0.12 310);border:1px solid oklch(0.60 0.18 310 / .3)}
+.role-user{background:oklch(0.74 0.16 155 / .1);color:var(--ok);border:1px solid oklch(0.74 0.16 155 / .2)}
 .perm-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .perm-chip{display:flex;align-items:center;gap:4px;font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:var(--surface)}
-.perm-chip.read{border-color:rgba(245,158,11,.3);color:var(--amber);background:rgba(245,158,11,.08)}
-.perm-chip.write{border-color:rgba(16,185,129,.3);color:var(--green);background:rgba(16,185,129,.08)}
+.perm-chip.read{border-color:oklch(0.78 0.16 70 / .3);color:var(--warn);background:oklch(0.78 0.16 70 / .08)}
+.perm-chip.write{border-color:oklch(0.74 0.16 155 / .3);color:var(--ok);background:oklch(0.74 0.16 155 / .08)}
 
 /* Modal */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:1000;backdrop-filter:blur(4px)}
 .modal-overlay.hidden{display:none}
-.modal{background:#18181b;border:1px solid var(--border);border-radius:16px;padding:1.75rem;width:480px;max-width:95vw;box-shadow:0 25px 50px rgba(0,0,0,.5)}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.75rem;width:480px;max-width:95vw;box-shadow:0 25px 50px rgba(0,0,0,.5)}
 .modal-title{font-size:16px;font-weight:700;margin-bottom:1.5rem}
 .form-group{margin-bottom:1rem}
 .label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;display:block}
-.input{width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:#09090b;color:var(--text);font-size:13px;outline:none;transition:border-color .15s}
-.input:focus{border-color:#3b82f6}
+.input{width:100%;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;outline:none;transition:border-color .15s;font-family:var(--font-sans)}
+.input:focus{border-color:var(--accent)}
 .modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:1.5rem}
 
 /* Permissions table */
@@ -52,26 +82,43 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .perm-table th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)}
 .perm-table td{padding:8px;border-bottom:1px solid var(--border);font-size:13px}
 .perm-table tr:last-child td{border-bottom:none}
-.perm-select{font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#09090b;color:var(--text);cursor:pointer}
+.perm-select{font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer}
 .empty{padding:2rem;text-align:center;color:var(--muted);font-size:13px}
-.err{font-size:12px;color:var(--red);margin-top:8px}
-.toast{position:fixed;bottom:24px;right:24px;background:#18181b;border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:9999;display:none}
+.err{font-size:12px;color:var(--bad);margin-top:8px}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:9999;display:none}
 .toast.show{display:block}
-.toast.ok{border-color:rgba(16,185,129,.4);color:var(--green)}
-.toast.fail{border-color:rgba(239,68,68,.4);color:var(--red)}
+.toast.ok{border-color:oklch(0.74 0.16 155 / .4);color:var(--ok)}
+.toast.fail{border-color:oklch(0.68 0.20 25 / .4);color:var(--bad)}
 </style>
 </head>
 <body>
-<header class="header">
-  <div class="header-left">
-    <a class="back-btn" href="/">← Dashboard</a>
-    <div class="page-title">👥 Quản lý Users</div>
+<nav class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">Home Lab</div>
+        <div class="brand-sub">Quản lý Users</div>
+      </div>
+    </div>
+    <div class="topnav">
+      <a class="topnav-item" href="/">Overview</a>
+      <a class="topnav-item" href="/meraki.html">Meraki</a>
+      <a class="topnav-item" href="/topology.html">Topology</a>
+      <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
+    </div>
   </div>
-  <div style="display:flex;align-items:center;gap:12px">
-    <a href="/policy.html" class="back-btn" style="color:var(--accent);border-color:rgba(96,165,250,.3)">🛡️ Policy & Quyền hạn</a>
-    <span id="current-user-info" style="font-size:13px;color:var(--muted)"></span>
+  <div class="topbar-right">
+    <a href="/policy.html" class="tbtn ghost">🛡️ Policy &amp; Quyền hạn</a>
+    <span id="current-user-info" class="tbtn ghost"></span>
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
   </div>
-</header>
+</nav>
 
 <div class="container">
   <!-- Users list -->
@@ -170,7 +217,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <img id="mfa-qr-img" src="" width="180" height="180" style="border-radius:10px;background:#fff;padding:6px"/>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em">Hoặc nhập thủ công (Secret Key):</div>
-      <div id="mfa-secret-box" style="font-family:'IBM Plex Mono',monospace;font-size:13px;background:#09090b;padding:9px 12px;border-radius:8px;border:1px solid var(--border);letter-spacing:3px;word-break:break-all;text-align:center;cursor:pointer;user-select:all" title="Click để copy"></div>
+      <div id="mfa-secret-box" style="font-family:var(--font-mono);font-size:13px;background:var(--bg);padding:9px 12px;border-radius:8px;border:1px solid var(--border);letter-spacing:3px;word-break:break-all;text-align:center;cursor:pointer;user-select:all" title="Click để copy"></div>
       <div style="font-size:11px;color:var(--muted);margin-top:5px;text-align:center">Click để copy secret key</div>
       <div class="modal-btns" style="margin-top:1.25rem">
         <button class="btn btn-outline" onclick="closeModal('mfa-setup-modal')">Hủy</button>
@@ -516,6 +563,18 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 loadMfaStatus();
+
+(function(){
+  var saved=null;try{saved=localStorage.getItem('dh_theme')}catch(e){}
+  if(saved==='light')document.documentElement.dataset.theme='light';
+  var tt=document.getElementById('themeToggle');
+  if(tt)tt.addEventListener('click',function(){
+    var next=document.documentElement.dataset.theme==='light'?'dark':'light';
+    document.documentElement.dataset.theme=next;
+    try{localStorage.setItem('dh_theme',next)}catch(e){}
+  });
+  setInterval(function(){var c=document.getElementById('clock');if(c)c.textContent=new Date().toLocaleTimeString('vi-VN',{hour12:false});},1000);
+})();
 </script>
 </body>
 </html>

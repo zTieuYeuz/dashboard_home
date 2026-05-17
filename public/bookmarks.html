@@ -1,43 +1,67 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Bookmarks — Home Lab</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#0b0d14;--surface:#131620;--card:#1a1d2e;--border:#252840;
-  --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
-  --green:#34d399;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;
-  --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+:root,[data-theme="dark"]{
+  --bg:oklch(0.18 0.012 250);--surface:oklch(0.22 0.012 250);--surface-2:oklch(0.26 0.012 250);
+  --card:oklch(0.21 0.012 250);--border:oklch(0.31 0.012 250);--border-soft:oklch(0.27 0.012 250);
+  --text:oklch(0.96 0.005 250);--text-2:oklch(0.86 0.008 250);--muted:oklch(0.62 0.012 250);
+  --accent:oklch(0.72 0.18 290);--ok:oklch(0.74 0.16 155);--warn:oklch(0.78 0.16 70);--bad:oklch(0.68 0.20 25);
+  --font-sans:'IBM Plex Sans',system-ui,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  --radius:12px;--radius-sm:8px;
 }
-body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh}
+[data-theme="light"]{
+  --bg:oklch(0.985 0.003 250);--surface:oklch(1 0 0);--surface-2:oklch(0.965 0.005 250);
+  --card:oklch(1 0 0);--border:oklch(0.91 0.008 250);--border-soft:oklch(0.94 0.008 250);
+  --text:oklch(0.22 0.015 250);--text-2:oklch(0.36 0.015 250);--muted:oklch(0.55 0.012 250);
+  --accent:oklch(0.55 0.18 290);--ok:oklch(0.52 0.15 155);--warn:oklch(0.62 0.16 70);--bad:oklch(0.55 0.20 25);
+}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-height:100vh}
 a{text-decoration:none;color:inherit}
-button{cursor:pointer;font-family:var(--font)}
+button{cursor:pointer;font-family:var(--font-sans)}
 
-/* ── Header ── */
-.header{background:var(--surface);border-bottom:.5px solid var(--border);padding:0 1.5rem;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
-.hdr-left{display:flex;align-items:center;gap:10px}
-.back-btn{font-size:12px;padding:5px 12px;border-radius:6px;border:.5px solid var(--border);background:transparent;color:var(--muted);transition:all .15s}
-.back-btn:hover{color:var(--text);border-color:#3d4260;background:var(--card)}
-.hdr-title{font-size:15px;font-weight:600}
-.hdr-right{display:flex;align-items:center;gap:8px}
-.edit-toggle{font-size:12px;padding:5px 12px;border-radius:6px;border:.5px solid var(--border);background:transparent;color:var(--muted);transition:all .15s}
-.edit-toggle:hover{color:var(--text);border-color:#3d4260}
-.edit-toggle.active{color:var(--amber);border-color:var(--amber);background:#2d1f00}
-.user-badge{font-size:12px;color:var(--muted);padding:4px 10px;border-radius:6px;background:var(--card);border:.5px solid var(--border)}
+/* ── Topbar ── */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:52px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+.topbar-left{display:flex;align-items:center;gap:28px}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:30px;height:30px;display:grid;place-items:center;background:var(--accent);color:var(--bg);border-radius:var(--radius-sm);flex-shrink:0}
+.brand-name{font-weight:600;font-size:14px;line-height:1.1}
+.brand-sub{font-size:11px;color:var(--muted);margin-top:1px}
+.topnav{display:flex;gap:2px}
+.topnav-item{font-size:13px;font-weight:500;color:var(--muted);padding:6px 12px;border-radius:var(--radius-sm);transition:all .12s;text-decoration:none;white-space:nowrap}
+.topnav-item:hover,.topnav-item.active{color:var(--text);background:var(--surface-2)}
+.clock{font-family:var(--font-mono);font-size:13px;color:var(--text-2);padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm)}
+.tbtn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);transition:all .12s;cursor:pointer;font-family:var(--font-sans);white-space:nowrap}
+.tbtn:hover{color:var(--text);border-color:var(--muted)}
+.tbtn.ghost{background:transparent;border-color:transparent}
+.tbtn.active{color:var(--warn);border-color:var(--warn);background:oklch(0.20 0.06 70)}
+.theme-toggle{width:32px;height:32px;display:grid;place-items:center;padding:0;border:1px solid var(--border);background:var(--surface-2);border-radius:var(--radius-sm);cursor:pointer;color:var(--text-2)}
+.theme-toggle:hover{color:var(--text)}
+
+/* ── Legacy edit-toggle (still used by JS) ── */
+.edit-toggle{font-size:12px;padding:5px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .15s}
+.edit-toggle:hover{color:var(--text);border-color:var(--border-soft)}
+.edit-toggle.active{color:var(--warn);border-color:var(--warn);background:oklch(0.20 0.06 70)}
+.user-badge{font-size:12px;color:var(--muted);padding:4px 10px;border-radius:var(--radius-sm);background:var(--card);border:1px solid var(--border)}
 
 /* ── Hero ── */
-.hero{padding:2.5rem 1.5rem 2rem;display:flex;flex-direction:column;align-items:center;gap:1.25rem;background:linear-gradient(180deg,#0c0e1a 0%,var(--bg) 100%)}
+.hero{padding:2.5rem 1.5rem 2rem;display:flex;flex-direction:column;align-items:center;gap:1.25rem;background:linear-gradient(180deg,var(--surface) 0%,var(--bg) 100%)}
 .clock-wrap{text-align:center}
-.clock{font-size:56px;font-weight:700;letter-spacing:-3px;line-height:1;font-variant-numeric:tabular-nums;color:var(--text)}
+.clock{font-size:56px;font-weight:700;letter-spacing:-3px;line-height:1;font-variant-numeric:tabular-nums;color:var(--text);font-family:var(--font-mono)}
 .clock-date{font-size:13px;color:var(--muted);margin-top:4px;letter-spacing:.02em}
-.search-wrap{display:flex;align-items:stretch;background:var(--card);border:.5px solid var(--border);border-radius:12px;width:100%;max-width:620px;overflow:hidden;transition:border-color .2s}
-.search-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(96,165,250,.12)}
-.engine-sel{font-size:13px;padding:0 14px;background:var(--surface);border:none;border-right:.5px solid var(--border);color:var(--muted);cursor:pointer;outline:none;font-family:var(--font);min-width:120px}
-.search-input{flex:1;padding:0 16px;height:48px;background:transparent;border:none;outline:none;font-size:15px;color:var(--text);font-family:var(--font)}
+.search-wrap{display:flex;align-items:stretch;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:620px;overflow:hidden;transition:border-color .2s}
+.search-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px oklch(0.72 0.18 290 / .12)}
+.engine-sel{font-size:13px;padding:0 14px;background:var(--surface);border:none;border-right:1px solid var(--border);color:var(--muted);cursor:pointer;outline:none;font-family:var(--font-sans);min-width:120px}
+.search-input{flex:1;padding:0 16px;height:48px;background:transparent;border:none;outline:none;font-size:15px;color:var(--text);font-family:var(--font-sans)}
 .search-input::placeholder{color:var(--muted)}
 .search-btn{padding:0 20px;background:var(--accent);border:none;color:#fff;font-size:15px;font-weight:600;transition:opacity .15s}
 .search-btn:hover{opacity:.85}
@@ -47,47 +71,47 @@ button{cursor:pointer;font-family:var(--font)}
 .folders-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;align-items:start}
 
 /* ── Folder ── */
-.folder{background:var(--card);border:.5px solid var(--border);border-radius:12px;overflow:hidden}
-.folder-header{display:flex;align-items:center;gap:8px;padding:.6rem .9rem;border-bottom:.5px solid var(--border)}
+.folder{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.folder-header{display:flex;align-items:center;gap:8px;padding:.6rem .9rem;border-bottom:1px solid var(--border)}
 .folder-icon-disp{font-size:16px;line-height:1;flex-shrink:0}
 .folder-color-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .folder-name{font-size:11.5px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
 .folder-acts{display:flex;gap:3px;opacity:0;transition:opacity .15s;flex-shrink:0}
 .folder:hover .folder-acts{opacity:1}
-.f-btn{font-size:11px;padding:2px 7px;border-radius:5px;border:.5px solid var(--border);background:transparent;color:var(--muted);transition:all .15s;line-height:1.5}
-.f-btn:hover{color:var(--text);border-color:#3d4260;background:var(--surface)}
-.f-btn.add{color:var(--accent);border-color:var(--accent)}.f-btn.add:hover{background:#0c1a2e}
-.f-btn.del:hover{color:var(--red);border-color:var(--red);background:#2d0a0a}
+.f-btn{font-size:11px;padding:2px 7px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .15s;line-height:1.5}
+.f-btn:hover{color:var(--text);border-color:var(--border-soft);background:var(--surface)}
+.f-btn.add{color:var(--accent);border-color:var(--accent)}.f-btn.add:hover{background:oklch(0.18 0.04 290)}
+.f-btn.del:hover{color:var(--bad);border-color:var(--bad);background:oklch(0.18 0.04 25)}
 .bm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:4px;padding:.6rem}
 .bm-empty{padding:1.5rem .75rem;text-align:center;font-size:12px;color:var(--muted);line-height:1.6}
 
 /* ── Bookmark tile ── */
-.bm-tile{display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 4px 8px;border-radius:8px;border:.5px solid transparent;position:relative;transition:all .15s;cursor:pointer;color:var(--text)}
+.bm-tile{display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 4px 8px;border-radius:var(--radius-sm);border:1px solid transparent;position:relative;transition:all .15s;cursor:pointer;color:var(--text)}
 .bm-tile:hover{background:var(--surface);border-color:var(--border)}
 .bm-tile:active{transform:scale(.96)}
-.bm-favicon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden;background:var(--surface);flex-shrink:0;border:.5px solid var(--border)}
+.bm-favicon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden;background:var(--surface);flex-shrink:0;border:1px solid var(--border)}
 .bm-favicon img{width:36px;height:36px;border-radius:8px;object-fit:cover}
 .bm-tname{font-size:10px;color:var(--muted);text-align:center;width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;line-height:1.3;padding:0 2px}
 .bm-tile:hover .bm-tname{color:var(--text)}
 .bm-tile-btns{display:none;position:absolute;top:-5px;right:-5px;flex-direction:column;gap:2px;z-index:5}
 .edit-mode .bm-tile-btns{display:flex}
 .tb-btn{width:18px;height:18px;border-radius:4px;border:none;font-size:9px;display:flex;align-items:center;justify-content:center;line-height:1}
-.tb-btn.e{background:#1e3a5f;color:var(--accent)}.tb-btn.d{background:#2d0a0a;color:var(--red)}
+.tb-btn.e{background:oklch(0.22 0.06 250);color:var(--accent)}.tb-btn.d{background:oklch(0.18 0.04 25);color:var(--bad)}
 .tb-btn:hover{filter:brightness(1.25)}
 
 /* ── Add folder ── */
 .add-folder-wrap{margin-top:12px}
-.add-folder-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:.75rem 1rem;border-radius:10px;border:.5px dashed var(--border);background:transparent;color:var(--muted);font-size:13px;transition:all .15s;width:100%;cursor:pointer}
-.add-folder-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(96,165,250,.06)}
+.add-folder-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:.75rem 1rem;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--muted);font-size:13px;transition:all .15s;width:100%;cursor:pointer;font-family:var(--font-sans)}
+.add-folder-btn:hover{border-color:var(--accent);color:var(--accent);background:oklch(0.72 0.18 290 / .06)}
 
 /* ── Modals ── */
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:1000;padding:1rem}
 .modal-bg.hidden{display:none}
-.modal{background:var(--surface);border:.5px solid var(--border);border-radius:14px;width:100%;max-width:420px;padding:1.5rem;box-shadow:0 24px 80px rgba(0,0,0,.5);max-height:90vh;overflow-y:auto}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:420px;padding:1.5rem;box-shadow:0 24px 80px rgba(0,0,0,.5);max-height:90vh;overflow-y:auto}
 .modal-title{font-size:16px;font-weight:600;margin-bottom:1.25rem}
 .form-group{margin-bottom:.85rem}
 .form-label{font-size:11px;color:var(--muted);margin-bottom:5px;display:block;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
-.form-input{width:100%;padding:9px 12px;border-radius:8px;border:.5px solid var(--border);background:var(--card);color:var(--text);font-size:14px;font-family:var(--font);outline:none;transition:border-color .15s}
+.form-input{width:100%;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--card);color:var(--text);font-size:14px;font-family:var(--font-sans);outline:none;transition:border-color .15s}
 .form-input:focus{border-color:var(--accent)}
 
 /* ── Color picker ── */
@@ -97,40 +121,57 @@ button{cursor:pointer;font-family:var(--font)}
 
 /* ── Icon picker ── */
 .icon-picker-wrap{margin-top:6px}
-.icon-search{width:100%;padding:6px 10px;border-radius:7px;border:.5px solid var(--border);background:var(--card);color:var(--text);font-size:13px;font-family:var(--font);outline:none;margin-bottom:7px;transition:border-color .15s}
+.icon-search{width:100%;padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:13px;font-family:var(--font-sans);outline:none;margin-bottom:7px;transition:border-color .15s}
 .icon-search:focus{border-color:var(--accent)}
 .icon-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:3px;max-height:150px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
 .icon-grid::-webkit-scrollbar{width:4px}.icon-grid::-webkit-scrollbar-track{background:transparent}.icon-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-.ic-btn{width:34px;height:34px;border-radius:7px;border:.5px solid transparent;background:transparent;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;flex-shrink:0}
+.ic-btn{width:34px;height:34px;border-radius:7px;border:1px solid transparent;background:transparent;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;flex-shrink:0}
 .ic-btn:hover{background:var(--card);border-color:var(--border);transform:scale(1.12)}
-.ic-btn.sel{background:rgba(96,165,250,.18);border-color:var(--accent)}
+.ic-btn.sel{background:oklch(0.72 0.18 290 / .18);border-color:var(--accent)}
 .icon-preview{display:flex;align-items:center;gap:8px;margin-top:5px;font-size:12px;color:var(--muted)}
 .icon-preview-em{font-size:22px;line-height:1}
 
 /* ── Modal buttons ── */
 .modal-btns{display:flex;gap:8px;margin-top:1.25rem;flex-wrap:wrap}
-.btn{font-size:13px;padding:8px 16px;border-radius:8px;border:.5px solid var(--border);background:transparent;transition:all .15s;font-family:var(--font)}
+.btn{font-size:13px;padding:8px 16px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;transition:all .15s;font-family:var(--font-sans)}
 .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}.btn-primary:hover{opacity:.85}
-.btn-ghost{color:var(--muted)}.btn-ghost:hover{color:var(--text);border-color:#3d4260}
-.btn-danger{color:var(--red);border-color:var(--red);margin-left:auto}.btn-danger:hover{background:#2d0a0a}
+.btn-ghost{color:var(--muted)}.btn-ghost:hover{color:var(--text);border-color:var(--border-soft)}
+.btn-danger{color:var(--bad);border-color:var(--bad);margin-left:auto}.btn-danger:hover{background:oklch(0.18 0.04 25)}
 
 /* Tooltip */
-.bm-tile[data-url]:hover::after{content:attr(data-url);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:#111827;border:.5px solid var(--border);color:var(--muted);font-size:10px;padding:3px 8px;border-radius:5px;white-space:nowrap;pointer-events:none;z-index:10;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.bm-tile[data-url]:hover::after{content:attr(data-url);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);color:var(--muted);font-size:10px;padding:3px 8px;border-radius:5px;white-space:nowrap;pointer-events:none;z-index:10;max-width:220px;overflow:hidden;text-overflow:ellipsis}
 </style>
 </head>
 <body>
 
-<!-- Header -->
-<div class="header">
-  <div class="hdr-left">
-    <button class="back-btn" onclick="location.href='/'">← Dashboard</button>
-    <div class="hdr-title">📌 Bookmarks</div>
+<!-- Topbar -->
+<nav class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">Home Lab</div>
+        <div class="brand-sub">Bookmarks · Home Lab</div>
+      </div>
+    </div>
+    <div class="topnav">
+      <a class="topnav-item" href="/">Overview</a>
+      <a class="topnav-item" href="/meraki.html">Meraki</a>
+      <a class="topnav-item" href="/topology.html">Topology</a>
+      <a class="topnav-item active" href="/bookmarks.html">Bookmarks</a>
+    </div>
   </div>
-  <div class="hdr-right">
-    <button class="edit-toggle" id="edit-toggle" onclick="toggleEditMode()">✏️ Chỉnh sửa</button>
-    <span class="user-badge" id="user-badge"></span>
+  <div class="topbar-right">
+    <button class="tbtn" id="edit-toggle" onclick="toggleEditMode()">✏️ Chỉnh sửa</button>
+    <span class="tbtn ghost" id="user-badge"></span>
+    <div class="clock" id="topClock">--:--:--</div>
+    <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
   </div>
-</div>
+</nav>
 
 <!-- Hero: Clock + Search -->
 <div class="hero">
@@ -572,6 +613,18 @@ document.addEventListener('keydown', function(e){
 
 /* ── Init ── */
 loadData();
+
+(function(){
+  var saved=null;try{saved=localStorage.getItem('dh_theme')}catch(e){}
+  if(saved==='light')document.documentElement.dataset.theme='light';
+  var tt=document.getElementById('themeToggle');
+  if(tt)tt.addEventListener('click',function(){
+    var next=document.documentElement.dataset.theme==='light'?'dark':'light';
+    document.documentElement.dataset.theme=next;
+    try{localStorage.setItem('dh_theme',next)}catch(e){}
+  });
+  setInterval(function(){var c=document.getElementById('topClock');if(c)c.textContent=new Date().toLocaleTimeString('vi-VN',{hour12:false});},1000);
+})();
 </script>
 </body>
 </html>

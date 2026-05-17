@@ -1,133 +1,90 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>SSH Terminal</title>
 <style>
+:root,[data-theme="dark"]{
+  --bg:oklch(0.18 0.012 250);--surface:oklch(0.22 0.012 250);--surface-2:oklch(0.26 0.012 250);
+  --card:oklch(0.21 0.012 250);--border:oklch(0.31 0.012 250);--border-soft:oklch(0.27 0.012 250);
+  --text:oklch(0.96 0.005 250);--text-2:oklch(0.86 0.008 250);--muted:oklch(0.62 0.012 250);
+  --accent:oklch(0.72 0.18 290);--ok:oklch(0.74 0.16 155);
+  --font-sans:'IBM Plex Sans',system-ui,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  --radius:12px;--radius-sm:8px;
+}
+[data-theme="light"]{
+  --bg:oklch(0.985 0.003 250);--surface:oklch(1 0 0);--surface-2:oklch(0.965 0.005 250);
+  --card:oklch(1 0 0);--border:oklch(0.91 0.008 250);--border-soft:oklch(0.94 0.008 250);
+  --text:oklch(0.22 0.015 250);--text-2:oklch(0.36 0.015 250);--muted:oklch(0.55 0.012 250);
+  --accent:oklch(0.55 0.18 290);
+}
 *{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#0b0d14;--surface:#131620;--card:#1a1d2e;--border:#252840;
-  --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
-  --green:#34d399;--red:#f87171;--amber:#fbbf24;
-}
-html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text)}
-
-/* ── Header ── */
-.header{
-  background:var(--surface);border-bottom:.5px solid var(--border);
-  padding:0 1.25rem;height:48px;
-  display:flex;align-items:center;justify-content:space-between;
-  position:relative;z-index:10;flex-shrink:0;
-}
-.hdr-left{display:flex;align-items:center;gap:10px}
-.back-btn{
-  font-size:12px;padding:4px 10px;border-radius:6px;
-  border:.5px solid var(--border);background:transparent;
-  color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap;
-}
-.back-btn:hover{color:var(--text);border-color:#3d4260}
-.hdr-title{display:flex;align-items:center;gap:8px}
-.hdr-name{font-size:14px;font-weight:600}
-.hdr-sub{font-size:11px;color:var(--muted)}
-
-.hdr-shortcuts{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;overflow-x:auto}
-.shortcut-item{
-  display:flex;align-items:center;gap:5px;
-  font-size:11px;color:var(--muted);
-  padding:3px 10px;border-radius:20px;
-  border:.5px solid var(--border);background:var(--card);
-  white-space:nowrap;flex-shrink:0;
-}
-.shortcut-item kbd{
-  display:inline-block;font-size:10px;padding:1px 5px;border-radius:4px;
-  background:#252840;border:.5px solid #3d4260;color:var(--text);
-  font-family:'IBM Plex Mono',monospace;letter-spacing:0;line-height:1.4;
-}
-.shortcut-item .sh-label{color:#94a3b8}
-.shortcut-sep{color:#2d3150;font-size:14px;flex-shrink:0;margin:0 1px}
-
-.hdr-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.open-btn{
-  font-size:12px;padding:4px 10px;border-radius:6px;
-  border:.5px solid var(--border);background:transparent;
-  color:var(--accent);cursor:pointer;transition:all .15s;white-space:nowrap;
-}
-.open-btn:hover{background:#1e3a5f;border-color:var(--accent)}
-.pop-btn{
-  font-size:12px;padding:4px 10px;border-radius:6px;
-  border:.5px solid var(--border);background:transparent;
-  color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap;
-}
-.pop-btn:hover{color:var(--text)}
-
-/* ── Iframe wrapper ── */
-.iframe-wrap{
-  position:relative;
-  height:calc(100vh - 48px);
-  display:flex;flex-direction:column;
-}
-iframe{
-  width:100%;flex:1;border:none;display:block;
-  background:#000;
-}
-
-/* ── Blocked fallback ── */
-.blocked{
-  display:none;flex-direction:column;align-items:center;justify-content:center;
-  height:100%;gap:16px;text-align:center;padding:2rem;
-}
+html,body{height:100%;overflow:hidden;font-family:var(--font-sans);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+a{color:inherit;text-decoration:none}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:48px;background:var(--surface);border-bottom:1px solid var(--border);z-index:10;flex-shrink:0}
+.topbar-left{display:flex;align-items:center;gap:20px}
+.topbar-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:8px}
+.brand-mark{width:28px;height:28px;display:grid;place-items:center;background:var(--accent);color:var(--bg);border-radius:var(--radius-sm)}
+.brand-name{font-weight:600;font-size:13px}
+.brand-sub{font-size:11px;color:var(--muted)}
+.topnav{display:flex;gap:2px}
+.topnav-item{font-size:12px;font-weight:500;color:var(--muted);padding:5px 10px;border-radius:var(--radius-sm);transition:all .12s;text-decoration:none;white-space:nowrap}
+.topnav-item:hover{color:var(--text);background:var(--surface-2)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);transition:all .12s;cursor:pointer;white-space:nowrap}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn:hover{color:var(--text);border-color:var(--muted)}
+.btn.accent{color:var(--accent);border-color:color-mix(in oklch,var(--accent) 35%,transparent)}
+.btn.accent:hover{background:color-mix(in oklch,var(--accent) 10%,transparent)}
+.shortcuts{display:flex;align-items:center;gap:4px;overflow-x:auto;scrollbar-width:none}
+.shortcuts::-webkit-scrollbar{display:none}
+.shortcut-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);padding:3px 8px;border-radius:20px;border:1px solid var(--border);background:var(--card);white-space:nowrap;flex-shrink:0}
+.shortcut-item kbd{display:inline-block;font-size:10px;padding:1px 5px;border-radius:4px;background:var(--surface-2);border:1px solid var(--border-soft);color:var(--text);font-family:var(--font-mono);line-height:1.4}
+.shortcut-sep{color:var(--border);font-size:14px;flex-shrink:0;margin:0 1px}
+.theme-toggle{width:30px;height:30px;display:grid;place-items:center;padding:0}
+.iframe-wrap{flex:1;position:relative;display:flex;flex-direction:column;overflow:hidden}
+iframe{width:100%;flex:1;border:none;display:block;background:#000}
+.blocked{display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;text-align:center;padding:2rem}
 .blocked .icon{font-size:48px}
 .blocked h2{font-size:18px;font-weight:600}
 .blocked p{font-size:13px;color:var(--muted);max-width:400px;line-height:1.6}
-.blocked .btn{
-  font-size:13px;padding:8px 20px;border-radius:8px;
-  background:var(--accent);color:#0b0d14;border:none;
-  cursor:pointer;font-weight:600;text-decoration:none;display:inline-block;
-}
+.blocked .btn-primary{font-size:13px;padding:8px 20px;border-radius:8px;background:var(--accent);color:oklch(0.18 0.012 250);border:none;cursor:pointer;font-weight:600;text-decoration:none;display:inline-block}
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="hdr-left">
-    <button class="back-btn" onclick="history.back()">← Dashboard</button>
-    <div class="hdr-title">
-      <span style="font-size:16px">🖧</span>
-      <div>
-        <div class="hdr-name">SSH Terminal</div>
-        <div class="hdr-sub" id="hdr-sub">Termix · Web SSH</div>
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M6 8l2 2-2 2M11 12h4" stroke-linejoin="round"/></svg>
       </div>
+      <div><div class="brand-name">SSH Terminal</div><div class="brand-sub">Termix · Web SSH</div></div>
+    </div>
+    <div class="shortcuts">
+      <div class="shortcut-item"><kbd>LShift</kbd><kbd>LShift</kbd><span>Palette</span></div>
+      <span class="shortcut-sep">|</span>
+      <div class="shortcut-item"><kbd>Ctrl</kbd><kbd>Ins</kbd><span>Copy</span></div>
+      <span class="shortcut-sep">|</span>
+      <div class="shortcut-item"><kbd>Shift</kbd><kbd>Ins</kbd><span>Paste</span></div>
+      <span class="shortcut-sep">|</span>
+      <div class="shortcut-item"><kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>T</kbd><span>Pop out</span></div>
     </div>
   </div>
-
-  <!-- Keyboard shortcut hints -->
-  <div class="hdr-shortcuts">
-    <div class="shortcut-item">
-      <kbd>LShift</kbd><kbd>LShift</kbd><span class="sh-label">Command Palette</span>
-    </div>
-    <span class="shortcut-sep">|</span>
-    <div class="shortcut-item">
-      <kbd>Ctrl</kbd><kbd>Insert</kbd><span class="sh-label">Copy</span>
-    </div>
-    <span class="shortcut-sep">|</span>
-    <div class="shortcut-item">
-      <kbd>Shift</kbd><kbd>Insert</kbd><span class="sh-label">Paste</span>
-    </div>
-    <span class="shortcut-sep">|</span>
-    <div class="shortcut-item">
-      <kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>T</kbd><span class="sh-label">Pop out</span>
-    </div>
+  <div class="topbar-right">
+    <button class="btn ghost" onclick="openPopup()">⛶ Pop out</button>
+    <a href="https://termix.home-server.id.vn" target="_blank"><button class="btn accent">🔗 Mở Termix</button></a>
+    <button class="btn ghost theme-toggle" id="themeToggle" title="Toggle theme">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"/></svg>
+    </button>
   </div>
-
-  <div class="hdr-right">
-    <button class="pop-btn" onclick="openPopup()" title="Mở cửa sổ riêng">⛶ Pop out</button>
-    <a href="https://termix.home-server.id.vn" target="_blank">
-      <button class="open-btn">🔗 Mở Termix</button>
-    </a>
-  </div>
-</div>
+</header>
 
 <div class="iframe-wrap">
   <iframe
@@ -143,7 +100,7 @@ iframe{
     <div class="icon">🔒</div>
     <h2>Không thể nhúng Termix</h2>
     <p>Termix đang block iframe embedding. Anh có thể mở trực tiếp trong tab mới.</p>
-    <a href="https://termix.home-server.id.vn" target="_blank" class="btn">Mở Termix →</a>
+    <a href="https://termix.home-server.id.vn" target="_blank" class="btn-primary">Mở Termix →</a>
   </div>
 </div>
 
@@ -189,6 +146,16 @@ document.addEventListener('keydown', function(e) {
     window.open(TERMIX_BASE, '_blank');
   }
 });
+
+(function initTheme(){
+  var saved=null;try{saved=localStorage.getItem('dh_theme')}catch(e){}
+  if(saved==='light')document.documentElement.dataset.theme='light';
+  document.getElementById('themeToggle').addEventListener('click',function(){
+    var next=document.documentElement.dataset.theme==='light'?'dark':'light';
+    document.documentElement.dataset.theme=next;
+    try{localStorage.setItem('dh_theme',next)}catch(e){}
+  });
+})();
 </script>
 </body>
 </html>

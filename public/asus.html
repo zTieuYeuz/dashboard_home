@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
 <meta charset="UTF-8"/>
@@ -7,36 +7,51 @@
 <title>ASUS Router Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#0b0d14;--surface:#131620;--card:#1a1d2e;--border:#252840;
-  --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
-  --green:#34d399;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;
-  --font:'Inter',system-ui,sans-serif;
-  --num:'Space Grotesk','Inter',sans-serif;
-  --mono:'IBM Plex Mono',monospace;
+:root,[data-theme="dark"]{
+  --bg:oklch(0.18 0.012 250);--surface:oklch(0.22 0.012 250);--surface-2:oklch(0.26 0.012 250);
+  --card:oklch(0.21 0.012 250);--border:oklch(0.31 0.012 250);--border-soft:oklch(0.27 0.012 250);
+  --text:oklch(0.96 0.005 250);--text-2:oklch(0.86 0.008 250);--muted:oklch(0.62 0.012 250);
+  --accent:oklch(0.72 0.18 290);--ok:oklch(0.74 0.16 155);--warn:oklch(0.78 0.16 70);--bad:oklch(0.68 0.20 25);
+  --font-sans:'IBM Plex Sans',system-ui,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  --radius:12px;--radius-sm:8px;
+  /* legacy aliases */
+  --green:var(--ok);--red:var(--bad);--amber:var(--warn);--purple:oklch(0.72 0.18 310);
 }
-html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100%;-webkit-font-smoothing:antialiased}
+[data-theme="light"]{
+  --bg:oklch(0.985 0.003 250);--surface:oklch(1 0 0);--surface-2:oklch(0.965 0.005 250);
+  --card:oklch(1 0 0);--border:oklch(0.91 0.008 250);--border-soft:oklch(0.94 0.008 250);
+  --text:oklch(0.22 0.015 250);--text-2:oklch(0.36 0.015 250);--muted:oklch(0.55 0.012 250);
+  --accent:oklch(0.55 0.18 290);--ok:oklch(0.52 0.15 155);--warn:oklch(0.62 0.16 70);--bad:oklch(0.55 0.20 25);
+  --green:var(--ok);--red:var(--bad);--amber:var(--warn);--purple:oklch(0.55 0.18 310);
+}
+html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-height:100%;-webkit-font-smoothing:antialiased}
 
-.header{background:var(--surface);border-bottom:.5px solid var(--border);padding:0 1.25rem;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
-.hdr-left{display:flex;align-items:center;gap:12px}
-.back-btn{font-size:12px;padding:5px 12px;border-radius:7px;border:.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;font-family:var(--font);font-weight:500}
-.back-btn:hover{color:var(--text);border-color:#3d4260}
-.hdr-name{font-size:15px;font-weight:700;letter-spacing:-.2px}
-.hdr-sub{font-size:11.5px;color:var(--muted);margin-top:1px}
-.hdr-right{display:flex;align-items:center;gap:10px}
-.refresh-btn{font-size:12px;padding:5px 12px;border-radius:7px;border:.5px solid var(--border);background:transparent;color:var(--accent);cursor:pointer;transition:all .15s;font-family:var(--font);font-weight:500}
-.refresh-btn:hover{background:#1e3a5f;border-color:var(--accent)}
-.last-update{font-size:11.5px;color:var(--muted)}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:52px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;backdrop-filter:blur(12px)}
+.topbar-left{display:flex;align-items:center;gap:28px}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:30px;height:30px;display:grid;place-items:center;background:var(--accent);color:var(--bg);border-radius:var(--radius-sm)}
+.brand-name{font-weight:600;font-size:14px;line-height:1.1}
+.brand-sub{font-size:11px;color:var(--muted);margin-top:1px}
+.topnav{display:flex;gap:2px}
+.topnav-item{font-size:13px;font-weight:500;color:var(--muted);padding:6px 12px;border-radius:var(--radius-sm);transition:all .12s;text-decoration:none}
+.topnav-item:hover,.topnav-item.active{color:var(--text);background:var(--surface-2)}
+.clock{font-family:var(--font-mono);font-size:13px;color:var(--text-2);padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm)}
+.tbtn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);transition:all .12s;cursor:pointer;font-family:var(--font-sans)}
+.tbtn:hover{color:var(--text);border-color:var(--muted)}
+.tbtn.ghost{background:transparent;border-color:transparent}
+.theme-toggle{width:32px;height:32px;display:grid;place-items:center;padding:0;border:1px solid var(--border);background:var(--surface-2);border-radius:var(--radius-sm);cursor:pointer;color:var(--text-2)}
+.theme-toggle:hover{color:var(--text)}
 
 .page{padding:1rem 1.25rem;max-width:1400px;margin:0 auto}
 
 /* Stats row */
 .stats-row{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:.85rem}
 @media(max-width:900px){.stats-row{grid-template-columns:repeat(3,1fr)}}
-.stat-card{background:var(--card);border:.5px solid var(--border);border-radius:10px;padding:12px 14px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px}
 .stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px;font-weight:600}
 .stat-value{font-size:22px;font-weight:700;line-height:1;letter-spacing:-.3px;font-family:var(--num)}
 .stat-sub{font-size:10px;color:var(--muted);margin-top:3px;font-weight:500}
@@ -48,12 +63,12 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 @media(max-width:600px){.main-grid{grid-template-columns:1fr}}
 
 /* Panel */
-.panel{background:var(--card);border:.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:.7rem}
+.panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:.7rem}
 .panel:last-child{margin-bottom:0}
-.panel-header{padding:9px 13px;border-bottom:.5px solid var(--border);display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;transition:background .15s}
+.panel-header{padding:9px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;transition:background .15s}
 .panel-header:hover{background:#1e2035}
 .panel-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);flex:1}
-.panel-badge{font-size:10px;padding:2px 8px;border-radius:8px;background:#1e2440;color:var(--accent);border:.5px solid #2d3a6a;white-space:nowrap;font-weight:500}
+.panel-badge{font-size:10px;padding:2px 8px;border-radius:var(--radius-sm);background:var(--surface-2);color:var(--accent);border:1px solid var(--border-soft);white-space:nowrap;font-weight:500}
 .chevron{font-size:10px;color:var(--muted);transition:transform .2s;flex-shrink:0}
 .panel.collapsed>.panel-header>.chevron{transform:rotate(-90deg)}
 .panel.collapsed>.panel-body{display:none}
@@ -61,45 +76,45 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 .panel-body.pad0{padding:0}
 
 /* Info rows */
-.info-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:.5px solid var(--border)}
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)}
 .info-row:last-child{border-bottom:none}
 .info-key{font-size:11px;color:var(--muted);font-weight:500}
-.info-val{font-size:11px;font-weight:600;text-align:right;word-break:break-all;max-width:200px;font-family:var(--mono);letter-spacing:.2px}
+.info-val{font-size:11px;font-weight:600;text-align:right;word-break:break-all;max-width:200px;font-family:var(--font-mono);letter-spacing:.2px}
 
 /* Resource bars */
 .res-item{margin-bottom:10px}.res-item:last-child{margin-bottom:0}
 .res-header{display:flex;justify-content:space-between;margin-bottom:4px}
 .res-name{font-size:12px;font-weight:500}.res-val{font-size:13px;color:var(--muted);font-weight:700;font-family:var(--num)}
-.bar-track{height:5px;background:#1e2440;border-radius:3px;overflow:hidden}
+.bar-track{height:5px;background:var(--surface-2);border-radius:3px;overflow:hidden}
 .bar-fill{height:100%;border-radius:3px;transition:width .5s}
 .bar-green{background:var(--green)}.bar-amber{background:var(--amber)}.bar-red{background:var(--red)}
 .barCls(p){return p>=85?'bar-red':p>=65?'bar-amber':'bar-green'}
 
 /* DDNS panel */
-.ddns-status{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:.5px solid var(--border)}
+.ddns-status{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
 .ddns-status:last-child{border-bottom:none}
 .ddns-icon{font-size:20px;flex-shrink:0}
 .ddns-body{flex:1;min-width:0}
-.ddns-host{font-size:13px;font-weight:600;font-family:var(--mono)}
-.ddns-meta{font-size:10px;color:var(--muted);margin-top:2px;font-family:var(--mono)}
+.ddns-host{font-size:13px;font-weight:600;font-family:var(--font-mono)}
+.ddns-meta{font-size:10px;color:var(--muted);margin-top:2px;font-family:var(--font-mono)}
 .ddns-badge{font-size:10px;padding:3px 9px;border-radius:6px;font-weight:600;white-space:nowrap;flex-shrink:0}
 .ddns-ok{background:#0d2d1e;color:var(--green);border:.5px solid #1a5c3a}
 .ddns-fail{background:#2d0d0d;color:var(--red);border:.5px solid #5c1a1a}
 .ddns-off{background:#252525;color:var(--muted);border:.5px solid #3a3a3a}
 
 /* WiFi card */
-.wifi-band{padding:10px 0;border-bottom:.5px solid var(--border)}
+.wifi-band{padding:10px 0;border-bottom:1px solid var(--border)}
 .wifi-band:last-child{border-bottom:none}
 .wifi-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
 .wifi-name{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
-.wifi-ssid{font-size:12px;color:var(--accent);font-family:var(--mono);font-weight:500}
-.wifi-meta{font-size:10px;color:var(--muted);display:flex;gap:12px;font-family:var(--mono)}
+.wifi-ssid{font-size:12px;color:var(--accent);font-family:var(--font-mono);font-weight:500}
+.wifi-meta{font-size:10px;color:var(--muted);display:flex;gap:12px;font-family:var(--font-mono)}
 .badge-on{font-size:9px;padding:2px 6px;border-radius:4px;background:#0d2d1e;color:var(--green);border:.5px solid #1a5c3a;font-weight:600}
 .badge-off{font-size:9px;padding:2px 6px;border-radius:4px;background:#252525;color:var(--muted);border:.5px solid #3a3a3a;font-weight:600}
 
 /* BW Chart */
-.bw-panel-card{background:var(--card);border:.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:.7rem}
-.bw-header{padding:9px 13px;border-bottom:.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:background .15s}
+.bw-panel-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:.7rem}
+.bw-header{padding:9px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:background .15s}
 .bw-header:hover{background:#1e2035}
 .bw-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);display:flex;align-items:center;gap:7px}
 .bw-legend{display:flex;gap:12px;font-size:10px;align-items:center;font-weight:500}
@@ -113,10 +128,10 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 /* Reboot button */
 .reboot-section{padding:12px 13px}
 .reboot-btn{
-  width:100%;padding:10px;border-radius:8px;
+  width:100%;padding:10px;border-radius:var(--radius-sm);
   border:.5px solid #5c1a1a;background:#2d0d0d;
   color:var(--red);font-size:13px;font-weight:600;
-  cursor:pointer;transition:all .2s;font-family:var(--font);
+  cursor:pointer;transition:all .2s;font-family:var(--font-sans);
   display:flex;align-items:center;justify-content:center;gap:8px;
 }
 .reboot-btn:hover{background:#3d1010;border-color:var(--red)}
@@ -124,59 +139,67 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 .reboot-confirm{display:none;margin-top:10px;text-align:center}
 .reboot-confirm p{font-size:12px;color:var(--muted);margin-bottom:8px}
 .reboot-confirm-btns{display:flex;gap:8px}
-.btn-confirm{flex:1;padding:7px;border-radius:7px;border:.5px solid #5c1a1a;background:var(--red);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)}
-.btn-cancel{flex:1;padding:7px;border-radius:7px;border:.5px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--font)}
+.btn-confirm{flex:1;padding:7px;border-radius:7px;border:.5px solid #5c1a1a;background:var(--red);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font-sans)}
+.btn-cancel{flex:1;padding:7px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--font-sans)}
 
 /* Skeleton */
-.skeleton{background:linear-gradient(90deg,#1a1d2e 25%,#22263a 50%,#1a1d2e 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:4px}
+.skeleton{background:linear-gradient(90deg,var(--card) 25%,var(--surface-2) 50%,var(--card) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:4px}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .skel-line{height:10px;margin-bottom:7px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{display:inline-block;animation:spin .8s linear infinite}
-.error-box{background:#1a0f0f;border:.5px solid #5c1a1a;border-radius:8px;padding:12px;color:var(--red);font-size:12px;text-align:center;grid-column:1/-1}
+.error-box{background:#1a0f0f;border:.5px solid #5c1a1a;border-radius:var(--radius-sm);padding:12px;color:var(--red);font-size:12px;text-align:center;grid-column:1/-1}
 
 /* ── Clients table ── */
-.clients-panel{background:var(--card);border:.5px solid var(--border);border-radius:10px;overflow:hidden;margin-top:.85rem}
+.clients-panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-top:.85rem}
 .clients-panel.collapsed>.panel-body{display:none}
 .clients-panel.collapsed>.clients-header>.chevron{transform:rotate(-90deg)}
 .clients-header{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;user-select:none}
 .clients-header:hover{background:rgba(255,255,255,.02)}
 .clients-title{font-size:13px;font-weight:600;flex:1}
-.clients-count{font-size:11px;padding:2px 8px;border-radius:10px;background:#1e3a5f;color:var(--accent);font-weight:600}
+.clients-count{font-size:11px;padding:2px 8px;border-radius:var(--radius);background:#1e3a5f;color:var(--accent);font-weight:600}
 .clients-table{width:100%;border-collapse:collapse;font-size:12px}
-.clients-table th{text-align:left;padding:7px 12px;font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:.5px solid var(--border);background:rgba(255,255,255,.02)}
+.clients-table th{text-align:left;padding:7px 12px;font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)}
 .clients-table td{padding:7px 12px;border-bottom:.5px solid rgba(37,40,64,.6);vertical-align:middle}
 .clients-table tr:last-child td{border-bottom:none}
 .clients-table tr:hover td{background:rgba(255,255,255,.02)}
 .ct-name{font-weight:500;color:var(--text);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ct-ip{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
-.ct-mac{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.ct-ip{font-family:var(--font-mono);font-size:11.5px;color:var(--accent)}
+.ct-mac{font-family:var(--font-mono);font-size:10.5px;color:var(--muted)}
 .ct-type{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:5px;white-space:nowrap}
 .ct-wired{background:rgba(96,165,250,.12);color:var(--accent)}
 .ct-24g{background:rgba(52,211,153,.12);color:var(--green)}
 .ct-5g{background:rgba(167,139,250,.12);color:var(--purple)}
-.ct-rssi{font-family:var(--mono);font-size:11px}
+.ct-rssi{font-family:var(--font-mono);font-size:11px}
 .clients-body-wrap{overflow-x:auto}
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="hdr-left">
-    <button class="back-btn" onclick="history.back()">← Dashboard</button>
-    <div style="display:flex;align-items:center;gap:8px">
-      <span style="font-size:18px">📡</span>
-      <div>
-        <div class="hdr-name">ASUS Router</div>
-        <div class="hdr-sub" id="hdr-sub">Loading...</div>
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/><circle cx="8" cy="6" r="1.5" fill="currentColor"/><circle cx="14" cy="12" r="1.5" fill="currentColor"/><circle cx="8" cy="18" r="1.5" fill="currentColor"/></svg>
       </div>
+      <div><div class="brand-name">Home Lab</div><div class="brand-sub" id="hdr-sub">ASUS Router · live</div></div>
     </div>
+    <nav class="topnav">
+      <a class="topnav-item" href="/">Overview</a>
+      <a class="topnav-item" href="/meraki.html">Meraki</a>
+      <a class="topnav-item" href="/topology.html">Topology</a>
+      <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
+    </nav>
   </div>
-  <div class="hdr-right">
-    <span class="last-update" id="last-update"></span>
-    <button class="refresh-btn" onclick="load()" id="refresh-btn">⟳ Refresh</button>
+  <div class="topbar-right">
+    <span style="font-family:var(--font-mono);font-size:12px;color:var(--muted)" id="last-update"></span>
+    <button class="tbtn ghost" onclick="load()" id="refresh-btn"><span style="display:inline-block">↻</span> Refresh</button>
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"/></svg>
+    </button>
   </div>
-</div>
+</header>
 
 <div class="page">
 
@@ -552,7 +575,7 @@ function renderDDNS(ddns){
     </div>
     ${infoRow('Registered IP', ddns.ip||'—')}
     ${infoRow('Last Update',   ddns.updated||'—')}
-    <div style="margin-top:8px;padding:6px 8px;background:${ok?'#0d2d1e':'#2d0d0d'};border-radius:6px;font-size:10px;color:${ok?'var(--green)':'var(--red)'};font-family:var(--mono)">
+    <div style="margin-top:8px;padding:6px 8px;background:${ok?'#0d2d1e':'#2d0d0d'};border-radius:6px;font-size:10px;color:${ok?'var(--green)':'var(--red)'};font-family:var(--font-mono)">
       ${ok?'✓ DDNS hostname đang hoạt động bình thường':'✗ DDNS chưa cập nhật hoặc có lỗi'}
     </div>`;
 }
@@ -685,6 +708,17 @@ window.addEventListener('load',()=>{
   load();
   startPolling();
 });
+
+(function(){
+  var saved=null;try{saved=localStorage.getItem('dh_theme')}catch(e){}
+  if(saved==='light')document.documentElement.dataset.theme='light';
+  document.getElementById('themeToggle').addEventListener('click',function(){
+    var next=document.documentElement.dataset.theme==='light'?'dark':'light';
+    document.documentElement.dataset.theme=next;
+    try{localStorage.setItem('dh_theme',next)}catch(e){}
+  });
+  setInterval(function(){var c=document.getElementById('clock');if(c)c.textContent=new Date().toLocaleTimeString('vi-VN',{hour12:false});},1000);
+})();
 </script>
 </body>
 </html>
