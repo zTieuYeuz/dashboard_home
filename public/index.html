@@ -1022,8 +1022,8 @@ function renderQAGrid() {
   var grid = document.getElementById('qa-grid');
   if (!grid) return;
   grid.innerHTML = ALL_SERVICES_DEF.map(function(s) {
-    var href = s.detailPage || s.url;
-    var target = (s.newTab || !s.detailPage) ? '_blank' : '_self';
+    var href = s.url;
+    var target = '_blank';
     var badge = s.local ? 'LAN' : s.noCheck ? 'ext' : 'live';
     return '<a class="qa-card" href="' + esc(href) + '" target="' + target + '" rel="noopener">'
       + '<span class="qa-icon">' + (s.icon || '🔗') + '</span>'
