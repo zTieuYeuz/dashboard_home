@@ -781,13 +781,8 @@ function renderServices() {
     if (lan)     pills += '<span class="tag-pill warn">' + lan     + ' LAN</span>';
     if (offline) pills += '<span class="tag-pill bad">'  + offline + ' offline</span>';
 
-    /* Open state: default collapsed; expand if searching; remember user preference */
-    var savedOpen = false;
-    if (q) {
-      savedOpen = filtered.length > 0; /* auto-expand if has matching results */
-    } else {
-      try { if (localStorage.getItem('dh_cat_' + cat.id) === '1') savedOpen = true; } catch(e) {}
-    }
+    /* Default collapsed on every page load; auto-expand only when searching */
+    var savedOpen = q ? filtered.length > 0 : false;
 
     /* Service rows */
     var rows = filtered.map(function(s){
