@@ -465,6 +465,73 @@ input { font: inherit; }
     </div>
   </div>
 
+  <!-- PANEL: WAN UPLINKS -->
+  <div class="panel is-closed" id="panel-uplinks">
+    <div class="panel-head" onclick="togglePanel('panel-uplinks')">
+      <span class="panel-icon">🌐</span>
+      <div class="panel-text">
+        <div class="panel-title">WAN Uplinks — Kết nối Internet (MX)</div>
+        <div class="panel-sub">Public IP · gateway · DNS · ISP · assignment</div>
+      </div>
+      <span class="panel-badge" id="badge-uplinks">Đang tải…</span>
+      <span class="panel-chev"><svg viewBox="0 0 12 12" width="11" height="11"><path d="M2 4 L6 8 L10 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    </div>
+    <div class="panel-body">
+      <div class="wan-grid" id="uplinkBody">
+        <div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--muted)"><span class="spinner"></span><br>Đang tải…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL: L3 INTERFACES / SVIs -->
+  <div class="panel is-closed" id="panel-vlans">
+    <div class="panel-head" onclick="togglePanel('panel-vlans')">
+      <span class="panel-icon">🔲</span>
+      <div class="panel-text">
+        <div class="panel-title">L3 Interfaces — SVI trên Switch</div>
+        <div class="panel-sub">VLAN · subnet · IP gateway · OSPF · multicast</div>
+      </div>
+      <span class="panel-badge" id="badge-vlans">Đang tải…</span>
+      <span class="panel-chev"><svg viewBox="0 0 12 12" width="11" height="11"><path d="M2 4 L6 8 L10 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    </div>
+    <div class="panel-body">
+      <div class="cmdbar">
+        <div class="cmdbar-search"><span class="cmdbar-prefix">🔍</span><input id="l3Search" placeholder="Tìm VLAN, tên, subnet, IP…" oninput="filterL3Interfaces()"/></div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr>
+            <th>VLAN</th><th>Tên Interface</th><th>Subnet</th><th>IP (SVI)</th><th>OSPF</th><th class="hide-md">Multicast</th><th class="hide-md">Switch</th>
+          </tr></thead>
+          <tbody id="vlanBody"><tr><td colspan="7" class="tbl-empty"><span class="spinner"></span><br>Đang tải…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL: L3 STATIC ROUTES -->
+  <div class="panel is-closed" id="panel-routes">
+    <div class="panel-head" onclick="togglePanel('panel-routes')">
+      <span class="panel-icon">🛣</span>
+      <div class="panel-text">
+        <div class="panel-title">L3 Static Routes — Định tuyến tĩnh</div>
+        <div class="panel-sub">Subnet đích · next hop · OSPF redistribute</div>
+      </div>
+      <span class="panel-badge" id="badge-routes">Đang tải…</span>
+      <span class="panel-chev"><svg viewBox="0 0 12 12" width="11" height="11"><path d="M2 4 L6 8 L10 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    </div>
+    <div class="panel-body">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr>
+            <th>Tên Route</th><th>Subnet đích</th><th>Next Hop</th><th>OSPF</th><th>Trạng thái</th><th class="hide-md">Switch</th>
+          </tr></thead>
+          <tbody id="routeBody"><tr><td colspan="6" class="tbl-empty"><span class="spinner"></span><br>Đang tải…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- PANEL: SWITCH PORTS -->
   <div class="panel is-closed" id="panel-ports">
     <div class="panel-head" onclick="togglePanel('panel-ports')">
@@ -512,7 +579,7 @@ input { font: inherit; }
 
   <footer class="footer">
     <span>Meraki monitor · data proxied qua n8n · API key giữ bí mật trong credential</span>
-    <span class="mono">/api/meraki-clients · /api/meraki-devices · /api/meraki-events · /api/meraki-switch-ports</span>
+    <span class="mono">/api/meraki-clients · /api/meraki-devices · /api/meraki-events · /api/meraki-uplinks · /api/meraki-l3-routing · /api/meraki-switch-ports</span>
   </footer>
 </main>
 
@@ -544,6 +611,7 @@ setInterval(function(){ document.getElementById('clock').textContent = new Date(
    STATE + HELPERS
    ═══════════════════════════════════════════════════════════════ */
 var clients = [], devices = [], deviceStatus = [], events = [];
+var uplinkDevices = [], vlansData = [], routesData = [];
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function timeAgoVN(ts) {
@@ -807,14 +875,147 @@ function loadEvents() {
     .catch(function(){ document.getElementById('eventBody').innerHTML = '<tr><td colspan="7" class="tbl-empty bad-text">Không tải được</td></tr>'; });
 }
 
+function loadUplinks() {
+  return fetch('/api/meraki-uplinks', { cache:'no-store' })
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(d){
+      uplinkDevices = d.devices || [];
+      renderUplinks(d);
+      var tot = uplinkDevices.reduce(function(s,dv){ return s + (dv.uplinks||[]).length; }, 0);
+      document.getElementById('badge-uplinks').textContent = d.totalActive + ' active · ' + tot + ' links';
+      document.getElementById('badge-uplinks').className = d.totalDown > 0 ? 'panel-badge tone-bad' : 'panel-badge tone-ok';
+    })
+    .catch(function(){
+      document.getElementById('uplinkBody').innerHTML = '<div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--bad)">Không tải được WAN uplinks</div>';
+      document.getElementById('badge-uplinks').textContent = 'Lỗi';
+      document.getElementById('badge-uplinks').className = 'panel-badge tone-bad';
+    });
+}
+
+function renderUplinks(d) {
+  var body = document.getElementById('uplinkBody');
+  if (!body) return;
+  var devs = d.devices || [];
+  var cards = [];
+  devs.forEach(function(dev) {
+    (dev.uplinks || []).forEach(function(ul) {
+      var isActive = ul.status === 'active';
+      var isReady  = ul.status === 'ready' || ul.status === 'standby';
+      var cls  = 'wan-card' + (isActive ? ' wan-active' : isReady ? ' wan-ready' : ' wan-failed');
+      var sLbl = isActive ? 'Active' : isReady ? 'Standby' : (ul.status || 'Unknown');
+      var col  = isActive ? 'var(--ok)' : isReady ? 'var(--warn)' : 'var(--bad)';
+      var assign = ul.ipAssignedBy === 'static' ? '<span class="tag-pill mute">STATIC</span>'
+        : ul.ipAssignedBy === 'dhcp' ? '<span class="tag-pill ok">DHCP</span>' : '';
+      cards.push(
+        '<div class="' + cls + '">'
+        + '<div class="wan-card-head">'
+          + '<div><div class="wan-iface">' + esc(ul.interface ? ul.interface.toUpperCase() : 'WAN') + '</div>'
+            + '<div class="wan-isp">' + esc(dev.name || dev.serial) + (dev.model ? ' · ' + esc(dev.model) : '') + '</div></div>'
+          + '<span class="status-pip" style="--c:' + col + '"><i></i><span>' + esc(sLbl) + '</span></span>'
+        + '</div>'
+        + '<div class="wan-rows">'
+          + (ul.ip        ? '<div class="wan-row"><span>IP LAN</span><span class="mono">'    + esc(ul.ip) + '</span></div>' : '')
+          + (ul.publicIp  ? '<div class="wan-row"><span>Public IP</span><span class="mono">' + esc(ul.publicIp) + '</span></div>' : '')
+          + (ul.gateway   ? '<div class="wan-row"><span>Gateway</span><span class="mono">'   + esc(ul.gateway) + '</span></div>' : '')
+          + (ul.primaryDns? '<div class="wan-row"><span>DNS</span><span class="mono">'       + esc(ul.primaryDns) + (ul.secondaryDns ? ' / ' + esc(ul.secondaryDns) : '') + '</span></div>' : '')
+          + (ul.provider  ? '<div class="wan-row"><span>Provider</span><span>'              + esc(ul.provider) + '</span></div>' : '')
+          + (assign       ? '<div class="wan-row"><span>Assignment</span><span>'            + assign + '</span></div>' : '')
+        + '</div>'
+        + '</div>'
+      );
+    });
+  });
+  body.innerHTML = cards.length ? cards.join('') : '<div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--muted)">Không có uplink data</div>';
+}
+
+function loadVlansRoutes() {
+  return fetch('/api/meraki-l3-routing', { cache:'no-store' })
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(d){
+      vlansData  = d.interfaces   || [];
+      routesData = d.staticRoutes || [];
+      filterL3Interfaces();
+      renderRoutes(routesData);
+      document.getElementById('badge-vlans').textContent = vlansData.length + ' interfaces';
+      document.getElementById('badge-vlans').className = vlansData.length ? 'panel-badge tone-ok' : 'panel-badge';
+      document.getElementById('badge-routes').textContent = routesData.length + ' routes';
+      document.getElementById('badge-routes').className = routesData.length ? 'panel-badge tone-ok' : 'panel-badge';
+    })
+    .catch(function(){
+      document.getElementById('vlanBody').innerHTML = '<tr><td colspan="7" class="tbl-empty bad-text">Không tải được L3 interfaces</td></tr>';
+      document.getElementById('routeBody').innerHTML = '<tr><td colspan="6" class="tbl-empty bad-text">Không tải được Static Routes</td></tr>';
+      document.getElementById('badge-vlans').textContent = 'Lỗi';
+      document.getElementById('badge-vlans').className = 'panel-badge tone-bad';
+      document.getElementById('badge-routes').textContent = 'Lỗi';
+      document.getElementById('badge-routes').className = 'panel-badge tone-bad';
+    });
+}
+
+function filterL3Interfaces() {
+  var q = ((document.getElementById('l3Search') || {}).value || '').toLowerCase();
+  var rows = vlansData.filter(function(v) {
+    if (!q) return true;
+    return String(v.vlanId || '').indexOf(q) >= 0
+      || (v.name || '').toLowerCase().indexOf(q) >= 0
+      || (v.subnet || '').indexOf(q) >= 0
+      || (v.interfaceIp || '').indexOf(q) >= 0
+      || (v.switchName || '').toLowerCase().indexOf(q) >= 0;
+  });
+  renderVlans(rows);
+}
+
+function renderVlans(ifaces) {
+  var body = document.getElementById('vlanBody');
+  if (!body) return;
+  if (!ifaces.length) { body.innerHTML = '<tr><td colspan="7" class="tbl-empty">Không có L3 interface nào</td></tr>'; return; }
+  var sorted = ifaces.slice().sort(function(a,b){ return (a.vlanId||0) - (b.vlanId||0); });
+  body.innerHTML = sorted.map(function(v) {
+    var ospfArea    = v.ospfSettings && v.ospfSettings.area && v.ospfSettings.area !== 'ospfDisabled' ? v.ospfSettings.area : null;
+    var ospfPassive = v.ospfSettings && v.ospfSettings.isPassiveEnabled;
+    var ospfCell = ospfArea
+      ? '<span class="tag-pill ospf">Area ' + esc(ospfArea) + (ospfPassive ? ' P' : '') + '</span>'
+      : '<span class="muted">—</span>';
+    var mcast = (v.multicastRouting || 'disabled') !== 'disabled'
+      ? '<span class="tag-pill warn">' + esc(v.multicastRouting) + '</span>'
+      : '<span class="muted">—</span>';
+    return '<tr>'
+      + '<td><span class="svi-vlan">' + esc(String(v.vlanId !== undefined ? v.vlanId : '—')) + '</span></td>'
+      + '<td><span class="svc-name">' + esc(v.name || '—') + '</span></td>'
+      + '<td><span class="mono small">' + esc(v.subnet || '—') + '</span></td>'
+      + '<td><span class="mono">' + esc(v.interfaceIp || '—') + '</span></td>'
+      + '<td>' + ospfCell + '</td>'
+      + '<td class="hide-md">' + mcast + '</td>'
+      + '<td class="hide-md muted small">' + esc(v.switchName || v.switchSerial || '—') + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function renderRoutes(routes) {
+  var body = document.getElementById('routeBody');
+  if (!body) return;
+  if (!routes.length) { body.innerHTML = '<tr><td colspan="6" class="tbl-empty">Không có static route nào</td></tr>'; return; }
+  body.innerHTML = routes.map(function(r) {
+    var ospf = r.advertiseViaOspf
+      ? '<span class="tag-pill ospf">OSPF' + (r.preferOverOspfRoutes ? ' ★' : '') + '</span>'
+      : '<span class="muted">—</span>';
+    return '<tr class="' + (r.enabled ? '' : 'route-row-off') + '">'
+      + '<td><span class="svc-name">' + esc(r.name || '—') + '</span></td>'
+      + '<td class="route-dst">' + esc(r.subnet || '—') + '</td>'
+      + '<td class="route-gw">' + esc(r.nextHopIp || r.gatewayIp || '—') + '</td>'
+      + '<td>' + ospf + '</td>'
+      + '<td>' + (r.enabled ? '<span class="tag-pill ok">Enabled</span>' : '<span class="tag-pill mute">Disabled</span>') + '</td>'
+      + '<td class="hide-md muted small">' + esc(r.switchName || r.switchSerial || '—') + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
 function loadAll() {
   var btn = document.getElementById('refreshBtn');
   btn.classList.add('refreshing'); btn.disabled = true;
-  Promise.all([loadClients(), loadDevices(), loadStatus(), loadEvents()]).finally(function(){
+  Promise.all([loadClients(), loadDevices(), loadStatus(), loadEvents(), loadUplinks(), loadVlansRoutes()]).finally(function(){
     btn.classList.remove('refreshing'); btn.disabled = false;
   });
-  // Also refresh switch ports if they were already loaded once
-  if (allSwitches.length > 0) loadSwitchPorts();
+  // Switch ports NOT auto-refreshed — takes ~50s, use the button manually
 }
 
 /* ═══════════════════════════════════════════════════════════════

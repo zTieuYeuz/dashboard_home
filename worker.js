@@ -832,7 +832,8 @@ const PANEL_REFRESH = `<style>
  if(window.__wfPanel)return; window.__wfPanel=1;
  var PMAP={'/meraki.html':{
    'panel-clients':'loadClients','panel-devices':'loadDevices','panel-status':'loadStatus',
-   'panel-events':'loadEvents','panel-ports':'loadSwitchPorts'}};
+   'panel-events':'loadEvents','panel-uplinks':'loadUplinks','panel-vlans':'loadVlansRoutes',
+   'panel-routes':'loadVlansRoutes','panel-ports':'loadSwitchPorts'}};
  var cfg=PMAP[location.pathname]; if(!cfg)return;
  function wire(){
   Object.keys(cfg).forEach(function(pid){
