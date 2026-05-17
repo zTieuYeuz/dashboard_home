@@ -374,22 +374,36 @@ input { font: inherit; }
 .act-ip   { font-size: 12px; color: var(--muted); }
 .act-time { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
 
-.bm-folders { display: flex; flex-direction: column; }
-.bm-folder { padding: 14px 20px; border-top: 1px solid var(--border-soft); }
-.bm-folder:first-child { border-top: none; }
-.bm-folder-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; }
-.bm-folder-name { font-weight: 600; }
-.bm-folder-count {
-  font-family: var(--font-mono); font-size: 11px; color: var(--muted);
-  padding: 1px 6px; background: var(--surface-2); border-radius: 4px;
-}
-.bm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.bm-chip {
-  font-size: 12px; padding: 4px 10px; border-radius: 999px;
+/* Quick Access Grid */
+.qa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; padding: 16px 20px; }
+.qa-card {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 14px 8px;
   background: var(--surface-2); border: 1px solid var(--border-soft);
-  color: var(--text-2); transition: all .12s;
+  border-radius: var(--radius-sm); text-decoration: none; color: var(--text);
+  transition: all .15s; text-align: center; cursor: pointer;
 }
-.bm-chip:hover { border-color: var(--accent); color: var(--accent); }
+.qa-card:hover { border-color: var(--accent); background: color-mix(in oklch, var(--accent) 8%, transparent); transform: translateY(-1px); }
+.qa-icon { font-size: 20px; line-height: 1; }
+.qa-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.qa-badge { font-family: var(--font-mono); font-size: 9px; padding: 1px 5px; border-radius: 3px; background: var(--surface); color: var(--muted); border: 1px solid var(--border-soft); letter-spacing: .04em; }
+/* Blocked Devices */
+.blk-wrap { border-top: 1px solid var(--border); }
+.blk-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--border-soft); }
+.blk-eyebrow { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; }
+.blk-table-wrap { overflow-x: auto; }
+.blk-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.blk-table thead th { text-align: left; font-family: var(--font-mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--surface-2); white-space: nowrap; }
+.blk-table td { padding: 9px 16px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
+.blk-table tr:last-child td { border-bottom: none; }
+.blk-table tr:hover td { background: var(--surface-2); }
+.cli-act { font-size: 11px; padding: 3px 9px; border-radius: 5px; cursor: pointer; font-weight: 600; border: 1px solid; transition: all .15s; white-space: nowrap; font-family: var(--font-sans); }
+.cli-act.blk { background: color-mix(in oklch, var(--bad) 10%, transparent); color: var(--bad); border-color: color-mix(in oklch, var(--bad) 35%, transparent); }
+.cli-act.blk:hover { background: color-mix(in oklch, var(--bad) 18%, transparent); }
+.cli-act.unblk { background: color-mix(in oklch, var(--ok) 10%, transparent); color: var(--ok); border-color: color-mix(in oklch, var(--ok) 35%, transparent); }
+.cli-act.unblk:hover { background: color-mix(in oklch, var(--ok) 18%, transparent); }
+.cli-act-prog { font-size: 11px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+.cli-spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
 
 .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 0; padding: 4px 0; }
 .kv > div { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; border-top: 1px solid var(--border-soft); font-size: 13px; }
@@ -584,18 +598,38 @@ input { font: inherit; }
     </section>
   </div>
 
-  <!-- BOOKMARKS + ACTIVITY -->
+  <!-- QUICK ACCESS + BLOCKED DEVICES + ACTIVITY -->
   <div class="two-col">
-    <!-- Bookmarks -->
+    <!-- Quick Access + Blocked Devices -->
     <section class="card-flush">
       <header class="card-head">
         <div>
-          <div class="section-eyebrow">Bookmarks</div>
-          <div class="section-title" id="bm-title">Đang tải…</div>
+          <div class="section-eyebrow">Quick Access</div>
+          <div class="section-title">Tất cả Endpoints</div>
         </div>
-        <a class="row-action" href="/bookmarks.html">Mở →</a>
       </header>
-      <div class="bm-folders" id="bm-folders"></div>
+      <div class="qa-grid" id="qa-grid"></div>
+      <!-- Blocked Devices -->
+      <div class="blk-wrap">
+        <div class="blk-head">
+          <span class="blk-eyebrow">🚫 Thiết bị đã bị chặn</span>
+          <span class="mono small muted" id="blocked-count">Đang tải…</span>
+        </div>
+        <div class="blk-table-wrap">
+          <table class="blk-table">
+            <thead><tr>
+              <th>Thiết bị</th>
+              <th>MAC</th>
+              <th>IP</th>
+              <th>Chặn lúc</th>
+              <th>Hành động</th>
+            </tr></thead>
+            <tbody id="blocked-body">
+              <tr><td colspan="5" style="padding:14px 16px;text-align:center;color:var(--muted)">Đang tải…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- Activity log (admin only) -->
@@ -982,31 +1016,130 @@ window.addEventListener('DOMContentLoaded', function() {
 });
 
 /* ═══════════════════════════════════════════════════════════════
-   BOOKMARKS PREVIEW
+   QUICK ACCESS GRID
    ═══════════════════════════════════════════════════════════════ */
-(function loadBookmarks() {
-  fetch('/api/bookmarks', { credentials:'include' })
-    .then(function(r){ return r.ok ? r.json() : null; })
-    .then(function(d){
-      var folders = (d && d.bookmarks && d.bookmarks.folders) || [];
-      var count = folders.reduce(function(a, f){ return a + (f.items || []).length; }, 0);
-      document.getElementById('bm-title').textContent = count + ' saved · ' + folders.length + ' folders';
-      document.getElementById('bm-folders').innerHTML = folders.slice(0, 4).map(function(f){
-        var items = (f.items || []).slice(0, 8).map(function(b){
-          return '<a class="bm-chip" href="' + esc(b.url) + '" target="_blank" rel="noopener">' + esc(b.name) + '</a>';
-        }).join('');
-        return '<div class="bm-folder">'
-          + '<div class="bm-folder-head">'
-            + '<span>' + esc(f.icon || '📁') + '</span>'
-            + '<span class="bm-folder-name">' + esc(f.name) + '</span>'
-            + '<span class="bm-folder-count">' + (f.items || []).length + '</span>'
-          + '</div>'
-          + '<div class="bm-chips">' + items + '</div>'
-        + '</div>';
-      }).join('') || '<div style="padding:20px;text-align:center;color:var(--muted)">Chưa có bookmark</div>';
+function renderQAGrid() {
+  var grid = document.getElementById('qa-grid');
+  if (!grid) return;
+  grid.innerHTML = ALL_SERVICES_DEF.map(function(s) {
+    var href = s.detailPage || s.url;
+    var target = (s.newTab || !s.detailPage) ? '_blank' : '_self';
+    var badge = s.local ? 'LAN' : s.noCheck ? 'ext' : 'live';
+    return '<a class="qa-card" href="' + esc(href) + '" target="' + target + '" rel="noopener">'
+      + '<span class="qa-icon">' + (s.icon || '🔗') + '</span>'
+      + '<span class="qa-name">' + esc(s.name) + '</span>'
+      + '<span class="qa-badge">' + badge + '</span>'
+      + '</a>';
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BLOCKED DEVICES
+   ═══════════════════════════════════════════════════════════════ */
+var _blockedList = [];
+var _clientPolicy = {};
+
+function timeAgoBlk(ts) {
+  if (!ts) return '—';
+  var m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1) return 'vừa xong';
+  if (m < 60) return m + 'ph trước';
+  var h = Math.floor(m / 60);
+  if (h < 24) return h + 'h trước';
+  return Math.floor(h / 24) + 'd trước';
+}
+
+function cliToast(msg, ok) {
+  var t = document.getElementById('cliToast');
+  if (!t) {
+    t = document.createElement('div'); t.id = 'cliToast';
+    t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99999;'
+      + 'padding:11px 22px;border-radius:9px;font-size:13px;font-weight:600;'
+      + 'box-shadow:0 8px 28px rgba(0,0,0,.45);transition:opacity .25s;opacity:0;max-width:90vw;text-align:center';
+    document.body.appendChild(t);
+  }
+  t.style.background = ok ? 'color-mix(in oklch,var(--ok) 15%,var(--card))' : 'color-mix(in oklch,var(--bad) 15%,var(--card))';
+  t.style.color = ok ? 'var(--ok)' : 'var(--bad)';
+  t.style.border = '1px solid ' + (ok ? 'color-mix(in oklch,var(--ok) 40%,transparent)' : 'color-mix(in oklch,var(--bad) 40%,transparent)');
+  t.textContent = msg; t.style.opacity = '1';
+  clearTimeout(window._cliToastT);
+  window._cliToastT = setTimeout(function(){ t.style.opacity = '0'; }, 3600);
+}
+
+function cliActHtml(mac, blocked, cName, cIp) {
+  var n = esc(cName || '').replace(/'/g, "\\'");
+  var ip = esc(cIp || '').replace(/'/g, "\\'");
+  if (blocked) {
+    return '<button class="cli-act unblk" onclick="cliPolicy(this,\'' + mac + '\',\'Normal\',\'' + n + '\',\'' + ip + '\')">✅ Mở chặn</button>';
+  }
+  return '<button class="cli-act blk" onclick="cliPolicy(this,\'' + mac + '\',\'Blocked\',\'' + n + '\',\'' + ip + '\')">⛔ Chặn</button>';
+}
+
+function cliPolicy(btn, mac, policy, clientName, clientIp) {
+  var blocking = policy === 'Blocked';
+  var label = clientName && clientName !== 'Không rõ' ? clientName + ' (' + mac + ')' : mac;
+  if (!confirm('Xác nhận ' + (blocking ? 'CHẶN' : 'MỞ CHẶN') + ' thiết bị ' + label + '?\n\n'
+    + (blocking ? 'Thiết bị sẽ KHÔNG truy cập mạng được nữa.' : 'Thiết bị sẽ được phép truy cập mạng trở lại.'))) return;
+  var cell = btn.parentNode;
+  cell.innerHTML = '<span class="cli-act-prog"><span class="cli-spin"></span>Đang ' + (blocking ? 'chặn' : 'mở') + '…</span>';
+  fetch('/api/meraki-client-policy', {
+    method: 'POST', cache: 'no-store',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mac: mac, policy: policy, name: clientName || mac, ip: clientIp || '—' })
+  }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, j: j }; }); })
+    .then(function(res) {
+      if (!res.ok || !res.j || res.j.success !== true) {
+        var em = (res.j && (res.j.error || res.j.detail)) || 'HTTP error';
+        cliToast('✗ Thất bại: ' + em, false);
+        cell.innerHTML = cliActHtml(mac, _clientPolicy[mac] === 'Blocked');
+        return;
+      }
+      _clientPolicy[mac] = policy;
+      cliToast(blocking ? ('⛔ Đã chặn ' + label) : ('✅ Đã mở chặn ' + label), true);
+      cell.innerHTML = cliActHtml(mac, blocking);
+      loadBlockedClients();
     })
-    .catch(function(){ document.getElementById('bm-title').textContent = 'Không tải được'; });
-})();
+    .catch(function(e) {
+      cliToast('✗ Lỗi: ' + e, false);
+      cell.innerHTML = cliActHtml(mac, _clientPolicy[mac] === 'Blocked');
+    });
+}
+
+function renderBlockedList() {
+  var el = document.getElementById('blocked-body');
+  var cnt = document.getElementById('blocked-count');
+  if (!el) return;
+  if (!_blockedList.length) {
+    if (cnt) cnt.textContent = '0 thiết bị';
+    el.innerHTML = '<tr><td colspan="5" style="padding:14px 16px;text-align:center;color:var(--ok)">✅ Không có thiết bị nào bị chặn</td></tr>';
+    return;
+  }
+  if (cnt) cnt.textContent = _blockedList.length + ' đã chặn';
+  el.innerHTML = _blockedList.map(function(b) {
+    var mac = (b.mac || '').toLowerCase();
+    return '<tr>'
+      + '<td class="mono" style="font-size:12px;font-weight:600">' + esc(b.name || b.mac) + '</td>'
+      + '<td class="mono" style="font-size:11px;color:var(--muted)">' + esc(b.mac) + '</td>'
+      + '<td class="mono" style="font-size:12px">' + esc(b.ip || '—') + '</td>'
+      + '<td style="font-size:11px;color:var(--muted)">' + timeAgoBlk(b.blockedAt) + (b.blockedBy ? ' · ' + esc(b.blockedBy) : '') + '</td>'
+      + '<td id="blka-' + mac.replace(/[^a-z0-9]/g, '') + '">' + cliActHtml(mac, true, b.name || b.mac, b.ip) + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function loadBlockedClients() {
+  fetch('/api/meraki-blocked-clients', { cache: 'no-store' })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d) {
+      _blockedList = (d && d.blocked) || [];
+      _blockedList.forEach(function(b){ _clientPolicy[(b.mac || '').toLowerCase()] = 'Blocked'; });
+      renderBlockedList();
+    })
+    .catch(function() {
+      var el = document.getElementById('blocked-body');
+      if (el) el.innerHTML = '<tr><td colspan="5" style="padding:14px 16px;text-align:center;color:var(--muted)">Không tải được</td></tr>';
+    });
+}
 
 /* ═══════════════════════════════════════════════════════════════
    ACTIVITY LOG (admin only)
@@ -1050,8 +1183,10 @@ window.addEventListener('DOMContentLoaded', function() {
    BOOT
    ═══════════════════════════════════════════════════════════════ */
 renderServices();
+renderQAGrid();
 runChecks();
 updateMerakiCard();
+loadBlockedClients();
 </script>
 </body>
 </html>
