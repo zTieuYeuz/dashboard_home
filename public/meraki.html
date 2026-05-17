@@ -546,14 +546,17 @@ input { font: inherit; }
           <button class="cmdseg active" id="rtf-all"     onclick="setRouteFilter('all')">All</button>
           <button class="cmdseg"        id="rtf-enabled" onclick="setRouteFilter('enabled')">Enabled</button>
           <button class="cmdseg"        id="rtf-ospf"    onclick="setRouteFilter('ospf')">OSPF</button>
+          <button class="cmdseg"        id="rtf-network" onclick="setRouteFilter('network')">Network</button>
+          <button class="cmdseg"        id="rtf-host"    onclick="setRouteFilter('host')">Host /32</button>
+          <button class="cmdseg"        id="rtf-default" onclick="setRouteFilter('default')">Default</button>
         </div>
       </div>
       <div class="tbl-wrap">
         <table class="tbl">
           <thead><tr>
-            <th>Tên Route</th><th>Subnet đích</th><th>Next Hop</th><th>OSPF</th><th>Trạng thái</th><th class="hide-md">Switch</th>
+            <th>Tên Route</th><th>Subnet đích</th><th>Kiểu</th><th>Next Hop</th><th>OSPF</th><th>Trạng thái</th><th class="hide-md">Switch</th>
           </tr></thead>
-          <tbody id="routeBody"><tr><td colspan="6" class="tbl-empty"><span class="spinner"></span><br>Đang tải…</td></tr></tbody>
+          <tbody id="routeBody"><tr><td colspan="7" class="tbl-empty"><span class="spinner"></span><br>Đang tải…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -984,7 +987,7 @@ function loadVlansRoutes() {
     })
     .catch(function(){
       document.getElementById('vlanBody').innerHTML = '<tr><td colspan="7" class="tbl-empty bad-text">Không tải được L3 interfaces</td></tr>';
-      document.getElementById('routeBody').innerHTML = '<tr><td colspan="6" class="tbl-empty bad-text">Không tải được Static Routes</td></tr>';
+      document.getElementById('routeBody').innerHTML = '<tr><td colspan="7" class="tbl-empty bad-text">Không tải được Static Routes</td></tr>';
       document.getElementById('badge-vlans').textContent = 'Lỗi';
       document.getElementById('badge-vlans').className = 'panel-badge tone-bad';
       document.getElementById('badge-routes').textContent = 'Lỗi';
@@ -1004,25 +1007,64 @@ function filterL3Interfaces() {
 }
 
 var _rtQ = '', _rtFilter = 'all';
+
+function routeNetType(subnet) {
+  if (!subnet) return 'unknown';
+  var pfx = parseInt((subnet.split('/')[1] || ''), 10);
+  if (subnet === '0.0.0.0/0' || pfx === 0) return 'default';
+  if (pfx === 32) return 'host';
+  return 'network';
+}
+
+function dedupeRoutes(data) {
+  var seen = {}, result = [];
+  data.forEach(function(r) {
+    var key = (r.subnet || '') + '|' + (r.nextHopIp || r.gatewayIp || '');
+    if (seen[key]) {
+      /* merge switch names */
+      var existing = seen[key];
+      var sw = r.switchName || r.switchSerial || '';
+      if (sw && (existing._switches || []).indexOf(sw) < 0) {
+        existing._switches = (existing._switches || [existing.switchName || existing.switchSerial || '']).concat(sw);
+      }
+    } else {
+      var copy = Object.assign({}, r);
+      copy._switches = [r.switchName || r.switchSerial || ''];
+      seen[key] = copy;
+      result.push(copy);
+    }
+  });
+  return result;
+}
+
 function filterRoutes() {
   _rtQ = ((document.getElementById('routeSearch') || {}).value || '').toLowerCase();
-  var rows = routesData.filter(function(r) {
+  var deduped = dedupeRoutes(routesData);
+  var rows = deduped.filter(function(r) {
+    var ntype = routeNetType(r.subnet);
     if (_rtFilter === 'enabled' && !r.enabled) return false;
     if (_rtFilter === 'ospf'    && !r.advertiseViaOspf) return false;
+    if (_rtFilter === 'network' && ntype !== 'network') return false;
+    if (_rtFilter === 'host'    && ntype !== 'host') return false;
+    if (_rtFilter === 'default' && ntype !== 'default') return false;
     if (!_rtQ) return true;
-    var hay = (r.name||'') + ' ' + (r.subnet||'') + ' ' + (r.nextHopIp||r.gatewayIp||'') + ' '
-            + (r.switchName||'') + ' ' + (r.switchSerial||'');
+    var sw = (r._switches || []).join(' ');
+    var hay = (r.name||'') + ' ' + (r.subnet||'') + ' ' + (r.nextHopIp||r.gatewayIp||'') + ' ' + sw;
     return hay.toLowerCase().indexOf(_rtQ) >= 0;
   });
-  document.getElementById('badge-routes').textContent = rows.length !== routesData.length
-    ? rows.length + ' / ' + routesData.length + ' routes'
-    : routesData.length + ' routes';
+  var dupRemoved = routesData.length - deduped.length;
+  var badge = rows.length !== deduped.length
+    ? rows.length + ' / ' + deduped.length + ' routes'
+    : deduped.length + ' routes';
+  if (dupRemoved > 0) badge += ' (' + dupRemoved + ' dup)';
+  document.getElementById('badge-routes').textContent = badge;
   renderRoutes(rows);
 }
 function setRouteFilter(v) {
   _rtFilter = v;
-  ['all','enabled','ospf'].forEach(function(s){
-    document.getElementById('rtf-' + s).className = 'cmdseg' + (v === s ? ' active' : '');
+  ['all','enabled','ospf','network','host','default'].forEach(function(s){
+    var el = document.getElementById('rtf-' + s);
+    if (el) el.className = 'cmdseg' + (v === s ? ' active' : '');
   });
   filterRoutes();
 }
@@ -1056,18 +1098,29 @@ function renderVlans(ifaces) {
 function renderRoutes(routes) {
   var body = document.getElementById('routeBody');
   if (!body) return;
-  if (!routes.length) { body.innerHTML = '<tr><td colspan="6" class="tbl-empty">Không có static route nào</td></tr>'; return; }
+  if (!routes.length) { body.innerHTML = '<tr><td colspan="7" class="tbl-empty">Không có static route nào</td></tr>'; return; }
   body.innerHTML = routes.map(function(r) {
     var ospf = r.advertiseViaOspf
       ? '<span class="tag-pill ospf">OSPF' + (r.preferOverOspfRoutes ? ' ★' : '') + '</span>'
       : '<span class="muted">—</span>';
+    var ntype = routeNetType(r.subnet);
+    var ntypePill = ntype === 'default'
+      ? '<span class="tag-pill warn">Default</span>'
+      : ntype === 'host'
+      ? '<span class="tag-pill mute">Host /32</span>'
+      : '<span class="tag-pill" style="background:color-mix(in oklch,var(--accent) 12%,transparent);color:var(--accent)">Network</span>';
+    var switches = (r._switches || [r.switchName || r.switchSerial || '']).filter(Boolean);
+    var switchCell = switches.length > 1
+      ? switches.map(function(s){ return '<span class="ssid-pill">' + esc(s) + '</span>'; }).join(' ')
+      : '<span class="muted small">' + esc(switches[0] || '—') + '</span>';
     return '<tr class="' + (r.enabled ? '' : 'route-row-off') + '">'
       + '<td><span class="svc-name">' + esc(r.name || '—') + '</span></td>'
       + '<td class="route-dst">' + esc(r.subnet || '—') + '</td>'
+      + '<td>' + ntypePill + '</td>'
       + '<td class="route-gw">' + esc(r.nextHopIp || r.gatewayIp || '—') + '</td>'
       + '<td>' + ospf + '</td>'
       + '<td>' + (r.enabled ? '<span class="tag-pill ok">Enabled</span>' : '<span class="tag-pill mute">Disabled</span>') + '</td>'
-      + '<td class="hide-md muted small">' + esc(r.switchName || r.switchSerial || '—') + '</td>'
+      + '<td class="hide-md">' + switchCell + '</td>'
       + '</tr>';
   }).join('');
 }
