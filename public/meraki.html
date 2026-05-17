@@ -540,6 +540,14 @@ input { font: inherit; }
       <span class="panel-chev"><svg viewBox="0 0 12 12" width="11" height="11"><path d="M2 4 L6 8 L10 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
     </div>
     <div class="panel-body">
+      <div class="cmdbar">
+        <div class="cmdbar-search"><span class="cmdbar-prefix">🔍</span><input id="routeSearch" placeholder="Tìm tên route · subnet · next hop · switch…" oninput="filterRoutes()"/></div>
+        <div class="cmdbar-segment">
+          <button class="cmdseg active" id="rtf-all"     onclick="setRouteFilter('all')">All</button>
+          <button class="cmdseg"        id="rtf-enabled" onclick="setRouteFilter('enabled')">Enabled</button>
+          <button class="cmdseg"        id="rtf-ospf"    onclick="setRouteFilter('ospf')">OSPF</button>
+        </div>
+      </div>
       <div class="tbl-wrap">
         <table class="tbl">
           <thead><tr>
@@ -684,7 +692,9 @@ function renderClients() {
   var rows = clients.filter(function(c){
     if (_cliSsid !== 'all' && c.ssid !== _cliSsid) return false;
     if (!ql) return true;
-    return (c.name + ' ' + c.ip + ' ' + c.mac + ' ' + c.ssid + ' ' + (c.manufacturer || '')).toLowerCase().indexOf(ql) >= 0;
+    var hay = (c.name||'') + ' ' + (c.ip||'') + ' ' + (c.mac||'') + ' ' + (c.ssid||'') + ' '
+            + (c.vlan||'') + ' ' + (c.manufacturer||'') + ' ' + (c.os||'') + ' ' + (c.description||'');
+    return hay.toLowerCase().indexOf(ql) >= 0;
   });
   document.getElementById('clientBody').innerHTML = rows.slice(0, 50).map(function(c){
     var ago = timeAgoVN(c.lastSeen);
@@ -729,7 +739,10 @@ function renderDevices() {
   var ql = _devQ;
   var rows = devices.filter(function(d){
     if (!ql) return true;
-    return (d.name + ' ' + d.model + ' ' + d.serial + ' ' + d.lanIp).toLowerCase().indexOf(ql) >= 0;
+    var hay = (d.name||'') + ' ' + (d.model||'') + ' ' + (d.serial||'') + ' ' + (d.lanIp||'') + ' '
+            + (d.productType||'') + ' ' + (d.status||'') + ' ' + (d.firmware||'') + ' '
+            + ((d.tags||[]).join(' '));
+    return hay.toLowerCase().indexOf(ql) >= 0;
   });
   document.getElementById('devBody').innerHTML = rows.map(function(d){
     var col = d.status === 'online' ? 'var(--ok)' : d.status === 'alerting' ? 'var(--warn)' : 'var(--bad)';
@@ -761,7 +774,9 @@ function renderStatus() {
   var ql = _stQ;
   var rows = deviceStatus.filter(function(d){
     if (!ql) return true;
-    return (d.name + ' ' + (d.publicIp || '') + ' ' + (d.lanIp || '')).toLowerCase().indexOf(ql) >= 0;
+    var hay = (d.name||'') + ' ' + (d.model||'') + ' ' + (d.status||'') + ' '
+            + (d.lanIp||'') + ' ' + (d.publicIp||'') + ' ' + (d.uptime||'');
+    return hay.toLowerCase().indexOf(ql) >= 0;
   });
   document.getElementById('statusBody').innerHTML = rows.map(function(d){
     var col = d.status === 'online' ? 'var(--ok)' : d.status === 'alerting' ? 'var(--warn)' : 'var(--bad)';
@@ -803,7 +818,9 @@ function renderEvents() {
   var rows = events.filter(function(e){
     if (_evSev !== 'all' && e.severity !== _evSev) return false;
     if (!ql) return true;
-    return (e.type + ' ' + (e.description || '') + ' ' + (e.deviceName || '')).toLowerCase().indexOf(ql) >= 0;
+    var hay = (e.type||'') + ' ' + (e.description||'') + ' ' + (e.deviceName||'') + ' '
+            + (e.ssid||'') + ' ' + (e.clientMac||'') + ' ' + (e.severity||'');
+    return hay.toLowerCase().indexOf(ql) >= 0;
   });
   document.getElementById('eventBody').innerHTML = rows.slice(0, 100).map(function(e){
     return '<tr class="event-row event-' + esc(e.severity || 'low') + '">'
@@ -959,7 +976,7 @@ function loadVlansRoutes() {
       vlansData  = d.interfaces   || [];
       routesData = d.staticRoutes || [];
       filterL3Interfaces();
-      renderRoutes(routesData);
+      filterRoutes();
       document.getElementById('badge-vlans').textContent = vlansData.length + ' interfaces';
       document.getElementById('badge-vlans').className = vlansData.length ? 'panel-badge tone-ok' : 'panel-badge';
       document.getElementById('badge-routes').textContent = routesData.length + ' routes';
@@ -979,13 +996,35 @@ function filterL3Interfaces() {
   var q = ((document.getElementById('l3Search') || {}).value || '').toLowerCase();
   var rows = vlansData.filter(function(v) {
     if (!q) return true;
-    return String(v.vlanId || '').indexOf(q) >= 0
-      || (v.name || '').toLowerCase().indexOf(q) >= 0
-      || (v.subnet || '').indexOf(q) >= 0
-      || (v.interfaceIp || '').indexOf(q) >= 0
-      || (v.switchName || '').toLowerCase().indexOf(q) >= 0;
+    var hay = String(v.vlanId||'') + ' ' + (v.name||'') + ' ' + (v.subnet||'') + ' '
+            + (v.interfaceIp||'') + ' ' + (v.switchName||'') + ' ' + (v.switchSerial||'');
+    return hay.toLowerCase().indexOf(q) >= 0;
   });
   renderVlans(rows);
+}
+
+var _rtQ = '', _rtFilter = 'all';
+function filterRoutes() {
+  _rtQ = ((document.getElementById('routeSearch') || {}).value || '').toLowerCase();
+  var rows = routesData.filter(function(r) {
+    if (_rtFilter === 'enabled' && !r.enabled) return false;
+    if (_rtFilter === 'ospf'    && !r.advertiseViaOspf) return false;
+    if (!_rtQ) return true;
+    var hay = (r.name||'') + ' ' + (r.subnet||'') + ' ' + (r.nextHopIp||r.gatewayIp||'') + ' '
+            + (r.switchName||'') + ' ' + (r.switchSerial||'');
+    return hay.toLowerCase().indexOf(_rtQ) >= 0;
+  });
+  document.getElementById('badge-routes').textContent = rows.length !== routesData.length
+    ? rows.length + ' / ' + routesData.length + ' routes'
+    : routesData.length + ' routes';
+  renderRoutes(rows);
+}
+function setRouteFilter(v) {
+  _rtFilter = v;
+  ['all','enabled','ospf'].forEach(function(s){
+    document.getElementById('rtf-' + s).className = 'cmdseg' + (v === s ? ' active' : '');
+  });
+  filterRoutes();
 }
 
 function renderVlans(ifaces) {
