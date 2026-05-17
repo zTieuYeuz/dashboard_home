@@ -424,11 +424,25 @@ async function handleUpdateUserPanels(request, env, username) {
   return json({ success: true, username, panels: user.panels, cameras: user.cameras });
 }
 
+const DEFAULT_CAMERAS = [
+  { id: 'cam01', name: 'Camera 01',          type: 'analog',  stream: 'cam01' },
+  { id: 'cam03', name: 'Camera 03',          type: 'analog',  stream: 'cam03' },
+  { id: 'cam04', name: 'Camera 04',          type: 'ip',      stream: 'cam04' },
+  { id: 'cam05', name: 'Camera 05',          type: 'ip',      stream: 'cam05' },
+  { id: 'cam06', name: 'Camera 06',          type: 'ip',      stream: 'cam06' },
+  { id: 'cam07', name: 'Camera Phòng Khách', type: 'unknown', stream: null    },
+];
+
 async function handleCameraList(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (request.method === 'GET') {
-    const list = await env.DASHBOARD_KV.get('camera_list', 'json') || [];
+    let list = await env.DASHBOARD_KV.get('camera_list', 'json');
+    if (!Array.isArray(list)) {
+      // First-time: seed defaults into KV so policy.html camera tab is populated
+      list = DEFAULT_CAMERAS;
+      await env.DASHBOARD_KV.put('camera_list', JSON.stringify(list));
+    }
     return json({ cameras: list });
   }
   if (request.method === 'PUT') {
