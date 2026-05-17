@@ -1,1721 +1,731 @@
-﻿<!DOCTYPE html>
-<html lang="vi">
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
 <head>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Meraki-Network — Home Lab Dashboard</title>
+<title>Meraki Network — Home Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#0b0d14;--surface:#131620;--card:#1a1d2e;--border:#252840;
-  --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
-  --green:#34d399;--red:#f87171;--amber:#fbbf24;
-  --green-dim:rgba(52,211,153,.08);--red-dim:rgba(248,113,113,.08);
-  --mono:'SF Mono','Fira Code',monospace;
+/* TOKENS */
+:root, [data-theme="dark"] {
+  --bg: oklch(0.18 0.012 250); --surface: oklch(0.22 0.012 250); --surface-2: oklch(0.26 0.012 250);
+  --card: oklch(0.21 0.012 250); --border: oklch(0.31 0.012 250); --border-soft: oklch(0.27 0.012 250);
+  --text: oklch(0.96 0.005 250); --text-2: oklch(0.86 0.008 250); --muted: oklch(0.62 0.012 250);
+  --track: oklch(0.30 0.012 250);
+  --accent: oklch(0.72 0.18 290); --accent-soft: oklch(0.55 0.13 290); --violet: oklch(0.72 0.18 290);
+  --ok: oklch(0.74 0.16 155); --warn: oklch(0.78 0.16 70); --bad: oklch(0.68 0.20 25);
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif; --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --radius: 12px; --radius-sm: 8px;
 }
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
-a{color:inherit;text-decoration:none}
-@keyframes spin{to{transform:rotate(360deg)}}
-
-/* ── HEADER ── */
-.header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.5rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
-.header-left{display:flex;align-items:center;gap:12px}
-.back-btn{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);padding:5px 10px;border-radius:6px;border:1px solid var(--border);transition:all .15s}
-.back-btn:hover{color:var(--text);border-color:#3d4260;background:var(--card)}
-.svc-icon{width:32px;height:32px;background:#1e2235;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px}
-.svc-name{font-size:15px;font-weight:600}
-.header-right{display:flex;align-items:center;gap:10px}
-.btn{font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit;transition:all .15s}
-.btn:hover{color:var(--text);border-color:#3d4260;background:var(--card)}
-.btn.refreshing .ri{animation:spin .6s linear infinite;display:inline-block}
-
-/* ── CONTAINER ── */
-.container{max-width:1400px;margin:0 auto;padding:1.5rem;display:flex;flex-direction:column;gap:16px}
-
-/* ── STATS ── */
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:.9rem 1.1rem;display:flex;align-items:center;gap:12px}
-.stat-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
-.stat-label{font-size:11px;color:var(--muted);font-weight:500;margin-bottom:2px}
-.stat-val{font-size:22px;font-weight:700;line-height:1;letter-spacing:-.02em}
-.c-green{color:var(--green)}.c-amber{color:var(--amber)}.c-accent{color:var(--accent)}.c-red{color:var(--red)}
-
-/* ── PANEL (collapsible) ── */
-.panel{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
-.panel-header{
-  display:flex;align-items:center;gap:9px;
-  padding:11px 15px;cursor:pointer;user-select:none;
-  background:#1e2235;border-bottom:1px solid var(--border);
-  transition:background .15s;
+[data-theme="light"] {
+  --bg: oklch(0.985 0.003 250); --surface: oklch(1 0 0); --surface-2: oklch(0.965 0.005 250);
+  --card: oklch(1 0 0); --border: oklch(0.91 0.008 250); --border-soft: oklch(0.94 0.008 250);
+  --text: oklch(0.22 0.015 250); --text-2: oklch(0.36 0.015 250); --muted: oklch(0.55 0.012 250);
+  --track: oklch(0.93 0.008 250);
+  --accent: oklch(0.55 0.18 290); --accent-soft: oklch(0.72 0.13 290); --violet: oklch(0.55 0.18 290);
+  --ok: oklch(0.52 0.15 155); --warn: oklch(0.62 0.16 70); --bad: oklch(0.55 0.20 25);
 }
-.panel-header:hover{background:#232640}
-.panel-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);flex:1}
-.panel-badge{font-size:10px;padding:2px 8px;border-radius:8px;background:#1e2440;color:var(--accent);border:1px solid #2d3a6a;font-weight:600;white-space:nowrap}
-.panel-badge.green{color:var(--green);background:var(--green-dim);border-color:rgba(52,211,153,.2)}
-.panel-badge.red{color:var(--red);background:var(--red-dim);border-color:rgba(248,113,113,.2)}
-.chevron{font-size:10px;color:var(--muted);transition:transform .25s;flex-shrink:0}
-.panel.collapsed>.panel-header>.chevron{transform:rotate(-90deg)}
-.panel.collapsed>.panel-body{display:none}
-.panel-body{padding:0}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { font-family: var(--font-sans); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+input { font: inherit; }
+::selection { background: color-mix(in oklch, var(--accent) 35%, transparent); }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.bad-text { color: var(--bad); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+@keyframes spin  { to { transform: rotate(360deg); } }
 
-/* ── TOOLBAR ── */
-.toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap;background:rgba(30,34,53,.5)}
-.search-wrap{position:relative;flex:1;min-width:180px}
-.search-wrap input{width:100%;padding:6px 10px 6px 30px;border-radius:7px;border:1px solid var(--border);background:#131620;color:var(--text);font-size:12px;outline:none;font-family:inherit;transition:border .15s}
-.search-wrap input:focus{border-color:var(--accent)}
-.search-wrap .si{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none}
-.filter-btn{font-size:11px;padding:5px 11px;border-radius:7px;border:1px solid var(--border);background:var(--card);color:var(--muted);cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .15s}
-.filter-btn:hover,.filter-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(96,165,250,.06)}
-.filter-btn.active{font-weight:600}
-.count-lbl{font-size:11px;color:var(--muted);margin-left:auto;white-space:nowrap}
+/* TOP BAR */
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 28px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 50; backdrop-filter: blur(12px); }
+.topbar-left { display: flex; align-items: center; gap: 28px; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark { width: 30px; height: 30px; display: grid; place-items: center; background: var(--accent); color: var(--bg); border-radius: var(--radius-sm); box-shadow: 0 4px 14px color-mix(in oklch, var(--accent) 25%, transparent); }
+.brand-name { font-weight: 600; font-size: 14px; line-height: 1.1; }
+.brand-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.topnav { display: flex; gap: 2px; }
+.topnav-item { font-size: 13px; font-weight: 500; color: var(--muted); padding: 6px 12px; border-radius: var(--radius-sm); transition: all .12s; text-decoration: none; }
+.topnav-item:hover { color: var(--text); background: var(--surface-2); }
+.topnav-item.active { color: var(--text); background: var(--surface-2); }
+.clock { font-family: var(--font-mono); font-size: 13px; color: var(--text-2); padding: 6px 10px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); }
+.auto-indicator { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); padding: 6px 10px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border-soft); font-family: var(--font-mono); }
+.auto-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: pulse 2s ease-in-out infinite; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px; font-weight: 500; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); border-radius: var(--radius-sm); transition: all .12s; cursor: pointer; }
+.btn.ghost { background: transparent; }
+.btn:hover { color: var(--text); border-color: var(--muted); }
+.btn .ri { display: inline-block; }
+.btn.refreshing .ri { animation: spin .6s linear infinite; }
+.theme-toggle { width: 32px; height: 32px; display: grid; place-items: center; padding: 0; }
 
-/* ── TABLE ── */
-.tbl-wrap{overflow-x:auto}
-.tbl{width:100%;border-collapse:collapse;font-size:12px}
-.tbl thead th{background:#1a1e32;padding:9px 13px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;text-align:left;white-space:nowrap;border-bottom:1px solid var(--border)}
-.tbl tbody tr{border-bottom:1px solid rgba(37,40,64,.5);transition:background .1s}
-.tbl tbody tr:last-child{border-bottom:none}
-.tbl tbody tr:hover{background:rgba(96,165,250,.04)}
-.tbl td{padding:10px 13px;vertical-align:middle}
-.tbl-msg{padding:2.5rem;text-align:center;color:var(--muted);font-size:12px}
-.spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-bottom:8px}
+/* LAYOUT */
+.main { width: 100%; max-width: 1440px; margin: 0 auto; padding: 24px 28px 64px; display: flex; flex-direction: column; gap: 20px; }
 
-/* ── CELLS ── */
-.cell-name{font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cell-name.unk{color:var(--muted);font-weight:400;font-style:italic}
-.cell-mac{font-family:var(--mono);font-size:11px;color:var(--muted)}
-.cell-ip{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--accent)}
-.cell-model{font-size:11px;color:var(--muted)}
-.ssid-pill{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap}
-.p-wifi  {background:rgba(96,165,250,.1);color:var(--accent);border:1px solid rgba(96,165,250,.2)}
-.p-wired {background:var(--green-dim);color:var(--green);border:1px solid rgba(52,211,153,.2)}
-.p-guest {background:rgba(251,191,36,.08);color:var(--amber);border:1px solid rgba(251,191,36,.18)}
-.vlan-tag{font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:#1e2235;color:#7c8db5;font-family:var(--mono)}
-.status-dot{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500}
-.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.dot-on {background:var(--green);box-shadow:0 0 5px var(--green)}
-.dot-off{background:var(--red)}
-.dot-alr{background:var(--amber);box-shadow:0 0 5px var(--amber)}
-.since{font-size:10px;color:#4a5270}
+/* HERO */
+.hero { display: flex; flex-direction: column; gap: 20px; }
+.hero-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+.section-eyebrow { font-family: var(--font-mono); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; margin-bottom: 4px; display: flex; align-items: center; }
+.hero-title { font-size: 32px; font-weight: 500; letter-spacing: -.025em; line-height: 1.1; color: var(--text); max-width: 640px; }
+.hero-accent { color: var(--accent); font-weight: 600; }
+.hero-sub { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.hero-meta { display: flex; flex-direction: column; gap: 4px; min-width: 240px; font-size: 12px; }
+.hero-meta-row { display: flex; justify-content: space-between; gap: 16px; padding: 4px 0; border-top: 1px solid var(--border-soft); }
+.hero-meta-row:first-child { border-top: none; }
+.hero-meta-row > span:first-child { color: var(--muted); }
 
-/* ── BLOCK / UNBLOCK (admin) ── */
-.cli-act{font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:600;border:1px solid;transition:all .15s;white-space:nowrap}
-.cli-act.blk{background:rgba(248,113,113,.08);color:var(--red);border-color:rgba(248,113,113,.3)}
-.cli-act.blk:hover{background:rgba(248,113,113,.18)}
-.cli-act.unblk{background:rgba(52,211,153,.08);color:var(--green);border-color:rgba(52,211,153,.3)}
-.cli-act.unblk:hover{background:rgba(52,211,153,.18)}
-.cli-act-prog{font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
-.cli-spin{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+/* STATS GRID */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.stat { padding: 18px 20px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.stat:last-child { border-right: none; }
+.stat-label { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+.stat-val { font-family: var(--font-mono); font-size: 28px; font-weight: 500; letter-spacing: -.03em; line-height: 1; }
+.stat-sub { font-size: 11px; color: var(--muted); }
 
-/* ── FOOTER BAR ── */
-.footer-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);background:rgba(19,22,32,.8)}
+/* ALERT BANNER */
+.alerts-banner { display: flex; align-items: flex-start; gap: 14px; padding: 14px 18px; background: color-mix(in oklch, var(--bad) 8%, var(--card)); border: 1px solid color-mix(in oklch, var(--bad) 35%, transparent); border-radius: var(--radius); }
+.alerts-icon { font-size: 22px; color: var(--bad); flex-shrink: 0; }
+.alerts-body { flex: 1; min-width: 0; }
+.alerts-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.alerts-sub { display: flex; flex-wrap: wrap; gap: 6px; }
+.alerts-chip { display: inline-flex; align-items: center; font-size: 12px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--text-2); cursor: pointer; transition: all .12s; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alerts-chip:hover { transform: translateY(-1px); }
+.alerts-chip-bad  { color: var(--bad); border-color: color-mix(in oklch, var(--bad) 35%, transparent); background: color-mix(in oklch, var(--bad) 10%, transparent); }
+.alerts-chip-warn { color: var(--warn); border-color: color-mix(in oklch, var(--warn) 35%, transparent); background: color-mix(in oklch, var(--warn) 10%, transparent); }
 
-/* ── EVENT SEVERITY ── */
-.sev-high  {font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.25)}
-.sev-medium{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(251,191,36,.1);color:var(--amber);border:1px solid rgba(251,191,36,.2)}
-.sev-low   {font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:#1e2235;color:var(--muted);border:1px solid var(--border)}
-.ev-type   {font-family:var(--mono);font-size:10px;color:#7c8db5}
+/* COLLAPSIBLE PANEL */
+.panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: border-color .15s; }
+.panel.is-open { border-color: color-mix(in oklch, var(--accent) 30%, var(--border)); }
+.panel-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; cursor: pointer; user-select: none; background: var(--surface-2); transition: background .12s; }
+.panel-head:hover { background: var(--surface); }
+.panel-icon { width: 32px; height: 32px; display: grid; place-items: center; background: var(--card); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); font-size: 16px; flex-shrink: 0; }
+.panel-text { flex: 1; min-width: 0; }
+.panel-title { font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text); }
+.panel-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.panel-badge { font-family: var(--font-mono); font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+.panel-badge.tone-ok     { color: var(--ok);     border-color: color-mix(in oklch, var(--ok) 35%, transparent);     background: color-mix(in oklch, var(--ok) 8%, transparent); }
+.panel-badge.tone-warn   { color: var(--warn);   border-color: color-mix(in oklch, var(--warn) 35%, transparent);   background: color-mix(in oklch, var(--warn) 8%, transparent); }
+.panel-badge.tone-bad    { color: var(--bad);    border-color: color-mix(in oklch, var(--bad) 35%, transparent);    background: color-mix(in oklch, var(--bad) 8%, transparent); }
+.panel-badge.tone-accent { color: var(--accent); border-color: color-mix(in oklch, var(--accent) 35%, transparent); background: color-mix(in oklch, var(--accent) 8%, transparent); }
+.panel-chev { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border-soft); background: var(--card); color: var(--muted); flex-shrink: 0; transition: transform .25s ease; }
+.panel.is-closed .panel-chev { transform: rotate(-90deg); }
+.panel.is-closed .panel-body { display: none; }
+.panel-body { border-top: 1px solid var(--border-soft); }
 
-/* ── SWITCH PORT GRID ── */
-.sw-grid{padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px}
-.sw-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:9px}
-.sw-card.dead{border-color:rgba(248,113,113,.3);background:rgba(248,113,113,.03)}
-.sw-header{display:flex;align-items:center;gap:9px}
-.sw-name{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sw-model{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:1px}
-.sw-cnt{text-align:right;flex-shrink:0}
-.sw-cnt-num{font-size:14px;font-weight:700}
-.sw-cnt-lbl{font-size:10px;color:var(--muted)}
-.port-grid{display:flex;flex-wrap:wrap;gap:3px;padding:2px 0}
-.port-sq{width:15px;height:15px;border-radius:3px;cursor:default;transition:transform .1s}
-.port-sq:hover{transform:scale(1.35);z-index:1;position:relative}
-.port-sq.connected   {background:var(--green);opacity:.9}
-.port-sq.disconnected{background:#252840}
-.port-sq.err         {background:var(--red);opacity:.9}
-.port-sq.warn        {background:var(--amber);opacity:.85}
-.port-sq.uplink      {outline:2px solid var(--accent);outline-offset:1px}
-.port-sq.aggr        {box-shadow:0 0 0 2px #a78bfa;}
-.sw-ports-tbl{width:100%;border-collapse:collapse;font-size:11px}
-.sw-ports-tbl td{padding:3px 7px;border-bottom:1px solid rgba(37,40,64,.4)}
-.sw-ports-tbl tr:last-child td{border-bottom:none}
-/* speed anomaly colors */
-.port-sq.speed-10 {background:#ef4444}
-.port-sq.speed-100{background:var(--amber);opacity:.9}
-/* ── Switch Panel (chassis view) ── */
-.swp-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.swp-chassis{
-  background:linear-gradient(180deg,#161b2c,#0f1220);
-  border:1px solid #252840;border-radius:6px;
-  padding:7px 10px 7px 14px;
-  display:flex;align-items:center;gap:6px;
-  min-width:max-content;position:relative;
-}
-.swp-chassis::before{
-  content:'';position:absolute;left:0;top:0;bottom:0;width:4px;
-  background:linear-gradient(180deg,#3b82f6,#1e3a8a);
-  border-radius:6px 0 0 6px;
-}
-.swp-sys-led{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-left:2px}
-.swp-sys-led.on {background:#34d399;box-shadow:0 0 5px #34d399}
-.swp-sys-led.off{background:#f87171}
-.swp-rj45-block{display:flex;gap:2px;flex-wrap:nowrap}
-.swp-col{display:flex;flex-direction:column;align-items:center;gap:2px}
-.swp-col-sep{width:5px;flex-shrink:0}
-.swp-lbl{font-size:6px;color:#354060;font-family:monospace;line-height:1;text-align:center}
-.swp-port-sep{width:1px;background:#1e2438;align-self:stretch;margin:0 4px;flex-shrink:0}
-/* RJ45 port icon */
-.swp-port{
-  width:18px;height:14px;border-radius:3px;
-  background:#0c1018;border:1.5px solid #222840;
-  cursor:pointer;position:relative;flex-shrink:0;
-  transition:transform .1s,box-shadow .1s;
-}
-.swp-port:hover{transform:scale(1.3);z-index:10;position:relative}
-/* inner notch (RJ45 opening) */
-.swp-port::before{
-  content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);
-  width:10px;height:8px;background:#06080e;
-  border-radius:2px 2px 0 0;border:1px solid #181e30;border-bottom:none;
-}
-/* LED dot */
-.swp-port::after{
-  content:'';position:absolute;top:2px;right:2px;
-  width:4px;height:4px;border-radius:50%;background:#1e2540;
-}
-/* Status colors */
-.swp-port.swp-connected  {border-color:#34d399;background:#091c16}
-.swp-port.swp-connected::before{border-color:#154030}
-.swp-port.swp-connected::after {background:#34d399;box-shadow:0 0 4px #34d399}
-.swp-port.swp-speed-100  {border-color:#fbbf24;background:#1a1200}
-.swp-port.swp-speed-100::after{background:#fbbf24}
-.swp-port.swp-speed-10   {border-color:#f87171;background:#1a0808}
-.swp-port.swp-speed-10::after {background:#f87171}
-.swp-port.swp-err        {border-color:#f87171}
-.swp-port.swp-err::after {background:#f87171;box-shadow:0 0 5px #f87171;animation:errBlink .7s infinite}
-.swp-port.swp-warn       {border-color:#fbbf24}
-.swp-port.swp-warn::after{background:#fbbf24}
-/* Uplink + AGGR ring */
-.swp-port.swp-uplink{box-shadow:0 0 0 1.5px #60a5fa}
-.swp-port.swp-aggr  {box-shadow:0 0 0 1.5px #a78bfa}
-.swp-port.swp-uplink.swp-aggr{box-shadow:0 0 0 1.5px #60a5fa,inset 0 0 0 1px #a78bfa}
-/* SFP port icon */
-.swp-sfp-block{display:flex;flex-direction:column;gap:2px;align-items:center;margin-left:2px}
-.swp-sfp-wrap{display:flex;flex-direction:column;align-items:center;gap:2px}
-.swp-sfp{
-  width:13px;height:22px;border-radius:3px;
-  background:#0a0e16;border:1.5px solid #222840;
-  cursor:pointer;position:relative;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-  transition:transform .1s;flex-shrink:0;
-}
-.swp-sfp:hover{transform:scale(1.2);z-index:10}
-.swp-sfp::before{content:'';width:7px;height:2px;background:#06080e;border:1px solid #181e30;border-radius:1px}
-.swp-sfp::after {content:'';width:4px;height:4px;border-radius:50%;background:#1e2540}
-.swp-sfp.swp-connected  {border-color:#34d399}
-.swp-sfp.swp-connected::after {background:#34d399;box-shadow:0 0 4px #34d399}
-.swp-sfp.swp-speed-100::after{background:#fbbf24}
-.swp-sfp.swp-speed-10::after {background:#f87171}
-.swp-sfp.swp-err::after      {background:#f87171;box-shadow:0 0 5px #f87171}
-.swp-sfp.swp-aggr{box-shadow:0 0 0 1.5px #a78bfa}
-.swp-sfp.swp-uplink{box-shadow:0 0 0 1.5px #60a5fa}
-@keyframes errBlink{0%,100%{opacity:1}50%{opacity:.3}}
-/* ── Port tooltip overlay ── */
-#portTip{position:fixed;z-index:9999;display:none;background:#0f1221;border:1px solid #2b3060;border-radius:10px;padding:11px 13px;min-width:208px;max-width:284px;box-shadow:0 10px 36px rgba(0,0,0,.8);font-size:12px;line-height:1.5;pointer-events:none}
-#portTip .pt-head{font-weight:700;font-size:12.5px;margin-bottom:6px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#portTip .pt-badges{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px}
-#portTip .pt-b{font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:4px;white-space:nowrap}
-#portTip .pt-b.trunk {background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.28)}
-#portTip .pt-b.access{background:rgba(52,211,153,.08);color:#34d399;border:1px solid rgba(52,211,153,.22)}
-#portTip .pt-b.aggr  {background:rgba(167,139,250,.1);color:#a78bfa;border:1px solid rgba(167,139,250,.28)}
-#portTip .pt-b.uplink{background:rgba(96,165,250,.07);color:#7db4f7;border:1px solid rgba(96,165,250,.18)}
-#portTip .pt-sep{height:1px;background:#1f2440;margin:7px 0}
-#portTip .pt-sec{color:#4a5680;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
-#portTip .pt-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:2px}
-#portTip .pt-lbl{color:#5a6c92;font-size:11px;white-space:nowrap}
-#portTip .pt-val{color:#c8d3ea;font-weight:600;font-size:11px;text-align:right;font-family:'SF Mono','Fira Code',monospace}
-#portTip .pt-status{display:flex;align-items:center;gap:6px;font-weight:600;font-size:12px}
-#portTip .pt-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-#portTip .pt-member{color:#a78bfa;font-size:11px;font-family:'SF Mono','Fira Code',monospace;line-height:1.6}
-#portTip .pt-err{color:#f87171;font-size:11px;margin-top:2px}
-/* floor summary */
-.floor-row{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);background:rgba(19,22,32,.5)}
-.floor-card{display:flex;flex-direction:column;gap:3px;padding:8px 13px;border-radius:9px;border:1px solid var(--border);background:var(--card);min-width:110px;cursor:default;transition:border-color .15s}
-.floor-card:hover{border-color:#3d4260}
-.floor-card.dead{border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.04)}
-.floor-card.ok  {border-color:rgba(52,211,153,.25)}
-.floor-name{font-size:11px;font-weight:700;letter-spacing:.05em}
-.floor-sw  {font-size:10px;color:var(--muted)}
-.floor-bar{height:4px;border-radius:2px;background:var(--border);overflow:hidden;margin-top:2px}
-.floor-bar-fill{height:100%;border-radius:2px;transition:width .4s}
-/* analysis section */
-.analysis-wrap{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)}
-@media(max-width:700px){.analysis-wrap{grid-template-columns:1fr}}
-.analysis-col{padding:12px 14px}
-.analysis-col+.analysis-col{border-left:1px solid var(--border)}
-.analysis-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:9px}
-.speed-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px}
-.speed-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
-.speed-cnt{font-weight:700;min-width:26px}
-.traffic-row{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(37,40,64,.4);font-size:11px}
-.traffic-row:last-child{border-bottom:none}
-.traffic-rank{font-size:10px;color:var(--muted);min-width:16px;text-align:right}
-.traffic-sw{color:var(--muted);font-size:10px;min-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.traffic-bar-wrap{flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
-.traffic-bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent),#818cf8)}
+/* CMD BAR */
+.cmdbar { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--border-soft); background: var(--surface-2); flex-wrap: wrap; }
+.cmdbar-search { flex: 1; min-width: 200px; display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); }
+.cmdbar-search:focus-within { border-color: var(--accent); }
+.cmdbar-prefix { font-family: var(--font-mono); color: var(--muted); font-size: 13px; }
+.cmdbar-search input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-size: 13px; }
+.cmdbar-search input::placeholder { color: var(--muted); }
+.cmdbar-segment { display: flex; gap: 2px; padding: 2px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); }
+.cmdseg { padding: 5px 12px; font-size: 12px; font-weight: 500; color: var(--muted); border-radius: 6px; transition: all .1s; white-space: nowrap; cursor: pointer; border: none; background: none; }
+.cmdseg:hover { color: var(--text); }
+.cmdseg.active { background: var(--card); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+.cmdseg-count { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 4px; background: color-mix(in oklch, var(--muted) 18%, transparent); color: var(--muted); font-size: 10px; font-family: var(--font-mono); font-weight: 600; }
+.cmdseg.active .cmdseg-count { background: color-mix(in oklch, var(--accent) 22%, transparent); color: var(--accent); }
 
-/* ── LOADING BAR ── */
-.load-bar-wrap{padding:10px 14px;border-bottom:1px solid var(--border)}
-.load-bar{height:5px;background:var(--border);border-radius:3px;overflow:hidden}
-.load-bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent),#818cf8);transition:width .5s linear}
-.load-bar-meta{display:flex;justify-content:space-between;margin-top:5px;font-size:11px;color:var(--muted)}
+/* TABLE */
+.tbl-wrap { overflow-x: auto; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl thead th { text-align: left; font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface-2); white-space: nowrap; user-select: none; cursor: pointer; }
+.tbl thead th:hover { color: var(--text-2); }
+.tbl tbody tr { border-bottom: 1px solid var(--border-soft); transition: background .1s; }
+.tbl tbody tr:last-child { border-bottom: none; }
+.tbl tbody tr:hover { background: color-mix(in oklch, var(--accent) 5%, transparent); }
+.tbl td { padding: 11px 16px; vertical-align: middle; }
+.tbl-empty { padding: 24px; text-align: center; color: var(--muted); }
+.spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+.tag-pill { display: inline-block; font-family: var(--font-mono); font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 4px; letter-spacing: .04em; text-transform: uppercase; }
+.tag-pill.ok    { background: color-mix(in oklch, var(--ok)   15%, transparent); color: var(--ok); }
+.tag-pill.warn  { background: color-mix(in oklch, var(--warn) 15%, transparent); color: var(--warn); }
+.tag-pill.bad   { background: color-mix(in oklch, var(--bad)  15%, transparent); color: var(--bad); }
+.tag-pill.mute  { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border-soft); }
+.tag-pill.ospf  { background: color-mix(in oklch, var(--violet) 12%, transparent); color: var(--violet); }
+.status-pip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--c, var(--text-2)); font-weight: 500; text-transform: capitalize; }
+.status-pip i { width: 7px; height: 7px; border-radius: 50%; background: var(--c, var(--muted)); box-shadow: 0 0 8px var(--c, transparent); }
+.svc-name { font-weight: 500; color: var(--text); white-space: nowrap; }
+.recent { color: var(--ok); font-weight: 500; }
 
-/* ── TOPOLOGY ── */
-.topo-wrap{overflow-x:auto;padding:12px;background:var(--surface)}
-.topo-legend{display:flex;gap:14px;flex-wrap:wrap;padding:8px 14px;border-top:1px solid var(--border);font-size:10px;color:var(--muted)}
+/* Clients table extras */
+.client-name-cell { display: flex; align-items: center; gap: 8px; }
+.os-glyph { width: 18px; text-align: center; color: var(--muted); font-family: var(--font-mono); font-size: 13px; }
+.signal-bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
+.signal-bar { width: 3px; background: var(--track); border-radius: 1px; }
+.signal-bar[data-on="1"] { background: var(--ok); }
+.signal-wired { color: var(--muted); }
+.traffic-glyph { display: inline-flex; gap: 2px; }
+.traffic-pip { width: 6px; height: 10px; border-radius: 1.5px; background: var(--track); }
+.traffic-pip[data-on="1"] { background: var(--accent); }
+.ssid-pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 4px; background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border-soft); }
 
-/* ── RESPONSIVE ── */
-@media(max-width:900px){
-  .stats{grid-template-columns:repeat(2,1fr)}
-  .hide-sm{display:none}
-}
-@media(max-width:600px){
-  .header{padding:0 .875rem}
-  .container{padding:1rem .75rem}
-  .stats{grid-template-columns:repeat(2,1fr)}
-}
+/* Live tail badge */
+.live-tail-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 10px; padding: 2px 8px; border-radius: 999px; background: color-mix(in oklch, var(--ok) 12%, transparent); color: var(--ok); font-family: var(--font-mono); font-size: 9px; text-transform: uppercase; letter-spacing: .1em; font-weight: 600; }
+.live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: pulse 1.8s ease-in-out infinite; }
 
-/* ── W6a: WAN Uplink Cards ── */
-.uplink-grid{padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:12px}
-.uplink-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:13px 15px;display:flex;flex-direction:column;gap:8px;transition:border-color .15s}
-.uplink-card.active{border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.03)}
-.uplink-card.ready {border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.03)}
-.uplink-card.failed{border-color:rgba(248,113,113,.3);background:rgba(248,113,113,.03)}
-.ul-header{display:flex;justify-content:space-between;align-items:center}
-.ul-iface{font-size:13px;font-weight:700;letter-spacing:.04em;font-family:var(--mono)}
-.ul-status{font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px}
-.ul-device{font-size:11px;color:var(--muted)}
-.ul-divider{height:1px;background:var(--border);margin:2px 0}
-.ul-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:11px}
-.ul-row .ul-lbl{color:var(--muted)}
-.ul-row .ul-val{font-family:var(--mono);font-weight:600;color:var(--text);font-size:11px}
-/* ── W6b: VLAN / Route table styles ── */
-.vlan-id-tag{font-size:12px;font-weight:700;font-family:var(--mono);padding:2px 9px;border-radius:5px;background:rgba(96,165,250,.1);color:var(--accent);display:inline-block;min-width:38px;text-align:center;border:1px solid rgba(96,165,250,.2)}
-.dhcp-pill{font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;white-space:nowrap}
-.dhcp-run  {background:var(--green-dim);color:var(--green);border:1px solid rgba(52,211,153,.25)}
-.dhcp-relay{background:rgba(251,191,36,.08);color:var(--amber);border:1px solid rgba(251,191,36,.2)}
-.dhcp-off  {background:#1e2235;color:var(--muted);border:1px solid var(--border)}
-.subnet-mono{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--accent)}
-.route-status{font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px}
-.route-on {background:var(--green-dim);color:var(--green);border:1px solid rgba(52,211,153,.2)}
-.route-off{background:var(--red-dim);color:var(--red);border:1px solid rgba(248,113,113,.2)}
-.ospf-badge{font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:rgba(167,139,250,.1);color:#a78bfa;border:1px solid rgba(167,139,250,.25)}
+/* Event row severity bar */
+.event-row { position: relative; }
+.event-sev-bar { padding: 0 !important; width: 4px; position: relative; }
+.event-sev-bar::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; border-radius: 2px; background: var(--track); }
+.event-row.event-high   .event-sev-bar::before { background: var(--bad); box-shadow: 0 0 6px var(--bad); }
+.event-row.event-medium .event-sev-bar::before { background: var(--warn); }
+.event-row.event-low    .event-sev-bar::before { background: color-mix(in oklch, var(--accent) 60%, transparent); }
+.event-type { color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 4px; padding: 2px 7px; display: inline-block; font-family: var(--font-mono); font-size: 11px; }
+
+/* SWITCH PORTS */
+.port-switches { display: flex; flex-direction: column; }
+.port-sw-row { border-top: 1px solid var(--border-soft); }
+.port-sw-row:first-child { border-top: none; }
+.port-sw-head { display: grid; grid-template-columns: 220px 1fr 200px auto; align-items: center; gap: 16px; padding: 12px 18px; cursor: pointer; transition: background .1s; }
+.port-sw-head:hover { background: var(--surface-2); }
+.port-sw-row.is-open .port-sw-head { background: var(--surface-2); }
+.port-sw-id { display: flex; flex-direction: column; gap: 2px; }
+.port-sw-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.port-sw-bar-wrap { display: flex; align-items: center; }
+.port-sw-bar { flex: 1; height: 4px; background: var(--track); border-radius: 2px; overflow: hidden; }
+.port-sw-fill { height: 100%; border-radius: 2px; transition: width .3s; }
+.port-sw-counts { color: var(--text-2); text-align: right; font-family: var(--font-mono); font-size: 12px; }
+.port-sw-chev { width: 22px; height: 22px; display: grid; place-items: center; color: var(--muted); transition: transform .25s; }
+.port-sw-row.is-open .port-sw-chev { transform: rotate(180deg); }
+.port-sw-body { padding: 14px 18px 18px; background: var(--bg); border-top: 1px solid var(--border-soft); }
+.port-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 6px; padding: 4px 0; }
+.port-cell-lg { aspect-ratio: 1; border-radius: 4px; display: grid; place-items: center; cursor: help; transition: transform .1s; font-family: var(--font-mono); font-weight: 600; min-height: 32px; position: relative; }
+.port-cell-lg:hover { transform: scale(1.08); z-index: 1; }
+.port-cell-lg.is-uplink { outline: 2px solid var(--accent); outline-offset: -1px; }
+.port-cell-lg.is-err { box-shadow: 0 0 0 2px var(--bad); }
+.port-cell-num { font-size: 10px; color: color-mix(in oklch, var(--text) 70%, transparent); text-shadow: 0 1px 1px rgba(0,0,0,.4); }
+.port-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-soft); color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+.port-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.port-legend i { width: 12px; height: 8px; border-radius: 2px; display: inline-block; }
+
+/* WAN UPLINKS */
+.wan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 14px; padding: 16px; }
+.wan-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; display: flex; flex-direction: column; gap: 12px; position: relative; overflow: hidden; }
+.wan-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--muted); }
+.wan-card.wan-active::before { background: var(--ok); }
+.wan-card.wan-ready::before  { background: var(--warn); }
+.wan-card.wan-failed::before { background: var(--bad); }
+.wan-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.wan-iface { font-family: var(--font-mono); font-size: 16px; font-weight: 600; color: var(--text); }
+.wan-isp { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.wan-rows { display: flex; flex-direction: column; font-size: 12px; background: var(--card); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); padding: 4px 12px; }
+.wan-row { display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--border-soft); }
+.wan-row:first-child { border-top: none; }
+.wan-row > span:first-child { color: var(--muted); font-size: 11px; }
+.wan-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.wan-metric { background: var(--card); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); padding: 8px; text-align: center; }
+.wan-metric-val { font-family: var(--font-mono); font-size: 18px; font-weight: 500; letter-spacing: -.02em; line-height: 1; color: var(--accent); }
+.wan-metric-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-top: 4px; font-family: var(--font-mono); }
+
+/* SVI grid + L3 routes */
+.svi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; padding: 12px 16px; }
+.svi-card { background: var(--card); border: 1px solid color-mix(in oklch, var(--accent) 25%, var(--border)); border-radius: var(--radius-sm); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.svi-card.svi-ospf { border-color: color-mix(in oklch, var(--violet) 40%, var(--border)); background: color-mix(in oklch, var(--violet) 4%, var(--card)); }
+.svi-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.svi-vlan { font-family: var(--font-mono); font-size: 10px; font-weight: 600; color: var(--accent); background: color-mix(in oklch, var(--accent) 14%, transparent); border: 1px solid color-mix(in oklch, var(--accent) 30%, transparent); border-radius: 4px; padding: 2px 7px; letter-spacing: .05em; }
+.svi-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.svi-sub { font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
+.svi-ip { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
+.route-dst { font-family: var(--font-mono); color: var(--accent); font-weight: 600; }
+.route-arrow { color: var(--ok); text-align: center; font-weight: 600; width: 24px; }
+.route-gw { font-family: var(--font-mono); color: var(--warn); font-weight: 600; }
+.route-row-off { opacity: 0.5; }
+
+.footer { display: flex; justify-content: space-between; padding: 20px 4px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border-soft); }
+
+@media (max-width: 1100px) { .stats { grid-template-columns: repeat(2, 1fr); } .stat:nth-child(2) { border-right: none; } .stat { border-bottom: 1px solid var(--border); } }
+@media (max-width: 980px)  { .main { padding: 16px; } .hide-md { display: none !important; } }
+@media (max-width: 640px)  { .topbar { padding: 10px 16px; } .topbar-left { gap: 14px; } .topnav-item:nth-child(n+3) { display: none; } .clock, .auto-indicator { display: none; } .port-sw-head { grid-template-columns: 1fr auto; gap: 8px; } .port-sw-bar-wrap, .port-sw-counts { display: none; } }
 </style>
 </head>
 <body>
 
-<header class="header">
-  <div class="header-left">
-    <a class="back-btn" href="/">← Dashboard</a>
-    <div class="svc-icon">🌐</div>
-    <div>
-      <div class="svc-name">Meraki-Network</div>
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">
+          <path d="M3 12 L9 6 L15 12 L21 6"></path><path d="M3 18 L9 12 L15 18 L21 12" opacity="0.45"></path>
+        </svg>
+      </div>
+      <div><div class="brand-name">Home Lab</div><div class="brand-sub">Meraki · live</div></div>
     </div>
+    <nav class="topnav">
+      <a class="topnav-item" href="/">Overview</a>
+      <a class="topnav-item active" href="/meraki.html">Meraki</a>
+      <a class="topnav-item" href="/topology.html">Topology</a>
+      <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
+    </nav>
   </div>
-  <div class="header-right">
-    <span id="fetchedAt" style="font-size:11px;color:var(--muted)"></span>
-    <button class="btn" id="refreshBtn" onclick="loadAll()">
-      <span class="ri">⟳</span> Refresh
+  <div class="topbar-right">
+    <div class="auto-indicator"><span class="auto-dot"></span><span id="autoLabel">Auto · 60s</span></div>
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="btn ghost" id="refreshBtn" onclick="loadAll()"><span class="ri">↻</span> Refresh</button>
+    <button class="btn ghost theme-toggle" id="themeToggle" title="Toggle theme" aria-label="Toggle theme">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"></circle><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"></path></svg>
     </button>
   </div>
 </header>
 
-<div class="container">
+<main class="main">
 
-  <!-- STATS -->
-  <div class="stats">
-    <div class="stat-card">
-      <div class="stat-icon" style="background:rgba(96,165,250,.1)">👥</div>
-      <div><div class="stat-label">Clients Online</div><div class="stat-val c-accent" id="statClients">—</div></div>
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-head">
+      <div>
+        <div class="section-eyebrow">Meraki · Movi office</div>
+        <h1 class="hero-title"><span id="hero-clients">—</span> clients on <span class="hero-accent" id="hero-ssids">— SSIDs</span>.</h1>
+        <p class="hero-sub" id="hero-sub">Đang tải dữ liệu…</p>
+      </div>
+      <div class="hero-meta">
+        <div class="hero-meta-row"><span>Org</span><span>movi-corp</span></div>
+        <div class="hero-meta-row"><span>Network</span><span>movi-office</span></div>
+        <div class="hero-meta-row"><span>Proxy</span><span class="mono">n8n.movi-finance.com</span></div>
+      </div>
     </div>
-    <div class="stat-card">
-      <div class="stat-icon" style="background:rgba(52,211,153,.08)">📡</div>
-      <div><div class="stat-label">Devices Online</div><div class="stat-val c-green" id="statDevOn">—</div></div>
+    <div class="stats">
+      <div class="stat"><div class="stat-label">Clients online</div><div class="stat-val" style="color:var(--accent)" id="statClients">—</div><div class="stat-sub">currently associated</div></div>
+      <div class="stat"><div class="stat-label">Devices online</div><div class="stat-val" style="color:var(--ok)" id="statDevOn">—</div><div class="stat-sub">APs + switches healthy</div></div>
+      <div class="stat"><div class="stat-label">Devices offline</div><div class="stat-val" style="color:var(--bad)" id="statDevOff">—</div><div class="stat-sub">need attention</div></div>
+      <div class="stat"><div class="stat-label">SSIDs active</div><div class="stat-val" style="color:var(--warn)" id="statSsid">—</div><div class="stat-sub">broadcasting</div></div>
     </div>
-    <div class="stat-card">
-      <div class="stat-icon" style="background:rgba(248,113,113,.08)">🔴</div>
-      <div><div class="stat-label">Devices Offline</div><div class="stat-val c-red" id="statDevOff">—</div></div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon" style="background:rgba(251,191,36,.08)">📶</div>
-      <div><div class="stat-label">SSIDs Active</div><div class="stat-val c-amber" id="statSsid">—</div></div>
-    </div>
-  </div>
+  </section>
+
+  <!-- ALERT BANNER -->
+  <div id="alerts-banner" style="display:none"></div>
 
   <!-- PANEL: CLIENTS -->
-  <div class="panel collapsed" id="panel-clients">
-    <div class="panel-header" onclick="togglePanel('panel-clients')">
-      <span>👥</span>
-      <span class="panel-title">Clients đang kết nối</span>
-      <span class="panel-badge green" id="badge-clients">Đang tải…</span>
-      <span class="chevron">▼</span>
+  <div class="panel is-closed" id="panel-clients">
+    <div class="panel-head" onclick="togglePanel('panel-clients')">
+      <span class="panel-icon">👥</span>
+      <div class="panel-text">
+        <div class="panel-title">Clients đang kết nối</div>
+        <div class="panel-sub">Search · filter SSID · signal · traffic</div>
+      </div>
+      <span class="panel-badge tone-accent" id="badge-clients">Đang tải…</span>
+      <span class="panel-chev"><svg viewBox="0 0 12 12" width="11" height="11"><path d="M2 4 L6 8 L10 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
     </div>
     <div class="panel-body">
-      <div class="toolbar">
-        <div class="search-wrap">
-          <span class="si">🔍</span>
-          <input type="text" id="clientSearch" placeholder="Tìm tên, MAC, IP, SSID…" oninput="filterClients()"/>
-        </div>
-        <div id="ssidFilters" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-        <span class="count-lbl" id="clientCount"></span>
+      <div class="cmdbar">
+        <div class="cmdbar-search"><span class="cmdbar-prefix">🔍</span><input id="clientSearch" placeholder="Tìm tên · MAC · IP · SSID…" oninput="filterClients()"/></div>
+        <div class="cmdbar-segment" id="ssidFilters"></div>
       </div>
       <div class="tbl-wrap">
         <table class="tbl">
-          <thead>
-            <tr>
-              <th>Tên thiết bị</th>
-              <th>IP</th>
-              <th class="hide-sm">MAC</th>
-              <th>SSID / Kết nối</th>
-              <th class="hide-sm">VLAN</th>
-              <th class="hide-sm">Hãng SX</th>
-              <th class="hide-sm">OS</th>
-              <th>Last Seen</th>
-              <th id="clientActTh" style="display:none">Hành động</th>
-            </tr>
-          </thead>
-          <tbody id="clientBody">
-            <tr><td colspan="9" class="tbl-msg"><div class="spinner"></div><br>Đang tải…</td></tr>
-          </tbody>
+          <thead><tr>
+            <th>Thiết bị</th><th>IP</th><th class="hide-md">MAC</th><th>SSID / VLAN</th><th class="hide-md">VLAN</th>
+            <th>Signal</th><th>Traffic</th><th class="hide-md">Hãng</th><th class="hide-md">OS</th><th style="text-align:right">Hoạt động</th>
+          </tr></thead>
+          <tbody id="clientBody"><tr><td colspan="10" class="tbl-empty"><span class="spinner"></span><br>Đang tải…</td></tr></tbody>
         </table>
-      </div>
-      <div class="footer-bar">
-        <span id="clientFooter">—</span>
-        <span>Tự động làm mới sau <span id="cdClients">60</span>s</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- PANEL: BLOCKED CLIENTS (admin only, hidden by default) -->
-  <div class="panel collapsed" id="panel-blocked" style="display:none">
-    <div class="panel-header" onclick="togglePanel('panel-blocked')">
-      <span>🚫</span>
-      <span class="panel-title">Thiết bị đã bị chặn</span>
-      <span class="panel-badge green" id="badge-blocked">Đang tải…</span>
-      <span class="chevron">▼</span>
-    </div>
-    <div class="panel-body">
-      <div class="tbl-wrap">
-        <table class="tbl">
-          <thead>
-            <tr>
-              <th>Tên thiết bị</th>
-              <th>MAC</th>
-              <th>IP (lúc chặn)</th>
-              <th>Chặn lúc</th>
-              <th>Hành động</th>
-            </tr>
-          </thead>
-          <tbody id="blockedBody">
-            <tr><td colspan="5" class="tbl-msg"><div class="spinner"></div><br>Đang tải…</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="footer-bar">
-        <span id="blockedFooter">Admin có thể mở chặn thiết bị bất kỳ lúc nào, kể cả khi thiết bị đã offline</span>
       </div>
     </div>
   </div>
 
   <!-- PANEL: DEVICES -->
-  <div class="panel collapsed" id="panel-devices">
-    <div class="panel-header" onclick="togglePanel('panel-devices')">
-      <span>📡</span>
-      <span class="panel-title">Thiết bị Meraki (APs / Switches)</span>
+  <div class="panel is-closed" id="panel-devices">
+    <div class="panel-head" onclick="togglePanel('panel-devices')">
+      <span class="panel-icon">📡</span>
+      <div class="panel-text">
+        <div class="panel-title">Thiết bị Meraki (APs / Switches / MX)</div>
+        <div class="panel-sub">Inventory · model · firmware · tags</div>
+      </div>
       <span class="panel-badge" id="badge-devices">Đang tải…</span>
-      <span class="chevron">▼</span>
+      <span class="panel-chev"><svg viewBox="0 0 12 12" width="11" height="11"><path d="M2 4 L6 8 L10 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
     </div>
     <div class="panel-body">
-      <div class="toolbar">
-        <div class="search-wrap">
-          <span class="si">🔍</span>
-          <input type="text" id="devSearch" placeholder="Tìm tên, model, IP, serial…" oninput="filterDevices()"/>
-        </div>
-        <span class="count-lbl" id="devCount"></span>
+      <div class="cmdbar">
+        <div class="cmdbar-search"><span class="cmdbar-prefix">🔍</span><input id="devSearch" placeholder="Tìm tên · model · serial · IP…" oninput="filterDevices()"/></div>
       </div>
       <div class="tbl-wrap">
         <table class="tbl">
-          <thead>
-            <tr>
-              <th>Tên thiết bị</th>
-              <th>Loại</th>
-              <th>Model</th>
-              <th class="hide-sm">Serial</th>
-              <th>IP LAN</th>
-              <th class="hide-sm">Tags</th>
-              <th class="hide-sm">Firmware</th>
-              <th>Trạng thái</th>
-            </tr>
-          </thead>
-          <tbody id="devBody">
-            <tr><td colspan="8" class="tbl-msg"><div class="spinner"></div><br>Đang tải…</td></tr>
-          </tbody>
+          <thead><tr>
+            <th></th><th>Thiết bị</th><th>Loại</th><th>Model</th><th class="hide-md">Serial</th>
+            <th>LAN IP</th><th class="hide-md">Tags</th><th>Firmware</th><th>Status</th>
+          </tr></thead>
+          <tbody id="devBody"><tr><td colspan="9" class="tbl-empty"><span class="spinner"></span><br>Đang tải…</td></tr></tbody>
         </table>
-      </div>
-      <div class="footer-bar">
-        <span id="devFooter">—</span>
       </div>
     </div>
   </div>
 
   <!-- PANEL: DEVICE STATUS -->
-  <div class="panel collapsed" id="panel-status">
-    <div class="panel-header" onclick="togglePanel('panel-status')">
-      <span>🔴</span>
-      <span class="panel-title">Trạng thái thiết bị (Real-time)</span>
+  <div class="panel is-closed" id="panel-status">
+    <div class="panel-head" onclick="togglePanel('panel-status')">
+      <span class="panel-icon">🔴</span>
+      <div class="panel-text">
+        <div class="panel-title">Device Status — real-time</div>
+        <div class="panel-sub">Public IP · last reported · uptime</div>
+      </div>
       <span class="panel-badge" id="badge-status">Đang tải…</span>
-      <span class="chevron">▼</span>
+      <span class="panel-chev"><svg viewBox="0 0 12 12" width="11" height="11"><path d="M2 4 L6 8 L10 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
     </div>
     <div class="panel-body">
-      <div class="toolbar">
-        <div class="search-wrap">
-          <span class="si">🔍</span>
-          <input type="text" id="statusSearch" placeholder="Tìm tên, model, serial…" oninput="filterStatuses()"/>
-        </div>
-        <span class="count-lbl" id="statusCount"></span>
+      <div class="cmdbar">
+        <div class="cmdbar-search"><span class="cmdbar-prefix">🔍</span><input id="statusSearch" placeholder="Tìm tên · LAN IP · public IP…" oninput="filterStatus()"/></div>
       </div>
       <div class="tbl-wrap">
         <table class="tbl">
-          <thead>
-            <tr>
-              <th>Tên thiết bị</th>
-              <th>Loại</th>
-              <th class="hide-sm">Model</th>
-              <th class="hide-sm">Serial</th>
-              <th>Public IP</th>
-              <th>Trạng thái</th>
-              <th class="hide-sm">Last Reported</th>
-            </tr>
-          </thead>
-          <tbody id="statusBody">
-            <tr><td colspan="7" class="tbl-msg"><div class="spinner"></div><br>Đang tải…</td></tr>
-          </tbody>
+          <thead><tr>
+            <th></th><th>Thiết bị</th><th>Status</th><th>LAN IP</th><th class="hide-md">Public IP</th><th>Uptime</th><th style="text-align:right">Last reported</th>
+          </tr></thead>
+          <tbody id="statusBody"><tr><td colspan="7" class="tbl-empty"><span class="spinner"></span><br>Đang tải…</td></tr></tbody>
         </table>
-      </div>
-      <div class="footer-bar">
-        <span id="statusFooter">—</span>
       </div>
     </div>
   </div>
 
-  <!-- PANEL: NETWORK EVENTS -->
-  <div class="panel collapsed" id="panel-events">
-    <div class="panel-header" onclick="togglePanel('panel-events')">
-      <span>📋</span>
-      <span class="panel-title">Network Events</span>
+  <!-- PANEL: EVENTS -->
+  <div class="panel is-closed" id="panel-events">
+    <div class="panel-head" onclick="togglePanel('panel-events')">
+      <span class="panel-icon">📋</span>
+      <div class="panel-text">
+        <div class="panel-title">Network Events <span class="live-tail-badge"><span class="live-dot"></span>live</span></div>
+        <div class="panel-sub">Wireless + appliance + switch · 24h gần nhất</div>
+      </div>
       <span class="panel-badge" id="badge-events">Đang tải…</span>
-      <span class="chevron">▼</span>
+      <span class="panel-chev"><svg viewBox="0 0 12 12" width="11" height="11"><path d="M2 4 L6 8 L10 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
     </div>
     <div class="panel-body">
-      <div class="toolbar">
-        <div class="search-wrap">
-          <span class="si">🔍</span>
-          <input type="text" id="evSearch" placeholder="Tìm type, mô tả, thiết bị…" oninput="filterEvents()"/>
-        </div>
-        <button class="filter-btn active" id="sev-all"    onclick="setSeverity('all')">Tất cả</button>
-        <button class="filter-btn"        id="sev-high"   onclick="setSeverity('high')">🔴 High</button>
-        <button class="filter-btn"        id="sev-medium" onclick="setSeverity('medium')">🟡 Medium</button>
-        <span class="count-lbl" id="evCount"></span>
+      <div class="cmdbar">
+        <div class="cmdbar-search"><span class="cmdbar-prefix">🔍</span><input id="eventSearch" placeholder="Tìm type · description · device…" oninput="filterEvents()"/></div>
+        <div class="cmdbar-segment" id="sevFilters"></div>
       </div>
       <div class="tbl-wrap">
         <table class="tbl">
-          <thead>
-            <tr>
-              <th>Thời gian</th>
-              <th>Mức độ</th>
-              <th>Type</th>
-              <th>Mô tả</th>
-              <th class="hide-sm">Thiết bị</th>
-              <th class="hide-sm">SSID / Client</th>
-            </tr>
-          </thead>
-          <tbody id="evBody">
-            <tr><td colspan="6" class="tbl-msg"><div class="spinner"></div><br>Đang tải…</td></tr>
-          </tbody>
+          <thead><tr>
+            <th style="width:4px"></th><th>Thời gian</th><th>Type</th><th>Mô tả</th>
+            <th class="hide-md">Device</th><th class="hide-md">SSID</th><th class="hide-md">Client MAC</th>
+          </tr></thead>
+          <tbody id="eventBody"><tr><td colspan="7" class="tbl-empty"><span class="spinner"></span><br>Đang tải…</td></tr></tbody>
         </table>
       </div>
-      <div class="footer-bar">
-        <span id="evFooter">—</span>
-        <span>Tự động làm mới sau <span id="cdEvents">120</span>s</span>
-      </div>
     </div>
   </div>
 
-  <!-- PANEL: SWITCH PORTS -->
-  <div class="panel collapsed" id="panel-ports">
-    <div class="panel-header" onclick="togglePanel('panel-ports')">
-      <span>🔀</span>
-      <span class="panel-title">Switch Ports — Trạng thái cổng mạng</span>
-      <span class="panel-badge" id="badge-ports">Đang tải…</span>
-      <span class="panel-badge" id="badge-aggr" style="border-color:rgba(167,139,250,.3);color:#a78bfa;background:rgba(167,139,250,.08)">LAG…</span>
-      <span class="chevron">▼</span>
-    </div>
-    <div class="panel-body">
-      <div class="toolbar">
-        <div class="search-wrap">
-          <span class="si">🔍</span>
-          <input type="text" id="portSearch" placeholder="Tìm switch, model, serial…" oninput="filterSwitches()"/>
-        </div>
-        <button class="filter-btn active" id="psw-all"    onclick="setSwitchFilter('all')">Tất cả</button>
-        <button class="filter-btn"        id="psw-issues" onclick="setSwitchFilter('issues')">⚠ Có lỗi</button>
-        <button class="filter-btn"        id="psw-dead"   onclick="setSwitchFilter('dead')">⛔ Down hoàn toàn</button>
-        <span class="count-lbl" id="portCount"></span>
-      </div>
-      <!-- Loading progress bar -->
-      <div class="load-bar-wrap" id="portsLoadBar" style="display:none">
-        <div class="load-bar"><div class="load-bar-fill" id="portsLoadFill" style="width:0%"></div></div>
-        <div class="load-bar-meta">
-          <span>Đang thu thập dữ liệu từ 19 switches (~50s)…</span>
-          <span id="portsLoadTimer">0s</span>
-        </div>
-      </div>
-      <!-- Floor Summary -->
-      <div class="floor-row" id="floorSummary"></div>
-      <!-- Speed Anomaly + Top Traffic -->
-      <div class="analysis-wrap" id="analysisSection" style="display:none">
-        <div class="analysis-col">
-          <div class="analysis-title">Speed Anomaly</div>
-          <div id="speedStats"></div>
-        </div>
-        <div class="analysis-col">
-          <div class="analysis-title">Top Bandwidth Ports</div>
-          <div id="topTraffic"></div>
-        </div>
-      </div>
-      <!-- Switch Cards Grid -->
-      <div class="sw-grid" id="switchGrid">
-        <div style="text-align:center;padding:2rem;color:var(--muted)"><div class="spinner"></div><br>Đang tải…</div>
-      </div>
-      <div class="footer-bar">
-        <span id="portFooter">—</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- PANEL: WAN UPLINKS (W6a) -->
-  <div class="panel collapsed" id="panel-uplinks">
-    <div class="panel-header" onclick="togglePanel('panel-uplinks')">
-      <span>🌐</span>
-      <span class="panel-title">WAN Uplinks — Kết nối Internet (MX)</span>
-      <span class="panel-badge" id="badge-uplinks">Đang tải…</span>
-      <span class="chevron">▼</span>
-    </div>
-    <div class="panel-body">
-      <div class="uplink-grid" id="uplinkBody">
-        <div style="text-align:center;padding:2rem;color:var(--muted);grid-column:1/-1"><div class="spinner"></div><br>Đang tải…</div>
-      </div>
-      <div class="footer-bar">
-        <span id="uplinkFooter">—</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- PANEL: L3 INTERFACES / SVIs (W6b) -->
-  <div class="panel collapsed" id="panel-vlans">
-    <div class="panel-header" onclick="togglePanel('panel-vlans')">
-      <span>🔲</span>
-      <span class="panel-title">L3 Interfaces — SVI trên Switch</span>
-      <span class="panel-badge" id="badge-vlans">Đang tải…</span>
-      <span class="chevron">▼</span>
-    </div>
-    <div class="panel-body">
-      <div class="toolbar">
-        <div class="search-wrap">
-          <span class="si">🔍</span>
-          <input type="text" id="l3Search" placeholder="Tìm VLAN, tên, subnet, IP…" oninput="filterL3Interfaces()"/>
-        </div>
-        <span class="count-lbl" id="l3Count"></span>
-      </div>
-      <div class="tbl-wrap">
-        <table class="tbl">
-          <thead>
-            <tr>
-              <th>VLAN</th>
-              <th>Tên Interface</th>
-              <th>Subnet</th>
-              <th>IP (SVI)</th>
-              <th>OSPF</th>
-              <th>Multicast</th>
-              <th>Switch</th>
-            </tr>
-          </thead>
-          <tbody id="vlanBody">
-            <tr><td colspan="7" class="tbl-msg"><div class="spinner"></div><br>Đang tải…</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="footer-bar">
-        <span id="vlanFooter">—</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- PANEL: L3 STATIC ROUTES (W6b) -->
-  <div class="panel collapsed" id="panel-routes">
-    <div class="panel-header" onclick="togglePanel('panel-routes')">
-      <span>🛣</span>
-      <span class="panel-title">L3 Static Routes — Định tuyến tĩnh trên Switch</span>
-      <span class="panel-badge" id="badge-routes">Đang tải…</span>
-      <span class="chevron">▼</span>
-    </div>
-    <div class="panel-body">
-      <div class="tbl-wrap">
-        <table class="tbl">
-          <thead>
-            <tr>
-              <th>Tên Route</th>
-              <th>Subnet đích</th>
-              <th>Next Hop</th>
-              <th>OSPF</th>
-              <th>Trạng thái</th>
-              <th>Switch</th>
-            </tr>
-          </thead>
-          <tbody id="routeBody">
-            <tr><td colspan="6" class="tbl-msg"><div class="spinner"></div><br>Đang tải…</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="footer-bar">
-        <span id="routeFooter">—</span>
-      </div>
-    </div>
-  </div>
-
-</div><!-- /container -->
+  <footer class="footer">
+    <span>Meraki monitor · data proxied qua n8n · API key giữ bí mật trong credential</span>
+    <span class="mono">/api/meraki-clients · /api/meraki-devices · /api/meraki-events</span>
+  </footer>
+</main>
 
 <script>
-var allClients   = [];
-var ADM = !!(window.__USER__ && window.__USER__.isAdmin);
-var UPanels = (window.__USER__ && window.__USER__.panels) || {};
-var CLI_COLS = ADM ? 9 : 8;
-var clientPolicy = {};   /* mac(lower) -> 'Blocked' | 'Normal' (last known/applied) */
-var allDevices   = [];
-var allStatuses  = [];
-var allEvents    = [];
-var allSwitches  = [];
-var activeSSID        = 'all';
-var activeSev         = 'all';
-var activeSwitchFilter = 'all';
-var portCfgData    = [];
-var portCfgMap     = {};   /* W5b: "serial:portId" → portConfig  */
-var statusPortMap  = {};   /* W5 : "serial:portId" → portStatus  */
-var linkAggPortMap = {};   /* W5c: "serial:portId" → aggInfo     */
-var uplinkDevices  = [];   /* W6a: MX devices with uplink info   */
-var vlansData      = [];   /* W6b: VLAN list                     */
-var routesData     = [];   /* W6b: static routes                 */
-var _portsBarIv = null, _portsBarT0 = 0;
-
-/* ── Helpers ── */
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function timeAgo(iso){
-  if(!iso)return'—';
-  var d=Math.floor((Date.now()-new Date(iso))/1000);
-  if(d<60)return d+'giây';if(d<3600)return Math.floor(d/60)+'ph';
-  return Math.floor(d/3600)+'h';
+/* ═══════════════════════════════════════════════════════════════
+   USER & THEME (preserved auth)
+   ═══════════════════════════════════════════════════════════════ */
+function _readUserCookie() {
+  try { var m = document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/); return m ? JSON.parse(decodeURIComponent(m[1])) : null; }
+  catch(e) { return null; }
 }
-function ssidPill(ssid){
-  if(!ssid||ssid==='—')return'<span style="color:var(--muted)">—</span>';
-  var cls=ssid==='Wired'?'p-wired':ssid.toLowerCase().includes('guest')?'p-guest':'p-wifi';
-  var ic =ssid==='Wired'?'🔌':'📶';
-  return'<span class="ssid-pill '+cls+'">'+ic+' '+esc(ssid)+'</span>';
+var __USER__ = window.__USER__ || _readUserCookie() || { role:'user', permissions:{}, isAdmin:false };
+var __PERM__ = __USER__.isAdmin ? 'write' : (__USER__.permissions['meraki'] || 'read');
+
+(function initTheme() {
+  var saved = null;
+  try { saved = localStorage.getItem('dh_theme'); } catch(e) {}
+  if (saved === 'light') document.documentElement.dataset.theme = 'light';
+  document.getElementById('themeToggle').addEventListener('click', function() {
+    var next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('dh_theme', next); } catch(e) {}
+  });
+})();
+
+setInterval(function(){ document.getElementById('clock').textContent = new Date().toLocaleTimeString('vi-VN',{hour12:false}); }, 1000);
+
+/* ═══════════════════════════════════════════════════════════════
+   STATE + HELPERS
+   ═══════════════════════════════════════════════════════════════ */
+var clients = [], devices = [], deviceStatus = [], events = [];
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function timeAgoVN(ts) {
+  var ms = Date.now() - new Date(ts).getTime();
+  var m = Math.floor(ms / 60000);
+  if (m < 1) return 'vừa xong';
+  if (m < 60) return m + ' phút';
+  var h = Math.floor(m / 60);
+  if (h < 24) return h + ' giờ';
+  return Math.floor(h / 24) + ' ngày';
+}
+function fmtKbps(k){ if (k == null) return '—'; if (k < 1000) return k + ' Kbps'; return (k / 1000).toFixed(1) + ' Mbps'; }
+function osGlyph(os){
+  if (!os) return '○';
+  var o = os.toLowerCase();
+  if (o.indexOf('mac') >= 0) return '';
+  if (o.indexOf('ios') >= 0 || o.indexOf('ipad') >= 0) return '';
+  if (o.indexOf('win') >= 0) return '⊞';
+  if (o.indexOf('android') >= 0) return '⊿';
+  if (o.indexOf('linux') >= 0) return '⏼';
+  return '○';
 }
 
-/* ── Toggle panel ── */
-function togglePanel(id){
-  var p=document.getElementById(id);
-  if(p) p.classList.toggle('collapsed');
+function togglePanel(id) {
+  var p = document.getElementById(id);
+  var isOpen = p.classList.contains('is-open');
+  p.classList.toggle('is-open',   !isOpen);
+  p.classList.toggle('is-closed',  isOpen);
 }
 
-/* ── Load clients ── */
-function loadClients(silent){
-  if(!silent){
-    var btn=document.getElementById('refreshBtn');
-    btn.classList.add('refreshing');
-    window._t0=Date.now();
-  }
-  fetch('/api/meraki-clients',{cache:'no-store'})
-    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
+/* ═══════════════════════════════════════════════════════════════
+   CLIENTS PANEL
+   ═══════════════════════════════════════════════════════════════ */
+var _cliQ = '', _cliSsid = 'all';
+function renderClients() {
+  if (!clients.length) { document.getElementById('clientBody').innerHTML = '<tr><td colspan="10" class="tbl-empty">Không có client</td></tr>'; return; }
+  var ssids = {}, ssidsArr = [];
+  clients.forEach(function(c){ if (!ssids[c.ssid]) { ssids[c.ssid] = 0; ssidsArr.push(c.ssid); } ssids[c.ssid]++; });
+  document.getElementById('ssidFilters').innerHTML =
+    '<button class="cmdseg ' + (_cliSsid === 'all' ? 'active' : '') + '" onclick="setSsidFilter(\'all\')">All <span class="cmdseg-count">' + clients.length + '</span></button>'
+    + ssidsArr.map(function(s){
+      return '<button class="cmdseg ' + (_cliSsid === s ? 'active' : '') + '" onclick="setSsidFilter(\'' + esc(s) + '\')">' + esc(s) + ' <span class="cmdseg-count">' + ssids[s] + '</span></button>';
+    }).join('');
+
+  var ql = _cliQ;
+  var rows = clients.filter(function(c){
+    if (_cliSsid !== 'all' && c.ssid !== _cliSsid) return false;
+    if (!ql) return true;
+    return (c.name + ' ' + c.ip + ' ' + c.mac + ' ' + c.ssid + ' ' + (c.manufacturer || '')).toLowerCase().indexOf(ql) >= 0;
+  });
+  document.getElementById('clientBody').innerHTML = rows.slice(0, 50).map(function(c){
+    var ago = timeAgoVN(c.lastSeen);
+    var recent = (Date.now() - new Date(c.lastSeen).getTime()) < 5 * 60000;
+    var sig = c.ssid === 'Wired'
+      ? '<span class="signal-wired mono small">⏚ wired</span>'
+      : '<span class="signal-bars">'
+        + [1,2,3,4].map(function(i){ return '<span class="signal-bar" data-on="' + (i <= (c.signal||0) ? '1' : '0') + '" style="height:' + (4 + i*2) + 'px"></span>'; }).join('')
+        + '</span>';
+    var total = (c.rxKbps || 0) + (c.txKbps || 0);
+    var lvl = total > 6000 ? 3 : total > 2500 ? 2 : total > 500 ? 1 : 0;
+    var traffic = '<span class="traffic-glyph" title="↓ ' + fmtKbps(c.rxKbps) + ' · ↑ ' + fmtKbps(c.txKbps) + '">'
+      + '<span class="traffic-pip" data-on="' + (lvl >= 1 ? '1' : '0') + '"></span>'
+      + '<span class="traffic-pip" data-on="' + (lvl >= 2 ? '1' : '0') + '"></span>'
+      + '<span class="traffic-pip" data-on="' + (lvl >= 3 ? '1' : '0') + '"></span>'
+      + '</span>';
+    return '<tr>'
+      + '<td><div class="client-name-cell"><span class="os-glyph" title="' + esc(c.os || '') + '">' + osGlyph(c.os) + '</span><span class="svc-name">' + esc(c.name || '?') + '</span></div></td>'
+      + '<td class="mono">' + esc(c.ip || '—') + '</td>'
+      + '<td class="mono hide-md muted">' + esc(c.mac || '—') + '</td>'
+      + '<td><span class="ssid-pill">' + esc(c.ssid || '—') + '</span></td>'
+      + '<td class="hide-md mono">' + esc(c.vlan || '—') + '</td>'
+      + '<td>' + sig + '</td>'
+      + '<td>' + traffic + '</td>'
+      + '<td class="hide-md">' + esc(c.manufacturer || '—') + '</td>'
+      + '<td class="hide-md">' + esc(c.os || '—') + '</td>'
+      + '<td class="small" style="text-align:right"><span class="' + (recent ? 'recent' : 'muted') + '">' + ago + ' trước</span></td>'
+      + '</tr>';
+  }).join('') || '<tr><td colspan="10" class="tbl-empty">Không có client khớp filter</td></tr>';
+  document.getElementById('badge-clients').textContent = rows.length + ' / ' + clients.length + ' clients';
+  document.getElementById('badge-clients').className = 'panel-badge tone-ok';
+}
+function filterClients() { _cliQ = document.getElementById('clientSearch').value.toLowerCase(); renderClients(); }
+function setSsidFilter(s) { _cliSsid = s; renderClients(); }
+
+/* ═══════════════════════════════════════════════════════════════
+   DEVICES PANEL
+   ═══════════════════════════════════════════════════════════════ */
+var _devQ = '';
+function renderDevices() {
+  if (!devices.length) { document.getElementById('devBody').innerHTML = '<tr><td colspan="9" class="tbl-empty">Không có thiết bị</td></tr>'; return; }
+  var ql = _devQ;
+  var rows = devices.filter(function(d){
+    if (!ql) return true;
+    return (d.name + ' ' + d.model + ' ' + d.serial + ' ' + d.lanIp).toLowerCase().indexOf(ql) >= 0;
+  });
+  document.getElementById('devBody').innerHTML = rows.map(function(d){
+    var col = d.status === 'online' ? 'var(--ok)' : d.status === 'alerting' ? 'var(--warn)' : 'var(--bad)';
+    return '<tr>'
+      + '<td><div style="width:28px;height:28px;border-radius:6px;background:var(--surface-2);display:grid;place-items:center;font-size:14px">' + esc(d.typeIcon || '📦') + '</div></td>'
+      + '<td><span class="svc-name">' + esc(d.name) + '</span></td>'
+      + '<td><span class="tag-pill mute">' + esc(d.productType || '—') + '</span></td>'
+      + '<td class="mono small">' + esc(d.model || '—') + '</td>'
+      + '<td class="mono small hide-md muted">' + esc(d.serial || '—') + '</td>'
+      + '<td class="mono">' + esc(d.lanIp || '—') + '</td>'
+      + '<td class="hide-md">' + (d.tags || []).map(function(t){ return '<span class="tag-pill mute" style="margin-right:4px">' + esc(t) + '</span>'; }).join('') + '</td>'
+      + '<td><span class="mono small ' + (d.firmwareOk === false ? 'bad-text' : '') + '">' + (d.firmwareOk === false ? '⚠ ' : '✓ ') + esc(d.firmware || '—') + '</span></td>'
+      + '<td><span class="status-pip" style="--c:' + col + '"><i></i><span>' + esc(d.status || '—') + '</span></span></td>'
+      + '</tr>';
+  }).join('') || '<tr><td colspan="9" class="tbl-empty">Không có thiết bị khớp filter</td></tr>';
+  var ok = devices.filter(function(d){ return d.status === 'online'; }).length;
+  var bad = devices.length - ok;
+  document.getElementById('badge-devices').textContent = devices.length + ' devices · ' + ok + ' online';
+  document.getElementById('badge-devices').className = bad === 0 ? 'panel-badge tone-ok' : 'panel-badge tone-warn';
+}
+function filterDevices() { _devQ = document.getElementById('devSearch').value.toLowerCase(); renderDevices(); }
+
+/* ═══════════════════════════════════════════════════════════════
+   DEVICE STATUS PANEL
+   ═══════════════════════════════════════════════════════════════ */
+var _stQ = '';
+function renderStatus() {
+  if (!deviceStatus.length) { document.getElementById('statusBody').innerHTML = '<tr><td colspan="7" class="tbl-empty">Không có dữ liệu</td></tr>'; return; }
+  var ql = _stQ;
+  var rows = deviceStatus.filter(function(d){
+    if (!ql) return true;
+    return (d.name + ' ' + (d.publicIp || '') + ' ' + (d.lanIp || '')).toLowerCase().indexOf(ql) >= 0;
+  });
+  document.getElementById('statusBody').innerHTML = rows.map(function(d){
+    var col = d.status === 'online' ? 'var(--ok)' : d.status === 'alerting' ? 'var(--warn)' : 'var(--bad)';
+    var ago = d.lastReportedAt ? timeAgoVN(d.lastReportedAt) : '—';
+    var lateMin = d.lastReportedAt ? (Date.now() - new Date(d.lastReportedAt).getTime()) / 60000 : 999;
+    return '<tr>'
+      + '<td><div style="width:28px;height:28px;border-radius:6px;background:var(--surface-2);display:grid;place-items:center;font-size:14px">' + (d.productType === 'wireless' ? '📡' : d.productType === 'switch' ? '🔀' : '📦') + '</div></td>'
+      + '<td><span class="svc-name">' + esc(d.name) + '</span><div class="muted mono small">' + esc(d.model || '') + '</div></td>'
+      + '<td><span class="status-pip" style="--c:' + col + '"><i></i><span>' + esc(d.status || '—') + '</span></span></td>'
+      + '<td class="mono">' + esc(d.lanIp || '—') + '</td>'
+      + '<td class="hide-md mono small">' + esc(d.publicIp || '—') + '</td>'
+      + '<td class="mono small">' + esc(d.uptime || '—') + '</td>'
+      + '<td class="small" style="text-align:right"><span class="' + (lateMin < 2 ? 'recent' : 'muted') + '">' + ago + ' trước</span></td>'
+      + '</tr>';
+  }).join('');
+  var ok = deviceStatus.filter(function(d){ return d.status === 'online'; }).length;
+  var bad = deviceStatus.length - ok;
+  document.getElementById('badge-status').textContent = ok + ' online · ' + bad + ' issue';
+  document.getElementById('badge-status').className = bad === 0 ? 'panel-badge tone-ok' : 'panel-badge tone-warn';
+}
+function filterStatus() { _stQ = document.getElementById('statusSearch').value.toLowerCase(); renderStatus(); }
+
+/* ═══════════════════════════════════════════════════════════════
+   EVENTS PANEL
+   ═══════════════════════════════════════════════════════════════ */
+var _evQ = '', _evSev = 'all';
+function renderEvents() {
+  if (!events.length) { document.getElementById('eventBody').innerHTML = '<tr><td colspan="7" class="tbl-empty">Không có event</td></tr>'; return; }
+  var high = events.filter(function(e){ return e.severity === 'high'; }).length;
+  var med  = events.filter(function(e){ return e.severity === 'medium'; }).length;
+  var low  = events.length - high - med;
+  document.getElementById('sevFilters').innerHTML =
+    '<button class="cmdseg ' + (_evSev === 'all'    ? 'active' : '') + '" onclick="setSevFilter(\'all\')">All <span class="cmdseg-count">' + events.length + '</span></button>'
+    + '<button class="cmdseg ' + (_evSev === 'high'   ? 'active' : '') + '" onclick="setSevFilter(\'high\')">High <span class="cmdseg-count">' + high + '</span></button>'
+    + '<button class="cmdseg ' + (_evSev === 'medium' ? 'active' : '') + '" onclick="setSevFilter(\'medium\')">Medium <span class="cmdseg-count">' + med + '</span></button>'
+    + '<button class="cmdseg ' + (_evSev === 'low'    ? 'active' : '') + '" onclick="setSevFilter(\'low\')">Low <span class="cmdseg-count">' + low + '</span></button>';
+
+  var ql = _evQ;
+  var rows = events.filter(function(e){
+    if (_evSev !== 'all' && e.severity !== _evSev) return false;
+    if (!ql) return true;
+    return (e.type + ' ' + (e.description || '') + ' ' + (e.deviceName || '')).toLowerCase().indexOf(ql) >= 0;
+  });
+  document.getElementById('eventBody').innerHTML = rows.slice(0, 100).map(function(e){
+    return '<tr class="event-row event-' + esc(e.severity || 'low') + '">'
+      + '<td class="event-sev-bar"></td>'
+      + '<td><div><span class="mono small">' + new Date(e.occurredAt).toLocaleTimeString('vi-VN',{hour12:false}) + '</span><div class="muted small">' + timeAgoVN(e.occurredAt) + '</div></div></td>'
+      + '<td><span class="event-type">' + esc(e.type) + '</span></td>'
+      + '<td>' + esc(e.description || '—') + '</td>'
+      + '<td class="hide-md">' + esc(e.deviceName || '—') + '</td>'
+      + '<td class="hide-md"><span class="ssid-pill">' + esc(e.ssid || '—') + '</span></td>'
+      + '<td class="mono small hide-md muted">' + esc(e.clientMac || '—') + '</td>'
+      + '</tr>';
+  }).join('') || '<tr><td colspan="7" class="tbl-empty">Không có event khớp filter</td></tr>';
+  document.getElementById('badge-events').textContent = rows.length + ' / ' + events.length + ' events';
+  document.getElementById('badge-events').className = high > 0 ? 'panel-badge tone-bad' : 'panel-badge tone-accent';
+}
+function filterEvents() { _evQ = document.getElementById('eventSearch').value.toLowerCase(); renderEvents(); }
+function setSevFilter(s) { _evSev = s; renderEvents(); }
+
+/* ═══════════════════════════════════════════════════════════════
+   ALERTS BANNER
+   ═══════════════════════════════════════════════════════════════ */
+function renderAlertsBanner() {
+  var offline = devices.filter(function(d){ return d.status === 'offline'; });
+  var alerting = devices.filter(function(d){ return d.status === 'alerting'; });
+  var high = events.filter(function(e){ return e.severity === 'high'; });
+  var issues = offline.length + alerting.length + high.length;
+  var banner = document.getElementById('alerts-banner');
+  if (!issues) { banner.style.display = 'none'; return; }
+  banner.style.display = '';
+  var chips = '';
+  if (offline.length)  chips += '<button class="alerts-chip alerts-chip-bad" onclick="openPanel(\'panel-status\')">' + offline.length + ' offline · ' + esc(offline.map(function(d){return d.name;}).join(', ')) + '</button>';
+  if (alerting.length) chips += '<button class="alerts-chip alerts-chip-warn" onclick="openPanel(\'panel-status\')">' + alerting.length + ' alerting · ' + esc(alerting.map(function(d){return d.name;}).join(', ')) + '</button>';
+  if (high.length)     chips += '<button class="alerts-chip alerts-chip-bad" onclick="openPanel(\'panel-events\');setSevFilter(\'high\')">' + high.length + ' sự kiện high · click xem</button>';
+  banner.innerHTML = '<div class="alerts-banner"><span class="alerts-icon">⚠</span><div class="alerts-body"><div class="alerts-title">' + issues + ' thiết bị / sự kiện cần kiểm tra</div><div class="alerts-sub">' + chips + '</div></div></div>';
+}
+function openPanel(id) {
+  var p = document.getElementById(id);
+  p.classList.add('is-open'); p.classList.remove('is-closed');
+  setTimeout(function(){ p.scrollIntoView({ behavior:'smooth', block:'start' }); }, 50);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HERO STATS
+   ═══════════════════════════════════════════════════════════════ */
+function renderHero() {
+  var devOn  = devices.filter(function(d){ return d.status === 'online'; }).length;
+  var devOff = devices.length - devOn;
+  var ssidSet = {};
+  clients.forEach(function(c){ if (c.ssid && c.ssid !== 'Wired') ssidSet[c.ssid] = 1; });
+  var ssidN = Object.keys(ssidSet).length;
+  document.getElementById('statClients').textContent = clients.length || '—';
+  document.getElementById('statDevOn').textContent   = devOn || 0;
+  document.getElementById('statDevOff').textContent  = devOff || 0;
+  document.getElementById('statSsid').textContent    = ssidN || '—';
+  document.getElementById('hero-clients').textContent = clients.length || '—';
+  document.getElementById('hero-ssids').textContent   = ssidN + ' SSIDs';
+  document.getElementById('hero-sub').textContent =
+    devices.length + ' devices · ' + devOn + ' online · ' + devOff + ' need attention · last sync ' +
+    new Date().toLocaleTimeString('vi-VN', { hour12:false });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   API LOADERS (preserved endpoints exactly)
+   ═══════════════════════════════════════════════════════════════ */
+function loadClients() {
+  return fetch('/api/meraki-clients', { cache:'no-store' })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ clients = (d && d.clients) || []; renderClients(); renderHero(); })
+    .catch(function(){ document.getElementById('clientBody').innerHTML = '<tr><td colspan="10" class="tbl-empty bad-text">Không tải được</td></tr>'; });
+}
+function loadDevices() {
+  return fetch('/api/meraki-devices', { cache:'no-store' })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ devices = (d && d.devices) || (Array.isArray(d) ? d : []); renderDevices(); renderHero(); renderAlertsBanner(); })
+    .catch(function(){ document.getElementById('devBody').innerHTML = '<tr><td colspan="9" class="tbl-empty bad-text">Không tải được</td></tr>'; });
+}
+function loadStatus() {
+  return fetch('/api/meraki-device-status', { cache:'no-store' })
+    .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(d){
-      if(!silent){var delay=Math.max(0,700-(Date.now()-window._t0));setTimeout(function(){document.getElementById('refreshBtn').classList.remove('refreshing');},delay);}
-      allClients=d.clients||[];
-      if(ADM){document.getElementById('clientActTh').style.display='';}
-      allClients.forEach(function(c){
-        var m=(c.mac||'').toLowerCase();if(!m)return;
-        var pol=c.policy||c.devicePolicy;
-        if(pol&&!(m in clientPolicy))clientPolicy[m]=(/block/i.test(pol)?'Blocked':'Normal');
-      });
-      document.getElementById('statClients').textContent=allClients.length;
-      var ssids=new Set(allClients.map(function(c){return c.ssid;}).filter(function(s){return s&&s!=='Wired'&&s!=='—';}));
-      document.getElementById('statSsid').textContent=ssids.size;
-      document.getElementById('badge-clients').textContent=allClients.length+' clients';
-      document.getElementById('badge-clients').className='panel-badge green';
-      if(d.fetchedAt){var dt=new Date(d.fetchedAt);document.getElementById('fetchedAt').textContent='Cập nhật: '+dt.toLocaleTimeString('vi-VN',{hour12:false});}
-      document.getElementById('clientFooter').textContent='Tổng '+allClients.length+' clients online';
-      renderSSIDFilters();
-      filterClients();
+      var raw = d;
+      var first = Array.isArray(raw) ? raw[0] : raw;
+      var list = (first && first.devices) || (Array.isArray(raw) ? raw : []);
+      deviceStatus = list;
+      renderStatus();
     })
-    .catch(function(e){
-      if(!silent)document.getElementById('refreshBtn').classList.remove('refreshing');
-      document.getElementById('clientBody').innerHTML='<tr><td colspan="'+CLI_COLS+'" class="tbl-msg" style="color:var(--red)">⚠ Không tải được — '+esc(String(e))+'</td></tr>';
-      document.getElementById('badge-clients').textContent='Lỗi';
-      document.getElementById('badge-clients').className='panel-badge red';
-    });
+    .catch(function(){ document.getElementById('statusBody').innerHTML = '<tr><td colspan="7" class="tbl-empty bad-text">Không tải được</td></tr>'; });
+}
+function loadEvents() {
+  return fetch('/api/meraki-events', { cache:'no-store' })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ events = (d && d.events) || []; renderEvents(); renderAlertsBanner(); })
+    .catch(function(){ document.getElementById('eventBody').innerHTML = '<tr><td colspan="7" class="tbl-empty bad-text">Không tải được</td></tr>'; });
 }
 
-/* ── Load devices ── */
-function loadDevices(silent){
-  fetch('/api/meraki-devices',{cache:'no-store'})
-    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
-    .then(function(d){
-      allDevices=d.devices||[];
-      var on =allDevices.filter(function(d){return d.status==='online';}).length;
-      var off=allDevices.length-on;
-      document.getElementById('statDevOn').textContent=on;
-      document.getElementById('statDevOff').textContent=off;
-      document.getElementById('badge-devices').textContent=allDevices.length+' thiết bị';
-      document.getElementById('badge-devices').className=off>0?'panel-badge red':'panel-badge green';
-      document.getElementById('devFooter').textContent='Tổng '+allDevices.length+' thiết bị · '+on+' online · '+off+' offline';
-      filterDevices();
-    })
-    .catch(function(e){
-      document.getElementById('devBody').innerHTML='<tr><td colspan="6" class="tbl-msg" style="color:var(--red)">⚠ Không tải được — '+esc(String(e))+'</td></tr>';
-      document.getElementById('badge-devices').textContent='Lỗi';
-      document.getElementById('badge-devices').className='panel-badge red';
-    });
-}
-
-/* ── Load device status ── */
-function loadDeviceStatus(){
-  fetch('/api/meraki-device-status',{cache:'no-store'})
-    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
-    .then(function(d){
-      allStatuses=d.statuses||[];
-      var on=d.online||0,off=d.offline||0,alr=d.alerting||0,drm=d.dormant||0;
-      var cls=off>0||alr>0?'panel-badge red':alr>0?'panel-badge':'panel-badge green';
-      var badge=on+' online'+(alr>0?' · ⚠ '+alr+' alert':'')+(off>0?' · '+off+' offline':'')+(drm>0?' · '+drm+' dormant':'');
-      document.getElementById('badge-status').textContent=badge;
-      document.getElementById('badge-status').className=cls;
-      document.getElementById('statusFooter').textContent='Tổng '+allStatuses.length+' · '+on+' online · '+alr+' alerting · '+off+' offline · '+drm+' dormant';
-      filterStatuses();
-    })
-    .catch(function(e){
-      document.getElementById('statusBody').innerHTML='<tr><td colspan="7" class="tbl-msg" style="color:var(--red)">⚠ Không tải được — '+esc(String(e))+'</td></tr>';
-      document.getElementById('badge-status').textContent='Lỗi';
-      document.getElementById('badge-status').className='panel-badge red';
-    });
-}
-
-/* ── Filter device status ── */
-function filterStatuses(){
-  var q=(document.getElementById('statusSearch').value||'').toLowerCase();
-  var rows=allStatuses.filter(function(d){
-    if(!q)return true;
-    return(d.name||'').toLowerCase().includes(q)||(d.model||'').toLowerCase().includes(q)
-      ||(d.serial||'').toLowerCase().includes(q)||(d.publicIp||'').toLowerCase().includes(q);
-  });
-  document.getElementById('statusCount').textContent=rows.length!==allStatuses.length?rows.length+' / '+allStatuses.length:'';
-  if(!rows.length){document.getElementById('statusBody').innerHTML='<tr><td colspan="7" class="tbl-msg">Không tìm thấy</td></tr>';return;}
-  var TYPE_ICON={'switch':'🔀','wireless':'📡','appliance':'🔥','camera':'📷'};
-  var TYPE_LBL ={'switch':'Switch','wireless':'AP','appliance':'Firewall','camera':'Camera'};
-  document.getElementById('statusBody').innerHTML=rows.map(function(d){
-    var st=d.status;
-    var dotCls=st==='online'?'dot-on':st==='alerting'?'dot-alr':'dot-off';
-    var lbl=st==='online'?'Online':st==='alerting'?'⚠ Alerting':st==='dormant'?'Dormant':'Offline';
-    var icon=TYPE_ICON[d.productType]||'📦';
-    var typeLbl=TYPE_LBL[d.productType]||d.productType;
-    var pillCls=d.productType==='wireless'?'p-wifi':d.productType==='appliance'?'p-guest':'p-wired';
-    return'<tr>'
-      +'<td><span class="cell-name">'+esc(d.name)+'</span></td>'
-      +'<td><span class="ssid-pill '+pillCls+'">'+icon+' '+esc(typeLbl)+'</span></td>'
-      +'<td class="hide-sm"><span class="cell-model">'+esc(d.model)+'</span></td>'
-      +'<td class="hide-sm"><span class="cell-mac" style="font-size:10px">'+esc(d.serial)+'</span></td>'
-      +'<td><span class="cell-ip">'+esc(d.publicIp)+'</span></td>'
-      +'<td><span class="status-dot"><span class="dot '+dotCls+'"></span>'+lbl+'</span></td>'
-      +'<td class="hide-sm"><span class="since">'+timeAgo(d.lastReportedAt)+' trước</span></td>'
-    +'</tr>';
-  }).join('');
-}
-
-/* ── Load events ── */
-function loadEvents(silent){
-  fetch('/api/meraki-events',{cache:'no-store'})
-    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
-    .then(function(d){
-      allEvents=d.events||[];
-      var h=d.high||0,m=d.medium||0;
-      var cls=h>0?'panel-badge red':m>0?'panel-badge':'panel-badge green';
-      document.getElementById('badge-events').textContent=(h>0?'🔴 '+h+' high · ':'')+allEvents.length+' sự kiện';
-      document.getElementById('badge-events').className=cls;
-      document.getElementById('evFooter').textContent='Tổng '+allEvents.length+' events · 🔴 '+h+' high · 🟡 '+m+' medium';
-      filterEvents();
-    })
-    .catch(function(e){
-      document.getElementById('evBody').innerHTML='<tr><td colspan="6" class="tbl-msg" style="color:var(--red)">⚠ Không tải được — '+esc(String(e))+'</td></tr>';
-      document.getElementById('badge-events').textContent='Lỗi';
-      document.getElementById('badge-events').className='panel-badge red';
-    });
-}
-
-/* ── Severity filter ── */
-function setSeverity(v){
-  activeSev=v;
-  ['all','high','medium'].forEach(function(s){
-    document.getElementById('sev-'+s).className='filter-btn'+(v===s?' active':'');
-  });
-  filterEvents();
-}
-
-/* ── Filter events ── */
-function filterEvents(){
-  var q=(document.getElementById('evSearch').value||'').toLowerCase();
-  var rows=allEvents.filter(function(e){
-    if(activeSev!=='all'&&e.severity!==activeSev)return false;
-    if(!q)return true;
-    return(e.type||'').toLowerCase().includes(q)||(e.description||'').toLowerCase().includes(q)
-      ||(e.deviceName||'').toLowerCase().includes(q)||(e.ssid||'').toLowerCase().includes(q)
-      ||(e.clientMac||'').toLowerCase().includes(q);
-  });
-  document.getElementById('evCount').textContent=rows.length!==allEvents.length?rows.length+' / '+allEvents.length:'';
-  if(!rows.length){document.getElementById('evBody').innerHTML='<tr><td colspan="6" class="tbl-msg">Không có sự kiện nào</td></tr>';return;}
-  document.getElementById('evBody').innerHTML=rows.map(function(e){
-    var sevCls='sev-'+e.severity;
-    var sevLbl=e.severity==='high'?'🔴 High':e.severity==='medium'?'🟡 Med':'Low';
-    var t=e.occurredAt?new Date(e.occurredAt).toLocaleString('vi-VN',{hour12:false,hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}):'—';
-    return'<tr>'
-      +'<td style="white-space:nowrap;font-size:11px;color:var(--muted)">'+esc(t)+'</td>'
-      +'<td><span class="'+sevCls+'">'+sevLbl+'</span></td>'
-      +'<td><span class="ev-type">'+esc(e.type)+'</span></td>'
-      +'<td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px">'+esc(e.description)+'</td>'
-      +'<td class="hide-sm" style="font-size:11px;color:var(--muted)">'+esc(e.deviceName)+'</td>'
-      +'<td class="hide-sm" style="font-size:11px;color:var(--muted)">'+esc(e.ssid!=='—'?e.ssid:e.clientMac)+'</td>'
-    +'</tr>';
-  }).join('');
-}
-
-/* ── Load switch ports ── */
-/* ── Floor helpers ── */
-function getFloor(name){
-  var m=(name||'').match(/^(F\d+)/i);
-  if(m)return m[1].toUpperCase();
-  if(/core/i.test(name))return'Core';
-  if(/xen/i.test(name))return'XEN';
-  return'Khác';
-}
-
-function renderFloorSummary(switches){
-  var floors={};
-  var order=[];
-  switches.forEach(function(sw){
-    var f=getFloor(sw.switchName);
-    if(!floors[f]){floors[f]={name:f,count:0,totalPorts:0,connectedPorts:0,dead:0};order.push(f);}
-    floors[f].count++;
-    floors[f].totalPorts+=sw.totalPorts||0;
-    floors[f].connectedPorts+=sw.connectedPorts||0;
-    if(sw.connectedPorts===0)floors[f].dead++;
-  });
-  // sort: F1..F9 first, then Core, XEN, Khác
-  order.sort(function(a,b){
-    var fa=a.match(/^F(\d+)/),fb=b.match(/^F(\d+)/);
-    if(fa&&fb)return parseInt(fa[1])-parseInt(fb[1]);
-    if(fa)return-1;if(fb)return 1;
-    return a.localeCompare(b);
-  });
-  document.getElementById('floorSummary').innerHTML=order.map(function(f){
-    var fl=floors[f];
-    var allDead=fl.dead===fl.count;
-    var pct=fl.totalPorts?Math.round(fl.connectedPorts/fl.totalPorts*100):0;
-    var barColor=allDead?'var(--red)':pct>50?'var(--green)':'var(--amber)';
-    var cls='floor-card'+(allDead?' dead':pct===100?' ok':'');
-    return'<div class="'+cls+'" onclick="document.getElementById(\'portSearch\').value=\''+f.toLowerCase()+'\';filterSwitches()" title="Click để lọc">'
-      +'<div class="floor-name" style="color:'+(allDead?'var(--red)':pct>50?'var(--green)':'var(--amber)')+'">'+esc(f)+'</div>'
-      +'<div class="floor-sw">'+fl.count+' SW · '+fl.connectedPorts+'/'+fl.totalPorts+' ports</div>'
-      +'<div class="floor-bar"><div class="floor-bar-fill" style="width:'+pct+'%;background:'+barColor+'"></div></div>'
-      +'</div>';
-  }).join('');
-}
-
-function renderSpeedStats(switches){
-  var cnt={'1 Gbps':0,'100 Mbps':0,'10 Mbps':0,'Khác':0};
-  switches.forEach(function(sw){
-    (sw.ports||[]).filter(function(p){return p.status==='Connected';}).forEach(function(p){
-      var s=p.speed||'';
-      if(s==='1 Gbps')cnt['1 Gbps']++;
-      else if(s.includes('100'))cnt['100 Mbps']++;
-      else if(s.includes('10 '))cnt['10 Mbps']++;
-      else cnt['Khác']++;
-    });
-  });
-  var specs=[
-    {label:'1 Gbps', key:'1 Gbps', color:'var(--green)', note:''},
-    {label:'100 Mbps',key:'100 Mbps',color:'var(--amber)',note:' — kiểm tra lại'},
-    {label:'10 Mbps', key:'10 Mbps', color:'var(--red)',  note:' — cáp/NIC hỏng?'},
-    {label:'Khác',    key:'Khác',    color:'var(--muted)',note:''},
-  ];
-  document.getElementById('speedStats').innerHTML=specs.filter(function(s){return cnt[s.key]>0;}).map(function(s){
-    return'<div class="speed-row">'
-      +'<div class="speed-dot" style="background:'+s.color+'"></div>'
-      +'<span class="speed-cnt" style="color:'+s.color+'">'+cnt[s.key]+'</span>'
-      +'<span style="color:var(--text)">'+s.label+'</span>'
-      +'<span style="color:var(--muted);font-size:10px">'+s.note+'</span>'
-    +'</div>';
-  }).join('');
-}
-
-function renderTopTraffic(switches){
-  var ports=[];
-  switches.forEach(function(sw){
-    (sw.ports||[]).filter(function(p){return p.status==='Connected'&&(p.usageSentKb||p.usageRecvKb);}).forEach(function(p){
-      ports.push({sw:sw.switchName,portId:p.portId,speed:p.speed,clients:p.clientCount,total:(p.usageSentKb||0)+(p.usageRecvKb||0),sent:p.usageSentKb||0,recv:p.usageRecvKb||0});
-    });
-  });
-  ports.sort(function(a,b){return b.total-a.total;});
-  var top=ports.slice(0,8);
-  var max=top[0]?top[0].total:1;
-  document.getElementById('topTraffic').innerHTML=top.map(function(p,i){
-    var pct=Math.round(p.total/max*100);
-    return'<div class="traffic-row">'
-      +'<span class="traffic-rank">'+(i+1)+'</span>'
-      +'<span class="traffic-sw" title="'+esc(p.sw)+'">'+esc(p.sw)+'</span>'
-      +'<span style="font-family:var(--mono);font-size:10px;color:var(--accent);min-width:24px">P'+esc(p.portId)+'</span>'
-      +'<div class="traffic-bar-wrap"><div class="traffic-bar-fill" style="width:'+pct+'%"></div></div>'
-      +'<span style="font-size:10px;font-family:var(--mono);color:var(--text);min-width:55px;text-align:right">'+fmtKb(p.total)+'</span>'
-    +'</div>';
-  }).join('');
-}
-
-function loadSwitchPorts(){
-  startPortsProgressBar();
-  fetch('/api/meraki-switch-ports',{cache:'no-store'})
-    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
-    .then(function(d){
-      stopPortsProgressBar(true);
-      allSwitches=d.switches||[];
-      buildStatusPortMap();
-      var dead=d.deadSwitches||0;
-      var badge=d.totalSwitches+' switches · '+d.connectedPorts+' ports connected'+(dead>0?' · ⛔ '+dead+' down':'');
-      document.getElementById('badge-ports').textContent=badge;
-      document.getElementById('badge-ports').className=dead>0?'panel-badge red':'panel-badge green';
-      document.getElementById('portFooter').textContent=d.totalSwitches+' switches · '+d.totalPorts+' ports · '+d.connectedPorts+' connected · '+dead+' switches offline';
-      renderFloorSummary(allSwitches);
-      renderSpeedStats(allSwitches);
-      renderTopTraffic(allSwitches);
-      document.getElementById('analysisSection').style.display='';
-      filterSwitches();
-    })
-    .catch(function(e){
-      stopPortsProgressBar(false);
-      document.getElementById('switchGrid').innerHTML='<div style="padding:2rem;text-align:center;color:var(--red)">⚠ Không tải được — '+esc(String(e))+'</div>';
-      document.getElementById('badge-ports').textContent='Lỗi';
-      document.getElementById('badge-ports').className='panel-badge red';
-    });
-}
-
-function setSwitchFilter(v){
-  activeSwitchFilter=v;
-  ['all','issues','dead'].forEach(function(s){
-    document.getElementById('psw-'+s).className='filter-btn'+(v===s?' active':'');
-  });
-  filterSwitches();
-}
-
-function filterSwitches(){
-  var q=(document.getElementById('portSearch').value||'').toLowerCase();
-  var rows=allSwitches.filter(function(sw){
-    if(activeSwitchFilter==='dead'&&sw.connectedPorts>0)return false;
-    if(activeSwitchFilter==='issues'&&!sw.ports.some(function(p){return p.errors.some(function(e){return e!=='Port disconnected'&&e!=='';});}))return false;
-    if(!q)return true;
-    return(sw.switchName||'').toLowerCase().includes(q)||(sw.switchModel||'').toLowerCase().includes(q)||(sw.switchSerial||'').toLowerCase().includes(q);
-  });
-  document.getElementById('portCount').textContent=rows.length!==allSwitches.length?rows.length+' / '+allSwitches.length:'';
-  if(!rows.length){document.getElementById('switchGrid').innerHTML='<div style="padding:2rem;text-align:center;color:var(--muted)">Không tìm thấy switch nào</div>';return;}
-  document.getElementById('switchGrid').innerHTML=rows.map(renderSwitchCard).join('');
-}
-
-function fmtKb(kb){
-  if(!kb)return'—';
-  if(kb>1048576)return(kb/1048576).toFixed(1)+' GB';
-  if(kb>1024)return(kb/1024).toFixed(0)+' MB';
-  return kb+' KB';
-}
-
-function portSqClass(p){
-  var realErr=p.errors.some(function(e){return e&&e!=='Port disconnected';});
-  if(realErr)return'err';
-  if(p.warnings&&p.warnings.length)return'warn';
-  if(p.status!=='Connected')return'disconnected';
-  if(p.speed==='10 Mbps')return'speed-10';
-  if(p.speed&&p.speed.includes('100'))return'speed-100';
-  return'connected';
-}
-
-/* ── Switch chassis panel (2-row RJ45 + SFP block) ── */
-function renderSwitchPanel(sw){
-  var serial=sw.switchSerial;
-  var ports=(sw.ports||[]).slice().sort(function(a,b){
-    return(parseInt(a.portId)||0)-(parseInt(b.portId)||0);
-  });
-  var n=ports.length;
-  if(!n)return'';
-
-  /* Detect SFP split: last 2 ports for ≤10-port switches, last 4 for the rest */
-  var sfpN=(n<=4)?0:(n<=10)?2:4;
-  var rj45=ports.slice(0,n-sfpN);
-  var sfpP=ports.slice(n-sfpN);
-
-  /* Status class helper */
-  function sCls(p){
-    var base=portSqClass(p);
-    var ag=linkAggPortMap[serial+':'+p.portId];
-    var ul=p.isUplink?' swp-uplink':'';
-    var ar=ag?' swp-aggr':'';
-    return'swp-'+base+ul+ar;
-  }
-
-  /* RJ45 columns: each column = pair (top=even-index, bottom=odd-index) */
-  var cols=Math.ceil(rj45.length/2);
-  var rj45Html='';
-  for(var c=0;c<cols;c++){
-    var t=rj45[c*2]||null, b=rj45[c*2+1]||null;
-    var lbl=t?t.portId:(b?b.portId:'');
-    /* Group spacer every 6 columns */
-    if(c>0&&c%6===0)rj45Html+='<div class="swp-col-sep"></div>';
-    rj45Html+='<div class="swp-col">';
-    if(t){
-      var pk=esc(serial+':'+t.portId);
-      rj45Html+='<div class="swp-port '+sCls(t)+'" data-pk="'+pk+'" onmouseenter="showPortTip(event,this)" onmouseleave="hidePortTip()"></div>';
-    }else{
-      rj45Html+='<div style="width:18px;height:14px"></div>';
-    }
-    if(b){
-      var pk2=esc(serial+':'+b.portId);
-      rj45Html+='<div class="swp-port '+sCls(b)+'" data-pk="'+pk2+'" onmouseenter="showPortTip(event,this)" onmouseleave="hidePortTip()"></div>';
-    }else{
-      rj45Html+='<div style="width:18px;height:14px"></div>';
-    }
-    rj45Html+='<div class="swp-lbl">'+esc(lbl)+'</div></div>';
-  }
-
-  /* SFP block */
-  var sfpHtml='';
-  sfpP.forEach(function(p){
-    var pk=esc(serial+':'+p.portId);
-    sfpHtml+='<div class="swp-sfp-wrap">'
-      +'<div class="swp-sfp '+sCls(p)+'" data-pk="'+pk+'" onmouseenter="showPortTip(event,this)" onmouseleave="hidePortTip()"></div>'
-      +'<div class="swp-lbl">'+esc(p.portId)+'</div>'
-      +'</div>';
-  });
-
-  return'<div class="swp-wrap"><div class="swp-chassis">'
-    +'<div class="swp-sys-led '+(sw.connectedPorts>0?'on':'off')+'"></div>'
-    +'<div class="swp-rj45-block">'+rj45Html+'</div>'
-    +(sfpP.length?'<div class="swp-port-sep"></div><div class="swp-sfp-block">'+sfpHtml+'</div>':'')
-    +'</div></div>';
-}
-
-function renderSwitchCard(sw){
-  var isDead=sw.connectedPorts===0;
-  var ports=sw.ports||[];
-  var has10M=ports.some(function(p){return p.status==='Connected'&&p.speed==='10 Mbps';});
-  var portSquares=ports.map(function(p){
-    var aggInfo=linkAggPortMap[sw.switchSerial+':'+p.portId]||null;
-    var cls=portSqClass(p)+(p.isUplink?' uplink':'')+(aggInfo?' aggr':'');
-    var pk=esc(sw.switchSerial+':'+p.portId);
-    return'<div class="port-sq '+cls+'" data-pk="'+pk+'" onmouseenter="showPortTip(event,this)" onmouseleave="hidePortTip()"></div>';
-  }).join('');
-
-  var connRows=ports.filter(function(p){return p.status==='Connected';}).map(function(p){
-    var spColor=p.speed==='10 Mbps'?'color:var(--red)':p.speed&&p.speed.includes('100')?'color:var(--amber)':'color:var(--muted)';
-    var realErr=p.errors.some(function(e){return e&&e!=='Port disconnected';});
-    var aggInfo=linkAggPortMap[sw.switchSerial+':'+p.portId]||null;
-    var aggrBadge=aggInfo?'<span style="font-size:9px;color:#a78bfa;margin-left:3px;font-family:var(--mono)">⚡'+aggInfo.label+'</span>':'';
-    return'<tr>'
-      +'<td style="color:var(--accent);font-family:var(--mono)">P'+esc(p.portId)+(p.isUplink?' <span style="font-size:9px">↑</span>':'')+aggrBadge+'</td>'
-      +'<td style="'+spColor+'">'+esc(p.speed||'—')+'</td>'
-      +'<td style="color:var(--muted)">'+p.clientCount+' clients</td>'
-      +'<td style="color:var(--green);font-family:var(--mono)">↑'+fmtKb(p.usageSentKb)+'</td>'
-      +'<td style="color:var(--accent);font-family:var(--mono)">↓'+fmtKb(p.usageRecvKb)+'</td>'
-      +(realErr?'<td style="color:var(--red);font-size:10px">⚠ '+esc(p.errors[0])+'</td>':'')
-    +'</tr>';
-  }).join('');
-
-  var warn=has10M?'<span style="font-size:10px;color:var(--red);margin-left:4px">⚠ 10M port</span>':'';
-  return'<div class="sw-card'+(isDead?' dead':'')+'">'
-    +'<div class="sw-header">'
-    +'<span style="font-size:20px">'+(isDead?'⛔':'🔀')+'</span>'
-    +'<div style="flex:1;min-width:0">'
-    +'<div class="sw-name">'+esc(sw.switchName)+warn+'</div>'
-    +'<div class="sw-model">'+esc(sw.switchModel)+' · '+esc(sw.switchSerial)+'</div>'
-    +'</div>'
-    +'<div class="sw-cnt">'
-    +'<div class="sw-cnt-num" style="color:'+(isDead?'var(--red)':'var(--green)')+'">'+sw.connectedPorts+'<span style="font-size:10px;font-weight:400;color:var(--muted)">/'+sw.totalPorts+'</span></div>'
-    +'<div class="sw-cnt-lbl">ports up</div>'
-    +'</div>'
-    +'</div>'
-    +renderSwitchPanel(sw)
-    +(connRows?'<div style="overflow-x:auto"><table class="sw-ports-tbl">'+connRows+'</table></div>':'')
-    +'</div>';
-}
-
-/* ── Progress bar ── */
-function startPortsProgressBar(){
-  _portsBarT0=Date.now();
-  var el=document.getElementById('portsLoadBar');
-  el.style.display='';
-  var fill=document.getElementById('portsLoadFill');
-  fill.style.background='linear-gradient(90deg,var(--accent),#818cf8)';
-  fill.style.transition='width .5s linear';
-  fill.style.width='0%';
-  document.getElementById('portsLoadTimer').textContent='0s';
-  if(_portsBarIv)clearInterval(_portsBarIv);
-  _portsBarIv=setInterval(function(){
-    var s=(Date.now()-_portsBarT0)/1000;
-    document.getElementById('portsLoadFill').style.width=Math.min(s/50*95,95).toFixed(1)+'%';
-    document.getElementById('portsLoadTimer').textContent=s.toFixed(0)+'s';
-  },300);
-}
-function stopPortsProgressBar(ok){
-  if(_portsBarIv){clearInterval(_portsBarIv);_portsBarIv=null;}
-  var el=document.getElementById('portsLoadBar');
-  if(ok){
-    var fill=document.getElementById('portsLoadFill');
-    fill.style.transition='width .2s,background .4s';
-    fill.style.width='100%';
-    fill.style.background='var(--green)';
-    document.getElementById('portsLoadTimer').textContent='✓ '+((Date.now()-_portsBarT0)/1000).toFixed(1)+'s';
-    setTimeout(function(){el.style.display='none';},2500);
-  }else{el.style.display='none';}
-}
-
-/* ── Port lookup maps ── */
-function buildStatusPortMap(){
-  statusPortMap={};
-  allSwitches.forEach(function(sw){
-    (sw.ports||[]).forEach(function(p){
-      statusPortMap[sw.switchSerial+':'+p.portId]=p;
-    });
-  });
-}
-function buildPortCfgMap(){
-  portCfgMap={};
-  portCfgData.forEach(function(sw){
-    (sw.ports||[]).forEach(function(p){
-      portCfgMap[sw.switchSerial+':'+p.portId]=p;
-    });
+function loadAll() {
+  var btn = document.getElementById('refreshBtn');
+  btn.classList.add('refreshing'); btn.disabled = true;
+  Promise.all([loadClients(), loadDevices(), loadStatus(), loadEvents()]).finally(function(){
+    btn.classList.remove('refreshing'); btn.disabled = false;
   });
 }
 
-/* ── Port tooltip ── */
-function showPortTip(e,el){
-  var key=el.getAttribute('data-pk');
-  if(!key)return;
-  var sp=statusPortMap[key]||null;
-  var cp=portCfgMap[key]||null;
-  var ag=linkAggPortMap[key]||null;
-  var parts=key.split(':');
-  var portId=parts[1];
-  var name=cp&&cp.name?cp.name:'';
-  var type=cp?cp.type:'';
-  var vlan=cp?(cp.vlan||''):'';
-  var allowedVlans=cp?(cp.allowedVlans||'all'):'';
-  var voiceVlan=cp?cp.voiceVlan:'';
-  var linkNeg=cp?cp.linkNegotiation:'';
-  var isUplink=sp?!!sp.isUplink:false;
-  var status=sp?(sp.status||'—'):'—';
-  var speed=sp?(sp.speed||''):'';
-  var clients=sp?sp.clientCount:0;
-  var h='';
-  /* Head */
-  h+='<div class="pt-head">Port '+esc(portId)+(name?' · '+esc(name):'')+' </div>';
-  /* Badges */
-  var bd='';
-  if(type==='trunk') bd+='<span class="pt-b trunk">TRUNK</span>';
-  else if(type==='access')bd+='<span class="pt-b access">ACCESS</span>';
-  if(isUplink)bd+='<span class="pt-b uplink">↑ UPLINK</span>';
-  if(ag)      bd+='<span class="pt-b aggr">⚡ '+esc(ag.label)+'</span>';
-  if(bd)h+='<div class="pt-badges">'+bd+'</div>';
-  /* VLAN block */
-  h+='<div class="pt-sep"></div>';
-  if(type==='trunk'){
-    h+='<div class="pt-row"><span class="pt-lbl">Native VLAN</span><span class="pt-val">'+esc(String(vlan||'—'))+'</span></div>';
-    h+='<div class="pt-row"><span class="pt-lbl">Allowed VLANs</span><span class="pt-val">'+esc(allowedVlans)+'</span></div>';
-  }else if(type==='access'){
-    h+='<div class="pt-row"><span class="pt-lbl">VLAN</span><span class="pt-val">'+esc(String(vlan||'—'))+'</span></div>';
-    if(voiceVlan)h+='<div class="pt-row"><span class="pt-lbl">Voice VLAN</span><span class="pt-val">'+esc(String(voiceVlan))+'</span></div>';
-  }
-  /* Port status */
-  h+='<div class="pt-sep"></div>';
-  h+='<div class="pt-sec">Port status</div>';
-  var dotC=status==='Connected'?'#34d399':'#f87171';
-  h+='<div class="pt-status"><div class="pt-dot" style="background:'+dotC+'"></div><span>'+esc(status)+(speed?' ('+esc(speed)+')':'')+'</span></div>';
-  if(status==='Connected'&&clients>0){
-    h+='<div class="pt-row" style="margin-top:4px"><span class="pt-lbl">Clients</span><span class="pt-val">'+clients+'</span></div>';
-    h+='<div class="pt-row"><span class="pt-lbl">Traffic ↑/↓</span><span class="pt-val">'+fmtKb(sp.usageSentKb)+' / '+fmtKb(sp.usageRecvKb)+'</span></div>';
-  }
-  /* Link negotiation */
-  if(linkNeg){
-    h+='<div class="pt-sep"></div>';
-    h+='<div class="pt-sec">Link negotiation</div>';
-    h+='<div style="font-weight:600;font-size:11px;color:#c8d3ea">'+esc(linkNeg)+(speed?' ('+esc(speed)+')':'')+'</div>';
-  }
-  /* AGGR members */
-  if(ag&&ag.members&&ag.members.length){
-    h+='<div class="pt-sep"></div>';
-    h+='<div class="pt-sec">'+esc(ag.label)+' / '+ag.memberCount+' Members:</div>';
-    ag.members.forEach(function(m){
-      var msw=allSwitches.find(function(s){return s.switchSerial===m.serial;});
-      var mn=msw?msw.switchName:m.serial.slice(-9);
-      h+='<div class="pt-member">'+esc(mn)+' / P'+esc(m.portId)+'</div>';
-    });
-  }
-  /* Errors */
-  if(sp){
-    var errs=(sp.errors||[]).filter(function(e){return e&&e!=='Port disconnected';});
-    if(errs.length)h+='<div class="pt-sep"></div><div class="pt-err">⚠ '+esc(errs[0])+'</div>';
-  }
-  var tip=document.getElementById('portTip');
-  tip.innerHTML=h;
-  /* Position */
-  var x=e.clientX+15,y=e.clientY-8;
-  tip.style.visibility='hidden';tip.style.display='block';
-  var tw=tip.offsetWidth||240,th=tip.offsetHeight||180;
-  if(x+tw>window.innerWidth-12)x=e.clientX-tw-12;
-  if(y+th>window.innerHeight-12)y=e.clientY-th+8;
-  tip.style.left=x+'px';tip.style.top=y+'px';
-  tip.style.visibility='visible';
-}
-function hidePortTip(){
-  var t=document.getElementById('portTip');if(t)t.style.display='none';
-}
+/* Auto-refresh */
+var cd = 60;
+setInterval(function() {
+  cd--;
+  document.getElementById('autoLabel').textContent = 'Auto · ' + cd + 's';
+  if (cd <= 0) { loadAll(); cd = 60; }
+}, 1000);
 
-/* ── Port configs (W5b) ── */
-function loadSwitchPortConfigs(){
-  fetch('/api/meraki-port-configs',{cache:'no-store'})
-    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
-    .then(function(d){portCfgData=d.configs||[];buildPortCfgMap();if(allSwitches.length){filterSwitches();}})
-    .catch(function(){});
-}
-
-/* ── Link Aggregations (W5c) ── */
-function loadLinkAggregations(){
-  fetch('/api/meraki-link-aggregations',{cache:'no-store'})
-    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
-    .then(function(d){
-      linkAggPortMap=d.portMap||{};
-      /* Cập nhật badge tổng số AGGR group */
-      var el=document.getElementById('badge-aggr');
-      if(el)el.textContent=d.totalGroups+' groups · '+d.totalPorts+' ports';
-      /* Re-render cards nếu switch data đã có */
-      if(allSwitches.length)filterSwitches();
-    })
-    .catch(function(){});
-}
-
-/* ══════════════════════════════════════════
-   W6a — WAN Uplinks
-   ══════════════════════════════════════════ */
-
-function loadUplinks(){
-  fetch('/api/meraki-uplinks',{cache:'no-store'})
-    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
-    .then(function(d){
-      uplinkDevices=d.devices||[];
-      renderUplinks(d);
-      var el=document.getElementById('badge-uplinks');
-      if(el){
-        var tot=uplinkDevices.reduce(function(s,dv){return s+(dv.uplinks||[]).length;},0);
-        el.textContent=d.totalActive+' active · '+tot+' links';
-        el.className=d.totalDown>0?'panel-badge red':'panel-badge green';
-      }
-      var ef=document.getElementById('uplinkFooter');
-      if(ef&&d.fetchedAt)ef.textContent='Cập nhật: '+new Date(d.fetchedAt).toLocaleTimeString('vi-VN');
-    })
-    .catch(function(){
-      var b=document.getElementById('uplinkBody');
-      if(b)b.innerHTML='<div class="tbl-msg" style="grid-column:1/-1">Không thể tải WAN uplinks</div>';
-      var el=document.getElementById('badge-uplinks');
-      if(el){el.textContent='Lỗi';el.className='panel-badge red';}
-    });
-}
-
-function renderUplinks(d){
-  var body=document.getElementById('uplinkBody');
-  if(!body)return;
-  var devs=d.devices||[];
-  var html=[];
-  devs.forEach(function(dev){
-    (dev.uplinks||[]).forEach(function(ul){
-      var isActive=ul.status==='active';
-      var isReady =ul.status==='ready'||ul.status==='standby';
-      var cardCls ='uplink-card'+(isActive?' active':isReady?' ready':' failed');
-      var dotColor=isActive?'var(--green)':isReady?'var(--amber)':'var(--red)';
-      var sLbl    =isActive?'Active':isReady?'Standby':(ul.status||'Unknown');
-      var assignTag=ul.ipAssignedBy==='static'
-        ?'<span style="font-size:10px;padding:1px 6px;border-radius:3px;background:#1e2235;color:#7c8db5;font-family:var(--mono)">STATIC</span>'
-        :ul.ipAssignedBy==='dhcp'
-        ?'<span style="font-size:10px;padding:1px 6px;border-radius:3px;background:rgba(96,165,250,.1);color:var(--accent)">DHCP</span>'
-        :'<span style="color:var(--muted);font-size:11px">—</span>';
-      var provRow=ul.provider?'<div class="ul-row"><span class="ul-lbl">Provider</span><span class="ul-val">'+esc(ul.provider)+'</span></div>':'';
-      html.push(
-        '<div class="'+cardCls+'">'
-        +'<div class="ul-header">'
-        +'<span class="ul-iface">'+esc(ul.interface?ul.interface.toUpperCase():'WAN')+'</span>'
-        +'<span class="ul-status"><span style="color:'+dotColor+'">●</span> '+esc(sLbl)+'</span>'
-        +'</div>'
-        +'<div class="ul-device">'+esc(dev.name||dev.serial)
-        +(dev.model?' &nbsp;<span style="font-family:var(--mono);font-size:10px;color:var(--muted)">'+esc(dev.model)+'</span>':'')
-        +'</div>'
-        +'<div class="ul-divider"></div>'
-        +(ul.ip       ?'<div class="ul-row"><span class="ul-lbl">IP LAN</span><span class="ul-val">'+esc(ul.ip)+'</span></div>':'')
-        +(ul.publicIp ?'<div class="ul-row"><span class="ul-lbl">Public IP</span><span class="ul-val">'+esc(ul.publicIp)+'</span></div>':'')
-        +(ul.gateway  ?'<div class="ul-row"><span class="ul-lbl">Gateway</span><span class="ul-val">'+esc(ul.gateway)+'</span></div>':'')
-        +(ul.primaryDns?'<div class="ul-row"><span class="ul-lbl">DNS</span><span class="ul-val">'+esc(ul.primaryDns)+(ul.secondaryDns?' / '+esc(ul.secondaryDns):'')+'</span></div>':'')
-        +provRow
-        +(ul.ipAssignedBy?'<div class="ul-row"><span class="ul-lbl">Assignment</span><span>'+assignTag+'</span></div>':'')
-        +'</div>'
-      );
-    });
-  });
-  body.innerHTML=html.length
-    ?html.join('')
-    :'<div class="tbl-msg" style="grid-column:1/-1">Không có uplink data</div>';
-}
-
-/* ══════════════════════════════════════════
-   W6b — L3 Switch Routing (SVIs + Static Routes)
-   ══════════════════════════════════════════ */
-function loadVlansRoutes(){
-  fetch('/api/meraki-l3-routing',{cache:'no-store'})
-    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
-    .then(function(d){
-      vlansData  = d.interfaces   || [];
-      routesData = d.staticRoutes || [];
-      renderVlans(vlansData);
-      renderRoutes(routesData);
-      var ev=document.getElementById('badge-vlans');
-      if(ev){ev.textContent=vlansData.length+' interfaces';ev.className=vlansData.length?'panel-badge green':'panel-badge';}
-      var er=document.getElementById('badge-routes');
-      if(er){er.textContent=routesData.length+' routes';er.className=routesData.length?'panel-badge green':'panel-badge';}
-      var ts=d.fetchedAt?'Cập nhật: '+new Date(d.fetchedAt).toLocaleTimeString('vi-VN'):'';
-      var ef1=document.getElementById('vlanFooter');var ef2=document.getElementById('routeFooter');
-      if(ef1)ef1.textContent=ts;if(ef2)ef2.textContent=ts;
-      filterL3Interfaces();
-    })
-    .catch(function(){
-      var vb=document.getElementById('vlanBody');var rb=document.getElementById('routeBody');
-      if(vb)vb.innerHTML='<tr><td colspan="7" class="tbl-msg">Không thể tải L3 interfaces</td></tr>';
-      if(rb)rb.innerHTML='<tr><td colspan="6" class="tbl-msg">Không thể tải Static Routes</td></tr>';
-      var ev=document.getElementById('badge-vlans');var er=document.getElementById('badge-routes');
-      if(ev){ev.textContent='Lỗi';ev.className='panel-badge red';}
-      if(er){er.textContent='Lỗi';er.className='panel-badge red';}
-    });
-}
-
-function filterL3Interfaces(){
-  var q=(document.getElementById('l3Search')||{}).value||'';
-  q=q.toLowerCase();
-  var rows=vlansData.filter(function(v){
-    if(!q)return true;
-    return String(v.vlanId||'').includes(q)
-      ||(v.name||'').toLowerCase().includes(q)
-      ||(v.subnet||'').includes(q)
-      ||(v.interfaceIp||'').includes(q)
-      ||(v.switchName||'').toLowerCase().includes(q);
-  });
-  var lc=document.getElementById('l3Count');
-  if(lc)lc.textContent=rows.length!==vlansData.length?rows.length+' / '+vlansData.length+' interfaces':'';
-  renderVlans(rows);
-}
-
-function renderVlans(ifaces){
-  var body=document.getElementById('vlanBody');
-  if(!body)return;
-  if(!ifaces.length){body.innerHTML='<tr><td colspan="7" class="tbl-msg">Không có L3 interface nào</td></tr>';return;}
-  /* Sort by VLAN ID */
-  var sorted=ifaces.slice().sort(function(a,b){return(a.vlanId||0)-(b.vlanId||0);});
-  body.innerHTML=sorted.map(function(v){
-    var ospfArea=v.ospfSettings&&v.ospfSettings.area&&v.ospfSettings.area!=='ospfDisabled'?v.ospfSettings.area:null;
-    var ospfPassive=v.ospfSettings&&v.ospfSettings.isPassiveEnabled;
-    var ospfCell=ospfArea
-      ?'<span class="ospf-badge">Area '+esc(ospfArea)+(ospfPassive?' P':'')+'</span>'
-      :'<span style="color:var(--muted);font-size:11px">—</span>';
-    var mcast=(v.multicastRouting||'disabled')!=='disabled'
-      ?'<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(251,191,36,.1);color:var(--amber);border:1px solid rgba(251,191,36,.2)">'+esc(v.multicastRouting)+'</span>'
-      :'<span style="color:var(--muted);font-size:11px">—</span>';
-    var swBadge=v.switchName
-      ?'<span style="font-size:10px;color:var(--muted)">'+esc(v.switchName)+'</span>'
-      :(v.switchSerial?'<span class="cell-mac">'+esc(v.switchSerial)+'</span>':'—');
-    return'<tr>'
-      +'<td><span class="vlan-id-tag">'+esc(String(v.vlanId!==undefined?v.vlanId:'—'))+'</span></td>'
-      +'<td><span style="font-weight:600">'+esc(v.name||'—')+'</span></td>'
-      +'<td><span class="subnet-mono">'+esc(v.subnet||'—')+'</span></td>'
-      +'<td><span class="cell-ip">'+esc(v.interfaceIp||'—')+'</span></td>'
-      +'<td>'+ospfCell+'</td>'
-      +'<td>'+mcast+'</td>'
-      +'<td>'+swBadge+'</td>'
-    +'</tr>';
-  }).join('');
-}
-
-function renderRoutes(routes){
-  var body=document.getElementById('routeBody');
-  if(!body)return;
-  if(!routes.length){body.innerHTML='<tr><td colspan="6" class="tbl-msg">Không có static route nào</td></tr>';return;}
-  body.innerHTML=routes.map(function(r){
-    var sCls=r.enabled?'route-status route-on':'route-status route-off';
-    var sLbl=r.enabled?'Enabled':'Disabled';
-    var ospf=r.advertiseViaOspf
-      ?'<span class="ospf-badge">OSPF'+(r.preferOverOspfRoutes?' ★':'')+'</span>'
-      :'<span style="color:var(--muted);font-size:11px">—</span>';
-    var swBadge=r.switchName
-      ?'<span style="font-size:10px;color:var(--muted)">'+esc(r.switchName)+'</span>'
-      :(r.switchSerial?'<span class="cell-mac">'+esc(r.switchSerial)+'</span>':'—');
-    return'<tr>'
-      +'<td><span style="font-weight:600">'+esc(r.name||'—')+'</span></td>'
-      +'<td><span class="subnet-mono">'+esc(r.subnet||'—')+'</span></td>'
-      +'<td><span class="cell-ip">'+esc(r.nextHopIp||r.gatewayIp||'—')+'</span></td>'
-      +'<td>'+ospf+'</td>'
-      +'<td><span class="'+sCls+'">'+sLbl+'</span></td>'
-      +'<td>'+swBadge+'</td>'
-    +'</tr>';
-  }).join('');
-}
-
-function canPanel(key){return ADM||!!UPanels[key];}
-
-function enforcePanelVisibility(){
-  var map={
-    'panel-clients':'meraki.clients','panel-blocked':'meraki.blocked',
-    'panel-devices':'meraki.devices','panel-status':'meraki.status',
-    'panel-events':'meraki.events','panel-ports':'meraki.ports',
-    'panel-uplinks':'meraki.uplinks','panel-vlans':'meraki.vlans',
-    'panel-routes':'meraki.routes'
-  };
-  Object.keys(map).forEach(function(pid){
-    var el=document.getElementById(pid);
-    if(el&&!canPanel(map[pid]))el.style.display='none';
-  });
-}
-
-function loadAll(silent){
-  enforcePanelVisibility();
-  if(canPanel('meraki.clients'))loadClients(silent);
-  if(canPanel('meraki.devices'))loadDevices(silent);
-  if(canPanel('meraki.status'))loadDeviceStatus();
-  if(canPanel('meraki.events'))loadEvents(silent);
-  if(canPanel('meraki.ports')){loadSwitchPorts();loadSwitchPortConfigs();loadLinkAggregations();}
-  if(canPanel('meraki.uplinks'))loadUplinks();
-  if(canPanel('meraki.vlans')||canPanel('meraki.routes'))loadVlansRoutes();
-  if(ADM&&canPanel('meraki.blocked')){
-    document.getElementById('panel-blocked').style.display='';
-    loadBlockedList();
-  }
-}
-
-/* ── SSID filter buttons ── */
-function renderSSIDFilters(){
-  var ssids=['all'];
-  allClients.forEach(function(c){if(c.ssid&&!ssids.includes(c.ssid))ssids.push(c.ssid);});
-  document.getElementById('ssidFilters').innerHTML=ssids.map(function(s){
-    var lbl=s==='all'?'Tất cả':s;
-    return'<button class="filter-btn'+(activeSSID===s?' active':'')+'" onclick="setSSID(\''+esc(s)+'\')">'+esc(lbl)+'</button>';
-  }).join('');
-}
-function setSSID(v){activeSSID=v;renderSSIDFilters();filterClients();}
-
-/* ── Filter clients ── */
-function filterClients(){
-  var q=(document.getElementById('clientSearch').value||'').toLowerCase();
-  var rows=allClients.filter(function(c){
-    if(activeSSID!=='all'&&c.ssid!==activeSSID)return false;
-    if(!q)return true;
-    return(c.name||'').toLowerCase().includes(q)||(c.mac||'').toLowerCase().includes(q)
-      ||(c.ip||'').toLowerCase().includes(q)||(c.manufacturer||'').toLowerCase().includes(q)
-      ||(c.ssid||'').toLowerCase().includes(q)||(c.os||'').toLowerCase().includes(q);
-  });
-  var diff=rows.length!==allClients.length;
-  document.getElementById('clientCount').textContent=diff?rows.length+' / '+allClients.length+' clients':'';
-  if(!rows.length){document.getElementById('clientBody').innerHTML='<tr><td colspan="'+CLI_COLS+'" class="tbl-msg">Không tìm thấy client nào</td></tr>';return;}
-  document.getElementById('clientBody').innerHTML=rows.map(function(c){
-    var nm=(!c.name||c.name==='Unknown'||/^[0-9a-f]{8}-/i.test(c.name))?'Không rõ':c.name;
-    var nmCls=nm==='Không rõ'?'cell-name unk':'cell-name';
-    var actTd='';
-    if(ADM){
-      var m=(c.mac||'').toLowerCase();
-      if(!m){actTd='<td><span style="font-size:11px;color:var(--muted)">—</span></td>';}
-      else{
-        var blocked=clientPolicy[m]==='Blocked';
-        var safe=m.replace(/[^a-z0-9]/g,'');
-        actTd='<td id="clipa-'+safe+'">'+cliActHtml(m,blocked,nm,c.ip)+'</td>';
-      }
-    }
-    return'<tr>'
-      +'<td><span class="'+nmCls+'" title="'+esc(c.name)+'">'+esc(nm)+'</span>'+(ADM&&clientPolicy[(c.mac||'').toLowerCase()]==='Blocked'?' <span style="font-size:10px;color:var(--red);font-weight:700">⛔ ĐÃ CHẶN</span>':'')+'</td>'
-      +'<td><span class="cell-ip">'+esc(c.ip)+'</span></td>'
-      +'<td class="hide-sm"><span class="cell-mac">'+esc(c.mac)+'</span></td>'
-      +'<td>'+ssidPill(c.ssid)+'</td>'
-      +'<td class="hide-sm"><span class="vlan-tag">'+esc(c.vlan)+'</span></td>'
-      +'<td class="hide-sm"><span style="font-size:11px;color:var(--muted)">'+esc(c.manufacturer==='—'?'':c.manufacturer)+'</span></td>'
-      +'<td class="hide-sm"><span style="font-size:11px;color:var(--muted)">'+esc(c.os==='—'?'':c.os)+'</span></td>'
-      +'<td><span class="since">'+timeAgo(c.lastSeen)+' trước</span></td>'
-      +actTd
-    +'</tr>';
-  }).join('');
-}
-
-/* ── Block / Unblock client (admin only) ── */
-function cliActHtml(mac,blocked,cName,cIp){
-  var n=esc(cName||'').replace(/'/g,'\\\'');
-  var ip=esc(cIp||'').replace(/'/g,'\\\'');
-  if(blocked){
-    return '<button class="cli-act unblk" onclick="cliPolicy(this,\''+mac+'\',\'Normal\',\''+n+'\',\''+ip+'\')">✅ Mở chặn</button>';
-  }
-  return '<button class="cli-act blk" onclick="cliPolicy(this,\''+mac+'\',\'Blocked\',\''+n+'\',\''+ip+'\')">⛔ Chặn</button>';
-}
-function cliToast(msg,ok){
-  var t=document.getElementById('cliToast');
-  if(!t){t=document.createElement('div');t.id='cliToast';
-    t.style.cssText='position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99999;'
-      +'padding:11px 20px;border-radius:9px;font-size:13px;font-weight:600;font-family:inherit;'
-      +'box-shadow:0 8px 28px rgba(0,0,0,.45);transition:opacity .25s;opacity:0;max-width:90vw;text-align:center';
-    document.body.appendChild(t);}
-  t.style.background=ok?'rgba(34,197,94,.16)':'rgba(239,68,68,.16)';
-  t.style.color=ok?'#22c55e':'#ef4444';
-  t.style.border='1px solid '+(ok?'rgba(34,197,94,.5)':'rgba(239,68,68,.5)');
-  t.textContent=msg;t.style.opacity='1';
-  clearTimeout(window._cliToastT);
-  window._cliToastT=setTimeout(function(){t.style.opacity='0';},3600);
-}
-function cliPolicy(btn,mac,policy,clientName,clientIp){
-  var blocking=policy==='Blocked';
-  var verb=blocking?'CHẶN':'MỞ CHẶN';
-  var label=clientName&&clientName!=='Không rõ'?clientName+' ('+mac+')':mac;
-  if(!confirm('Xác nhận '+verb+' thiết bị '+label+' ?\n\n'
-    +(blocking?'Thiết bị sẽ KHÔNG truy cập mạng được nữa (Meraki devicePolicy = Blocked).'
-              :'Thiết bị sẽ được phép truy cập mạng trở lại (devicePolicy = Normal).'))) return;
-  var cell=btn.parentNode;
-  cell.innerHTML='<span class="cli-act-prog"><span class="cli-spin"></span>Đang '+(blocking?'chặn':'mở')+'…</span>';
-  fetch('/api/meraki-client-policy',{
-    method:'POST',cache:'no-store',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({mac:mac,policy:policy,name:clientName||mac,ip:clientIp||'—'})
-  }).then(function(r){return r.json().then(function(j){return{ok:r.ok,j:j};});})
-   .then(function(res){
-     if(!res.ok||!res.j||res.j.success!==true){
-       var em=(res.j&&(res.j.error||res.j.detail))||('HTTP '+(res.j&&res.j.status||'?'));
-       cliToast('✗ Thất bại: '+em,false);
-       cell.innerHTML=cliActHtml(mac,clientPolicy[mac]==='Blocked');
-       return;
-     }
-     clientPolicy[mac]=policy;
-     cliToast(blocking?('⛔ Đã chặn '+label):('✅ Đã mở chặn '+label),true);
-     cell.innerHTML=cliActHtml(mac,blocking);
-     filterClients();
-     if(ADM)loadBlockedList();
-   })
-   .catch(function(e){
-     cliToast('✗ Lỗi kết nối: '+e,false);
-     cell.innerHTML=cliActHtml(mac,clientPolicy[mac]==='Blocked');
-   });
-}
-
-/* ── Blocked clients list (admin) ── */
-var blockedClients=[];
-function loadBlockedList(){
-  if(!ADM)return;
-  fetch('/api/meraki-blocked-clients',{cache:'no-store'})
-    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
-    .then(function(d){
-      blockedClients=d.blocked||[];
-      blockedClients.forEach(function(b){clientPolicy[b.mac]='Blocked';});
-      renderBlockedList();
-      var badge=document.getElementById('badge-blocked');
-      if(badge){
-        badge.textContent=blockedClients.length?blockedClients.length+' đã chặn':'Không có';
-        badge.className=blockedClients.length?'panel-badge red':'panel-badge green';
-      }
-      if(allClients.length)filterClients();
-    })
-    .catch(function(){});
-}
-function renderBlockedList(){
-  var el=document.getElementById('blockedBody');
-  if(!el)return;
-  if(!blockedClients.length){
-    el.innerHTML='<tr><td colspan="5" class="tbl-msg" style="color:var(--green)">✅ Không có thiết bị nào bị chặn</td></tr>';
-    return;
-  }
-  el.innerHTML=blockedClients.map(function(b){
-    var ago=timeAgo(b.blockedAt);
-    return'<tr>'
-      +'<td><span class="cell-name">'+esc(b.name||b.mac)+'</span></td>'
-      +'<td><span class="cell-mac">'+esc(b.mac)+'</span></td>'
-      +'<td><span class="cell-ip">'+esc(b.ip||'—')+'</span></td>'
-      +'<td><span class="since">'+esc(ago)+' trước — bởi '+esc(b.blockedBy||'?')+'</span></td>'
-      +'<td><button class="cli-act unblk" onclick="cliPolicy(this,\''+b.mac+'\',\'Normal\',\''+esc(b.name||'')+'\',\''+esc(b.ip||'')+'\')">✅ Mở chặn</button></td>'
-    +'</tr>';
-  }).join('');
-}
-
-/* ── Filter devices ── */
-function filterDevices(){
-  var q=(document.getElementById('devSearch').value||'').toLowerCase();
-  var rows=allDevices.filter(function(d){
-    if(!q)return true;
-    return(d.name||'').toLowerCase().includes(q)||(d.model||'').toLowerCase().includes(q)
-      ||(d.serial||'').toLowerCase().includes(q)||(d.lanIp||'').toLowerCase().includes(q);
-  });
-  document.getElementById('devCount').textContent=rows.length!==allDevices.length?rows.length+' / '+allDevices.length+' thiết bị':'';
-  if(!rows.length){document.getElementById('devBody').innerHTML='<tr><td colspan="8" class="tbl-msg">Không tìm thấy thiết bị nào</td></tr>';return;}
-  document.getElementById('devBody').innerHTML=rows.map(function(d){
-    var isOn=d.status==='online';
-    var dotCls=isOn?'dot-on':d.status==='alerting'?'dot-alr':'dot-off';
-    var lbl=isOn?'Online':d.status==='alerting'?'⚠ Firmware':'Offline';
-    var fwCls=d.firmwareOk?'':'color:var(--amber)';
-    var typeLabel={'switch':'Switch','wireless':'AP','appliance':'Firewall','camera':'Camera'}[d.productType]||d.productType;
-    var nameLink=d.url
-      ?'<a href="'+esc(d.url)+'" target="_blank" class="cell-name" style="color:var(--text);text-decoration:none" title="'+esc(d.name)+'">'+esc(d.name||'—')+'</a>'
-      :'<span class="cell-name">'+esc(d.name||'—')+'</span>';
-    return'<tr>'
-      +'<td>'+nameLink+'</td>'
-      +'<td><span class="ssid-pill '+(d.productType==='wireless'?'p-wifi':d.productType==='appliance'?'p-guest':'p-wired')+'">'+esc(d.typeIcon)+' '+esc(typeLabel)+'</span></td>'
-      +'<td><span class="cell-model">'+esc(d.model)+'</span></td>'
-      +'<td class="hide-sm"><span class="cell-mac" style="font-size:10px">'+esc(d.serial)+'</span></td>'
-      +'<td><span class="cell-ip">'+esc(d.lanIp)+'</span></td>'
-      +'<td class="hide-sm"><span style="font-size:10px;color:var(--muted)">'+esc(d.tags||'')+'</span></td>'
-      +'<td class="hide-sm"><span style="font-size:10px;'+fwCls+'">'+esc(d.firmware)+'</span></td>'
-      +'<td><span class="status-dot"><span class="dot '+dotCls+'"></span>'+lbl+'</span></td>'
-    +'</tr>';
-  }).join('');
-}
-
-/* ── Auto-refresh clients (60s) ── */
-var cdC=60;
-setInterval(function(){
-  cdC--;document.getElementById('cdClients').textContent=cdC;
-  if(cdC<=0){cdC=60;loadClients(true);}
-},1000);
-
-/* ── Auto-refresh events (120s) ── */
-var cdE=120;
-setInterval(function(){
-  cdE--;document.getElementById('cdEvents').textContent=cdE;
-  if(cdE<=0){cdE=120;loadEvents(true);}
-},1000);
-
-/* ── Init ── */
+/* Boot */
 loadAll();
 </script>
-<div id="portTip"></div>
 </body>
 </html>

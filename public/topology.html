@@ -1,1355 +1,1114 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Movi Map Network — Sơ đồ Topology Mạng</title>
+<title>Movi Map Network — Sơ đồ Topology</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#0b0d14;--surface:#131620;--card:#1a1d2e;--border:#252840;
-  --text:#e2e8f0;--muted:#64748b;--accent:#60a5fa;
-  --green:#34d399;--red:#f87171;--amber:#fbbf24;
-  --green-dim:rgba(52,211,153,.08);--red-dim:rgba(248,113,113,.08);
-  --mono:'SF Mono','Fira Code',monospace;
+:root, [data-theme="dark"] {
+  --bg: oklch(0.18 0.012 250); --surface: oklch(0.22 0.012 250); --surface-2: oklch(0.26 0.012 250);
+  --card: oklch(0.21 0.012 250); --border: oklch(0.31 0.012 250); --border-soft: oklch(0.27 0.012 250);
+  --text: oklch(0.96 0.005 250); --text-2: oklch(0.86 0.008 250); --muted: oklch(0.62 0.012 250);
+  --track: oklch(0.30 0.012 250);
+  --accent: oklch(0.72 0.18 290); --violet: oklch(0.72 0.18 290);
+  --ok: oklch(0.74 0.16 155); --warn: oklch(0.78 0.16 70); --bad: oklch(0.68 0.20 25);
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif; --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --radius: 12px; --radius-sm: 8px;
 }
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
-a{color:inherit;text-decoration:none}
-@keyframes spin{to{transform:rotate(360deg)}}
+[data-theme="light"] {
+  --bg: oklch(0.985 0.003 250); --surface: oklch(1 0 0); --surface-2: oklch(0.965 0.005 250);
+  --card: oklch(1 0 0); --border: oklch(0.91 0.008 250); --border-soft: oklch(0.94 0.008 250);
+  --text: oklch(0.22 0.015 250); --text-2: oklch(0.36 0.015 250); --muted: oklch(0.55 0.012 250);
+  --track: oklch(0.93 0.008 250);
+  --accent: oklch(0.55 0.18 290); --violet: oklch(0.55 0.18 290);
+  --ok: oklch(0.52 0.15 155); --warn: oklch(0.62 0.16 70); --bad: oklch(0.55 0.20 25);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { font-family: var(--font-sans); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+input { font: inherit; }
+::selection { background: color-mix(in oklch, var(--accent) 35%, transparent); }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+@keyframes spin  { to { transform: rotate(360deg); } }
 
-/* ── HEADER ── */
-.header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.5rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
-.header-left{display:flex;align-items:center;gap:12px}
-.back-btn{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);padding:5px 10px;border-radius:6px;border:1px solid var(--border);transition:all .15s}
-.back-btn:hover{color:var(--text);border-color:#3d4260;background:var(--card)}
-.svc-icon{width:32px;height:32px;background:#1e2235;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px}
-.svc-name{font-size:15px;font-weight:600}
-.svc-sub{font-size:11px;color:var(--muted);margin-top:1px}
-.header-right{display:flex;align-items:center;gap:10px}
-.btn{font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit;transition:all .15s}
-.btn:hover{color:var(--text);border-color:#3d4260;background:var(--card)}
-.btn.refreshing .ri{animation:spin .6s linear infinite;display:inline-block}
+/* TOP BAR (same as index/meraki) */
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 28px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 50; backdrop-filter: blur(12px); }
+.topbar-left { display: flex; align-items: center; gap: 28px; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark { width: 30px; height: 30px; display: grid; place-items: center; background: var(--accent); color: var(--bg); border-radius: var(--radius-sm); box-shadow: 0 4px 14px color-mix(in oklch, var(--accent) 25%, transparent); }
+.brand-name { font-weight: 600; font-size: 14px; line-height: 1.1; }
+.brand-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.topnav { display: flex; gap: 2px; }
+.topnav-item { font-size: 13px; font-weight: 500; color: var(--muted); padding: 6px 12px; border-radius: var(--radius-sm); text-decoration: none; }
+.topnav-item:hover { color: var(--text); background: var(--surface-2); }
+.topnav-item.active { color: var(--text); background: var(--surface-2); }
+.clock { font-family: var(--font-mono); font-size: 13px; color: var(--text-2); padding: 6px 10px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px; font-weight: 500; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); border-radius: var(--radius-sm); cursor: pointer; }
+.btn.ghost { background: transparent; }
+.btn:hover { color: var(--text); border-color: var(--muted); }
+.btn .ri { display: inline-block; }
+.btn.refreshing .ri { animation: spin .6s linear infinite; }
+.theme-toggle { width: 32px; height: 32px; display: grid; place-items: center; padding: 0; }
 
-/* ── CONTAINER ── */
-.container{max-width:1440px;margin:0 auto;padding:1.5rem;display:flex;flex-direction:column;gap:16px}
+.main { width: 100%; max-width: 1440px; margin: 0 auto; padding: 24px 28px 64px; display: flex; flex-direction: column; gap: 20px; }
 
-/* ── PANEL ── */
-.panel{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
-.panel-header{display:flex;align-items:center;gap:9px;padding:11px 15px;cursor:pointer;user-select:none;background:#1e2235;border-bottom:1px solid var(--border);transition:background .15s}
-.panel-header:hover{background:#232640}
-.panel-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);flex:1}
-.panel-badge{font-size:10px;padding:2px 8px;border-radius:8px;background:#1e2440;color:var(--accent);border:1px solid #2d3a6a;font-weight:600;white-space:nowrap}
-.panel-badge.green{color:var(--green);background:var(--green-dim);border-color:rgba(52,211,153,.2)}
-.panel-badge.red{color:var(--red);background:var(--red-dim);border-color:rgba(248,113,113,.2)}
-.chevron{font-size:10px;color:var(--muted);transition:transform .25s;flex-shrink:0}
-.panel.collapsed>.panel-header>.chevron{transform:rotate(-90deg)}
-.panel.collapsed>.panel-body{display:none}
-.panel-body{padding:0}
+/* HERO */
+.hero { display: flex; flex-direction: column; gap: 20px; }
+.hero-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+.section-eyebrow { font-family: var(--font-mono); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; margin-bottom: 4px; }
+.hero-title { font-size: 32px; font-weight: 500; letter-spacing: -.025em; line-height: 1.1; color: var(--text); max-width: 640px; }
+.hero-accent { color: var(--accent); font-weight: 600; }
+.hero-sub { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.hero-meta { display: flex; flex-direction: column; gap: 4px; min-width: 240px; font-size: 12px; }
+.hero-meta-row { display: flex; justify-content: space-between; gap: 16px; padding: 4px 0; border-top: 1px solid var(--border-soft); }
+.hero-meta-row:first-child { border-top: none; }
+.hero-meta-row > span:first-child { color: var(--muted); }
 
-/* ── STATS ── */
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:.9rem 1.1rem;display:flex;align-items:center;gap:12px}
-.stat-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
-.stat-label{font-size:11px;color:var(--muted);font-weight:500;margin-bottom:2px}
-.stat-val{font-size:22px;font-weight:700;line-height:1;letter-spacing:-.02em}
-.c-green{color:var(--green)}.c-amber{color:var(--amber)}.c-accent{color:var(--accent)}.c-red{color:var(--red)}
+.stats { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.stat { padding: 18px 20px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.stat:last-child { border-right: none; }
+.stat-label { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+.stat-val { font-family: var(--font-mono); font-size: 28px; font-weight: 500; letter-spacing: -.03em; line-height: 1; }
+.stat-sub { font-size: 11px; color: var(--muted); }
 
-/* ── TOOLBAR ── */
-.toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap;background:rgba(30,34,53,.5)}
-.mode-chip{font-size:11px;font-weight:600;padding:5px 13px;border-radius:7px;background:rgba(96,165,250,.06);border:1px solid var(--accent);color:var(--accent);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.count-lbl{font-size:11px;color:var(--muted);margin-left:auto;white-space:nowrap}
+.card-flush { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.card-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-soft); gap: 12px; }
+.section-title { font-size: 18px; font-weight: 500; letter-spacing: -.015em; }
 
-/* ── DRAW BUTTON ── */
-.draw-btn{font-size:11px;padding:5px 14px;border-radius:7px;border:1px solid var(--accent);background:rgba(96,165,250,.08);color:var(--accent);cursor:pointer;font-family:inherit;transition:all .15s;font-weight:600;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
-.draw-btn:hover{background:rgba(96,165,250,.18);border-color:#93c5fd}
-.draw-btn:disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
-.draw-btn.drawing{opacity:.7;cursor:wait}
-.draw-btn .ri{display:inline-block}
-.draw-btn.drawing .ri{animation:spin .6s linear infinite}
+.cmdbar-segment { display: flex; gap: 2px; padding: 2px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); }
+.cmdseg { padding: 5px 14px; font-size: 12px; font-weight: 500; color: var(--muted); border-radius: 6px; white-space: nowrap; cursor: pointer; }
+.cmdseg:hover { color: var(--text); }
+.cmdseg.active { background: var(--card); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.1); }
 
-/* ── DIAGRAM WRAP ── */
-.topo-wrap{overflow-x:auto;padding:12px;background:var(--surface)}
-.topo-legend{display:flex;gap:14px;flex-wrap:wrap;padding:8px 14px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);align-items:center}
-.diagram-empty{text-align:center;padding:3.5rem 2rem;color:var(--muted)}
-.diagram-empty .empty-ico{font-size:2.5rem;margin-bottom:12px}
-.diagram-empty .empty-msg{font-size:13px;margin-bottom:16px}
+.tab-panel-wrap { background: var(--bg); }
 
-/* ── FOOTER BAR ── */
-.footer-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);background:rgba(19,22,32,.8)}
+/* Intro card above each diagram */
+.diagram-intro { padding: 14px 20px; font-size: 13px; color: var(--text-2); background: var(--surface-2); border-bottom: 1px solid var(--border-soft); line-height: 1.6; }
+.diagram-intro b { color: var(--text); font-weight: 600; }
 
-/* ── SPINNER ── */
-.spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-bottom:8px}
+/* Toolbar / draw button row */
+.draw-toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--border-soft); background: var(--surface-2); flex-wrap: wrap; }
+.draw-btn { font-size: 13px; padding: 7px 16px; border-radius: var(--radius-sm); border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, transparent); color: var(--accent); cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+.draw-btn:hover { background: color-mix(in oklch, var(--accent) 18%, transparent); }
+.draw-btn:disabled { opacity: .45; cursor: not-allowed; }
+.draw-btn .ri { display: inline-block; }
+.draw-btn.drawing .ri { animation: spin .6s linear infinite; }
+.draw-hint { font-size: 12px; color: var(--muted); }
+.draw-count { margin-left: auto; font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
 
-/* ── RESPONSIVE ── */
-@media(max-width:900px){.stats{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:600px){.container{padding:1rem}}
+/* Diagram container */
+.diagram-wrap { overflow-x: auto; padding: 16px; background: var(--bg); }
+.diagram-empty { text-align: center; padding: 56px 20px; color: var(--muted); }
+.diagram-empty .empty-ico { font-size: 36px; margin-bottom: 12px; }
+.diagram-empty .empty-msg { font-size: 14px; margin-bottom: 16px; }
+
+.spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin-bottom: 10px; }
+
+/* Legend bar at the bottom of each diagram */
+.diagram-legend { display: flex; gap: 16px; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--border-soft); font-size: 11px; color: var(--muted); align-items: center; background: var(--surface-2); }
+
+/* Panel badge */
+.panel-badge { font-family: var(--font-mono); font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--muted); white-space: nowrap; }
+.panel-badge.tone-ok  { color: var(--ok);  border-color: color-mix(in oklch, var(--ok) 35%, transparent);  background: color-mix(in oklch, var(--ok) 8%, transparent); }
+.panel-badge.tone-bad { color: var(--bad); border-color: color-mix(in oklch, var(--bad) 35%, transparent); background: color-mix(in oklch, var(--bad) 8%, transparent); }
+
+/* Inner styles consumed by render*Map functions — copy from original */
+.rmap-search,.wmap-search,.rmap-sec,.wmap-sec,.rmap-svigrid,.rmap-svi,.rmap-hub,.rmap-tools,.wmap-tools,
+.rmap-stat,.wmap-stat,.rmt-wrap,.wt-wrap,#rmTable,#wTable,
+.svg-shell { /* placeholder so render* fns work the same */ }
+
+.footer { display: flex; justify-content: space-between; padding: 20px 4px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border-soft); }
+
+@media (max-width: 1100px) { .stats { grid-template-columns: repeat(3, 1fr); } .stat:nth-child(3) { border-right: none; } }
+@media (max-width: 700px) { .stats { grid-template-columns: repeat(2, 1fr); } .stat { border-right: 1px solid var(--border) !important; } .stat:nth-child(2n) { border-right: none !important; } }
 </style>
 </head>
 <body>
 
-<header class="header">
-  <div class="header-left">
-    <a class="back-btn" href="/">← Dashboard</a>
-    <div class="svc-icon">🗺️</div>
-    <div>
-      <div class="svc-name">Movi Map Network</div>
-      <div class="svc-sub">Sơ đồ Topology Mạng · Cisco Meraki</div>
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">
+          <path d="M3 12 L9 6 L15 12 L21 6"></path><path d="M3 18 L9 12 L15 18 L21 12" opacity="0.45"></path>
+        </svg>
+      </div>
+      <div><div class="brand-name">Home Lab</div><div class="brand-sub">Movi · Topology</div></div>
     </div>
+    <nav class="topnav">
+      <a class="topnav-item" href="/">Overview</a>
+      <a class="topnav-item" href="/meraki.html">Meraki</a>
+      <a class="topnav-item active" href="/topology.html">Topology</a>
+      <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
+    </nav>
   </div>
-  <div class="header-right">
-    <span id="fetchedAt" style="font-size:11px;color:var(--muted)"></span>
-    <button class="btn" id="refreshBtn" onclick="refreshAll()">
-      <span class="ri">⟳</span> Vẽ lại
+  <div class="topbar-right">
+    <span id="fetchedAt" class="muted small mono"></span>
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="btn ghost" id="refreshBtn" onclick="refreshActive()"><span class="ri">↻</span> Vẽ lại</button>
+    <button class="btn ghost theme-toggle" id="themeToggle" title="Toggle theme">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"></circle><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"></path></svg>
     </button>
   </div>
 </header>
 
-<div class="container">
+<main class="main">
 
-  <!-- STATS -->
-  <div class="stats">
-    <div class="stat-card">
-      <div class="stat-icon" style="background:rgba(59,130,246,.1)">🔵</div>
-      <div><div class="stat-label">Core Switches</div><div class="stat-val c-accent" id="statCore">—</div></div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon" style="background:rgba(52,211,153,.08)">🟢</div>
-      <div><div class="stat-label">Switches Online</div><div class="stat-val c-green" id="statOn">—</div></div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon" style="background:rgba(248,113,113,.08)">🔴</div>
-      <div><div class="stat-label">Switches Offline</div><div class="stat-val c-red" id="statOff">—</div></div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon" style="background:rgba(251,191,36,.08)">⚡</div>
-      <div><div class="stat-label">Ports Connected</div><div class="stat-val c-amber" id="statPorts">—</div></div>
-    </div>
-  </div>
-
-  <!-- PANEL A: TOPOLOGY MAP -->
-  <div class="panel" id="panel-topo">
-    <div class="panel-header" onclick="togglePanel('panel-topo')">
-      <span>🗺️</span>
-      <span class="panel-title">Sơ đồ Topology Movi</span>
-      <span class="panel-badge" id="badge-topo">Chờ vẽ…</span>
-      <span class="chevron">▼</span>
-    </div>
-    <div class="panel-body">
-      <div class="toolbar">
-        <span class="mode-chip">🗺️ Topology Map</span>
-        <button class="draw-btn" id="btnDrawTopo" onclick="drawTopo()"><span class="ri">🎨</span> Vẽ sơ đồ</button>
-        <span style="font-size:11px;color:var(--muted)">CDP/LLDP · LAG · port LED</span>
-        <span class="count-lbl" id="topoCount"></span>
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-head">
+      <div>
+        <div class="section-eyebrow">Movi Map Network</div>
+        <h1 class="hero-title">Sơ đồ <span class="hero-accent">network của Movi</span>.</h1>
+        <p class="hero-sub">3 góc nhìn: <b>Topology</b> (sơ đồ tổng thể) · <b>Route Map</b> (L3 / VLAN) · <b>Wiring</b> (dây vật lý)</p>
       </div>
-      <div class="topo-wrap" id="topoContainer">
-        <div class="diagram-empty">
-          <div class="empty-ico">🗺️</div>
-          <div class="empty-msg">Nhấn <strong>Vẽ sơ đồ</strong> để tải dữ liệu và hiển thị sơ đồ topology</div>
-          <button class="draw-btn" onclick="drawTopo()"><span class="ri">🎨</span> Vẽ sơ đồ</button>
+      <div class="hero-meta">
+        <div class="hero-meta-row"><span>Stack</span><span>MS350 ×2 + 1 server</span></div>
+        <div class="hero-meta-row"><span>Floors</span><span>F1 – F5</span></div>
+        <div class="hero-meta-row"><span>Data source</span><span class="mono">n8n proxy</span></div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="stat-label">Core switches</div><div class="stat-val" style="color:var(--accent)" id="statCore">—</div><div class="stat-sub">MS350 stack</div></div>
+      <div class="stat"><div class="stat-label">Switches online</div><div class="stat-val" style="color:var(--ok)" id="statOn">—</div><div class="stat-sub">≥1 port dùng</div></div>
+      <div class="stat"><div class="stat-label">Switches offline</div><div class="stat-val" style="color:var(--bad)" id="statOff">—</div><div class="stat-sub">0 port dùng</div></div>
+      <div class="stat"><div class="stat-label">Ports connected</div><div class="stat-val" style="color:var(--warn)" id="statPorts">—</div><div class="stat-sub">toàn stack</div></div>
+      <div class="stat"><div class="stat-label">SVIs / Routes</div><div class="stat-val">—<span class="muted" style="font-size:14px"> / —</span></div><div class="stat-sub" id="statL3">VLAN + static</div></div>
+    </div>
+  </section>
+
+  <!-- TAB SELECTOR -->
+  <section class="card-flush">
+    <header class="card-head">
+      <div>
+        <div class="section-eyebrow">3 góc nhìn</div>
+        <div class="section-title">Chọn loại sơ đồ muốn xem</div>
+      </div>
+      <div class="cmdbar-segment" role="tablist">
+        <button class="cmdseg active" id="tab-topo"   onclick="switchTab('topo')">🗺 Topology</button>
+        <button class="cmdseg"        id="tab-route"  onclick="switchTab('route')">📍 Route Map</button>
+        <button class="cmdseg"        id="tab-wiring" onclick="switchTab('wiring')">🔌 Wiring</button>
+      </div>
+    </header>
+    <div class="tab-panel-wrap" id="tab-content">
+      <!-- TAB: TOPOLOGY -->
+      <div data-tab="topo">
+        <div class="diagram-intro">
+          <b>Sơ đồ topology · 3 lớp:</b> WAN → <b style="color:var(--accent)">CORE STACK</b> → <b style="color:var(--violet)">DISTRIBUTION</b> (mỗi sàn 1 switch SW1) → <b style="color:var(--ok)">ACCESS</b> (các switch tầng nhỏ SW2/SW3/SW4). Nhãn <span class="mono" style="color:var(--accent)">P1 ↔ P24</span> là port của 2 đầu cable (CDP/LLDP).
         </div>
-      </div>
-      <div class="topo-legend" id="topoLegend"></div>
-    </div>
-  </div>
-
-  <!-- PANEL B: ROUTE MAP -->
-  <div class="panel collapsed" id="panel-route">
-    <div class="panel-header" onclick="togglePanel('panel-route')">
-      <span>📍</span>
-      <span class="panel-title">Route Map Movi</span>
-      <span class="panel-badge" id="badge-route">Chờ vẽ…</span>
-      <span class="chevron">▼</span>
-    </div>
-    <div class="panel-body">
-      <div class="toolbar">
-        <span class="mode-chip">📍 Route Map</span>
-        <button class="draw-btn" id="btnDrawRoute" onclick="drawRoute()"><span class="ri">🎨</span> Vẽ sơ đồ</button>
-        <span style="font-size:11px;color:var(--muted)">L3 SVIs · Static Routes · OSPF</span>
-        <span class="count-lbl" id="routeCount"></span>
-      </div>
-      <div class="topo-wrap" id="routeContainer">
-        <div class="diagram-empty">
-          <div class="empty-ico">📍</div>
-          <div class="empty-msg">Nhấn <strong>Vẽ sơ đồ</strong> để tải dữ liệu L3 routing và hiển thị</div>
-          <button class="draw-btn" onclick="drawRoute()"><span class="ri">🎨</span> Vẽ sơ đồ</button>
+        <div class="draw-toolbar">
+          <button class="draw-btn" id="btnDrawTopo" onclick="drawTopo()"><span class="ri">🎨</span> Vẽ sơ đồ</button>
+          <span class="draw-hint">CDP/LLDP · LAG · port LED · rê chuột vào switch xem chi tiết</span>
+          <span class="panel-badge" id="badge-topo">Chờ vẽ…</span>
+          <span class="draw-count" id="topoCount"></span>
         </div>
-      </div>
-      <div class="topo-legend" id="routeLegend"></div>
-    </div>
-  </div>
-
-  <!-- PANEL C: WIRING DIAGRAM -->
-  <div class="panel collapsed" id="panel-wiring">
-    <div class="panel-header" onclick="togglePanel('panel-wiring')">
-      <span>🔌</span>
-      <span class="panel-title">Sơ đồ dây switch Movi</span>
-      <span class="panel-badge" id="badge-wiring">Chờ vẽ…</span>
-      <span class="chevron">▼</span>
-    </div>
-    <div class="panel-body">
-      <div class="toolbar">
-        <span class="mode-chip">🔌 Wiring Map</span>
-        <button class="draw-btn" id="btnDrawWiring" onclick="drawWiring()"><span class="ri">🎨</span> Vẽ sơ đồ</button>
-        <button class="draw-btn" id="btnWiringFs" onclick="wiringFullscreen()" style="display:none"><span class="ri">⛶</span> Toàn màn hình</button>
-        <span style="font-size:11px;color:var(--muted)">CDP/LLDP · port-to-port (đúng từng dây)</span>
-        <span class="count-lbl" id="wiringCount"></span>
-      </div>
-      <div class="topo-wrap" id="wiringContainer">
-        <div class="diagram-empty">
-          <div class="empty-ico">🔌</div>
-          <div class="empty-msg">Nhấn <strong>Vẽ sơ đồ</strong> để tải dữ liệu và vẽ sơ đồ dây vật lý</div>
-          <button class="draw-btn" onclick="drawWiring()"><span class="ri">🎨</span> Vẽ sơ đồ</button>
+        <div class="diagram-wrap" id="topoContainer">
+          <div class="diagram-empty"><div class="empty-ico">🗺️</div><div class="empty-msg">Nhấn <b>Vẽ sơ đồ</b> để tải dữ liệu và hiển thị</div><button class="draw-btn" onclick="drawTopo()"><span class="ri">🎨</span> Vẽ sơ đồ</button></div>
         </div>
+        <div class="diagram-legend" id="topoLegend"></div>
       </div>
-      <div class="topo-legend" id="wiringLegend"></div>
+      <!-- TAB: ROUTE -->
+      <div data-tab="route" style="display:none">
+        <div class="diagram-intro">
+          <b>Sơ đồ Routing · 2 phần:</b> <b style="color:var(--accent)">SVI</b> = cổng VLAN trong switch (gateway của mỗi VLAN) · <b style="color:var(--warn)">Static Route</b> = đường đi tới subnet bên ngoài. Cột "Đích → Next-hop" cho biết gói tin tới subnet đó sẽ đi qua đâu.
+        </div>
+        <div class="draw-toolbar">
+          <button class="draw-btn" id="btnDrawRoute" onclick="drawRoute()"><span class="ri">🎨</span> Vẽ sơ đồ</button>
+          <span class="draw-hint">L3 SVIs · Static Routes · OSPF</span>
+          <span class="panel-badge" id="badge-route">Chờ vẽ…</span>
+          <span class="draw-count" id="routeCount"></span>
+        </div>
+        <div class="diagram-wrap" id="routeContainer">
+          <div class="diagram-empty"><div class="empty-ico">📍</div><div class="empty-msg">Nhấn <b>Vẽ sơ đồ</b> để tải dữ liệu L3 routing</div><button class="draw-btn" onclick="drawRoute()"><span class="ri">🎨</span> Vẽ sơ đồ</button></div>
+        </div>
+        <div class="diagram-legend" id="routeLegend"></div>
+      </div>
+      <!-- TAB: WIRING -->
+      <div data-tab="wiring" style="display:none">
+        <div class="diagram-intro">
+          <b>Sơ đồ dây vật lý:</b> Mỗi switch là 1 thẻ — <b>rê chuột vào</b> để xem bảng port của nó và sáng riêng các cable liên quan. Bảng bên dưới tra cứu port-to-port đầy đủ.
+        </div>
+        <div class="draw-toolbar">
+          <button class="draw-btn" id="btnDrawWiring" onclick="drawWiring()"><span class="ri">🎨</span> Vẽ sơ đồ</button>
+          <button class="draw-btn" id="btnWiringFs" onclick="wiringFullscreen()" style="display:none"><span class="ri">⛶</span> Toàn màn hình</button>
+          <span class="draw-hint">CDP/LLDP · port-to-port (đúng từng dây)</span>
+          <span class="panel-badge" id="badge-wiring">Chờ vẽ…</span>
+          <span class="draw-count" id="wiringCount"></span>
+        </div>
+        <div class="diagram-wrap" id="wiringContainer">
+          <div class="diagram-empty"><div class="empty-ico">🔌</div><div class="empty-msg">Nhấn <b>Vẽ sơ đồ</b> để tải dữ liệu và vẽ sơ đồ dây vật lý</div><button class="draw-btn" onclick="drawWiring()"><span class="ri">🎨</span> Vẽ sơ đồ</button></div>
+        </div>
+        <div class="diagram-legend" id="wiringLegend"></div>
+      </div>
     </div>
-  </div>
+  </section>
 
-</div><!-- /container -->
+  <footer class="footer">
+    <span>Topology engine · CDP / LLDP · n8n proxy</span>
+    <span class="mono">/api/meraki-switch-ports · /api/meraki-l3-routing · /api/meraki-devices</span>
+  </footer>
+</main>
 
 <script>
-/* ════════════════════════════════════════════
-   STATE
-   ════════════════════════════════════════════ */
-var allSwitches    = [];
-var linkAggPortMap = {};
-var portCfgData    = [];
-var l3Data         = { interfaces:[], staticRoutes:[] };
-var deviceList     = [];   /* /api/meraki-devices → mac/ip → name resolution */
-var _wCables       = [];   /* deduped physical cable list for table */
-
-var drawnPanels = { topo:false, route:false, wiring:false };
-
-var _ADM = !!(window.__USER__ && window.__USER__.isAdmin);
-var _UPanels = (window.__USER__ && window.__USER__.panels) || {};
+/* ═══════════════════════════════════════════════════════════════
+   AUTH + THEME
+   ═══════════════════════════════════════════════════════════════ */
+function _readUserCookie() {
+  try { var m = document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/); return m ? JSON.parse(decodeURIComponent(m[1])) : null; }
+  catch(e) { return null; }
+}
+var __USER__ = window.__USER__ || _readUserCookie() || { role:'user', permissions:{}, isAdmin:false };
+var _ADM = !!__USER__.isAdmin;
+var _UPanels = __USER__.panels || {};
 function canTopoPanel(key){ return _ADM || !!_UPanels[key]; }
 
-(function enforceTopoPanels(){
-  var map = {'panel-topo':'topology.topo','panel-route':'topology.route','panel-wiring':'topology.wiring'};
-  Object.keys(map).forEach(function(pid){
-    var el = document.getElementById(pid);
-    if(el && !canTopoPanel(map[pid])) el.style.display='none';
+(function initTheme() {
+  var saved = null;
+  try { saved = localStorage.getItem('dh_theme'); } catch(e) {}
+  if (saved === 'light') document.documentElement.dataset.theme = 'light';
+  document.getElementById('themeToggle').addEventListener('click', function() {
+    var next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('dh_theme', next); } catch(e) {}
   });
 })();
+setInterval(function(){ document.getElementById('clock').textContent = new Date().toLocaleTimeString('vi-VN',{hour12:false}); }, 1000);
 
-/* ════════════════════════════════════════════
-   HELPERS
-   ════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   STATE — preserved from original
+   ═══════════════════════════════════════════════════════════════ */
+var allSwitches = [], linkAggPortMap = {}, portCfgData = [], l3Data = { interfaces:[], staticRoutes:[] }, deviceList = [], _wCables = [];
+var drawnPanels = { topo:false, route:false, wiring:false };
+var activeTab = 'topo';
+
+function switchTab(t) {
+  activeTab = t;
+  ['topo','route','wiring'].forEach(function(k){
+    document.getElementById('tab-' + k).classList.toggle('active', k === t);
+    document.querySelector('[data-tab="' + k + '"]').style.display = (k === t ? '' : 'none');
+  });
+}
+function refreshActive() {
+  if (activeTab === 'topo')   drawTopo();
+  if (activeTab === 'route')  drawRoute();
+  if (activeTab === 'wiring') drawWiring();
+}
+
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function escSvg(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-function togglePanel(id){
-  var p=document.getElementById(id);
-  if(p) p.classList.toggle('collapsed');
-}
-
 function setBtnState(id, loading, label){
-  var b=document.getElementById(id);
-  if(!b)return;
-  b.disabled=loading;
-  b.classList.toggle('drawing',loading);
-  b.innerHTML=loading
-    ? '<span class="ri">⟳</span> Đang vẽ…'
-    : '<span class="ri">'+(drawnPanels[id==='btnDrawTopo'?'topo':id==='btnDrawRoute'?'route':'wiring']?'⟳':'🎨')+'</span> '+(label||'Vẽ lại');
+  var b = document.getElementById(id);
+  if (!b) return;
+  b.disabled = loading;
+  b.classList.toggle('drawing', loading);
+  b.innerHTML = loading ? '<span class="ri">⟳</span> Đang vẽ…' : '<span class="ri">🎨</span> ' + (label || 'Vẽ lại');
 }
 
-/* ════════════════════════════════════════════
-   TOPOLOGY CONSTANTS & LAYOUT
-   ════════════════════════════════════════════ */
-var T_FCX={F1:150,F2:402,F3:654,F4:906,F5:1158};
-var T_CORE_CX={a:544,b:764};
-var T_STACK_CX=654;
-var T_SRV_CX=1014;
-var T_ROLE_C={core:'#3b82f6',dist:'#8b5cf6',access:'#0ea5e9',srv:'#06b6d4'};
+/* ═══════════════════════════════════════════════════════════════
+   TOPOLOGY constants/helpers — from original topology.html
+   ═══════════════════════════════════════════════════════════════ */
+var T_FCX = { F1:150, F2:402, F3:654, F4:906, F5:1158 };
+var T_CORE_CX = { a:544, b:764 };
+var T_STACK_CX = 654, T_SRV_CX = 1014;
+var T_ROLE_C = { core:'#a78bfa', dist:'#c4b5fd', access:'#34d399', srv:'#22d3ee' };
 
-function getTopoLayout(){
-  return{
-    adv:true,
-    cw:200, nh:78, coreW:196, srvW:184,
-    ah:62, step:92, zoneHalf:122,
-    coreY:134, distY:358, accY:506
-  };
-}
-
+function getTopoLayout(){ return { adv:true, cw:200, nh:78, coreW:196, srvW:184, ah:62, step:92, zoneHalf:122, coreY:134, distY:358, accY:506 }; }
 function topoNodes(){
-  var L=getTopoLayout();
-  var nd=[];
+  var L = getTopoLayout(), nd = [];
   nd.push({key:'CoreSW-01',role:'core',cx:T_CORE_CX.a,cy:L.coreY,w:L.coreW,h:L.nh});
   nd.push({key:'CoreSW-02',role:'core',cx:T_CORE_CX.b,cy:L.coreY,w:L.coreW,h:L.nh});
   nd.push({key:'XEN-SW',   role:'srv', cx:T_SRV_CX,   cy:L.coreY,w:L.srvW, h:L.nh});
   Object.keys(T_FCX).forEach(function(f){
-    var cx=T_FCX[f];
-    nd.push({key:f+'-SW1',role:'dist',  floor:f,cx:cx,cy:L.distY,w:L.cw,h:L.nh});
-    var accs=['SW2','SW3'].concat(f==='F1'?['SW4']:[]);
-    accs.forEach(function(s,i){
-      nd.push({key:f+'-'+s,role:'access',floor:f,cx:cx,cy:L.accY+i*L.step,w:L.cw,h:L.ah});
-    });
+    var cx = T_FCX[f];
+    nd.push({key:f+'-SW1',role:'dist',floor:f,cx:cx,cy:L.distY,w:L.cw,h:L.nh});
+    var accs = ['SW2','SW3'].concat(f==='F1' ? ['SW4'] : []);
+    accs.forEach(function(s,i){ nd.push({key:f+'-'+s,role:'access',floor:f,cx:cx,cy:L.accY+i*L.step,w:L.cw,h:L.ah}); });
   });
   return nd;
 }
-
-/* ── SVG defs ── */
+function matchTopoKey(name){
+  if (!name) return '';
+  var n = name.toUpperCase().replace(/-POE\d*|-TEST/g,'');
+  if (n==='CORESW-01') return 'CoreSW-01';
+  if (n==='CORESW-02') return 'CoreSW-02';
+  if (n==='XEN-SW')    return 'XEN-SW';
+  var m = n.match(/^(F\d+)-(SW\d+)/);
+  return m ? (m[1] + '-' + m[2]) : name;
+}
 function topoDefs(){
   return '<defs>'
-   +'<linearGradient id="gChassis" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e2640"/><stop offset="1" stop-color="#10141f"/></linearGradient>'
-   +'<linearGradient id="gCore"    x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#143055"/><stop offset="1" stop-color="#0a1626"/></linearGradient>'
-   +'<linearGradient id="gSrv"     x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c3038"/><stop offset="1" stop-color="#0a1620"/></linearGradient>'
-   +'<linearGradient id="gCable"   x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3358a0"/><stop offset="1" stop-color="#1d2f52"/></linearGradient>'
-   +'<linearGradient id="gCableDead" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6b2230"/><stop offset="1" stop-color="#3a1620"/></linearGradient>'
-   +'<filter id="fSh" x="-25%" y="-25%" width="150%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="4.5" flood-color="#000" flood-opacity="0.6"/></filter>'
-   +'<pattern id="gridP" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M28 0H0V28" fill="none" stroke="#141a2b" stroke-width="1"/></pattern>'
-   +'</defs>';
+    +'<linearGradient id="gChassis" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2740"/><stop offset="1" stop-color="#1a1729"/></linearGradient>'
+    +'<linearGradient id="gCore"    x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a1f48"/><stop offset="1" stop-color="#1a1431"/></linearGradient>'
+    +'<linearGradient id="gSrv"     x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#142d34"/><stop offset="1" stop-color="#0f1f24"/></linearGradient>'
+    +'<linearGradient id="gCable"   x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#3d2c80"/></linearGradient>'
+    +'<linearGradient id="gCableDead" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a02030"/><stop offset="1" stop-color="#4a1018"/></linearGradient>'
+    +'<filter id="fSh" x="-25%" y="-25%" width="150%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="4.5" flood-color="#000" flood-opacity="0.5"/></filter>'
+    +'<pattern id="gridP" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M28 0H0V28" fill="none" stroke="#1f1b32" stroke-width="1"/></pattern>'
+    +'</defs>';
 }
-
-/* ── Icons ── */
 function icoSwitch(cx,cy,c,stacked){
-  var s=[],w=30,h=15;
-  if(stacked){s.push('<rect x="'+(cx-w/2+4)+'" y="'+(cy-h/2-5)+'" width="'+w+'" height="'+h+'" rx="2.5" fill="#0e1a2c" stroke="'+c+'" stroke-width="1.3" opacity="0.7"/>');}
-  var ty=cy-h/2+(stacked?3:0);
-  s.push('<rect x="'+(cx-w/2)+'" y="'+ty+'" width="'+w+'" height="'+h+'" rx="2.6" fill="#0b1220" stroke="'+c+'" stroke-width="1.6"/>');
-  for(var i=0;i<7;i++) s.push('<rect x="'+(cx-w/2+3.5+i*3.5)+'" y="'+(ty+h-5)+'" width="2.4" height="2.6" rx="0.6" fill="'+c+'" opacity="0.85"/>');
+  var s = [], w = 30, h = 15;
+  if (stacked) s.push('<rect x="'+(cx-w/2+4)+'" y="'+(cy-h/2-5)+'" width="'+w+'" height="'+h+'" rx="2.5" fill="#15102a" stroke="'+c+'" stroke-width="1.3" opacity="0.7"/>');
+  var ty = cy - h/2 + (stacked ? 3 : 0);
+  s.push('<rect x="'+(cx-w/2)+'" y="'+ty+'" width="'+w+'" height="'+h+'" rx="2.6" fill="#0f0a1f" stroke="'+c+'" stroke-width="1.6"/>');
+  for (var i = 0; i < 7; i++) s.push('<rect x="'+(cx-w/2+3.5+i*3.5)+'" y="'+(ty+h-5)+'" width="2.4" height="2.6" rx="0.6" fill="'+c+'" opacity="0.85"/>');
   s.push('<circle cx="'+(cx+w/2-3.5)+'" cy="'+(ty+3.5)+'" r="1.6" fill="'+c+'"/>');
   return s.join('');
 }
 function icoServer(cx,cy,c){
-  var s=[],w=20,h=26;
-  s.push('<rect x="'+(cx-w/2)+'" y="'+(cy-h/2)+'" width="'+w+'" height="'+h+'" rx="2.6" fill="#0b1220" stroke="'+c+'" stroke-width="1.6"/>');
-  for(var i=0;i<3;i++){var yy=cy-h/2+6+i*7;
+  var s = [], w = 20, h = 26;
+  s.push('<rect x="'+(cx-w/2)+'" y="'+(cy-h/2)+'" width="'+w+'" height="'+h+'" rx="2.6" fill="#0f0a1f" stroke="'+c+'" stroke-width="1.6"/>');
+  for (var i = 0; i < 3; i++) {
+    var yy = cy - h/2 + 6 + i*7;
     s.push('<line x1="'+(cx-w/2+4)+'" y1="'+yy+'" x2="'+(cx+w/2-8)+'" y2="'+yy+'" stroke="'+c+'" stroke-width="1.5" stroke-linecap="round"/>');
-    s.push('<circle cx="'+(cx+w/2-4.5)+'" cy="'+yy+'" r="1.5" fill="'+c+'"/>');}
+    s.push('<circle cx="'+(cx+w/2-4.5)+'" cy="'+yy+'" r="1.5" fill="'+c+'"/>');
+  }
   return s.join('');
 }
 function icoCloud(cx,cy,c){
-  return '<path d="M '+(cx-15)+' '+(cy+6)+' a 7.5 7.5 0 0 1 1.6 -14 a 9.5 9.5 0 0 1 18.4 2 a 6.2 6.2 0 0 1 -2 12 Z" fill="#0b1220" stroke="'+c+'" stroke-width="1.7" stroke-linejoin="round"/>'
-   +'<path d="M '+(cx-7)+' '+(cy-1)+' h 12 M '+(cx-7)+' '+(cy+3)+' h 9" stroke="'+c+'" stroke-width="1.3" stroke-linecap="round" opacity="0.7"/>';
+  return '<path d="M '+(cx-15)+' '+(cy+6)+' a 7.5 7.5 0 0 1 1.6 -14 a 9.5 9.5 0 0 1 18.4 2 a 6.2 6.2 0 0 1 -2 12 Z" fill="#0f0a1f" stroke="'+c+'" stroke-width="1.7"/>';
 }
-
-/* ── Port LED strip ── */
 function portStrip(sw,x,y,w,hh){
-  var ports=(sw.ports||[]).slice(0).sort(function(a,b){return(parseInt(a.portId)||0)-(parseInt(b.portId)||0);});
-  var n=ports.length;if(!n)return'';
-  var max=Math.min(n,28),gap=2;
-  var cw=(w-(max-1)*gap)/max;if(cw>9)cw=9;if(cw<2)cw=2;
-  var totW=cw*max+gap*(max-1),sx=x+(w-totW)/2,s=[];
-  for(var i=0;i<max;i++){
-    var pp=ports[i],col='#222c45';
-    if(pp.status==='Connected'){
-      if(pp.speed==='10 Mbps')col='#f87171';
-      else if(pp.speed&&pp.speed.indexOf('100')!==-1&&pp.speed.indexOf('1000')===-1)col='#fbbf24';
-      else col='#34d399';
+  var ports = (sw.ports || []).slice(0).sort(function(a,b){ return (parseInt(a.portId)||0) - (parseInt(b.portId)||0); });
+  var n = ports.length; if (!n) return '';
+  var max = Math.min(n, 28), gap = 2;
+  var cw = (w-(max-1)*gap) / max; if (cw > 9) cw = 9; if (cw < 2) cw = 2;
+  var totW = cw*max + gap*(max-1), sx = x + (w-totW)/2, s = [];
+  for (var i = 0; i < max; i++) {
+    var pp = ports[i], col = '#2a2740';
+    if (pp.status === 'Connected') {
+      if (pp.speed === '10 Mbps') col = '#f87171';
+      else if (pp.speed && pp.speed.indexOf('100') !== -1 && pp.speed.indexOf('1000') === -1) col = '#fbbf24';
+      else col = '#34d399';
     }
-    var er=(pp.errors||[]).some(function(e){return e&&e!=='Port disconnected';});
-    var ex=(sx+i*(cw+gap)).toFixed(1);
+    var er = (pp.errors || []).some(function(e){ return e && e !== 'Port disconnected'; });
+    var ex = (sx + i*(cw + gap)).toFixed(1);
     s.push('<rect x="'+ex+'" y="'+y+'" width="'+cw.toFixed(1)+'" height="'+hh+'" rx="1.3" fill="'+col+'"'+(er?' stroke="#fca5a5" stroke-width="0.9"':'')+'/>');
-    var isAggr=sw.switchSerial&&linkAggPortMap[sw.switchSerial+':'+pp.portId];
-    if(isAggr)s.push('<rect x="'+ex+'" y="'+(y-5.2)+'" width="'+cw.toFixed(1)+'" height="2" rx="1" fill="#a78bfa"/>');
-    if(pp.isUplink)s.push('<rect x="'+ex+'" y="'+(y-2.6)+'" width="'+cw.toFixed(1)+'" height="2" rx="1" fill="#60a5fa"/>');
+    var isAggr = sw.switchSerial && linkAggPortMap[sw.switchSerial + ':' + pp.portId];
+    if (isAggr)    s.push('<rect x="'+ex+'" y="'+(y-5.2)+'" width="'+cw.toFixed(1)+'" height="2" rx="1" fill="#a78bfa"/>');
+    if (pp.isUplink) s.push('<rect x="'+ex+'" y="'+(y-2.6)+'" width="'+cw.toFixed(1)+'" height="2" rx="1" fill="#7c5cff"/>');
   }
-  if(n>max)s.push('<text x="'+(x+w+3)+'" y="'+(y+hh)+'" font-size="6.5" fill="#54648a" font-family="monospace">+'+(n-max)+'</text>');
+  if (n > max) s.push('<text x="'+(x+w+3)+'" y="'+(y+hh)+'" font-size="6.5" fill="#7a6c92" font-family="monospace">+'+(n-max)+'</text>');
   return s.join('');
 }
-
-/* ── Topo node card ── */
 function topoNode(nd,sw,L){
-  var rx=nd.cx-nd.w/2,ry=nd.cy-nd.h/2,W=nd.w,H=nd.h,p=[];
-  var roleC=T_ROLE_C[nd.role]||'#475569';
-  var nc='#64748b',brd='#252f4a',grad='url(#gChassis)';
-  if(nd.role==='core')grad='url(#gCore)';
-  if(nd.role==='srv') grad='url(#gSrv)';
-  var pct=0,er=0;
-  if(sw){
-    pct=sw.totalPorts?sw.connectedPorts/sw.totalPorts:0;
-    er=(sw.ports||[]).filter(function(pp){return(pp.errors||[]).some(function(e){return e&&e!=='Port disconnected';});}).length;
-    if(sw.connectedPorts===0){nc='#f87171';brd='rgba(248,113,113,.5)';}
-    else if(pct>=0.5){nc='#34d399';brd='rgba(52,211,153,.34)';}
-    else{nc='#fbbf24';brd='rgba(251,191,36,.34)';}
+  var rx = nd.cx - nd.w/2, ry = nd.cy - nd.h/2, W = nd.w, H = nd.h, p = [];
+  var roleC = T_ROLE_C[nd.role] || '#475569';
+  var nc = '#a0a0c0', brd = '#3a2f5a', grad = 'url(#gChassis)';
+  if (nd.role === 'core') grad = 'url(#gCore)';
+  if (nd.role === 'srv')  grad = 'url(#gSrv)';
+  var pct = 0, er = 0;
+  if (sw) {
+    pct = sw.totalPorts ? sw.connectedPorts/sw.totalPorts : 0;
+    er  = (sw.ports || []).filter(function(pp){ return (pp.errors||[]).some(function(e){return e && e !== 'Port disconnected';}); }).length;
+    if (sw.connectedPorts === 0) { nc = '#f87171'; brd = 'rgba(248,113,113,.5)'; }
+    else if (pct >= 0.5) { nc = '#34d399'; brd = 'rgba(52,211,153,.4)'; }
+    else { nc = '#fbbf24'; brd = 'rgba(251,191,36,.4)'; }
   }
-  var mono='SF Mono,Fira Code,monospace';
-  var isAcc=nd.role==='access',isSrv=nd.role==='srv';
-
-  var ttl=(sw?sw.switchName:nd.key)+'\n'+(nd.role.toUpperCase());
-  if(sw){
-    ttl+='\n'+(sw.switchModel||'?')+(sw.switchSerial?'  ·  SN '+sw.switchSerial:'');
-    ttl+='\n'+sw.connectedPorts+'/'+sw.totalPorts+' ports đang kết nối';
-    if(er)ttl+='\n⚠ '+er+' port có lỗi';
-    var spd={};(sw.ports||[]).forEach(function(pp){if(pp.status==='Connected'){var k=pp.speed||'?';spd[k]=(spd[k]||0)+1;}});
-    var sp=Object.keys(spd).map(function(k){return spd[k]+'×'+k;}).join(', ');
-    if(sp)ttl+='\n'+sp;
-  }else if(isSrv){ttl='XEN-SW\nSERVER\nHypervisor host (uplink → CoreSW-02)';}
+  var mono = 'IBM Plex Mono,monospace';
+  var isAcc = nd.role === 'access', isSrv = nd.role === 'srv';
+  var ttl = (sw ? sw.switchName : nd.key) + '\n' + nd.role.toUpperCase();
+  if (sw) {
+    ttl += '\n' + (sw.switchModel || '?') + (sw.switchSerial ? '  ·  SN ' + sw.switchSerial : '');
+    ttl += '\n' + sw.connectedPorts + '/' + sw.totalPorts + ' ports đang kết nối';
+    if (er) ttl += '\n⚠ ' + er + ' port có lỗi';
+  } else if (isSrv) ttl = 'XEN-SW\nSERVER\nHypervisor host (uplink → CoreSW-02)';
 
   p.push('<g><title>'+escSvg(ttl)+'</title>');
   p.push('<rect x="'+rx+'" y="'+ry+'" width="'+W+'" height="'+H+'" rx="10" fill="'+grad+'" stroke="'+brd+'" stroke-width="1.6" filter="url(#fSh)"/>');
   p.push('<rect x="'+rx+'" y="'+ry+'" width="5" height="'+H+'" rx="2.5" fill="'+roleC+'"/>');
-
-  var icy=ry+22;
-  p.push(isSrv?icoServer(rx+22,icy,nc):icoSwitch(rx+22,icy,nc,nd.role==='core'));
-  var tx=rx+44;
-
-  var nm=sw?sw.switchName:(isSrv?'XEN-SW':nd.key);
-  if(nm.length>22)nm=nm.slice(0,21)+'…';
+  var icy = ry + 22;
+  p.push(isSrv ? icoServer(rx+22,icy,nc) : icoSwitch(rx+22,icy,nc,nd.role==='core'));
+  var tx = rx + 44;
+  var nm = sw ? sw.switchName : (isSrv ? 'XEN-SW' : nd.key);
+  if (nm.length > 22) nm = nm.slice(0,21) + '…';
   p.push('<text x="'+tx+'" y="'+(ry+18)+'" font-size="12" fill="'+nc+'" font-family="'+mono+'" font-weight="700">'+escSvg(nm)+'</text>');
-  if(sw){
+  if (sw) {
     p.push('<text x="'+(rx+W-10)+'" y="'+(ry+18)+'" text-anchor="end" font-size="10" fill="'+nc+'" font-family="'+mono+'" font-weight="700">'+sw.connectedPorts+'/'+sw.totalPorts+(er?'  ⚠'+er:'')+'</text>');
-    var ser=sw.switchSerial?('  ·  #'+sw.switchSerial.slice(-7)):'';
-    p.push('<text x="'+tx+'" y="'+(ry+(isAcc?32:31))+'" font-size="8" fill="#5a6c92" font-family="'+mono+'">'+escSvg((sw.switchModel||'')+ser)+'</text>');
+    var ser = sw.switchSerial ? ('  ·  #'+sw.switchSerial.slice(-7)) : '';
+    p.push('<text x="'+tx+'" y="'+(ry+(isAcc?32:31))+'" font-size="8" fill="#7a6c92" font-family="'+mono+'">'+escSvg((sw.switchModel||'')+ser)+'</text>');
     p.push(portStrip(sw,rx+10,ry+H-21,W-20,8));
-    var bw=W-16,bx=rx+8,by=ry+H-8,fc=pct>=0.5?'#34d399':pct>0?'#fbbf24':'#f87171';
-    p.push('<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="4" rx="2" fill="#0e1626"/>');
+    var bw = W-16, bx = rx+8, by = ry+H-8, fc = pct>=0.5?'#34d399':pct>0?'#fbbf24':'#f87171';
+    p.push('<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="4" rx="2" fill="#15102a"/>');
     p.push('<rect x="'+bx+'" y="'+by+'" width="'+(bw*pct).toFixed(1)+'" height="4" rx="2" fill="'+fc+'"/>');
-  }else{
-    p.push('<text x="'+tx+'" y="'+(ry+31)+'" font-size="8" fill="#5a6c92" font-family="'+mono+'">'+(isSrv?'Hypervisor · uplink CoreSW-02':'Chờ dữ liệu…')+'</text>');
+  } else {
+    p.push('<text x="'+tx+'" y="'+(ry+31)+'" font-size="8" fill="#7a6c92" font-family="'+mono+'">'+(isSrv?'Hypervisor · uplink CoreSW-02':'Chờ dữ liệu…')+'</text>');
   }
   p.push('</g>');
   return p.join('');
 }
-
-/* ── Key matching ── */
-function matchTopoKey(name){
-  if(!name)return'';
-  var n=name.toUpperCase().replace(/-POE\d*|-TEST/g,'');
-  if(n==='CORESW-01')return'CoreSW-01';
-  if(n==='CORESW-02')return'CoreSW-02';
-  if(n==='XEN-SW')return'XEN-SW';
-  var m=n.match(/^(F\d+)-(SW\d+)/);
-  return m?(m[1]+'-'+m[2]):name;
-}
-
-/* ── CDP/LLDP port link map ── */
 function buildPortLinks(){
-  var links={},nameMap={};
+  var links = {}, nameMap = {};
   allSwitches.forEach(function(sw){
-    var k=matchTopoKey(sw.switchName);
-    [sw.switchName,sw.switchName.toLowerCase(),k,k.toLowerCase(),
-     sw.switchName.toLowerCase().replace(/-poe\d*|-test/gi,'')
-    ].forEach(function(a){if(a)nameMap[a]=k;});
+    var k = matchTopoKey(sw.switchName);
+    [sw.switchName, sw.switchName.toLowerCase(), k, k.toLowerCase(), sw.switchName.toLowerCase().replace(/-poe\d*|-test/gi,'')].forEach(function(a){ if (a) nameMap[a] = k; });
   });
   allSwitches.forEach(function(sw){
-    var srcKey=matchTopoKey(sw.switchName);
-    (sw.ports||[]).forEach(function(p){
-      if(!p.neighborDevice||p.status!=='Connected')return;
-      var nd2=(p.neighborDevice||'').toLowerCase().trim();
-      var dstKey=nameMap[nd2]||nameMap[matchTopoKey(p.neighborDevice).toLowerCase()]||nameMap[matchTopoKey(p.neighborDevice)];
-      if(!dstKey&&nd2.length>3){
-        Object.keys(nameMap).forEach(function(k){if(!dstKey&&k.length>3&&(nd2.indexOf(k)!==-1||k.indexOf(nd2)!==-1))dstKey=nameMap[k];});
-      }
-      if(!dstKey||dstKey===srcKey)return;
-      var sorted=[srcKey,dstKey].sort();
-      var lkKey=sorted.join('::');
-      if(!links[lkKey])links[lkKey]={sw1:sorted[0],sw2:sorted[1],portSw1:'',portSw2:'',speed:p.speed,proto:p.neighborProto||''};
-      var isSw1=srcKey===links[lkKey].sw1;
-      var mySide=isSw1?'portSw1':'portSw2',nbrSide=isSw1?'portSw2':'portSw1';
-      if(!links[lkKey][mySide])links[lkKey][mySide]='P'+p.portId;
-      if(!links[lkKey][nbrSide]&&p.neighborPort){
-        var np=String(p.neighborPort||'');
-        var pm=np.match(/(\d+)$/);
-        links[lkKey][nbrSide]=pm?('P'+pm[1]):(np.replace(/\s+/g,'').slice(0,7)||'P?');
+    var srcKey = matchTopoKey(sw.switchName);
+    (sw.ports || []).forEach(function(p){
+      if (!p.neighborDevice || p.status !== 'Connected') return;
+      var nd2 = (p.neighborDevice || '').toLowerCase().trim();
+      var dstKey = nameMap[nd2] || nameMap[matchTopoKey(p.neighborDevice).toLowerCase()] || nameMap[matchTopoKey(p.neighborDevice)];
+      if (!dstKey && nd2.length > 3) Object.keys(nameMap).forEach(function(k){ if (!dstKey && k.length > 3 && (nd2.indexOf(k) >= 0 || k.indexOf(nd2) >= 0)) dstKey = nameMap[k]; });
+      if (!dstKey || dstKey === srcKey) return;
+      var sorted = [srcKey, dstKey].sort();
+      var lkKey = sorted.join('::');
+      if (!links[lkKey]) links[lkKey] = { sw1:sorted[0], sw2:sorted[1], portSw1:'', portSw2:'', speed:p.speed, proto:p.neighborProto||'' };
+      var isSw1 = srcKey === links[lkKey].sw1;
+      var mySide = isSw1 ? 'portSw1' : 'portSw2', nbrSide = isSw1 ? 'portSw2' : 'portSw1';
+      if (!links[lkKey][mySide]) links[lkKey][mySide] = 'P' + p.portId;
+      if (!links[lkKey][nbrSide] && p.neighborPort) {
+        var np = String(p.neighborPort || ''), pm = np.match(/(\d+)$/);
+        links[lkKey][nbrSide] = pm ? ('P'+pm[1]) : (np.replace(/\s+/g,'').slice(0,7) || 'P?');
       }
     });
   });
   return links;
 }
 
-/* ════════════════════════════════════════════
-   PANEL A — TOPOLOGY MAP
-   ════════════════════════════════════════════ */
-function renderTopoPanel(){
-  var L=getTopoLayout();
-  var nodes=topoNodes();
-  var byKey={};nodes.forEach(function(n){byKey[n.key]=n;});
-  var swMap={};allSwitches.forEach(function(sw){swMap[matchTopoKey(sw.switchName)]=sw;});
-  var portLinks=buildPortLinks();
-  var ZH=L.zoneHalf,mono='SF Mono,Fira Code,monospace';
-  var lastAccCy=L.accY+2*L.step;
-  var svgW=T_FCX.F5+ZH+30;
-  var svgH=lastAccCy+L.ah/2+34;
-  var p=[];
+/* ═══════════════════════════════════════════════════════════════
+   RENDER TOPOLOGY — same logic as original
+   ═══════════════════════════════════════════════════════════════ */
+function renderTopoPanel() {
+  var L = getTopoLayout();
+  var nodes = topoNodes();
+  var byKey = {}; nodes.forEach(function(n){ byKey[n.key] = n; });
+  var swMap = {}; allSwitches.forEach(function(sw){ swMap[matchTopoKey(sw.switchName)] = sw; });
+  var portLinks = buildPortLinks();
+  var ZH = L.zoneHalf, mono = 'IBM Plex Mono,monospace';
+  var lastAccCy = L.accY + 2*L.step;
+  var svgW = T_FCX.F5 + ZH + 30;
+  var svgH = lastAccCy + L.ah/2 + 34;
+  var p = [];
 
   p.push(topoDefs());
-  p.push('<rect x="0" y="0" width="'+svgW+'" height="'+svgH+'" fill="#0a0d16"/>');
+  p.push('<rect x="0" y="0" width="'+svgW+'" height="'+svgH+'" fill="#15102a"/>');
   p.push('<rect x="0" y="0" width="'+svgW+'" height="'+svgH+'" fill="url(#gridP)" opacity="0.5"/>');
 
-  /* Floor zones */
   Object.keys(T_FCX).forEach(function(f){
-    var cx=T_FCX[f],isF1=f==='F1';
-    var zx=cx-ZH,zw=ZH*2;
-    var zy=L.distY-L.nh/2-26;
-    var lastCy=L.accY+(isF1?2:1)*L.step;
-    var zb=lastCy+L.ah/2+16;
-    var tp=0,tc=0,nSw=0,dead=0,hasData=false;
-    ['SW1','SW2','SW3'].concat(isF1?['SW4']:[]).forEach(function(s){
-      var sw=swMap[f+'-'+s];if(sw){hasData=true;nSw++;tp+=sw.totalPorts||0;tc+=sw.connectedPorts||0;if(sw.connectedPorts===0)dead++;}
-    });
-    var allDead=hasData&&dead===nSw;
-    var fillC=allDead?'rgba(248,113,113,.05)':'rgba(18,24,44,.5)';
-    var strkC=allDead?'rgba(248,113,113,.28)':'#1c2542';
-    p.push('<rect x="'+zx+'" y="'+zy+'" width="'+zw+'" height="'+(zb-zy)+'" rx="16" fill="'+fillC+'" stroke="'+strkC+'" stroke-width="1.2"/>');
-    var hc=allDead?'#f87171':'#8aa0c8';
-    p.push('<rect x="'+(cx-66)+'" y="'+(zy-14)+'" width="132" height="22" rx="11" fill="#111a2e" stroke="'+strkC+'" stroke-width="1"/>');
-    p.push('<text x="'+(cx-54)+'" y="'+(zy+1)+'" font-size="10.5" fill="'+hc+'" font-weight="700" font-family="sans-serif">'+escSvg(f)+'</text>');
-    if(hasData)p.push('<text x="'+(cx+58)+'" y="'+(zy+1)+'" text-anchor="end" font-size="9" fill="#5a6c92" font-family="'+mono+'">'+tc+'/'+tp+' ports</text>');
+    var cx = T_FCX[f], isF1 = f === 'F1';
+    var zx = cx - ZH, zw = ZH*2;
+    var zy = L.distY - L.nh/2 - 26;
+    var lastCy = L.accY + (isF1 ? 2 : 1) * L.step;
+    var zb = lastCy + L.ah/2 + 16;
+    p.push('<rect x="'+zx+'" y="'+zy+'" width="'+zw+'" height="'+(zb-zy)+'" rx="16" fill="rgba(40,30,60,.4)" stroke="#332750" stroke-width="1.2"/>');
+    p.push('<rect x="'+(cx-66)+'" y="'+(zy-14)+'" width="132" height="22" rx="11" fill="#1a1429" stroke="#332750" stroke-width="1"/>');
+    p.push('<text x="'+cx+'" y="'+(zy+1)+'" text-anchor="middle" font-size="10.5" fill="#b5a0d6" font-weight="700" font-family="sans-serif">'+escSvg(f)+'</text>');
   });
 
   /* Core stack housing */
-  var stX=T_CORE_CX.a-L.coreW/2-16,stW=(T_CORE_CX.b+L.coreW/2+16)-stX;
-  var stY=L.coreY-L.nh/2-28,stH=L.nh+44,trunkY=stY+stH;
-  var swC1=swMap['CoreSW-01'],swC2=swMap['CoreSW-02'];
-  var stDead=(swC1&&swC1.connectedPorts===0)&&(swC2&&swC2.connectedPorts===0);
-  p.push('<rect x="'+stX+'" y="'+stY+'" width="'+stW+'" height="'+stH+'" rx="18" fill="'+(stDead?'rgba(248,113,113,.07)':'rgba(10,32,60,.55)')+'" stroke="'+(stDead?'rgba(248,113,113,.32)':'#1f5688')+'" stroke-width="1.6"/>');
-  p.push('<rect x="'+(T_STACK_CX-94)+'" y="'+(stY-14)+'" width="188" height="22" rx="11" fill="#0c2038" stroke="#1f5688" stroke-width="1"/>');
-  p.push('<text x="'+T_STACK_CX+'" y="'+(stY+1)+'" text-anchor="middle" font-size="10.5" fill="#48a7df" font-weight="700" font-family="sans-serif">CORE STACK · MS350 ×2</text>');
-  p.push('<line x1="'+T_STACK_CX+'" y1="'+trunkY+'" x2="'+T_STACK_CX+'" y2="'+(trunkY+28)+'" stroke="#1f5688" stroke-width="4" stroke-linecap="round"/>');
-  p.push('<circle cx="'+T_STACK_CX+'" cy="'+(trunkY+28)+'" r="3.5" fill="#2f6ea0"/>');
+  var stX = T_CORE_CX.a - L.coreW/2 - 16, stW = (T_CORE_CX.b + L.coreW/2 + 16) - stX;
+  var stY = L.coreY - L.nh/2 - 28, stH = L.nh + 44, trunkY = stY + stH;
+  p.push('<rect x="'+stX+'" y="'+stY+'" width="'+stW+'" height="'+stH+'" rx="18" fill="rgba(35,20,70,.55)" stroke="#5d3da0" stroke-width="1.6"/>');
+  p.push('<rect x="'+(T_STACK_CX-94)+'" y="'+(stY-14)+'" width="188" height="22" rx="11" fill="#2a1f4a" stroke="#5d3da0" stroke-width="1"/>');
+  p.push('<text x="'+T_STACK_CX+'" y="'+(stY+1)+'" text-anchor="middle" font-size="10.5" fill="#b89aff" font-weight="700" font-family="sans-serif">CORE STACK · MS350 ×2</text>');
+  p.push('<line x1="'+T_STACK_CX+'" y1="'+trunkY+'" x2="'+T_STACK_CX+'" y2="'+(trunkY+28)+'" stroke="#5d3da0" stroke-width="4" stroke-linecap="round"/>');
 
-  /* WAN cloud */
-  var wanY=stY-42;
-  p.push(icoCloud(T_STACK_CX,wanY,'#5b7bb0'));
-  p.push('<text x="'+T_STACK_CX+'" y="'+(wanY+23)+'" text-anchor="middle" font-size="10" fill="#5b7bb0" font-weight="600" font-family="sans-serif">Internet / WAN</text>');
-  p.push('<line x1="'+T_STACK_CX+'" y1="'+(wanY+9)+'" x2="'+T_STACK_CX+'" y2="'+stY+'" stroke="#324066" stroke-width="1.6" stroke-dasharray="4,3"/>');
+  /* WAN */
+  var wanY = stY - 42;
+  p.push(icoCloud(T_STACK_CX, wanY, '#a0a0c0'));
+  p.push('<text x="'+T_STACK_CX+'" y="'+(wanY+23)+'" text-anchor="middle" font-size="10" fill="#a0a0c0" font-weight="600">Internet / WAN</text>');
+  p.push('<line x1="'+T_STACK_CX+'" y1="'+(wanY+9)+'" x2="'+T_STACK_CX+'" y2="'+stY+'" stroke="#473866" stroke-width="1.6" stroke-dasharray="4,3"/>');
 
-  /* XEN-SW cable (draw cable only, label will come AFTER nodes) */
-  var xn=byKey['XEN-SW'],c2=byKey['CoreSW-02'];
-  var xDead=swMap['XEN-SW']&&swMap['XEN-SW'].connectedPorts===0;
-  var xg=xDead?'url(#gCableDead)':'url(#gCable)';
-  var csx=stX+stW,csy=c2.cy,exx=xn.cx-xn.w/2,exy=xn.cy,cmx=(csx+exx)/2;
-  p.push('<path d="M'+csx+','+csy+' C'+cmx+','+csy+' '+cmx+','+exy+' '+exx+','+exy+'" fill="none" stroke="'+xg+'" stroke-width="2.8" stroke-dasharray="7,4" stroke-linecap="round"/>');
-  p.push('<circle cx="'+csx+'" cy="'+csy+'" r="3" fill="#2f6ea0"/><circle cx="'+exx+'" cy="'+exy+'" r="3" fill="#2f6ea0"/>');
+  /* XEN cable */
+  var xn = byKey['XEN-SW'], c2 = byKey['CoreSW-02'];
+  var csx = stX + stW, csy = c2.cy, exx = xn.cx - xn.w/2, exy = xn.cy, cmx = (csx + exx)/2;
+  p.push('<path d="M'+csx+','+csy+' C'+cmx+','+csy+' '+cmx+','+exy+' '+exx+','+exy+'" fill="none" stroke="url(#gCable)" stroke-width="2.8" stroke-dasharray="7,4" stroke-linecap="round"/>');
 
   /* Layer labels */
   [[L.coreY,'CORE'],[L.distY,'DISTRIBUTION'],[L.accY+L.step/2,'ACCESS']].forEach(function(r){
-    p.push('<text x="6" y="'+(r[0]+3)+'" font-size="8" fill="#243a58" font-weight="700" font-family="sans-serif" letter-spacing="1">'+r[1]+'</text>');
+    p.push('<text x="6" y="'+(r[0]+3)+'" font-size="8" fill="#473866" font-weight="700" font-family="sans-serif" letter-spacing="1">'+r[1]+'</text>');
   });
 
-  /* Core → SW1 fan */
+  /* Core → SW1 */
   Object.keys(T_FCX).forEach(function(f){
-    var tn=byKey[f+'-SW1'];if(!tn)return;
-    var swT=swMap[f+'-SW1'];
-    var dead=swT&&swT.connectedPorts===0;
-    var grad=dead?'url(#gCableDead)':'url(#gCable)';
-    var x1=T_STACK_CX,y1=trunkY+28,x2=tn.cx,y2=tn.cy-tn.h/2,my=(y1+y2)/2;
-    p.push('<path d="M'+x1+','+y1+' C'+x1+','+my+' '+x2+','+my+' '+x2+','+y2+'" fill="none" stroke="'+grad+'" stroke-width="2.6" stroke-linecap="round"/>');
-    var coreKey=(f==='F4'||f==='F5')?'CoreSW-02':'CoreSW-01';
-    var pl=portLinks[[coreKey,f+'-SW1'].sort().join('::')];
-    if(pl&&(pl.portSw1||pl.portSw2)){
-      var st=[coreKey,f+'-SW1'].sort();
-      var fp=coreKey===st[0]?pl.portSw1:pl.portSw2;
-      var tpp=(f+'-SW1')===st[1]?pl.portSw2:pl.portSw1;
-      var lbl=(fp||'?')+' ↔ '+(tpp||'?');
-      var lx=x2,ly=y2-14,lbW=lbl.length*5.2+12;
-      p.push('<rect x="'+(lx-lbW/2).toFixed(0)+'" y="'+(ly-9)+'" width="'+lbW.toFixed(0)+'" height="16" rx="5" fill="#070b14" stroke="#22467a" stroke-width="0.8"/>');
-      p.push('<text x="'+lx+'" y="'+(ly+2)+'" text-anchor="middle" font-size="8" fill="#60a5fa" font-family="'+mono+'" font-weight="600">'+escSvg(lbl)+'</text>');
+    var tn = byKey[f+'-SW1']; if (!tn) return;
+    var x1 = T_STACK_CX, y1 = trunkY + 28, x2 = tn.cx, y2 = tn.cy - tn.h/2, my = (y1+y2)/2;
+    p.push('<path d="M'+x1+','+y1+' C'+x1+','+my+' '+x2+','+my+' '+x2+','+y2+'" fill="none" stroke="url(#gCable)" stroke-width="2.6" stroke-linecap="round"/>');
+    var coreKey = (f==='F4'||f==='F5') ? 'CoreSW-02' : 'CoreSW-01';
+    var pl = portLinks[[coreKey, f+'-SW1'].sort().join('::')];
+    if (pl && (pl.portSw1 || pl.portSw2)) {
+      var st = [coreKey, f+'-SW1'].sort();
+      var fp = coreKey === st[0] ? pl.portSw1 : pl.portSw2;
+      var tpp = (f+'-SW1') === st[1] ? pl.portSw2 : pl.portSw1;
+      var lbl = (fp || '?') + ' ↔ ' + (tpp || '?');
+      var lx = x2, ly = y2 - 14, lbW = lbl.length * 5.2 + 12;
+      p.push('<rect x="'+(lx-lbW/2).toFixed(0)+'" y="'+(ly-9)+'" width="'+lbW.toFixed(0)+'" height="16" rx="5" fill="#0d0a1c" stroke="#5d3da0" stroke-width="0.8"/>');
+      p.push('<text x="'+lx+'" y="'+(ly+2)+'" text-anchor="middle" font-size="8" fill="#b89aff" font-family="'+mono+'" font-weight="600">'+escSvg(lbl)+'</text>');
     }
   });
 
-  /* Per-floor riser spine */
+  /* Per-floor spine */
   Object.keys(T_FCX).forEach(function(f){
-    var d=byKey[f+'-SW1'];if(!d)return;
-    var accs=['SW2','SW3'].concat(f==='F1'?['SW4']:[]).map(function(k){return byKey[f+'-'+k];}).filter(Boolean);
-    if(!accs.length)return;
-    var spineX=d.cx-L.cw/2-16;
-    var topY=d.cy,botY=accs[accs.length-1].cy;
-    p.push('<path d="M'+spineX+','+topY+' V'+botY+'" stroke="url(#gCable)" stroke-width="2.4" fill="none" stroke-linecap="round"/>');
+    var d = byKey[f+'-SW1']; if (!d) return;
+    var accs = ['SW2','SW3'].concat(f==='F1' ? ['SW4'] : []).map(function(k){ return byKey[f+'-'+k]; }).filter(Boolean);
+    if (!accs.length) return;
+    var spineX = d.cx - L.cw/2 - 16;
+    var topY = d.cy, botY = accs[accs.length-1].cy;
+    p.push('<path d="M'+spineX+','+topY+' V'+botY+'" stroke="url(#gCable)" stroke-width="2.4" fill="none"/>');
     p.push('<path d="M'+(d.cx-L.cw/2)+','+topY+' H'+spineX+'" stroke="url(#gCable)" stroke-width="2.4" fill="none"/>');
-    p.push('<circle cx="'+spineX+'" cy="'+topY+'" r="3.4" fill="#2f6ea0"/>');
     accs.forEach(function(a){
-      var sa=swMap[a.key];
-      var ad=sa&&sa.connectedPorts===0;
-      var ag=ad?'url(#gCableDead)':'url(#gCable)';
-      p.push('<path d="M'+spineX+','+a.cy+' H'+(a.cx-L.cw/2)+'" stroke="'+ag+'" stroke-width="2" fill="none"/>');
-      p.push('<circle cx="'+spineX+'" cy="'+a.cy+'" r="2.8" fill="'+(ad?'#6b2230':'#2f6ea0')+'"/>');
-      var pl=portLinks[[f+'-SW1',a.key].sort().join('::')];
-      if(pl&&(pl.portSw1||pl.portSw2)){
-        var st=[f+'-SW1',a.key].sort();
-        var fp=(f+'-SW1')===st[0]?pl.portSw1:pl.portSw2;
-        var tpp=a.key===st[1]?pl.portSw2:pl.portSw1;
-        var lbl=(fp||'?')+'↔'+(tpp||'?');
-        var lx=(spineX+a.cx-L.cw/2)/2,lbW=lbl.length*5+10;
-        p.push('<rect x="'+(lx-lbW/2).toFixed(0)+'" y="'+(a.cy-16)+'" width="'+lbW.toFixed(0)+'" height="14" rx="4" fill="#070b14" stroke="#22467a" stroke-width="0.7"/>');
-        p.push('<text x="'+lx+'" y="'+(a.cy-6)+'" text-anchor="middle" font-size="7.5" fill="#60a5fa" font-family="'+mono+'" font-weight="600">'+escSvg(lbl)+'</text>');
+      p.push('<path d="M'+spineX+','+a.cy+' H'+(a.cx-L.cw/2)+'" stroke="url(#gCable)" stroke-width="2" fill="none"/>');
+      var pl = portLinks[[f+'-SW1', a.key].sort().join('::')];
+      if (pl && (pl.portSw1 || pl.portSw2)) {
+        var st = [f+'-SW1', a.key].sort();
+        var fp = (f+'-SW1') === st[0] ? pl.portSw1 : pl.portSw2;
+        var tpp = a.key === st[1] ? pl.portSw2 : pl.portSw1;
+        var lbl = (fp || '?') + '↔' + (tpp || '?');
+        var lx = (spineX + a.cx - L.cw/2)/2, lbW = lbl.length*5 + 10;
+        p.push('<rect x="'+(lx-lbW/2).toFixed(0)+'" y="'+(a.cy-16)+'" width="'+lbW.toFixed(0)+'" height="14" rx="4" fill="#0d0a1c" stroke="#5d3da0" stroke-width="0.7"/>');
+        p.push('<text x="'+lx+'" y="'+(a.cy-6)+'" text-anchor="middle" font-size="7.5" fill="#b89aff" font-family="'+mono+'" font-weight="600">'+escSvg(lbl)+'</text>');
       }
     });
   });
 
-  /* ── Nodes (drawn BEFORE xen label so label is on top) ── */
-  nodes.forEach(function(nd){ p.push(topoNode(nd,swMap[nd.key],L)); });
+  /* Nodes */
+  nodes.forEach(function(nd){ p.push(topoNode(nd, swMap[nd.key], L)); });
 
-  /* ── FIX: XEN-SW uplink label rendered AFTER nodes → always on top ── */
-  var xpl=portLinks[['CoreSW-02','XEN-SW'].sort().join('::')];
-  var xlbl='Server uplink';
-  if(xpl&&(xpl.portSw1||xpl.portSw2)){
-    var xs=['CoreSW-02','XEN-SW'].sort();
-    var cP='CoreSW-02'===xs[0]?xpl.portSw1:xpl.portSw2;
-    var sP='XEN-SW'===xs[1]?xpl.portSw2:xpl.portSw1;
-    xlbl=(cP||'?')+' ↔ '+(sP||'?');
-  }
-  var xlw=xlbl.length*5.6+16;
-  /* Place label at 35% from stack edge (closer to stack, away from XEN-SW card) */
-  var xlx=csx+(exx-csx)*0.35;
-  var xly=(csy+exy)/2;
-  p.push('<rect x="'+(xlx-xlw/2)+'" y="'+(xly-9)+'" width="'+xlw+'" height="18" rx="6" fill="#070b14" stroke="#22467a" stroke-width="0.9"/>');
-  p.push('<text x="'+xlx+'" y="'+(xly+3)+'" text-anchor="middle" font-size="8.5" fill="#5fb0e8" font-family="'+mono+'" font-weight="600">'+escSvg(xlbl)+'</text>');
+  document.getElementById('topoContainer').innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'" style="min-width:'+svgW+'px;display:block;border-radius:8px">'+p.join('')+'</svg>';
 
-  document.getElementById('topoContainer').innerHTML='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'" style="min-width:'+svgW+'px;display:block">'+p.join('')+'</svg>';
+  var total = allSwitches.length;
+  var online = allSwitches.filter(function(sw){ return sw.connectedPorts > 0; }).length;
+  var offline = total - online;
+  var b = document.getElementById('badge-topo');
+  b.textContent = total + ' switches · ' + online + ' online';
+  b.className = offline > 0 ? 'panel-badge tone-bad' : 'panel-badge tone-ok';
+  document.getElementById('topoCount').textContent = total + ' switches';
 
-  var total=allSwitches.length;
-  var online=allSwitches.filter(function(sw){return sw.connectedPorts>0;}).length;
-  var offline=total-online;
-  document.getElementById('badge-topo').textContent=total+' switches · '+online+' online';
-  document.getElementById('badge-topo').className=offline>0?'panel-badge red':'panel-badge green';
-  document.getElementById('topoCount').textContent=total+' switches';
+  var core = allSwitches.filter(function(sw){ return matchTopoKey(sw.switchName).match(/^CoreSW/); }).length;
+  var totalPorts = allSwitches.reduce(function(s,sw){ return s + (sw.connectedPorts || 0); }, 0);
+  document.getElementById('statCore').textContent  = core || '—';
+  document.getElementById('statOn').textContent    = online;
+  document.getElementById('statOff').textContent   = offline;
+  document.getElementById('statPorts').textContent = totalPorts;
 
-  /* Update stats */
-  var core=allSwitches.filter(function(sw){return matchTopoKey(sw.switchName).match(/^CoreSW/);}).length;
-  var totalPorts=allSwitches.reduce(function(s,sw){return s+(sw.connectedPorts||0);},0);
-  document.getElementById('statCore').textContent=core||'—';
-  document.getElementById('statOn').textContent=online;
-  document.getElementById('statOff').textContent=offline;
-  document.getElementById('statPorts').textContent=totalPorts;
-
-  renderTopoLegend();
+  document.getElementById('topoLegend').innerHTML =
+    '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#34d399;margin-right:4px"></span>Online (≥50%)</span>'
+    + '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#fbbf24;margin-right:4px"></span>Một phần</span>'
+    + '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#f87171;margin-right:4px"></span>Offline</span>'
+    + '<span style="width:1px;height:14px;background:var(--border);display:inline-block"></span>'
+    + '<span>Port: <span style="display:inline-block;width:8px;height:11px;border-radius:2px;background:#34d399;margin:0 4px"></span>1G/10G · '
+    + '<span style="display:inline-block;width:8px;height:11px;border-radius:2px;background:#fbbf24;margin:0 4px"></span>100M · '
+    + '<span style="display:inline-block;width:8px;height:11px;border-radius:2px;background:#f87171;margin:0 4px"></span>10M · '
+    + '<span style="display:inline-block;width:8px;height:11px;border-radius:2px;background:#2a2740;margin:0 4px"></span>trống</span>'
+    + '<span style="width:1px;height:14px;background:var(--border);display:inline-block"></span>'
+    + '<span style="color:var(--muted)">🖱 Rê chuột vào switch để xem chi tiết</span>';
 }
 
-function renderTopoLegend(){
-  function ic(svg){return'<svg width="22" height="20" viewBox="0 0 22 20" style="flex-shrink:0">'+svg+'</svg>';}
-  var roleItems=[
-    ['<g>'+icoSwitch(11,10,'#3b82f6',true)+'</g>','Core stack'],
-    ['<g>'+icoSwitch(11,10,'#8b5cf6',false)+'</g>','Distribution'],
-    ['<g>'+icoSwitch(11,10,'#0ea5e9',false)+'</g>','Access'],
-    ['<g>'+icoServer(11,10,'#06b6d4')+'</g>','Server']
-  ].map(function(it){return'<span style="display:flex;align-items:center;gap:5px">'+ic(it[0])+'<span>'+esc(it[1])+'</span></span>';});
-  var stItems=[['#34d399','Online (>50%)'],['#fbbf24','Một phần (<50%)'],['#f87171','Offline']].map(function(it){
-    return'<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:50%;background:'+it[0]+';display:inline-block;flex-shrink:0"></span><span>'+esc(it[1])+'</span></span>';
-  });
-  var portLeg=[['#34d399','1G/10G'],['#fbbf24','100M'],['#f87171','10M'],['#222c45','Trống']].map(function(it){
-    return'<span style="display:flex;align-items:center;gap:4px"><span style="width:7px;height:11px;border-radius:2px;background:'+it[0]+';display:inline-block;flex-shrink:0"></span><span>'+esc(it[1])+'</span></span>';
-  });
-  var ext=[
-    '<span style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:3px;border-radius:2px;background:#60a5fa;display:inline-block"></span><span>Uplink port</span></span>',
-    '<span style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:3px;border-radius:2px;background:#a78bfa;display:inline-block"></span><span>LAG/AGGR port</span></span>',
-    '<span style="display:flex;align-items:center;gap:4px"><span style="font-size:9px;color:#60a5fa;font-family:monospace;white-space:nowrap">P1 ↔ P24</span><span>CDP/LLDP</span></span>'
-  ];
-  var sep='<span style="width:1px;height:14px;background:var(--border);display:inline-block;margin:0 2px"></span>';
-  var hint='<span style="display:flex;align-items:center;gap:4px;color:#5a6c92">🖱 Rê chuột xem chi tiết</span>';
-  document.getElementById('topoLegend').innerHTML=roleItems.join('')+sep+stItems.join('')+sep+portLeg.join('')+sep+ext.join('')+sep+hint;
-}
-
-/* ════════════════════════════════════════════
-   PANEL B — ROUTE MAP MOVI
-   ════════════════════════════════════════════ */
-var _rmRoutes=[], _rmSVI=[], _rmSort={col:'subnet',dir:1}, _rmQ='';
-
+/* ═══════════════════════════════════════════════════════════════
+   ROUTE MAP — preserved from original
+   ═══════════════════════════════════════════════════════════════ */
 function _ipKey(s){
-  /* sortable key: pad each octet so 10.x sorts before 100.x correctly */
-  var m=String(s||'').match(/(\d+)\.(\d+)\.(\d+)\.(\d+)/);
-  if(!m)return 'zzz'+String(s||'');
-  return m.slice(1).map(function(o){return ('00'+o).slice(-3);}).join('.');
+  var m = String(s||'').match(/(\d+)\.(\d+)\.(\d+)\.(\d+)/);
+  if (!m) return 'zzz' + String(s||'');
+  return m.slice(1).map(function(o){ return ('00'+o).slice(-3); }).join('.');
 }
-
+var _rmRoutes = [], _rmSVI = [], _rmSort = { col:'subnet', dir:1 }, _rmQ = '';
+function rmFilter(v){ _rmQ = (v||'').trim().toLowerCase(); _rmRender(); }
+function rmSort(c){ if (_rmSort.col === c) _rmSort.dir = -_rmSort.dir; else { _rmSort.col = c; _rmSort.dir = 1; } _rmRender(); }
 function _rmRender(){
-  var q=_rmQ, col=_rmSort.col, dir=_rmSort.dir;
-  var rows=_rmRoutes.slice();
-  if(q)rows=rows.filter(function(r){return r._s.indexOf(q)>=0;});
+  var rows = _rmRoutes.slice();
+  if (_rmQ) rows = rows.filter(function(r){ return r._s.indexOf(_rmQ) >= 0; });
   rows.sort(function(a,b){
-    var x,y;
-    if(col==='subnet'){x=_ipKey(a.subnet);y=_ipKey(b.subnet);}
-    else if(col==='gw'){x=_ipKey(a.gw);y=_ipKey(b.gw);}
-    else if(col==='status'){x=(a.enabled?0:1);y=(b.enabled?0:1);}
-    else if(col==='sw'){x=a.sw.length;y=b.sw.length;}
-    else {x=String(a[col]||'').toLowerCase();y=String(b[col]||'').toLowerCase();}
-    return x<y?-dir:x>y?dir:0;
+    var x, y, col = _rmSort.col, dir = _rmSort.dir;
+    if (col === 'subnet')      { x = _ipKey(a.subnet); y = _ipKey(b.subnet); }
+    else if (col === 'gw')     { x = _ipKey(a.gw);     y = _ipKey(b.gw); }
+    else if (col === 'status') { x = a.enabled ? 0 : 1; y = b.enabled ? 0 : 1; }
+    else { x = String(a[col]||'').toLowerCase(); y = String(b[col]||'').toLowerCase(); }
+    return x < y ? -dir : x > y ? dir : 0;
   });
-  var on=rows.filter(function(r){return r.enabled;}).length;
-  var html='';
-  rows.forEach(function(r){
-    var swT=r.sw.join(', ');
-    html+='<tr class="'+(r.enabled?'':'rmt-off')+'">'
-      +'<td class="rmt-dst" title="'+esc(r.subnet)+'">'+esc(r.subnet||'—')+'</td>'
-      +'<td class="rmt-arr">→</td>'
-      +'<td class="rmt-gw" title="next-hop">'+esc(r.gw||'—')+'</td>'
-      +'<td class="rmt-nm" title="'+esc(r.name)+'">'+esc(r.name||'—')+'</td>'
-      +'<td class="rmt-c">'+(r.ospf?'<span class="rmt-osp">OSPF</span>':'<span class="rmt-dash">—</span>')+'</td>'
-      +'<td class="rmt-c">'+(r.enabled?'<span class="rmt-en">● on</span>':'<span class="rmt-dis">● off</span>')+'</td>'
-      +'<td class="rmt-c"><span class="rmt-sw" title="'+esc(swT)+'">'+r.sw.length+'</span></td>'
-      +'</tr>';
-  });
-  if(!rows.length)html='<tr><td colspan="7" class="rmt-empty">Không có route khớp "'+esc(q)+'"</td></tr>';
-  document.getElementById('rmTbody').innerHTML=html;
-  document.getElementById('rmStat').textContent=rows.length+' route'+(q?' (lọc)':'')+' · '+on+' on / '+(rows.length-on)+' off';
-  document.querySelectorAll('#rmTable th[data-col]').forEach(function(th){
-    var c=th.getAttribute('data-col');
-    th.querySelector('.rmt-sortic').textContent=(c===col)?(dir>0?' ▲':' ▼'):'';
-  });
+  var html = rows.map(function(r){
+    return '<tr class="'+(r.enabled?'':'rmt-off')+'">'
+      + '<td class="rmt-dst">'+esc(r.subnet)+'</td>'
+      + '<td class="rmt-arr">→</td>'
+      + '<td class="rmt-gw">'+esc(r.gw)+'</td>'
+      + '<td class="rmt-nm">'+esc(r.name)+'</td>'
+      + '<td class="rmt-c">'+(r.ospf?'<span class="rmt-osp">OSPF</span>':'<span class="rmt-dash">—</span>')+'</td>'
+      + '<td class="rmt-c">'+(r.enabled?'<span class="rmt-en">● on</span>':'<span class="rmt-dis">● off</span>')+'</td>'
+      + '<td class="rmt-c"><span class="rmt-sw" title="'+esc(r.sw.join(', '))+'">'+r.sw.length+'</span></td>'
+    + '</tr>';
+  }).join('') || '<tr><td colspan="7" style="padding:26px;text-align:center;color:var(--muted)">Không có route khớp "'+esc(_rmQ)+'"</td></tr>';
+  document.getElementById('rmTbody').innerHTML = html;
+  document.getElementById('rmStat').textContent = rows.length + ' route' + (_rmQ?' (lọc)':'');
 }
-function rmSort(col){
-  if(_rmSort.col===col)_rmSort.dir=-_rmSort.dir;
-  else {_rmSort.col=col;_rmSort.dir=1;}
-  _rmRender();
-}
-function rmFilter(v){ _rmQ=(v||'').trim().toLowerCase(); _rmRender(); }
-
 function renderRouteMap(data){
-  var ifaces=data.interfaces||[];
-  var routes=data.staticRoutes||[];
-
-  /* ── DEDUPE static routes (API repeats each route per switch in the stack) ── */
-  var rMap={};
+  var ifaces = data.interfaces || [], routes = data.staticRoutes || [];
+  var rMap = {};
   routes.forEach(function(r){
-    var sub=r.subnet||'?';
-    var gw=r.nextHopIp||r.gatewayIp||'(unknown)';
-    var nm=r.name||sub;
-    var key=sub+'|'+gw+'|'+nm;
-    if(!rMap[key]){
-      rMap[key]={subnet:sub,gw:gw,name:nm,
-        ospf:!!r.advertiseViaOspf,enabled:r.enabled!==false,sw:[]};
-    }
-    var sw=r.switchName||r.switch||r.serial||'';
-    if(sw&&rMap[key].sw.indexOf(sw)<0)rMap[key].sw.push(sw);
-    if(r.advertiseViaOspf)rMap[key].ospf=true;
+    var sub = r.subnet || '?', gw = r.nextHopIp || r.gatewayIp || '(unknown)', nm = r.name || sub;
+    var key = sub + '|' + gw + '|' + nm;
+    if (!rMap[key]) rMap[key] = { subnet:sub, gw:gw, name:nm, ospf:!!r.advertiseViaOspf, enabled:r.enabled !== false, sw:[] };
+    var sw = r.switchName || r.switch || r.serial || '';
+    if (sw && rMap[key].sw.indexOf(sw) < 0) rMap[key].sw.push(sw);
+    if (r.advertiseViaOspf) rMap[key].ospf = true;
   });
-  _rmRoutes=Object.keys(rMap).map(function(k){
-    var r=rMap[k];
-    if(!r.sw.length)r.sw=['stack'];
-    r._s=(r.name+' '+r.subnet+' '+r.gw).toLowerCase();
+  _rmRoutes = Object.keys(rMap).map(function(k){
+    var r = rMap[k]; if (!r.sw.length) r.sw = ['stack'];
+    r._s = (r.name + ' ' + r.subnet + ' ' + r.gw).toLowerCase();
     return r;
   });
-
-  /* ── DEDUPE SVIs ── */
-  var sMap={};
+  var sMap = {};
   ifaces.forEach(function(v){
-    var key=(v.vlanId!==undefined?v.vlanId:'?')+'|'+(v.subnet||'');
-    if(!sMap[key]){
-      var hasOspf=v.ospfSettings&&v.ospfSettings.area&&v.ospfSettings.area!=='ospfDisabled';
-      sMap[key]={vlanId:v.vlanId,name:v.name||'',subnet:v.subnet||'',
-        ip:v.interfaceIp||'',ospf:hasOspf,sw:[]};
+    var key = (v.vlanId !== undefined ? v.vlanId : '?') + '|' + (v.subnet || '');
+    if (!sMap[key]) {
+      var hasOspf = v.ospfSettings && v.ospfSettings.area && v.ospfSettings.area !== 'ospfDisabled';
+      sMap[key] = { vlanId:v.vlanId, name:v.name || '', subnet:v.subnet || '', ip:v.interfaceIp || '', ospf:hasOspf };
     }
-    var sw=v.switchName||v.switch||'';
-    if(sw&&sMap[key].sw.indexOf(sw)<0)sMap[key].sw.push(sw);
   });
-  _rmSVI=Object.keys(sMap).map(function(k){return sMap[k];})
-    .sort(function(a,b){return (a.vlanId||0)-(b.vlanId||0);});
+  _rmSVI = Object.keys(sMap).map(function(k){ return sMap[k]; }).sort(function(a,b){ return (a.vlanId||0) - (b.vlanId||0); });
 
-  var nR=_rmRoutes.length, nS=_rmSVI.length;
-  var ospfSviN=_rmSVI.filter(function(v){return v.ospf;}).length;
-  var gwSet={}; _rmRoutes.forEach(function(r){gwSet[r.gw]=1;});
-  var nGw=Object.keys(gwSet).length;
-  var rawR=routes.length;
-  _rmSort={col:'subnet',dir:1}; _rmQ='';
+  var nR = _rmRoutes.length, nS = _rmSVI.length;
+  var ospfSviN = _rmSVI.filter(function(v){ return v.ospf; }).length;
+  var gwSet = {}; _rmRoutes.forEach(function(r){ gwSet[r.gw] = 1; });
 
-  var H=[];
+  var H = [];
   H.push('<style>'
-    +'.rmap{font-family:-apple-system,Segoe UI,sans-serif;color:var(--text);min-width:680px}'
-    +'.rmap-sec{font-size:10px;font-weight:700;letter-spacing:.09em;color:#46587a;margin:4px 2px 9px;text-transform:uppercase;display:flex;align-items:center;gap:8px}'
-    +'.rmap-sec::after{content:"";flex:1;height:1px;background:var(--border)}'
-    +'.rmap-svigrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(176px,1fr));gap:8px;margin-bottom:20px}'
-    +'.rmap-svi{background:rgba(96,165,250,.04);border:1px solid rgba(96,165,250,.28);border-radius:9px;padding:9px 11px}'
-    +'.rmap-svi.o{background:rgba(167,139,250,.05);border-color:rgba(167,139,250,.45)}'
-    +'.rmap-svi-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}'
-    +'.rmap-vt{font-size:9px;font-weight:700;font-family:monospace;color:#60a5fa;background:rgba(96,165,250,.14);border:1px solid rgba(96,165,250,.3);border-radius:4px;padding:2px 6px}'
-    +'.rmap-ob{font-size:8px;font-weight:700;color:#a78bfa;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.35);border-radius:4px;padding:2px 6px}'
-    +'.rmap-svi-n{font-size:12px;font-weight:700;color:#d6deef;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
-    +'.rmap-svi-s{font-size:11px;font-family:monospace;color:#60a5fa}'
-    +'.rmap-svi-i{font-size:10px;font-family:monospace;color:#5a7090;margin-top:2px}'
-    +'.rmap-hub{display:flex;flex-direction:column;align-items:center;text-align:center;background:linear-gradient(180deg,#0c1e38,#0a1525);border:1.5px solid #2a6aaa;border-radius:13px;padding:11px 22px;margin:0 auto 18px;max-width:380px}'
-    +'.rmap-hub-t{font-size:14px;font-weight:700;color:#60a5fa;font-family:monospace}'
-    +'.rmap-hub-s{font-size:11px;color:#5a7aa0;margin-top:4px;font-family:monospace}'
-    +'.rmap-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}'
-    +'.rmap-search{flex:1;min-width:200px;max-width:360px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-size:12px;font-family:inherit;outline:none}'
-    +'.rmap-search:focus{border-color:var(--accent)}'
-    +'.rmap-stat{font-size:11px;color:var(--muted);font-family:monospace}'
-    +'.rmt-wrap{border:1px solid var(--border);border-radius:10px;overflow:hidden}'
-    +'#rmTable{width:100%;border-collapse:collapse;font-size:12px}'
-    +'#rmTable thead th{background:#1c2236;color:#7c8baa;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap;position:sticky;top:0}'
-    +'#rmTable thead th:hover{color:#aab6d0;background:#222a42}'
-    +'#rmTable thead th.rmt-c{text-align:center}'
-    +'#rmTable .rmt-sortic{color:var(--accent);font-size:9px}'
-    +'#rmTable tbody td{padding:8px 12px;border-bottom:1px solid #1c2030;font-family:monospace}'
-    +'#rmTable tbody tr:last-child td{border-bottom:none}'
-    +'#rmTable tbody tr:hover{background:rgba(96,165,250,.05)}'
-    +'#rmTable tbody tr.rmt-off{opacity:.5}'
-    +'.rmt-dst{color:#7dd3fc;font-weight:700;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-    +'.rmt-arr{color:#34d399;text-align:center;font-weight:700;width:24px}'
-    +'.rmt-gw{color:#fbbf24;font-weight:600}'
-    +'.rmt-nm{color:#cdd7ea;font-family:-apple-system,Segoe UI,sans-serif;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-    +'.rmt-c{text-align:center}'
-    +'.rmt-osp{font-size:9px;font-weight:700;color:#a78bfa;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.35);border-radius:4px;padding:2px 6px}'
-    +'.rmt-dash{color:#3a4560}'
-    +'.rmt-en{color:#34d399;font-size:11px;font-weight:600}'
-    +'.rmt-dis{color:#f87171;font-size:11px;font-weight:600}'
-    +'.rmt-sw{color:#8b97b5;background:#1a2030;border:1px solid #2a3146;border-radius:9px;padding:2px 8px;font-size:10px;cursor:help}'
-    +'.rmt-empty{padding:26px;text-align:center;color:var(--muted);font-family:inherit!important}'
-    +'</style>');
+    + '.rmap-sec{font-size:10px;font-weight:700;letter-spacing:.09em;color:var(--muted);margin:4px 0 12px;text-transform:uppercase;display:flex;align-items:center;gap:8px}'
+    + '.rmap-sec::after{content:"";flex:1;height:1px;background:var(--border)}'
+    + '.rmap-stat-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}'
+    + '.rmap-sc{background:var(--card);border:1px solid var(--border-soft);border-radius:var(--radius-sm);padding:12px 16px}'
+    + '.rmap-sc-num{font-family:var(--font-mono);font-size:26px;font-weight:500;letter-spacing:-.03em;color:var(--accent)}'
+    + '.rmap-sc-lbl{font-size:12px;color:var(--text);margin-top:6px}'
+    + '.rmap-sc-sub{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:4px}'
+    + '.svi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:20px}'
+    + '.svi-card{background:var(--card);border:1px solid color-mix(in oklch, var(--accent) 25%, var(--border));border-radius:var(--radius-sm);padding:10px 12px;display:flex;flex-direction:column;gap:4px}'
+    + '.svi-card.svi-ospf{border-color:color-mix(in oklch, var(--violet) 40%, var(--border));background:color-mix(in oklch, var(--violet) 4%, var(--card))}'
+    + '.svi-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}'
+    + '.svi-vlan{font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--accent);background:color-mix(in oklch, var(--accent) 14%, transparent);border:1px solid color-mix(in oklch, var(--accent) 30%, transparent);border-radius:4px;padding:2px 7px;letter-spacing:.05em}'
+    + '.svi-ob{font-size:9px;font-weight:600;color:var(--violet);background:color-mix(in oklch, var(--violet) 12%, transparent);border:1px solid color-mix(in oklch, var(--violet) 35%, transparent);border-radius:4px;padding:2px 7px}'
+    + '.svi-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    + '.svi-sub{font-family:var(--font-mono);font-size:12px;color:var(--accent)}'
+    + '.svi-ip{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:2px}'
+    + '.rmap-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}'
+    + '.rmap-search{flex:1;min-width:200px;max-width:360px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text);font-size:13px;font-family:inherit;outline:none}'
+    + '.rmap-search:focus{border-color:var(--accent)}'
+    + '.rmap-stat{font-size:11px;color:var(--muted);font-family:var(--font-mono)}'
+    + '.rmt-wrap{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}'
+    + '#rmTable{width:100%;border-collapse:collapse;font-size:13px}'
+    + '#rmTable thead th{background:var(--surface-2);color:var(--muted);font-family:var(--font-mono);font-size:10.5px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap}'
+    + '#rmTable thead th:hover{color:var(--text-2)}'
+    + '#rmTable thead th.rmt-c{text-align:center}'
+    + '#rmTable tbody td{padding:10px 14px;border-bottom:1px solid var(--border-soft)}'
+    + '#rmTable tbody tr:last-child td{border-bottom:none}'
+    + '#rmTable tbody tr:hover{background:color-mix(in oklch, var(--accent) 5%, transparent)}'
+    + '#rmTable tbody tr.rmt-off{opacity:.5}'
+    + '.rmt-dst{font-family:var(--font-mono);color:var(--accent);font-weight:600}'
+    + '.rmt-arr{font-family:var(--font-mono);color:var(--ok);text-align:center;font-weight:600;width:24px}'
+    + '.rmt-gw{font-family:var(--font-mono);color:var(--warn);font-weight:600}'
+    + '.rmt-nm{color:var(--text)}'
+    + '.rmt-c{text-align:center}'
+    + '.rmt-osp{font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--violet);background:color-mix(in oklch, var(--violet) 12%, transparent);border:1px solid color-mix(in oklch, var(--violet) 35%, transparent);border-radius:4px;padding:2px 7px}'
+    + '.rmt-dash{color:var(--muted)}'
+    + '.rmt-en{color:var(--ok);font-family:var(--font-mono);font-size:11px;font-weight:600}'
+    + '.rmt-dis{color:var(--bad);font-family:var(--font-mono);font-size:11px;font-weight:600}'
+    + '.rmt-sw{font-family:var(--font-mono);font-size:11px;color:var(--muted);background:var(--surface-2);border:1px solid var(--border-soft);border-radius:9px;padding:2px 8px;cursor:help}'
+    + '</style>');
 
-  H.push('<div class="rmap">');
+  H.push('<div class="rmap-stat-cards">'
+    + '<div class="rmap-sc"><div class="rmap-sc-num">'+nS+'</div><div class="rmap-sc-lbl">VLAN Interfaces</div><div class="rmap-sc-sub">'+ospfSviN+' OSPF · '+(nS-ospfSviN)+' static</div></div>'
+    + '<div class="rmap-sc"><div class="rmap-sc-num">'+nR+'</div><div class="rmap-sc-lbl">Static Routes</div><div class="rmap-sc-sub">'+_rmRoutes.filter(function(r){return r.enabled;}).length+' on · '+_rmRoutes.filter(function(r){return !r.enabled;}).length+' off</div></div>'
+    + '<div class="rmap-sc"><div class="rmap-sc-num">'+Object.keys(gwSet).length+'</div><div class="rmap-sc-lbl">Next-hop Gateways</div><div class="rmap-sc-sub">đích forward đến</div></div>'
+    + '</div>');
 
-  /* ── SVI section ── */
-  H.push('<div class="rmap-sec">VLAN Interfaces (SVIs) · '+nS+' · OSPF '+ospfSviN+'</div>');
-  H.push('<div class="rmap-svigrid">');
-  if(!nS)H.push('<div class="rmt-empty">Không có SVI</div>');
+  H.push('<div class="rmap-sec">VLAN Interfaces (SVIs) — '+nS+' VLAN nội bộ</div>');
+  H.push('<div class="svi-grid">');
   _rmSVI.forEach(function(v){
-    H.push('<div class="rmap-svi'+(v.ospf?' o':'')+'">'
-      +'<div class="rmap-svi-h"><span class="rmap-vt">VLAN '+esc(String(v.vlanId!==undefined?v.vlanId:'?'))+'</span>'
-      +(v.ospf?'<span class="rmap-ob">OSPF</span>':'')+'</div>'
-      +'<div class="rmap-svi-n" title="'+esc(v.name)+'">'+esc(v.name||'—')+'</div>'
-      +'<div class="rmap-svi-s">'+esc(v.subnet||'—')+'</div>'
-      +'<div class="rmap-svi-i">SVI IP: '+esc(v.ip||'—')+'</div>'
-      +'</div>');
+    H.push('<div class="svi-card'+(v.ospf?' svi-ospf':'')+'">'
+      + '<div class="svi-row"><span class="svi-vlan">VLAN '+esc(String(v.vlanId!==undefined?v.vlanId:'?'))+'</span>'+(v.ospf?'<span class="svi-ob">OSPF</span>':'')+'</div>'
+      + '<div class="svi-name" title="'+esc(v.name)+'">'+esc(v.name||'—')+'</div>'
+      + '<div class="svi-sub">'+esc(v.subnet||'—')+'</div>'
+      + '<div class="svi-ip">SVI IP: '+esc(v.ip||'—')+'</div>'
+      + '</div>');
   });
   H.push('</div>');
 
-  /* ── Hub ── */
-  H.push('<div class="rmap-hub"><div class="rmap-hub-t">🔵 MS Switch Stack — L3</div>'
-    +'<div class="rmap-hub-s">'+nS+' SVIs · '+nR+' route (đã gộp · '+rawR+' raw) · '+nGw+' gateways</div></div>');
-
-  /* ── Directional routing table ── */
-  H.push('<div class="rmap-sec">Bảng Routing — Đích → Next-hop · '+nR+' route</div>');
+  H.push('<div class="rmap-sec">Static Routes — '+nR+' route (đích → next-hop)</div>');
   H.push('<div class="rmap-tools">'
-    +'<input class="rmap-search" type="text" placeholder="🔍 Lọc: subnet đích / next-hop / tên route…" oninput="rmFilter(this.value)">'
-    +'<span class="rmap-stat" id="rmStat"></span></div>');
+    + '<input class="rmap-search" type="text" placeholder="🔍 Lọc: subnet đích / next-hop / tên route…" oninput="rmFilter(this.value)">'
+    + '<span class="rmap-stat" id="rmStat"></span></div>');
   H.push('<div class="rmt-wrap"><table id="rmTable"><thead><tr>'
-    +'<th data-col="subnet" onclick="rmSort(\'subnet\')">Đích (subnet)<span class="rmt-sortic"></span></th>'
-    +'<th class="rmt-c"></th>'
-    +'<th data-col="gw" onclick="rmSort(\'gw\')">Next-hop (gateway)<span class="rmt-sortic"></span></th>'
-    +'<th data-col="name" onclick="rmSort(\'name\')">Tên / Mục đích<span class="rmt-sortic"></span></th>'
-    +'<th class="rmt-c" data-col="ospf" onclick="rmSort(\'ospf\')">OSPF<span class="rmt-sortic"></span></th>'
-    +'<th class="rmt-c" data-col="status" onclick="rmSort(\'status\')">Trạng thái<span class="rmt-sortic"></span></th>'
-    +'<th class="rmt-c" data-col="sw" onclick="rmSort(\'sw\')">Switch<span class="rmt-sortic"></span></th>'
-    +'</tr></thead><tbody id="rmTbody"></tbody></table></div>');
-  H.push('</div>');
+    + '<th onclick="rmSort(\'subnet\')">Đích (subnet)</th>'
+    + '<th class="rmt-c"></th>'
+    + '<th onclick="rmSort(\'gw\')">Next-hop</th>'
+    + '<th onclick="rmSort(\'name\')">Tên / Mục đích</th>'
+    + '<th class="rmt-c" onclick="rmSort(\'ospf\')">OSPF</th>'
+    + '<th class="rmt-c" onclick="rmSort(\'status\')">Trạng thái</th>'
+    + '<th class="rmt-c">Switch</th>'
+    + '</tr></thead><tbody id="rmTbody"></tbody></table></div>');
 
-  document.getElementById('routeContainer').innerHTML=H.join('');
+  document.getElementById('routeContainer').innerHTML = H.join('');
   _rmRender();
 
-  document.getElementById('badge-route').textContent=nS+' SVIs · '+nR+' routes';
-  document.getElementById('badge-route').className='panel-badge green';
-  document.getElementById('routeCount').textContent=nS+' SVIs · '+nR+' route (gộp từ '+rawR+') · '+nGw+' gateways';
-
-  var sep='<span style="width:1px;height:14px;background:var(--border);display:inline-block;margin:0 2px"></span>';
-  document.getElementById('routeLegend').innerHTML=
-    '<span style="display:flex;align-items:center;gap:4px"><span style="color:#7dd3fc;font-weight:700">Đích</span> → <span style="color:#fbbf24;font-weight:600">Next-hop</span> = đường đi gói tin</span>'+sep
-   +'<span style="display:flex;align-items:center;gap:4px"><span style="color:#34d399">● on</span> route đang hoạt động</span>'+sep
-   +'<span style="display:flex;align-items:center;gap:4px"><span style="color:#f87171">● off</span> route bị tắt</span>'+sep
-   +'<span style="display:flex;align-items:center;gap:4px"><span class="rmt-osp" style="padding:1px 5px">OSPF</span> được quảng bá qua OSPF</span>'+sep
-   +'<span style="display:flex;align-items:center;gap:4px">Cột <b style="color:#8b97b5">Switch</b> = số switch trong stack có route này (hover xem tên) · Click tiêu đề cột để sắp xếp</span>';
+  var b = document.getElementById('badge-route');
+  b.textContent = nS + ' SVIs · ' + nR + ' routes';
+  b.className = 'panel-badge tone-ok';
+  document.getElementById('routeCount').textContent = nS + ' SVIs · ' + nR + ' route · ' + Object.keys(gwSet).length + ' gateways';
+  document.getElementById('routeLegend').innerHTML =
+    '<span><span style="color:var(--accent);font-weight:700">Đích</span> → <span style="color:var(--warn);font-weight:600">Next-hop</span> = đường đi gói tin</span>'
+    + '<span style="width:1px;height:14px;background:var(--border);display:inline-block"></span>'
+    + '<span><span style="color:var(--ok)">● on</span> route đang chạy</span>'
+    + '<span><span style="color:var(--bad)">● off</span> route bị tắt</span>'
+    + '<span class="rmt-osp">OSPF</span><span>quảng bá qua OSPF</span>'
+    + '<span style="width:1px;height:14px;background:var(--border);display:inline-block"></span>'
+    + '<span style="color:var(--muted)">Click tiêu đề cột để sort · hover số switch để xem tên</span>';
 }
 
-/* ════════════════════════════════════════════
-   PANEL C — WIRING DIAGRAM (Physical Cables)
-   ════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   WIRING DIAGRAM — preserved from original
+   ═══════════════════════════════════════════════════════════════ */
 function _normMac(s){ return String(s||'').replace(/[:.\-\s]/g,'').toLowerCase(); }
 function _portNum(s){
-  if(s===undefined||s===null)return '?';
-  var str=String(s);
-  var m=str.match(/(\d+)\s*$/);
-  if(m)return 'P'+m[1];
-  m=str.match(/(\d+)/);
-  return m?('P'+m[1]):str.slice(0,6);
+  if (s === undefined || s === null) return '?';
+  var str = String(s), m = str.match(/(\d+)\s*$/);
+  if (m) return 'P' + m[1];
+  m = str.match(/(\d+)/);
+  return m ? ('P'+m[1]) : str.slice(0,6);
 }
 function _spdColor(spd){
-  if(!spd)return'#3358a0';
-  if(spd.indexOf('10 G')!==-1||spd.indexOf('10G')!==-1)return'#22d3ee';
-  if(spd.indexOf('1 G')!==-1||spd.indexOf('1G')!==-1)return'#34d399';
-  if(spd.indexOf('100')!==-1&&spd.indexOf('1000')===-1)return'#fbbf24';
-  if(spd.indexOf('10 M')!==-1||spd.indexOf('10M')!==-1)return'#f87171';
-  return'#3358a0';
+  if (!spd) return '#7c5cff';
+  if (spd.indexOf('10 G') !== -1 || spd.indexOf('10G') !== -1) return '#22d3ee';
+  if (spd.indexOf('1 G') !== -1 || spd.indexOf('1G') !== -1)   return '#34d399';
+  if (spd.indexOf('100') !== -1 && spd.indexOf('1000') === -1) return '#fbbf24';
+  if (spd.indexOf('10 M') !== -1 || spd.indexOf('10M') !== -1) return '#f87171';
+  return '#7c5cff';
 }
-
-/* ── Resolve CDP/LLDP neighbor (MAC / IP / name) → real switch name ── */
 function buildCables(switches){
-  /* maps from /api/meraki-devices */
-  var macMap={}, ipMap={}, nameMap={};
-  (deviceList||[]).forEach(function(d){
-    if(d.mac)  macMap[_normMac(d.mac)]=d.name;
-    if(d.lanIp)ipMap[d.lanIp]=d.name;
+  var macMap = {}, ipMap = {}, nameMap = {};
+  (deviceList || []).forEach(function(d){
+    if (d.mac)   macMap[_normMac(d.mac)] = d.name;
+    if (d.lanIp) ipMap[d.lanIp] = d.name;
   });
   switches.forEach(function(sw){
-    var k=matchTopoKey(sw.switchName);
-    [sw.switchName,sw.switchName.toLowerCase(),k.toLowerCase(),
-     sw.switchName.toLowerCase().replace(/-poe\d*|-test/gi,'')].forEach(function(a){if(a)nameMap[a]=sw.switchName;});
+    var k = matchTopoKey(sw.switchName);
+    [sw.switchName, sw.switchName.toLowerCase(), k.toLowerCase()].forEach(function(a){ if (a) nameMap[a] = sw.switchName; });
   });
-  function resolve(nd,ip){
-    if(!nd&&!ip)return '';
-    var m=_normMac(nd);
-    if(macMap[m])return macMap[m];
-    if(ip&&ipMap[ip])return ipMap[ip];
-    var low=String(nd||'').toLowerCase().trim();
-    if(nameMap[low])return nameMap[low];
-    var hit='';
-    Object.keys(nameMap).forEach(function(k){if(!hit&&k.length>3&&(low.indexOf(k)!==-1||k.indexOf(low)!==-1))hit=nameMap[k];});
+  function resolve(nd, ip) {
+    if (!nd && !ip) return '';
+    var m = _normMac(nd);
+    if (macMap[m]) return macMap[m];
+    if (ip && ipMap[ip]) return ipMap[ip];
+    var low = String(nd||'').toLowerCase().trim();
+    if (nameMap[low]) return nameMap[low];
+    var hit = '';
+    Object.keys(nameMap).forEach(function(k){ if (!hit && k.length > 3 && (low.indexOf(k) >= 0 || k.indexOf(low) >= 0)) hit = nameMap[k]; });
     return hit;
   }
-  /* dedupe physical cables: a cable seen from both ends = one cable */
-  var seen={}, list=[];
+  var seen = {}, list = [];
   switches.forEach(function(sw){
-    var srcName=sw.switchName;
-    (sw.ports||[]).forEach(function(p){
-      if(!p.neighborDevice||p.status!=='Connected')return;
-      var dstName=resolve(p.neighborDevice,p.neighborIp);
-      var srcPort=_portNum(p.portId);
-      var dstPort=_portNum(p.neighborPort);
-      var rawNb=String(p.neighborDevice||'');
-      var dstLabel=dstName||(/^[0-9a-f:.\-]{6,}$/i.test(rawNb)?('? ('+rawNb+')'):rawNb||'?');
-      var a=srcName+'|'+srcPort, b=(dstName||rawNb)+'|'+dstPort;
-      var key=[a,b].sort().join('::');
-      if(seen[key])return;
-      seen[key]=1;
-      list.push({
-        src:srcName, srcKey:matchTopoKey(srcName), srcPort:srcPort,
+    var srcName = sw.switchName;
+    (sw.ports || []).forEach(function(p){
+      if (!p.neighborDevice || p.status !== 'Connected') return;
+      var dstName = resolve(p.neighborDevice, p.neighborIp);
+      var srcPort = _portNum(p.portId), dstPort = _portNum(p.neighborPort);
+      var rawNb = String(p.neighborDevice || '');
+      var dstLabel = dstName || (/^[0-9a-f:.\-]{6,}$/i.test(rawNb) ? ('? ('+rawNb+')') : (rawNb || '?'));
+      var a = srcName + '|' + srcPort, b = (dstName || rawNb) + '|' + dstPort;
+      var key = [a, b].sort().join('::');
+      if (seen[key]) return;
+      seen[key] = 1;
+      list.push({ src:srcName, srcKey:matchTopoKey(srcName), srcPort:srcPort,
         dst:dstLabel, dstName:dstName, dstKey:dstName?matchTopoKey(dstName):'',
-        dstPort:dstPort, speed:p.speed||'', proto:p.neighborProto||'',
-        ip:p.neighborIp||'', resolved:!!dstName
-      });
+        dstPort:dstPort, speed:p.speed || '', proto:p.neighborProto || '', resolved:!!dstName });
     });
   });
   return list;
 }
-
-/* ── Cable table render / sort / filter ── */
-var _wSort={col:'src',dir:1}, _wQ='';
+var _wSort = { col:'src', dir:1 }, _wQ = '';
+function wFilter(v){ _wQ = (v||'').trim().toLowerCase(); _wRender(); }
+function wSort(c){ if (_wSort.col === c) _wSort.dir = -_wSort.dir; else { _wSort.col = c; _wSort.dir = 1; } _wRender(); }
 function _wRender(){
-  var rows=_wCables.slice();
-  if(_wQ)rows=rows.filter(function(r){return (r.src+' '+r.srcPort+' '+r.dst+' '+r.dstPort+' '+r.speed+' '+r.proto).toLowerCase().indexOf(_wQ)>=0;});
-  var c=_wSort.col,d=_wSort.dir;
+  var rows = _wCables.slice();
+  if (_wQ) rows = rows.filter(function(r){ return (r.src+' '+r.srcPort+' '+r.dst+' '+r.dstPort+' '+r.speed+' '+r.proto).toLowerCase().indexOf(_wQ) >= 0; });
   rows.sort(function(a,b){
-    var x,y;
-    if(c==='srcPort'||c==='dstPort'){x=parseInt(String(a[c]).replace(/\D/g,''))||0;y=parseInt(String(b[c]).replace(/\D/g,''))||0;}
-    else {x=String(a[c]||'').toLowerCase();y=String(b[c]||'').toLowerCase();}
-    return x<y?-d:x>y?d:0;
+    var x, y, c = _wSort.col, d = _wSort.dir;
+    if (c === 'srcPort' || c === 'dstPort') { x = parseInt(String(a[c]).replace(/\D/g,''))||0; y = parseInt(String(b[c]).replace(/\D/g,''))||0; }
+    else { x = String(a[c]||'').toLowerCase(); y = String(b[c]||'').toLowerCase(); }
+    return x < y ? -d : x > y ? d : 0;
   });
-  var html='';
-  rows.forEach(function(r){
-    var sc=_spdColor(r.speed);
-    html+='<tr class="'+(r.resolved?'':'wt-un')+'">'
-      +'<td class="wt-sw">'+esc(r.src)+'</td>'
-      +'<td class="wt-pt">'+esc(r.srcPort)+'</td>'
-      +'<td class="wt-ar">⟷</td>'
-      +'<td class="wt-sw">'+esc(r.dst)+'</td>'
-      +'<td class="wt-pt">'+esc(r.dstPort)+'</td>'
-      +'<td class="wt-c"><span class="wt-spd" style="color:'+sc+';border-color:'+sc+'66">'+esc(r.speed||'—')+'</span></td>'
-      +'<td class="wt-c wt-pr">'+esc(r.proto||'—')+'</td>'
-      +'</tr>';
-  });
-  if(!rows.length)html='<tr><td colspan="7" class="wt-empty">Không có cáp khớp "'+esc(_wQ)+'"</td></tr>';
-  document.getElementById('wTbody').innerHTML=html;
-  document.getElementById('wStat').textContent=rows.length+' cáp'+(_wQ?' (lọc)':'');
-  document.querySelectorAll('#wTable th[data-col]').forEach(function(th){
-    var col=th.getAttribute('data-col');
-    th.querySelector('.wt-si').textContent=(col===c)?(d>0?' ▲':' ▼'):'';
-  });
+  document.getElementById('wTbody').innerHTML = rows.map(function(r){
+    var sc = _spdColor(r.speed);
+    return '<tr class="'+(r.resolved?'':'wt-un')+'">'
+      + '<td class="wt-sw">'+esc(r.src)+'</td>'
+      + '<td class="wt-pt">'+esc(r.srcPort)+'</td>'
+      + '<td class="wt-ar">⟷</td>'
+      + '<td class="wt-sw">'+esc(r.dst)+'</td>'
+      + '<td class="wt-pt">'+esc(r.dstPort)+'</td>'
+      + '<td class="wt-c"><span class="wt-spd" style="color:'+sc+';border-color:'+sc+'77">'+esc(r.speed||'—')+'</span></td>'
+      + '<td class="wt-c wt-pr">'+esc(r.proto||'—')+'</td>'
+    + '</tr>';
+  }).join('') || '<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--muted)">Không có cáp khớp "'+esc(_wQ)+'"</td></tr>';
+  document.getElementById('wStat').textContent = rows.length + ' cáp' + (_wQ?' (lọc)':'');
 }
-function wSort(c){ if(_wSort.col===c)_wSort.dir=-_wSort.dir; else {_wSort.col=c;_wSort.dir=1;} _wRender(); }
-function wFilter(v){ _wQ=(v||'').trim().toLowerCase(); _wRender(); }
-
 function wiringFullscreen(){
-  var box=document.getElementById('wiringContainer');
-  if(box.classList.contains('wfs')){
-    box.classList.remove('wfs');
-    document.getElementById('wfsClose').style.display='none';
-    document.body.style.overflow='';
-  }else{
-    box.classList.add('wfs');
-    document.getElementById('wfsClose').style.display='block';
-    document.body.style.overflow='hidden';
-  }
+  var box = document.getElementById('wiringContainer');
+  if (box.classList.contains('wfs')) { box.classList.remove('wfs'); document.body.style.overflow = ''; }
+  else { box.classList.add('wfs'); document.body.style.overflow = 'hidden'; }
 }
-
-/* ── Hover-isolate: brighten one switch's cables, fade the rest ── */
 function wHi(k){
-  var box=document.getElementById('wiringSvg'); if(!box)return;
+  var box = document.getElementById('wiringSvg'); if (!box) return;
   box.querySelectorAll('.wln').forEach(function(g){
-    var ks=(g.getAttribute('data-k')||'').split('|');
-    var on=!k||ks.indexOf(k)>=0;
-    g.style.opacity = !k ? '0.42' : (on?'1':'0.04');
-    var pa=g.querySelector('path'); if(pa)pa.setAttribute('stroke-width',(k&&on)?'3.4':'1.7');
-    g.querySelector('.wln-lbl')&&(g.querySelector('.wln-lbl').style.display=(k&&on)?'':'none');
+    var ks = (g.getAttribute('data-k') || '').split('|');
+    var on = !k || ks.indexOf(k) >= 0;
+    g.style.opacity = !k ? '0.45' : (on ? '1' : '0.06');
+    var pa = g.querySelector('path'); if (pa) pa.setAttribute('stroke-width', (k && on) ? '3.2' : '1.8');
+    var lbl = g.querySelector('.wln-lbl'); if (lbl) lbl.style.display = (k && on) ? '' : 'none';
   });
   box.querySelectorAll('.wnd').forEach(function(g){
-    var nk=g.getAttribute('data-k');
-    var adj=(g.getAttribute('data-adj')||'').split('|');
-    var rel=!k||nk===k||adj.indexOf(k)>=0;
-    g.style.opacity=rel?'1':'0.28';
+    var nk = g.getAttribute('data-k');
+    var adj = (g.getAttribute('data-adj') || '').split('|');
+    var rel = !k || nk === k || adj.indexOf(k) >= 0;
+    g.style.opacity = rel ? '1' : '0.3';
   });
 }
-
-/* ── Hover tooltip: per-switch port table ── */
-function _wConnsOf(k){
-  var out=[];
-  (_wCables||[]).forEach(function(c){
-    if(c.srcKey===k) out.push({tp:c.srcPort,other:c.dstName||c.dst,op:c.dstPort,sp:c.speed,res:c.resolved});
-    else if(c.dstKey===k) out.push({tp:c.dstPort,other:c.src,op:c.srcPort,sp:c.speed,res:true});
-  });
-  out.sort(function(a,b){return String(a.other).localeCompare(String(b.other))
-    || (parseInt(String(a.tp).replace(/\D/g,''))||0)-(parseInt(String(b.tp).replace(/\D/g,''))||0);});
-  return out;
-}
-function wEnter(e,k){
-  wHi(k);
-  var cs=_wConnsOf(k);
-  var rows=cs.map(function(c){
-    var sc=_spdColor(c.sp);
-    return '<tr'+(c.res?'':' style="opacity:.55"')+'>'
-      +'<td class="wtp-p">'+esc(c.tp)+'</td>'
-      +'<td class="wtp-a">→</td>'
-      +'<td class="wtp-o" title="'+esc(c.other||'')+'">'+esc(c.other||'?')+'</td>'
-      +'<td class="wtp-p">'+esc(c.op)+'</td>'
-      +'<td class="wtp-s" style="color:'+sc+'">'+esc(c.sp||'—')+'</td></tr>';
-  }).join('');
-  var tip=document.getElementById('wTip'); if(!tip)return;
-  tip.innerHTML='<div class="wtp-h">'+esc(k)+' · '+cs.length+' dây</div>'
-    +(cs.length?'<table class="wtp-t"><thead><tr><th>Port</th><th></th><th>Đích</th><th>Port</th><th>Tốc độ</th></tr></thead><tbody>'+rows+'</tbody></table>'
-                :'<div class="wtp-e">Không có dây kết nối switch nào</div>');
-  tip.style.display='block';
-  wMove(e);
-}
-function wMove(e){
-  var tip=document.getElementById('wTip'); if(!tip||tip.style.display!=='block')return;
-  var pad=14, w=tip.offsetWidth, h=tip.offsetHeight;
-  var x=e.clientX+pad, y=e.clientY+pad;
-  if(x+w>window.innerWidth-8)  x=e.clientX-w-pad;
-  if(y+h>window.innerHeight-8) y=Math.max(8,window.innerHeight-h-8);
-  tip.style.left=x+'px'; tip.style.top=y+'px';
-}
-function wLeave(){
-  wHi('');
-  var tip=document.getElementById('wTip'); if(tip)tip.style.display='none';
-}
-
 function renderWiringDiagram(switches){
-  var mono='SF Mono,Fira Code,monospace';
-
-  /* Resolve + dedupe physical cables (MAC/IP aware) */
-  _wCables=buildCables(switches);
-
-  /* ── Card set: every real switch (keyed by topo name) ── */
-  var byK={};
-  switches.forEach(function(sw){ byK[matchTopoKey(sw.switchName)]=sw; });
-  var TOP=['CoreSW-01','CoreSW-02','XEN-SW'].filter(function(k){return byK[k];});
-  var REST=Object.keys(byK).filter(function(k){return TOP.indexOf(k)<0;}).sort(function(a,b){
-    return a.replace(/\d+/g,function(n){return n.padStart(3,'0');})
-            .localeCompare(b.replace(/\d+/g,function(n){return n.padStart(3,'0');}));
+  _wCables = buildCables(switches);
+  var byK = {};
+  switches.forEach(function(sw){ byK[matchTopoKey(sw.switchName)] = sw; });
+  var TOP = ['CoreSW-01','CoreSW-02','XEN-SW'].filter(function(k){ return byK[k]; });
+  var REST = Object.keys(byK).filter(function(k){ return TOP.indexOf(k) < 0; }).sort(function(a,b){
+    return a.replace(/\d+/g, function(n){return n.padStart(3,'0');}).localeCompare(b.replace(/\d+/g, function(n){return n.padStart(3,'0');}));
   });
-
-  /* connections per key (from this switch's POV) + adjacency between cards */
   function connsOf(k){
-    var out=[];
+    var out = [];
     _wCables.forEach(function(c){
-      if(c.srcKey===k){ out.push({other:c.dstName||c.dst, oKey:c.dstKey, tp:c.srcPort, op:c.dstPort, sp:c.speed, res:c.resolved}); }
-      else if(c.dstKey===k){ out.push({other:c.src, oKey:c.srcKey, tp:c.dstPort, op:c.srcPort, sp:c.speed, res:true}); }
+      if (c.srcKey === k)      out.push({ other:c.dstName || c.dst, oKey:c.dstKey, tp:c.srcPort, op:c.dstPort, sp:c.speed, res:c.resolved });
+      else if (c.dstKey === k) out.push({ other:c.src, oKey:c.srcKey, tp:c.dstPort, op:c.srcPort, sp:c.speed, res:true });
     });
-    out.sort(function(a,b){return String(a.other).localeCompare(String(b.other));});
     return out;
   }
-  var connMap={}, adjMap={};
+  var connMap = {}, adjMap = {};
   Object.keys(byK).forEach(function(k){
-    var cs=connsOf(k); connMap[k]=cs;
-    var adj={}; cs.forEach(function(c){ if(c.oKey&&byK[c.oKey])adj[c.oKey]=1; });
-    adjMap[k]=Object.keys(adj);
+    var cs = connsOf(k); connMap[k] = cs;
+    var adj = {}; cs.forEach(function(c){ if (c.oKey && byK[c.oKey]) adj[c.oKey] = 1; });
+    adjMap[k] = Object.keys(adj);
   });
 
-  /* ── Layout (fixed compact cards — details on hover) ── */
-  var PAD=22, NC=4;
-  var topW=270, topH=66, topGap=40;
-  var cardW=Math.max(230,(1280-PAD*2-(NC-1)*22)/NC), gx=22, gy=26, cH=66;
-  var svgW=PAD*2+NC*cardW+(NC-1)*gx;
-  var topY=58;
-  var gridY=topY+topH+78;
-
-  var pos={}; /* key → {x,y,w,h,cx,cy} */
-  var topTotal=TOP.length*topW+(TOP.length-1)*topGap;
-  var tx=(svgW-topTotal)/2;
-  TOP.forEach(function(k){
-    pos[k]={x:tx,y:topY,w:topW,h:topH,cx:tx+topW/2,cy:topY+topH/2,top:true};
-    tx+=topW+topGap;
-  });
-  var gyc=gridY,rowKeys=[];
+  var PAD = 22, NC = 4, topW = 270, topH = 66, topGap = 40;
+  var cardW = Math.max(230, (1280 - PAD*2 - (NC-1)*22) / NC), gx = 22, gy = 26, cH = 66;
+  var svgW = PAD*2 + NC*cardW + (NC-1)*gx;
+  var topY = 58, gridY = topY + topH + 78;
+  var pos = {};
+  var topTotal = TOP.length * topW + (TOP.length-1) * topGap;
+  var tx = (svgW - topTotal) / 2;
+  TOP.forEach(function(k){ pos[k] = { x:tx, y:topY, w:topW, h:topH, cx:tx+topW/2, cy:topY+topH/2, top:true }; tx += topW + topGap; });
+  var gyc = gridY, rowKeys = [];
   function flushRow(){
-    rowKeys.forEach(function(k,i){
-      var x=PAD+i*(cardW+gx);
-      pos[k]={x:x,y:gyc,w:cardW,h:cH,cx:x+cardW/2,cy:gyc+cH/2};
-    });
-    gyc+=cH+gy; rowKeys=[];
+    rowKeys.forEach(function(k,i){ var x = PAD + i*(cardW+gx); pos[k] = { x:x, y:gyc, w:cardW, h:cH, cx:x+cardW/2, cy:gyc+cH/2 }; });
+    gyc += cH + gy; rowKeys = [];
   }
-  REST.forEach(function(k){ rowKeys.push(k); if(rowKeys.length===NC)flushRow(); });
-  if(rowKeys.length)flushRow();
-  var svgH=gyc+10;
+  REST.forEach(function(k){ rowKeys.push(k); if (rowKeys.length === NC) flushRow(); });
+  if (rowKeys.length) flushRow();
+  var svgH = gyc + 10;
 
-  var p=[];
-  p.push('<defs>'
-    +'<pattern id="wGrid" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M30 0H0V30" fill="none" stroke="#121828" stroke-width="1"/></pattern>'
-    +'<filter id="wSh" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.5"/></filter>'
-    +'</defs>');
-  p.push('<rect x="0" y="0" width="'+svgW+'" height="'+svgH+'" fill="#0a0d16"/>');
+  var p = [];
+  p.push('<defs><pattern id="wGrid" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M30 0H0V30" fill="none" stroke="#1c1830" stroke-width="1"/></pattern>'
+    + '<filter id="wSh" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.4"/></filter></defs>');
+  p.push('<rect x="0" y="0" width="'+svgW+'" height="'+svgH+'" fill="#15102a"/>');
   p.push('<rect x="0" y="0" width="'+svgW+'" height="'+svgH+'" fill="url(#wGrid)" opacity="0.5"/>');
-  p.push('<rect width="'+svgW+'" height="1" y="'+(topY+topH+38)+'" fill="#1a2238"/>');
-  p.push('<text x="'+PAD+'" y="34" font-size="9" fill="#3a4a68" font-weight="700" font-family="sans-serif" letter-spacing="1.5">CORE / SERVER</text>');
-  p.push('<text x="'+PAD+'" y="'+(gridY-16)+'" font-size="9" fill="#3a4a68" font-weight="700" font-family="sans-serif" letter-spacing="1.5">SWITCHES — rê chuột vào 1 card để xem bảng port</text>');
+  p.push('<text x="'+PAD+'" y="34" font-size="9" fill="#473866" font-weight="700" font-family="sans-serif" letter-spacing="1.5">CORE / SERVER</text>');
+  p.push('<text x="'+PAD+'" y="'+(gridY-16)+'" font-size="9" fill="#473866" font-weight="700" font-family="sans-serif" letter-spacing="1.5">SWITCHES — rê chuột vào 1 card để xem bảng port</text>');
 
-  /* ── Cables ── */
-  var drawn={};
+  /* Cables */
+  var drawn = {};
   Object.keys(byK).forEach(function(k){
-    (connMap[k]||[]).forEach(function(c){
-      if(!c.oKey||!pos[c.oKey]||!pos[k])return;
-      var uid=[k,c.oKey].sort().join('|')+'|'+[c.tp,c.op].sort().join('-');
-      if(drawn[uid])return; drawn[uid]=1;
-      var A=pos[k], B=pos[c.oKey], sc=_spdColor(c.sp), d, lx, ly;
-      if(A.top&&B.top){
-        /* core ↔ core / core ↔ XEN: clear arc bowing ABOVE the row */
-        var L2=A.cx<B.cx?A:B, R2=A.cx<B.cx?B:A;
-        var x1=L2.x+L2.w, y1=L2.cy, x2=R2.x, y2=R2.cy;
-        var topB=topY-30;
-        d='M'+x1+','+y1+' C'+(x1+34)+','+topB+' '+(x2-34)+','+topB+' '+x2+','+y2;
-        lx=(x1+x2)/2; ly=topB+4;
+    (connMap[k] || []).forEach(function(c){
+      if (!c.oKey || !pos[c.oKey] || !pos[k]) return;
+      var uid = [k, c.oKey].sort().join('|') + '|' + [c.tp, c.op].sort().join('-');
+      if (drawn[uid]) return; drawn[uid] = 1;
+      var A = pos[k], B = pos[c.oKey], sc = _spdColor(c.sp), d, lx, ly;
+      if (A.top && B.top) {
+        var L2 = A.cx < B.cx ? A : B, R2 = A.cx < B.cx ? B : A;
+        var x1 = L2.x + L2.w, y1 = L2.cy, x2 = R2.x, y2 = R2.cy, topB = topY - 30;
+        d = 'M'+x1+','+y1+' C'+(x1+34)+','+topB+' '+(x2-34)+','+topB+' '+x2+','+y2;
+        lx = (x1+x2)/2; ly = topB + 4;
       } else {
-        /* top ↔ grid (or grid ↔ grid): vertical S-curve, edge to edge */
-        var hi=A.y<=B.y?A:B, lo=A.y<=B.y?B:A;
-        var x1b=hi.cx, y1b=hi.y+hi.h, x2b=lo.cx, y2b=lo.y;
-        if(Math.abs(A.y-B.y)<2){ y1b=hi.cy; y2b=lo.cy; }
-        var midY=(y1b+y2b)/2;
-        d='M'+x1b+','+y1b+' C'+x1b+','+midY+' '+x2b+','+midY+' '+x2b+','+y2b;
-        lx=(x1b+x2b)/2; ly=midY;
+        var hi = A.y <= B.y ? A : B, lo = A.y <= B.y ? B : A;
+        var x1b = hi.cx, y1b = hi.y + hi.h, x2b = lo.cx, y2b = lo.y;
+        if (Math.abs(A.y - B.y) < 2) { y1b = hi.cy; y2b = lo.cy; }
+        var midY = (y1b + y2b) / 2;
+        d = 'M'+x1b+','+y1b+' C'+x1b+','+midY+' '+x2b+','+midY+' '+x2b+','+y2b;
+        lx = (x1b+x2b)/2; ly = midY;
       }
-      var ttl=k+' '+c.tp+'  ⟷  '+(c.other||c.oKey)+' '+c.op+(c.sp?'  ·  '+c.sp:'');
-      p.push('<g class="wln" data-k="'+esc(k+'|'+c.oKey)+'" style="opacity:0.42"><title>'+escSvg(ttl)+'</title>');
-      p.push('<path d="'+d+'" fill="none" stroke="'+sc+'" stroke-width="1.7" stroke-linecap="round"/>');
-      var lbl=c.tp+' ↔ '+c.op, lw=lbl.length*5.6+10;
-      p.push('<g class="wln-lbl" style="display:none"><rect x="'+(lx-lw/2)+'" y="'+(ly-8)+'" width="'+lw+'" height="16" rx="4" fill="#060a13" stroke="'+sc+'"/>'
-        +'<text x="'+lx+'" y="'+(ly+4)+'" text-anchor="middle" font-size="9" fill="'+sc+'" font-family="'+mono+'" font-weight="700">'+escSvg(lbl)+'</text></g>');
+      var ttl = k + ' ' + c.tp + '  ⟷  ' + (c.other || c.oKey) + ' ' + c.op + (c.sp ? '  ·  ' + c.sp : '');
+      p.push('<g class="wln" data-k="'+esc(k+'|'+c.oKey)+'" style="opacity:0.45"><title>'+escSvg(ttl)+'</title>');
+      p.push('<path d="'+d+'" fill="none" stroke="'+sc+'" stroke-width="1.8" stroke-linecap="round"/>');
+      var lbl = c.tp + ' ↔ ' + c.op, lw = lbl.length * 5.6 + 10;
+      p.push('<g class="wln-lbl" style="display:none"><rect x="'+(lx-lw/2)+'" y="'+(ly-8)+'" width="'+lw+'" height="16" rx="4" fill="#0d0a1c" stroke="'+sc+'"/><text x="'+lx+'" y="'+(ly+4)+'" text-anchor="middle" font-size="9" fill="'+sc+'" font-family="IBM Plex Mono,monospace" font-weight="700">'+escSvg(lbl)+'</text></g>');
       p.push('</g>');
     });
   });
 
-  /* ── Switch cards (compact — hover shows port table) ── */
   function drawCard(k){
-    var sw=byK[k], P=pos[k]; if(!P)return;
-    var rx=P.x, ry=P.y, W=P.w, H=P.h;
-    var isTop=!!P.top;
-    var roleC=k.indexOf('Core')===0?'#3b82f6':(k==='XEN-SW'?'#06b6d4':'#8b5cf6');
-    var nc='#64748b',brd='#252f4a',pct=0;
-    if(sw){
-      pct=sw.totalPorts?sw.connectedPorts/sw.totalPorts:0;
-      if(sw.connectedPorts===0){nc='#f87171';brd='rgba(248,113,113,.5)';}
-      else if(pct>=0.5){nc='#34d399';brd='rgba(52,211,153,.32)';}
-      else{nc='#fbbf24';brd='rgba(251,191,36,.32)';}
+    var sw = byK[k], P = pos[k]; if (!P) return;
+    var rx = P.x, ry = P.y, W = P.w, H = P.h;
+    var roleC = k.indexOf('Core') === 0 ? '#a78bfa' : (k === 'XEN-SW' ? '#22d3ee' : '#34d399');
+    var nc = '#a0a0c0', brd = '#3a2f5a', pct = 0;
+    if (sw) {
+      pct = sw.totalPorts ? sw.connectedPorts/sw.totalPorts : 0;
+      if (sw.connectedPorts === 0) { nc = '#f87171'; brd = 'rgba(248,113,113,.5)'; }
+      else if (pct >= 0.5) { nc = '#34d399'; brd = 'rgba(52,211,153,.4)'; }
+      else { nc = '#fbbf24'; brd = 'rgba(251,191,36,.4)'; }
     }
-    var cs=connMap[k]||[];
-    p.push('<g class="wnd" data-k="'+esc(k)+'" data-adj="'+esc((adjMap[k]||[]).join('|'))+'" style="cursor:pointer" '
-      +'onmouseover="wEnter(event,\''+esc(k)+'\')" onmousemove="wMove(event)" onmouseout="wLeave()">');
-    p.push('<rect x="'+rx+'" y="'+ry+'" width="'+W+'" height="'+H+'" rx="9" fill="'+(isTop?'#0e1626':'#12162a')+'" stroke="'+brd+'" stroke-width="1.5" filter="url(#wSh)"/>');
+    var cs = connMap[k] || [];
+    p.push('<g class="wnd" data-k="'+esc(k)+'" data-adj="'+esc((adjMap[k] || []).join('|'))+'" style="cursor:pointer" onmouseover="wHi(\''+esc(k)+'\')" onmouseout="wHi(\'\')">');
+    p.push('<rect x="'+rx+'" y="'+ry+'" width="'+W+'" height="'+H+'" rx="9" fill="#1c1633" stroke="'+brd+'" stroke-width="1.5" filter="url(#wSh)"/>');
     p.push('<rect x="'+rx+'" y="'+ry+'" width="4.5" height="'+H+'" rx="2.2" fill="'+roleC+'"/>');
-    var nm=sw?sw.switchName:k;
-    if(nm.length>24)nm=nm.slice(0,23)+'…';
-    p.push('<text x="'+(rx+14)+'" y="'+(ry+24)+'" font-size="12.5" fill="'+nc+'" font-family="'+mono+'" font-weight="700">'+escSvg(nm)+'</text>');
-    if(sw){
-      p.push('<text x="'+(rx+W-12)+'" y="'+(ry+24)+'" text-anchor="end" font-size="10.5" fill="'+nc+'" font-family="'+mono+'" font-weight="700">'+sw.connectedPorts+'/'+sw.totalPorts+'</text>');
-      p.push('<text x="'+(rx+14)+'" y="'+(ry+41)+'" font-size="8.5" fill="#56688c" font-family="'+mono+'">'+escSvg((sw.switchModel||'?'))+'</text>');
-      p.push('<text x="'+(rx+W-12)+'" y="'+(ry+41)+'" text-anchor="end" font-size="8.5" fill="#7dd3fc" font-family="'+mono+'">'+cs.length+' dây ▾</text>');
-      var bw=W-20,bx2=rx+10,byp=ry+H-11,fc=pct>=0.5?'#34d399':pct>0?'#fbbf24':'#f87171';
-      p.push('<rect x="'+bx2+'" y="'+byp+'" width="'+bw+'" height="3.5" rx="1.7" fill="#0e1626"/>');
+    var nm = sw ? sw.switchName : k;
+    if (nm.length > 24) nm = nm.slice(0,23) + '…';
+    p.push('<text x="'+(rx+14)+'" y="'+(ry+24)+'" font-size="12.5" fill="'+nc+'" font-family="IBM Plex Mono,monospace" font-weight="700">'+escSvg(nm)+'</text>');
+    if (sw) {
+      p.push('<text x="'+(rx+W-12)+'" y="'+(ry+24)+'" text-anchor="end" font-size="10.5" fill="'+nc+'" font-family="IBM Plex Mono,monospace" font-weight="700">'+sw.connectedPorts+'/'+sw.totalPorts+'</text>');
+      p.push('<text x="'+(rx+14)+'" y="'+(ry+41)+'" font-size="8.5" fill="#7a6c92" font-family="IBM Plex Mono,monospace">'+escSvg(sw.switchModel || '?')+'</text>');
+      p.push('<text x="'+(rx+W-12)+'" y="'+(ry+41)+'" text-anchor="end" font-size="8.5" fill="#b89aff" font-family="IBM Plex Mono,monospace">'+cs.length+' dây</text>');
+      var bw = W-20, bx2 = rx+10, byp = ry+H-11, fc = pct>=0.5?'#34d399':pct>0?'#fbbf24':'#f87171';
+      p.push('<rect x="'+bx2+'" y="'+byp+'" width="'+bw+'" height="3.5" rx="1.7" fill="#15102a"/>');
       p.push('<rect x="'+bx2+'" y="'+byp+'" width="'+(bw*pct).toFixed(1)+'" height="3.5" rx="1.7" fill="'+fc+'"/>');
     } else {
-      p.push('<text x="'+(rx+14)+'" y="'+(ry+41)+'" font-size="8.5" fill="#56688c" font-family="'+mono+'">'+cs.length+' dây ▾</text>');
+      p.push('<text x="'+(rx+14)+'" y="'+(ry+41)+'" font-size="8.5" fill="#7a6c92" font-family="IBM Plex Mono,monospace">'+cs.length+' dây</text>');
     }
     p.push('</g>');
   }
   TOP.forEach(drawCard);
   REST.forEach(drawCard);
 
-  var nCablesSw=_wCables.filter(function(c){return c.srcKey&&c.dstKey&&byK[c.srcKey]&&byK[c.dstKey];}).length;
-  var nPairs=Object.keys(drawn).length;
-  var nUnres=_wCables.filter(function(c){return !c.resolved;}).length;
+  var nPairs = Object.keys(drawn).length;
+  var nUnres = _wCables.filter(function(c){ return !c.resolved; }).length;
 
-  /* ── Compose: SVG + cable table ── */
-  var H=[];
+  var H = [];
   H.push('<style>'
-    +'#wiringContainer.wfs{position:fixed;inset:0;z-index:9999;background:#0a0d16;overflow:auto;padding:18px}'
-    +'.wfs-close{display:none;position:fixed;top:14px;right:18px;z-index:10000;background:#1e2235;border:1px solid var(--accent);color:var(--accent);font-size:13px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer}'
-    +'.wmap-svg{display:block;min-width:'+svgW+'px;background:#0a0d16;border:1px solid var(--border);border-radius:10px}'
-    +'.wmap-sec{font-size:10px;font-weight:700;letter-spacing:.09em;color:#46587a;margin:18px 2px 9px;text-transform:uppercase;display:flex;align-items:center;gap:8px}'
-    +'.wmap-sec::after{content:"";flex:1;height:1px;background:var(--border)}'
-    +'.wmap-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}'
-    +'.wmap-search{flex:1;min-width:200px;max-width:340px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-size:12px;font-family:inherit;outline:none}'
-    +'.wmap-search:focus{border-color:var(--accent)}'
-    +'.wmap-stat{font-size:11px;color:var(--muted);font-family:monospace}'
-    +'.wt-wrap{border:1px solid var(--border);border-radius:10px;overflow:hidden}'
-    +'#wTable{width:100%;border-collapse:collapse;font-size:12px}'
-    +'#wTable thead th{background:#1c2236;color:#7c8baa;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap}'
-    +'#wTable thead th:hover{color:#aab6d0;background:#222a42}'
-    +'#wTable thead th.wt-c{text-align:center}'
-    +'#wTable .wt-si{color:var(--accent);font-size:9px}'
-    +'#wTable tbody td{padding:8px 12px;border-bottom:1px solid #1c2030;font-family:monospace}'
-    +'#wTable tbody tr:last-child td{border-bottom:none}'
-    +'#wTable tbody tr:hover{background:rgba(96,165,250,.05)}'
-    +'#wTable tbody tr.wt-un{opacity:.55}'
-    +'.wt-sw{color:#cdd7ea;font-weight:700}'
-    +'.wt-pt{color:#7dd3fc;font-weight:700}'
-    +'.wt-ar{color:#34d399;text-align:center;font-weight:700}'
-    +'.wt-c{text-align:center}'
-    +'.wt-spd{font-size:10px;font-weight:700;border:1px solid;border-radius:4px;padding:2px 7px}'
-    +'.wt-pr{color:#8b97b5;font-size:11px}'
-    +'.wt-empty{padding:24px;text-align:center;color:var(--muted)}'
-    +'.w-tip{position:fixed;display:none;z-index:10001;pointer-events:none;background:#0c1120;border:1px solid #2c3a5e;border-radius:9px;padding:8px 10px;box-shadow:0 8px 28px rgba(0,0,0,.6);max-width:340px}'
-    +'.wtp-h{font-size:11px;font-weight:700;color:#7dd3fc;font-family:monospace;margin-bottom:6px;border-bottom:1px solid #1f2a44;padding-bottom:5px}'
-    +'.wtp-t{border-collapse:collapse;font-size:11px;font-family:monospace;width:100%}'
-    +'.wtp-t th{color:#5a6c92;font-size:9px;font-weight:700;text-transform:uppercase;text-align:left;padding:2px 7px 4px;letter-spacing:.04em}'
-    +'.wtp-t td{padding:3px 7px;border-top:1px solid #161e30;white-space:nowrap}'
-    +'.wtp-p{color:#7dd3fc;font-weight:700}'
-    +'.wtp-a{color:#34d399;text-align:center}'
-    +'.wtp-o{color:#cdd7ea;max-width:150px;overflow:hidden;text-overflow:ellipsis}'
-    +'.wtp-s{font-weight:700}'
-    +'.wtp-e{font-size:11px;color:var(--muted);padding:4px 2px}'
-    +'</style>');
-  H.push('<button class="wfs-close" id="wfsClose" onclick="wiringFullscreen()">✕ Đóng toàn màn hình</button>');
+    + '#wiringContainer.wfs{position:fixed;inset:0;z-index:9999;background:var(--bg);overflow:auto;padding:18px}'
+    + '.wmap-svg{display:block;min-width:'+svgW+'px;background:#15102a;border:1px solid var(--border);border-radius:var(--radius-sm)}'
+    + '.wmap-sec{font-size:10px;font-weight:700;letter-spacing:.09em;color:var(--muted);margin:18px 0 12px;text-transform:uppercase;display:flex;align-items:center;gap:8px}'
+    + '.wmap-sec::after{content:"";flex:1;height:1px;background:var(--border)}'
+    + '.wmap-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}'
+    + '.wmap-search{flex:1;min-width:200px;max-width:340px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text);font-size:13px;font-family:inherit;outline:none}'
+    + '.wmap-search:focus{border-color:var(--accent)}'
+    + '.wmap-stat{font-size:11px;color:var(--muted);font-family:var(--font-mono)}'
+    + '.wt-wrap{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}'
+    + '#wTable{width:100%;border-collapse:collapse;font-size:13px}'
+    + '#wTable thead th{background:var(--surface-2);color:var(--muted);font-family:var(--font-mono);font-size:10.5px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap}'
+    + '#wTable thead th.wt-c{text-align:center}'
+    + '#wTable tbody td{padding:10px 14px;border-bottom:1px solid var(--border-soft)}'
+    + '#wTable tbody tr:last-child td{border-bottom:none}'
+    + '#wTable tbody tr:hover{background:color-mix(in oklch, var(--accent) 5%, transparent)}'
+    + '#wTable tbody tr.wt-un{opacity:.55}'
+    + '.wt-sw{color:var(--text);font-weight:500}'
+    + '.wt-pt{font-family:var(--font-mono);color:var(--accent);font-weight:600}'
+    + '.wt-ar{font-family:var(--font-mono);color:var(--ok);text-align:center;font-weight:600}'
+    + '.wt-c{text-align:center}'
+    + '.wt-spd{font-family:var(--font-mono);font-size:11px;font-weight:600;border:1px solid;border-radius:4px;padding:2px 7px}'
+    + '.wt-pr{color:var(--muted);font-family:var(--font-mono);font-size:11px}'
+    + '</style>');
   H.push('<svg id="wiringSvg" class="wmap-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'">'+p.join('')+'</svg>');
-  H.push('<div class="w-tip" id="wTip"></div>');
 
-  /* Cable list table — definitive port-to-port reference */
   H.push('<div class="wmap-sec">Bảng cáp vật lý — Nguồn ⟷ Đích (đúng từng port)</div>');
-  H.push('<div class="wmap-tools">'
-    +'<input class="wmap-search" type="text" placeholder="🔍 Lọc: switch / port / tốc độ…" oninput="wFilter(this.value)">'
-    +'<span class="wmap-stat" id="wStat"></span></div>');
+  H.push('<div class="wmap-tools"><input class="wmap-search" placeholder="🔍 Lọc switch · port · tốc độ…" oninput="wFilter(this.value)"><span class="wmap-stat" id="wStat"></span></div>');
   H.push('<div class="wt-wrap"><table id="wTable"><thead><tr>'
-    +'<th data-col="src" onclick="wSort(\'src\')">Switch nguồn<span class="wt-si"></span></th>'
-    +'<th data-col="srcPort" onclick="wSort(\'srcPort\')">Port<span class="wt-si"></span></th>'
-    +'<th class="wt-c"></th>'
-    +'<th data-col="dst" onclick="wSort(\'dst\')">Switch đích<span class="wt-si"></span></th>'
-    +'<th data-col="dstPort" onclick="wSort(\'dstPort\')">Port<span class="wt-si"></span></th>'
-    +'<th class="wt-c" data-col="speed" onclick="wSort(\'speed\')">Tốc độ<span class="wt-si"></span></th>'
-    +'<th class="wt-c" data-col="proto" onclick="wSort(\'proto\')">Proto<span class="wt-si"></span></th>'
-    +'</tr></thead><tbody id="wTbody"></tbody></table></div>');
+    + '<th onclick="wSort(\'src\')">Switch nguồn</th>'
+    + '<th onclick="wSort(\'srcPort\')">Port</th>'
+    + '<th class="wt-c"></th>'
+    + '<th onclick="wSort(\'dst\')">Switch đích</th>'
+    + '<th onclick="wSort(\'dstPort\')">Port</th>'
+    + '<th class="wt-c" onclick="wSort(\'speed\')">Tốc độ</th>'
+    + '<th class="wt-c" onclick="wSort(\'proto\')">Proto</th>'
+    + '</tr></thead><tbody id="wTbody"></tbody></table></div>');
 
-  document.getElementById('wiringContainer').innerHTML=H.join('');
-  _wSort={col:'src',dir:1}; _wQ='';
+  document.getElementById('wiringContainer').innerHTML = H.join('');
+  _wSort = { col:'src', dir:1 }; _wQ = '';
   _wRender();
-
-  document.getElementById('btnWiringFs').style.display='';
-  document.getElementById('badge-wiring').textContent=nPairs+' link · '+_wCables.length+' cáp';
-  document.getElementById('badge-wiring').className='panel-badge green';
-  document.getElementById('wiringCount').textContent=nPairs+' link · '+nCablesSw+' dây switch'+(nUnres?' · '+nUnres+' chưa định danh':'');
-
-  var sep='<span style="width:1px;height:14px;background:var(--border);display:inline-block;margin:0 2px"></span>';
-  var speeds=[['#22d3ee','10G'],['#34d399','1G'],['#fbbf24','100M'],['#f87171','10M']];
-  var legItems=speeds.map(function(s){
-    return'<span style="display:flex;align-items:center;gap:4px"><span style="width:18px;height:3px;border-radius:2px;background:'+s[0]+';display:inline-block"></span>'+s[1]+'</span>';
-  });
-  document.getElementById('wiringLegend').innerHTML=legItems.join(sep)+sep
-    +'<span style="color:#5a6c92;font-size:10px"><b>Rê chuột vào 1 switch</b> → hiện bảng port của nó &amp; sáng riêng dây của nó · bảng bên dưới tra cứu đầy đủ · ⛶ xem rộng</span>';
+  document.getElementById('btnWiringFs').style.display = '';
+  var b = document.getElementById('badge-wiring');
+  b.textContent = nPairs + ' link · ' + _wCables.length + ' cáp';
+  b.className = 'panel-badge tone-ok';
+  document.getElementById('wiringCount').textContent = nPairs + ' link' + (nUnres ? ' · ' + nUnres + ' chưa định danh' : '');
+  document.getElementById('wiringLegend').innerHTML =
+    '<span><span style="display:inline-block;width:18px;height:3px;border-radius:2px;background:#22d3ee;margin-right:4px"></span>10G</span>'
+    + '<span><span style="display:inline-block;width:18px;height:3px;border-radius:2px;background:#34d399;margin-right:4px"></span>1G</span>'
+    + '<span><span style="display:inline-block;width:18px;height:3px;border-radius:2px;background:#fbbf24;margin-right:4px"></span>100M</span>'
+    + '<span><span style="display:inline-block;width:18px;height:3px;border-radius:2px;background:#f87171;margin-right:4px"></span>10M</span>'
+    + '<span style="width:1px;height:14px;background:var(--border);display:inline-block"></span>'
+    + '<span style="color:var(--muted)">Rê chuột vào 1 switch → hiện cable của nó · bảng bên dưới tra cứu đầy đủ</span>';
 }
 
-/* ════════════════════════════════════════════
-   DRAW ACTIONS (button handlers)
-   ════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   DRAW ACTIONS (API endpoints preserved exactly)
+   ═══════════════════════════════════════════════════════════════ */
 function drawTopo(){
-  setBtnState('btnDrawTopo',true);
-  document.getElementById('topoContainer').innerHTML='<div style="text-align:center;padding:3rem;color:var(--muted)"><div class="spinner"></div><br>Đang tải dữ liệu…</div>';
-  document.getElementById('badge-topo').textContent='Đang tải…';
-  document.getElementById('badge-topo').className='panel-badge';
+  setBtnState('btnDrawTopo', true);
+  document.getElementById('topoContainer').innerHTML = '<div class="diagram-empty"><span class="spinner"></span><br>Đang tải dữ liệu…</div>';
+  document.getElementById('badge-topo').textContent = 'Đang tải…';
   Promise.all([
-    fetch('/api/meraki-switch-ports',{cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject(r.status);}),
-    fetch('/api/meraki-link-aggregations',{cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject(r.status);}),
-    fetch('/api/meraki-port-configs',{cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject(r.status);})
+    fetch('/api/meraki-switch-ports', { cache:'no-store' }).then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); }),
+    fetch('/api/meraki-link-aggregations', { cache:'no-store' }).then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); }),
+    fetch('/api/meraki-port-configs', { cache:'no-store' }).then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); }),
   ]).then(function(results){
-    allSwitches=results[0].switches||[];
-    linkAggPortMap=results[1].portMap||{};
-    portCfgData=results[2].configs||[];
-    if(results[0].fetchedAt){var dt=new Date(results[0].fetchedAt);document.getElementById('fetchedAt').textContent='Cập nhật: '+dt.toLocaleTimeString('vi-VN',{hour12:false});}
+    allSwitches    = results[0].switches || [];
+    linkAggPortMap = results[1].portMap  || {};
+    portCfgData    = results[2].configs  || [];
+    if (results[0].fetchedAt) {
+      document.getElementById('fetchedAt').textContent = 'Cập nhật ' + new Date(results[0].fetchedAt).toLocaleTimeString('vi-VN', { hour12:false });
+    }
     renderTopoPanel();
-    drawnPanels.topo=true;
-    setBtnState('btnDrawTopo',false,'Vẽ lại');
+    drawnPanels.topo = true;
+    setBtnState('btnDrawTopo', false);
   }).catch(function(e){
-    document.getElementById('topoContainer').innerHTML='<div style="text-align:center;padding:3rem;color:var(--red)">⚠ Không tải được — '+esc(String(e))+'</div>';
-    document.getElementById('badge-topo').textContent='Lỗi';
-    document.getElementById('badge-topo').className='panel-badge red';
-    setBtnState('btnDrawTopo',false,'Thử lại');
+    document.getElementById('topoContainer').innerHTML = '<div class="diagram-empty" style="color:var(--bad)">⚠ Không tải được — ' + esc(String(e)) + '</div>';
+    document.getElementById('badge-topo').textContent = 'Lỗi';
+    document.getElementById('badge-topo').className = 'panel-badge tone-bad';
+    setBtnState('btnDrawTopo', false, 'Thử lại');
   });
 }
-
 function drawRoute(){
-  setBtnState('btnDrawRoute',true);
-  document.getElementById('routeContainer').innerHTML='<div style="text-align:center;padding:3rem;color:var(--muted)"><div class="spinner"></div><br>Đang tải dữ liệu L3 routing…</div>';
-  document.getElementById('badge-route').textContent='Đang tải…';
-  document.getElementById('badge-route').className='panel-badge';
-  /* Open panel if collapsed */
-  document.getElementById('panel-route').classList.remove('collapsed');
-  fetch('/api/meraki-l3-routing',{cache:'no-store'})
-    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
+  setBtnState('btnDrawRoute', true);
+  document.getElementById('routeContainer').innerHTML = '<div class="diagram-empty"><span class="spinner"></span><br>Đang tải L3 routing…</div>';
+  document.getElementById('badge-route').textContent = 'Đang tải…';
+  fetch('/api/meraki-l3-routing', { cache:'no-store' })
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function(d){
-      l3Data=d;
+      l3Data = d;
       renderRouteMap(d);
-      drawnPanels.route=true;
-      setBtnState('btnDrawRoute',false,'Vẽ lại');
-    }).catch(function(e){
-      document.getElementById('routeContainer').innerHTML='<div style="text-align:center;padding:3rem;color:var(--red)">⚠ Không tải được — '+esc(String(e))+'</div>';
-      document.getElementById('badge-route').textContent='Lỗi';
-      document.getElementById('badge-route').className='panel-badge red';
-      setBtnState('btnDrawRoute',false,'Thử lại');
+      drawnPanels.route = true;
+      setBtnState('btnDrawRoute', false);
+    })
+    .catch(function(e){
+      document.getElementById('routeContainer').innerHTML = '<div class="diagram-empty" style="color:var(--bad)">⚠ Không tải được — ' + esc(String(e)) + '</div>';
+      document.getElementById('badge-route').textContent = 'Lỗi';
+      document.getElementById('badge-route').className = 'panel-badge tone-bad';
+      setBtnState('btnDrawRoute', false, 'Thử lại');
     });
 }
-
 function drawWiring(){
-  setBtnState('btnDrawWiring',true);
-  document.getElementById('wiringContainer').innerHTML='<div style="text-align:center;padding:3rem;color:var(--muted)"><div class="spinner"></div><br>Đang tải dữ liệu cáp vật lý…</div>';
-  document.getElementById('badge-wiring').textContent='Đang tải…';
-  document.getElementById('badge-wiring').className='panel-badge';
-  /* Open panel if collapsed */
-  document.getElementById('panel-wiring').classList.remove('collapsed');
-  function fail(e){
-    document.getElementById('wiringContainer').innerHTML='<div style="text-align:center;padding:3rem;color:var(--red)">⚠ Không tải được — '+esc(String(e))+'</div>';
-    document.getElementById('badge-wiring').textContent='Lỗi';
-    document.getElementById('badge-wiring').className='panel-badge red';
-    setBtnState('btnDrawWiring',false,'Thử lại');
-  }
-  /* Need switch-ports (CDP/LLDP) + devices (MAC/IP → name resolution) */
-  var pSw = allSwitches.length
-    ? Promise.resolve({switches:allSwitches})
-    : fetch('/api/meraki-switch-ports',{cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject(r.status);});
-  var pDev = deviceList.length
-    ? Promise.resolve({devices:deviceList})
-    : fetch('/api/meraki-devices',{cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject(r.status);}).catch(function(){return {devices:[]};});
-  Promise.all([pSw,pDev]).then(function(rr){
-    allSwitches=rr[0].switches||allSwitches||[];
-    deviceList=(rr[1]&&(rr[1].devices||(Array.isArray(rr[1])?rr[1]:[])))||deviceList||[];
+  setBtnState('btnDrawWiring', true);
+  document.getElementById('wiringContainer').innerHTML = '<div class="diagram-empty"><span class="spinner"></span><br>Đang tải dữ liệu cáp…</div>';
+  document.getElementById('badge-wiring').textContent = 'Đang tải…';
+  Promise.all([
+    fetch('/api/meraki-switch-ports', { cache:'no-store' }).then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); }),
+    fetch('/api/meraki-devices',      { cache:'no-store' }).then(function(r){ return r.ok ? r.json() : null; }),
+  ]).then(function(results){
+    allSwitches = results[0].switches || [];
+    deviceList  = (results[1] && results[1].devices) || (Array.isArray(results[1]) ? results[1] : []);
     renderWiringDiagram(allSwitches);
-    drawnPanels.wiring=true;
-    setBtnState('btnDrawWiring',false,'Vẽ lại');
-  }).catch(fail);
+    drawnPanels.wiring = true;
+    setBtnState('btnDrawWiring', false);
+  }).catch(function(e){
+    document.getElementById('wiringContainer').innerHTML = '<div class="diagram-empty" style="color:var(--bad)">⚠ Không tải được — ' + esc(String(e)) + '</div>';
+    document.getElementById('badge-wiring').textContent = 'Lỗi';
+    document.getElementById('badge-wiring').className = 'panel-badge tone-bad';
+    setBtnState('btnDrawWiring', false, 'Thử lại');
+  });
 }
-
-/* ── Header "Vẽ lại" button: re-draw all drawn panels ── */
-function refreshAll(){
-  var btn=document.getElementById('refreshBtn');
-  btn.classList.add('refreshing');
-  var jobs=[];
-  if(drawnPanels.topo)jobs.push(new Promise(function(res){
-    fetch('/api/meraki-switch-ports',{cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject(r.status);})
-    .then(function(d0){
-      return Promise.all([
-        Promise.resolve(d0),
-        fetch('/api/meraki-link-aggregations',{cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject(r.status);}),
-        fetch('/api/meraki-port-configs',{cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject(r.status);})
-      ]);
-    }).then(function(rr){
-      allSwitches=rr[0].switches||[];linkAggPortMap=rr[1].portMap||{};portCfgData=rr[2].configs||[];
-      if(rr[0].fetchedAt){var dt=new Date(rr[0].fetchedAt);document.getElementById('fetchedAt').textContent='Cập nhật: '+dt.toLocaleTimeString('vi-VN',{hour12:false});}
-      renderTopoPanel();res();
-    }).catch(function(){res();});
-  }));
-  if(drawnPanels.route)jobs.push(new Promise(function(res){
-    fetch('/api/meraki-l3-routing',{cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject(r.status);})
-    .then(function(d){l3Data=d;renderRouteMap(d);res();}).catch(function(){res();});
-  }));
-  if(drawnPanels.wiring)jobs.push(new Promise(function(res){
-    Promise.all([
-      fetch('/api/meraki-switch-ports',{cache:'no-store'}).then(function(r){return r.ok?r.json():Promise.reject(r.status);}),
-      fetch('/api/meraki-devices',{cache:'no-store'}).then(function(r){return r.ok?r.json():{devices:[]};}).catch(function(){return {devices:[]};})
-    ]).then(function(rr){
-      allSwitches=rr[0].switches||allSwitches||[];
-      deviceList=(rr[1]&&(rr[1].devices||(Array.isArray(rr[1])?rr[1]:[])))||deviceList||[];
-      renderWiringDiagram(allSwitches);res();
-    }).catch(function(){ if(allSwitches.length)renderWiringDiagram(allSwitches); res(); });
-  }));
-  Promise.all(jobs).finally(function(){btn.classList.remove('refreshing');});
-}
-
-/* ── No auto-load on page open ── */
 </script>
 </body>
 </html>

@@ -1,499 +1,627 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Home Lab Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* ───────────────────────────────────────────────────────────────
+   DESIGN TOKENS
+   ─────────────────────────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --bg:           oklch(0.18 0.012 250);
+  --surface:      oklch(0.22 0.012 250);
+  --surface-2:    oklch(0.26 0.012 250);
+  --card:         oklch(0.21 0.012 250);
+  --border:       oklch(0.31 0.012 250);
+  --border-soft:  oklch(0.27 0.012 250);
+  --text:         oklch(0.96 0.005 250);
+  --text-2:       oklch(0.86 0.008 250);
+  --muted:        oklch(0.62 0.012 250);
+  --track:        oklch(0.30 0.012 250);
 
-* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-:root {
-  --bg: #09090b;
-  --surface: #18181b;
-  --card: #18181b;
-  --border: #27272a;
-  --border-hover: #3f3f46;
-  --text: #f4f4f5;
-  --muted: #a1a1aa;
-  
-  --accent: #60a5fa;
-  --accent-glow: rgba(96, 165, 250, 0.5);
-  
-  --green: #10b981;
-  --red: #ef4444;
-  --amber: #f59e0b;
-  
-  --green-dim: rgba(16, 185, 129, 0.1);
-  --red-dim: rgba(239, 68, 68, 0.1);
-  --amber-dim: rgba(245, 158, 11, 0.1);
+  --accent:       oklch(0.72 0.18 290);   /* violet */
+  --accent-soft:  oklch(0.55 0.13 290);
+  --violet:       oklch(0.72 0.18 290);
+  --ok:           oklch(0.74 0.16 155);   /* emerald */
+  --warn:         oklch(0.78 0.16 70);    /* amber */
+  --bad:          oklch(0.68 0.20 25);    /* coral */
+
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --radius: 12px;
+  --radius-sm: 8px;
 }
-body { background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+[data-theme="light"] {
+  --bg:           oklch(0.985 0.003 250);
+  --surface:      oklch(1 0 0);
+  --surface-2:    oklch(0.965 0.005 250);
+  --card:         oklch(1 0 0);
+  --border:       oklch(0.91 0.008 250);
+  --border-soft:  oklch(0.94 0.008 250);
+  --text:         oklch(0.22 0.015 250);
+  --text-2:       oklch(0.36 0.015 250);
+  --muted:        oklch(0.55 0.012 250);
+  --track:        oklch(0.93 0.008 250);
+  --accent:       oklch(0.55 0.18 290);
+  --accent-soft:  oklch(0.72 0.13 290);
+  --violet:       oklch(0.55 0.18 290);
+  --ok:           oklch(0.52 0.15 155);
+  --warn:         oklch(0.62 0.16 70);
+  --bad:          oklch(0.55 0.20 25);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   BASE
+   ─────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { font-family: var(--font-sans); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .45; }
 a { color: inherit; text-decoration: none; }
-
-/* HEADER */
-.header {
-  background: rgba(24, 24, 27, 0.8);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-  padding: 0 2rem;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-.header-left { display: flex; align-items: center; gap: 12px; }
-.logo {
-  width: 32px; height: 32px;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-}
-.site-name { font-size: 16px; font-weight: 600; letter-spacing: -0.02em; }
-.site-sub { font-size: 13px; color: var(--muted); margin-left: 4px; }
-.header-right { display: flex; align-items: center; gap: 16px; }
-.clock { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
-.refresh-btn {
-  font-size: 13px; font-weight: 500;
-  padding: 6px 14px; border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface); color: var(--text);
-  cursor: pointer; transition: all 0.2s;
-}
-.refresh-btn:hover { background: #27272a; border-color: var(--border-hover); }
-.auto-badge {
-  font-size: 12px; padding: 4px 10px; border-radius: 20px;
-  background: var(--green-dim); color: var(--green);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  font-weight: 500;
-}
-
-/* CONTAINER */
-.container { max-width: 1400px; margin: 0 auto; padding: 2rem 1.5rem; display: flex; flex-direction: column; gap: 24px; }
-
-/* SUMMARY GRID */
-.summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-.sum-card {
-  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
-  padding: 1.25rem 1.5rem; display: flex; align-items: center; gap: 16px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-.sum-icon {
-  width: 48px; height: 48px; border-radius: 12px;
-  display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;
-}
-.sum-icon.total { background: #27272a; }
-.sum-icon.online { background: var(--green-dim); color: var(--green); }
-.sum-icon.offline { background: var(--red-dim); color: var(--red); }
-.sum-icon.local { background: var(--amber-dim); color: var(--amber); }
-.sum-label { font-size: 13px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
-.sum-value { font-size: 24px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
-.sum-value.green { color: var(--green); }
-.sum-value.red { color: var(--red); }
-.sum-value.amber { color: var(--amber); }
-
-/* SECTIONS */
-.section-title {
-  font-size: 13px; font-weight: 600; color: var(--muted);
-  text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px;
-  display: flex; align-items: center; gap: 8px;
-}
-
-/* SERVICES GRID */
-.services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-.srv-card {
-  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
-  padding: 1.25rem; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
-.srv-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,0.2); }
-.srv-card::after {
-  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px;
-  background: transparent; transition: background 0.2s;
-}
-.srv-card.online::after { background: var(--green); box-shadow: 0 -2px 10px rgba(16, 185, 129, 0.4); }
-.srv-card.offline::after { background: var(--red); box-shadow: 0 -2px 10px rgba(239, 68, 68, 0.4); }
-.srv-card.local::after { background: var(--amber); box-shadow: 0 -2px 10px rgba(245, 158, 11, 0.4); }
-.srv-card.checking::after { background: #52525b; }
-
-.srv-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
-.srv-icon {
-  width: 44px; height: 44px; border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 20px; background: #27272a; flex-shrink: 0;
-}
-.srv-name-wrap { margin-bottom: 12px; }
-.srv-name { font-size: 16px; font-weight: 600; margin-bottom: 4px; color: var(--text); letter-spacing: -0.01em; }
-.srv-desc { font-size: 13px; color: var(--muted); }
-
-.srv-footer {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);
-}
-.srv-status-wrap { display: flex; align-items: center; gap: 8px; }
-.srv-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.srv-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
-.srv-dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); }
-.srv-dot.local { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
-.srv-dot.checking { background: #52525b; animation: pulse 1s infinite; }
-
-.srv-badge { font-size: 12px; font-weight: 500; color: var(--text); }
-.srv-badge.online { color: var(--green); }
-.srv-badge.offline { color: var(--red); }
-.srv-badge.local { color: var(--amber); }
-.srv-badge.checking { color: var(--muted); }
-
-.srv-ping { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; background: #27272a; padding: 2px 6px; border-radius: 6px; }
-.srv-link { font-size: 12px; font-weight: 500; color: var(--accent); opacity: 0; transition: opacity 0.2s; }
-.srv-card:hover .srv-link { opacity: 1; }
-
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-
-/* BOTTOM GRID FOR BALANCE */
-.bottom-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: start; }
-
-.boxed-section {
-  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
-  padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 16px;
-}
-
-/* UPTIME */
-.uptime-item { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
-.uptime-item:last-child { margin-bottom: 0; }
-.uptime-label { display: flex; justify-content: space-between; font-size: 13px; }
-.uptime-name { font-weight: 500; display: flex; align-items: center; gap: 6px; }
-.uptime-pct { font-weight: 600; }
-.uptime-bar-bg { height: 6px; background: #27272a; border-radius: 3px; overflow: hidden; }
-.uptime-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
-.uptime-bar-fill.good { background: var(--green); }
-.uptime-bar-fill.warn { background: var(--amber); }
-.uptime-bar-fill.bad { background: var(--red); }
-
-/* LOGS */
-.log-list { display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; padding-right: 4px; }
-.log-item { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border); }
-.log-item:last-child { border-bottom: none; }
-.log-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.log-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
-.log-dot.offline { background: var(--red); box-shadow: 0 0 6px var(--red); }
-.log-time { color: var(--muted); flex-shrink: 0; font-variant-numeric: tabular-nums; font-size: 12px; }
-.log-text { color: var(--text); flex: 1; font-weight: 500; }
-
-/* INFO & LINKS */
-.info-rows { display: flex; flex-direction: column; gap: 10px; }
-.info-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
-.info-key { color: var(--muted); }
-.info-val { color: var(--text); font-weight: 500; text-align: right; }
-.info-val.green { color: var(--green); }
-.info-val.red { color: var(--red); }
-.info-val.amber { color: var(--amber); }
-.note { font-size: 12px; color: var(--amber); background: var(--amber-dim); border: 1px solid rgba(245,158,11,0.2); border-radius: 8px; padding: 10px 12px; line-height: 1.4; margin-top: 10px; }
-
-.qlink-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.qlink { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); transition: all 0.2s; }
-.qlink:hover { border-color: var(--accent); background: rgba(59, 130, 246, 0.05); transform: translateY(-1px); }
-.qlink-icon { font-size: 18px; }
-.qlink-text { display: flex; flex-direction: column; overflow: hidden; }
-.qlink-name { font-size: 12px; font-weight: 600; color: var(--text); }
-.qlink-url { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* BOOKMARKS CARD */
-.bm-launch-card{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-radius:12px;border:.5px solid var(--border);background:var(--surface);transition:all .2s;text-decoration:none;color:var(--text)}
-.bm-launch-card:hover{border-color:var(--accent);background:rgba(96,165,250,.06);transform:translateY(-1px)}
-.bm-launch-left{display:flex;align-items:center;gap:12px}
-.bm-launch-icon{font-size:22px;line-height:1}
-.bm-launch-info{}
-.bm-launch-name{font-size:13px;font-weight:600}
-.bm-launch-sub{font-size:11px;color:var(--muted);margin-top:2px}
-.bm-launch-arrow{font-size:16px;color:var(--muted)}
-.bm-preview{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.bm-chip{font-size:11px;padding:3px 9px;border-radius:20px;background:var(--card);border:.5px solid var(--border);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
-
-/* MODAL */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:1000;backdrop-filter:blur(4px)}
-.modal-overlay.hidden{display:none}
-.modal{background:#18181b;border:1px solid var(--border);border-radius:16px;padding:1.5rem;width:380px;max-width:90vw;box-shadow:0 25px 50px rgba(0,0,0,.5)}
-.modal-title{font-size:15px;font-weight:700;margin-bottom:1.25rem}
-.modal-row{display:flex;gap:10px;margin-bottom:12px}
-.modal-row.full{flex-direction:column}
-.m-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
-.m-input{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;outline:none;transition:border .15s}
-.m-input:focus{border-color:var(--accent)}
-.m-icon-input{width:60px;font-size:20px;text-align:center;flex-shrink:0}
-.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:1rem}
-.m-btn{padding:7px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s}
-.m-btn.primary{background:var(--accent);color:#0b0d14}
-.m-btn.primary:hover{background:#3b82f6}
-.m-btn.cancel{background:var(--surface);color:var(--muted);border:1px solid var(--border)}
-.m-btn.cancel:hover{color:var(--text)}
-
-/* CATEGORY ACCORDION */
-.cat-wrap { display: flex; flex-direction: column; gap: 14px; }
-
-.cat-section {
-  border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
-  box-shadow: 0 2px 6px rgba(0,0,0,.08);
-}
-
-.cat-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 20px; cursor: pointer; user-select: none;
-  background: #1c1c1f; border-bottom: 1px solid transparent;
-  transition: background .18s;
-}
-.cat-header:hover { background: #222226; }
-.cat-header.open { border-bottom-color: var(--border); }
-
-.cat-left { display: flex; align-items: center; gap: 14px; }
-.cat-emoji { font-size: 22px; line-height: 1; flex-shrink: 0; }
-.cat-name { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
-.cat-meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
-
-.cat-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-.cat-pills { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-.cat-pill {
-  font-size: 11.5px; font-weight: 600; padding: 3px 10px;
-  border-radius: 20px; white-space: nowrap;
-}
-.cat-pill.online  { background: var(--green-dim); color: var(--green);  border: 1px solid rgba(16,185,129,.25); }
-.cat-pill.offline { background: var(--red-dim);   color: var(--red);    border: 1px solid rgba(239,68,68,.25); }
-.cat-pill.local   { background: var(--amber-dim); color: var(--amber);  border: 1px solid rgba(245,158,11,.25); }
-.cat-pill.empty   { background: #27272a;           color: var(--muted);  border: 1px solid var(--border); }
-.cat-pill.check   { background: #222226;           color: #52525b;       border: 1px solid var(--border); }
-
-.cat-chevron {
-  width: 26px; height: 26px; border-radius: 50%;
-  background: #27272a; color: var(--muted);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 10px; transition: transform .25s, background .15s; flex-shrink: 0;
-}
-.cat-header:hover .cat-chevron { background: #333338; }
-.cat-chevron.closed { transform: rotate(-90deg); }
-
-.cat-body {
-  overflow: hidden;
-  transition: max-height .35s cubic-bezier(.4,0,.2,1), opacity .25s;
-}
-.cat-body.closed { opacity: 0; }
-.cat-body.open   { opacity: 1; }
-
-.cat-grid {
-  padding: 14px 16px;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;
-  background: var(--bg);
-}
-.cat-empty {
-  padding: 2.5rem; text-align: center; color: var(--muted);
-  font-size: 13px; line-height: 1.7; background: var(--bg);
-}
-
-/* OFFLINE ALERT BANNER */
-.offline-banner{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.28);border-radius:12px;padding:.875rem 1.25rem;display:flex;align-items:center;gap:12px}
-.offline-banner .b-icon{font-size:20px;flex-shrink:0}
-.offline-banner .b-title{font-size:13px;font-weight:600;color:var(--red);margin-bottom:2px}
-.offline-banner .b-list{font-size:12px;color:#f87171aa}
-
-/* QUICK STATUS STRIP */
-.status-strip{display:flex;flex-wrap:wrap;gap:8px}
-.sp{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:10px;border:1px solid var(--border);background:var(--card);transition:all .15s;cursor:default;min-width:0}
-.sp:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.25)}
-.sp.online {border-color:rgba(16,185,129,.22);background:rgba(16,185,129,.04)}
-.sp.offline{border-color:rgba(239,68,68,.28) ;background:rgba(239,68,68,.05)}
-.sp.local  {border-color:rgba(245,158,11,.22);background:rgba(245,158,11,.04)}
-.sp-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.sp-dot.online {background:var(--green);box-shadow:0 0 6px var(--green)}
-.sp-dot.offline{background:var(--red)  ;box-shadow:0 0 6px var(--red)}
-.sp-dot.local  {background:var(--amber);box-shadow:0 0 6px var(--amber)}
-.sp-dot.checking{background:#52525b;animation:pulse 1s infinite}
-.sp-name{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap}
-.sp-meta{display:flex;align-items:center;gap:4px;margin-top:1px}
-.sp-ping{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
-.sp-trend{font-size:10px;font-weight:700}
-.sp-trend.up  {color:var(--green)}
-.sp-trend.down{color:var(--red)}
-.sp-trend.same{color:#52525b}
-.sp-since{font-size:10px;color:#3f3f46}
-
-/* PING TREND in cards */
-.ping-box{display:flex;align-items:center;gap:4px}
-.ping-trend{font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px}
-.ping-trend.up  {color:var(--green);background:var(--green-dim)}
-.ping-trend.down{color:var(--red)  ;background:var(--red-dim)}
-.ping-trend.same{color:#52525b    ;background:#27272a}
-
-/* ACTIVITY LOG */
-.act-row{display:flex;align-items:center;gap:10px;padding:9px 1.25rem;border-bottom:1px solid var(--border);font-size:12px;flex-wrap:wrap}
-.act-row:last-child{border-bottom:none}
-.act-row:hover{background:#1c1c1f}
-.act-badge{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;flex-shrink:0}
-.act-ok   {background:var(--green-dim);color:var(--green)}
-.act-err  {background:var(--red-dim)  ;color:var(--red)}
-.act-info {background:rgba(96,165,250,.1);color:var(--accent)}
-.act-muted{background:#27272a;color:var(--muted)}
-.act-user {color:var(--text);font-weight:500;flex-shrink:0}
-.act-ip   {color:var(--muted);font-family:monospace;font-size:11px;flex:1}
-.act-time {color:var(--muted);font-size:11px;white-space:nowrap;margin-left:auto}
-
-/* FOOTER */
-.footer { text-align: center; padding: 2rem; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); margin-top: 2rem; }
-
-/* RESPONSIVE */
-@media (max-width: 1100px) {
-  .bottom-grid { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 800px) {
-  .summary { grid-template-columns: repeat(2, 1fr); }
-  .bottom-grid { grid-template-columns: 1fr; }
-}
-
-::-webkit-scrollbar { width: 6px; }
+input { font: inherit; }
+::selection { background: color-mix(in oklch, var(--accent) 35%, transparent); }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #52525b; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.num  { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+@keyframes spin  { to { transform: rotate(360deg); } }
+
+/* ───────────────────────────────────────────────────────────────
+   TOP BAR
+   ─────────────────────────────────────────────────────────────── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 28px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 50;
+  backdrop-filter: blur(12px);
+}
+.topbar-left { display: flex; align-items: center; gap: 28px; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark {
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  background: var(--accent); color: var(--bg);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 14px color-mix(in oklch, var(--accent) 25%, transparent);
+}
+.brand-name { font-weight: 600; font-size: 14px; line-height: 1.1; letter-spacing: -.01em; }
+.brand-sub  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.topnav { display: flex; align-items: center; gap: 2px; }
+.topnav-item {
+  font-size: 13px; font-weight: 500; color: var(--muted);
+  padding: 6px 12px; border-radius: var(--radius-sm);
+  transition: all .12s; text-decoration: none;
+}
+.topnav-item:hover { color: var(--text); background: var(--surface-2); }
+.topnav-item.active { color: var(--text); background: var(--surface-2); }
+.clock {
+  font-family: var(--font-mono);
+  font-size: 13px; color: var(--text-2);
+  padding: 6px 10px; background: var(--surface-2);
+  border: 1px solid var(--border-soft); border-radius: var(--radius-sm);
+}
+.auto-indicator {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--muted);
+  padding: 6px 10px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border-soft);
+  font-family: var(--font-mono);
+}
+.auto-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: pulse 2s ease-in-out infinite; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; font-size: 13px; font-weight: 500;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2);
+  border-radius: var(--radius-sm); transition: all .12s; cursor: pointer;
+}
+.btn.ghost { background: transparent; }
+.btn:hover { color: var(--text); border-color: var(--muted); }
+.btn.active { color: var(--accent); border-color: var(--accent); background: color-mix(in oklch, var(--accent) 8%, transparent); }
+.theme-toggle { width: 32px; height: 32px; display: grid; place-items: center; padding: 0; }
+.user-chip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px; font-size: 13px;
+}
+.user-avatar {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--violet));
+  color: var(--bg);
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 600;
+}
+.user-tag {
+  font-size: 10px; padding: 2px 6px;
+  background: color-mix(in oklch, var(--accent) 15%, transparent);
+  color: var(--accent); border-radius: 4px;
+  font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   LAYOUT
+   ─────────────────────────────────────────────────────────────── */
+.main { width: 100%; max-width: 1440px; margin: 0 auto; padding: 24px 28px 64px; display: flex; flex-direction: column; gap: 24px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* ───────────────────────────────────────────────────────────────
+   HERO
+   ─────────────────────────────────────────────────────────────── */
+.hero { display: flex; flex-direction: column; gap: 20px; }
+.hero-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+.section-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .12em;
+  margin-bottom: 4px;
+}
+.hero-title {
+  font-size: 32px; font-weight: 500;
+  letter-spacing: -.025em; line-height: 1.1;
+  color: var(--text); max-width: 640px;
+}
+.hero-accent { color: var(--accent); font-weight: 600; }
+.hero-sub { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.hero-meta { display: flex; flex-direction: column; gap: 4px; min-width: 240px; font-size: 12px; }
+.hero-meta-row {
+  display: flex; justify-content: space-between; gap: 16px;
+  padding: 4px 0;
+  border-top: 1px solid var(--border-soft);
+}
+.hero-meta-row:first-child { border-top: none; }
+.hero-meta-row > span:first-child { color: var(--muted); }
+
+/* KPI strip */
+.kpi-strip {
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+}
+.kpi { padding: 18px 20px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.kpi:last-child { border-right: none; }
+.kpi-label { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+.kpi-value { font-family: var(--font-mono); font-size: 28px; font-weight: 500; letter-spacing: -.03em; line-height: 1; }
+.kpi-sub { font-size: 11px; color: var(--muted); }
+
+/* ───────────────────────────────────────────────────────────────
+   CARDS
+   ─────────────────────────────────────────────────────────────── */
+.card-flush {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+}
+.card-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px; border-bottom: 1px solid var(--border-soft); gap: 12px;
+}
+.section-title { font-size: 18px; font-weight: 500; letter-spacing: -.015em; color: var(--text); }
+
+/* ───────────────────────────────────────────────────────────────
+   COMMAND BAR
+   ─────────────────────────────────────────────────────────────── */
+.cmdbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  flex-wrap: wrap;
+}
+.cmdbar-search {
+  flex: 1; min-width: 240px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+}
+.cmdbar-search:focus-within { border-color: var(--accent); }
+.cmdbar-prefix { font-family: var(--font-mono); color: var(--muted); font-size: 13px; }
+.cmdbar-search input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-size: 13px; }
+.cmdbar-search input::placeholder { color: var(--muted); }
+
+/* ───────────────────────────────────────────────────────────────
+   SERVICE GROUPS (collapsible)
+   ─────────────────────────────────────────────────────────────── */
+.grouped-services { display: flex; flex-direction: column; }
+.svc-group { border-top: 1px solid var(--border); }
+.svc-group:first-child { border-top: none; }
+.svc-group-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+  padding: 18px 20px 14px;
+  background: linear-gradient(to right, color-mix(in oklch, var(--group-accent, var(--accent)) 6%, transparent), transparent 60%);
+  border-left: 3px solid var(--group-accent, var(--accent));
+  cursor: pointer; user-select: none;
+  transition: background .15s;
+}
+.svc-group-head:hover { background: linear-gradient(to right, color-mix(in oklch, var(--group-accent, var(--accent)) 10%, transparent), transparent 70%); }
+.svc-group-title-wrap { display: flex; align-items: center; gap: 12px; }
+.svc-group-icon {
+  width: 36px; height: 36px;
+  display: grid; place-items: center;
+  font-size: 18px;
+  background: color-mix(in oklch, var(--group-accent, var(--accent)) 14%, transparent);
+  border: 1px solid color-mix(in oklch, var(--group-accent, var(--accent)) 25%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--group-accent, var(--accent));
+}
+.svc-group-title { font-size: 16px; font-weight: 600; letter-spacing: -.01em; color: var(--text); }
+.svc-group-sub { font-size: 12px; color: var(--muted); margin-top: 2px; font-family: var(--font-mono); }
+.svc-group-stats { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.svc-group-chev {
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  color: var(--muted);
+  transition: transform .25s ease;
+  margin-left: 4px;
+  cursor: pointer;
+}
+.svc-group.is-closed .svc-group-chev { transform: rotate(-90deg); }
+.svc-group-body {
+  display: grid; grid-template-rows: 1fr;
+  transition: grid-template-rows .3s cubic-bezier(.4,0,.2,1), opacity .25s;
+  opacity: 1;
+}
+.svc-group-body > * { overflow: hidden; min-height: 0; }
+.svc-group.is-closed .svc-group-body { grid-template-rows: 0fr; opacity: 0; }
+
+/* ───────────────────────────────────────────────────────────────
+   SERVICES TABLE
+   ─────────────────────────────────────────────────────────────── */
+.svc-table-wrap { overflow-x: auto; }
+.svc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.svc-table thead th {
+  text-align: left;
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+  color: var(--muted); text-transform: uppercase; letter-spacing: .1em;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2); white-space: nowrap;
+}
+.svc-table tbody tr { border-bottom: 1px solid var(--border-soft); transition: background .1s; }
+.svc-table tbody tr:last-child { border-bottom: none; }
+.svc-table tbody tr:hover { background: color-mix(in oklch, var(--accent) 5%, transparent); }
+.svc-table td { padding: 12px 16px; vertical-align: middle; }
+.svc-icon-sm {
+  width: 28px; height: 28px; border-radius: 6px;
+  background: var(--surface-2);
+  display: grid; place-items: center;
+  font-size: 14px;
+}
+.svc-name-cell { display: flex; align-items: center; gap: 8px; }
+.svc-name { font-weight: 500; color: var(--text); white-space: nowrap; }
+.svc-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.svc-host { font-family: var(--font-mono); font-size: 12px; color: var(--text-2); white-space: nowrap; }
+
+.status-pip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500;
+  color: var(--c, var(--text-2)); text-transform: capitalize;
+}
+.status-pip i {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--c, var(--muted));
+  box-shadow: 0 0 8px var(--c, transparent);
+  flex-shrink: 0;
+}
+.status-pip i.checking { animation: pulse 1s infinite; }
+
+.tag-pill {
+  display: inline-block;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  padding: 2px 7px; border-radius: 4px;
+  letter-spacing: .04em; text-transform: uppercase;
+}
+.tag-pill.ok    { background: color-mix(in oklch, var(--ok)   15%, transparent); color: var(--ok); }
+.tag-pill.warn  { background: color-mix(in oklch, var(--warn) 15%, transparent); color: var(--warn); }
+.tag-pill.bad   { background: color-mix(in oklch, var(--bad)  15%, transparent); color: var(--bad); }
+.tag-pill.mute  { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border-soft); }
+
+.row-action {
+  font-size: 12px; color: var(--accent); font-weight: 500;
+  padding: 4px 8px; border-radius: 6px; text-decoration: none;
+  white-space: nowrap;
+}
+.row-action:hover { background: color-mix(in oklch, var(--accent) 10%, transparent); }
+
+/* sparkline */
+.spark { display: block; color: var(--accent); }
+
+/* ───────────────────────────────────────────────────────────────
+   ALERT BANNER + ACTIVITY + BOOKMARKS + SPEED
+   ─────────────────────────────────────────────────────────────── */
+.alerts-banner {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 14px 18px;
+  background: color-mix(in oklch, var(--bad) 8%, var(--card));
+  border: 1px solid color-mix(in oklch, var(--bad) 35%, transparent);
+  border-radius: var(--radius);
+}
+.alerts-icon { font-size: 22px; color: var(--bad); flex-shrink: 0; }
+.alerts-body { flex: 1; min-width: 0; }
+.alerts-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.alerts-sub   { font-size: 12px; color: var(--muted); }
+
+.act-list { list-style: none; }
+.act-row {
+  display: grid; grid-template-columns: 130px 110px 1fr auto;
+  align-items: center; gap: 12px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--border-soft); font-size: 13px;
+}
+.act-row:first-child { border-top: none; }
+.act-row:hover { background: var(--surface-2); }
+.act-user { font-weight: 500; }
+.act-ip   { font-size: 12px; color: var(--muted); }
+.act-time { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+
+.bm-folders { display: flex; flex-direction: column; }
+.bm-folder { padding: 14px 20px; border-top: 1px solid var(--border-soft); }
+.bm-folder:first-child { border-top: none; }
+.bm-folder-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; }
+.bm-folder-name { font-weight: 600; }
+.bm-folder-count {
+  font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+  padding: 1px 6px; background: var(--surface-2); border-radius: 4px;
+}
+.bm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.bm-chip {
+  font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--border-soft);
+  color: var(--text-2); transition: all .12s;
+}
+.bm-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+.kv { display: grid; grid-template-columns: 1fr 1fr; gap: 0; padding: 4px 0; }
+.kv > div { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; border-top: 1px solid var(--border-soft); font-size: 13px; }
+.kv > div:nth-child(-n+2) { border-top: none; }
+.kv > div:nth-child(odd) { border-right: 1px solid var(--border-soft); }
+.kv dt { color: var(--muted); font-size: 12px; }
+.kv dd { color: var(--text); font-weight: 500; }
+
+.speed-body { display: flex; align-items: center; justify-content: space-between; padding: 20px; gap: 24px; }
+.speed-value { font-family: var(--font-mono); font-size: 36px; font-weight: 500; letter-spacing: -.03em; color: var(--accent); line-height: 1; }
+.speed-unit  { font-size: 14px; color: var(--muted); font-weight: 400; }
+.speed-meta  { font-size: 11px; color: var(--muted); margin-top: 6px; font-family: var(--font-mono); }
+
+.footer {
+  display: flex; justify-content: space-between;
+  padding: 20px 4px; font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid var(--border-soft);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   RESPONSIVE
+   ─────────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .kpi-strip { grid-template-columns: repeat(3, 1fr); }
+  .kpi:nth-child(3) { border-right: none; }
+  .kpi { border-bottom: 1px solid var(--border); }
+}
+@media (max-width: 980px) {
+  .two-col { grid-template-columns: 1fr; }
+  .main { padding: 16px; }
+  .hide-md { display: none !important; }
+}
+@media (max-width: 640px) {
+  .topbar { padding: 10px 16px; }
+  .topbar-left { gap: 14px; }
+  .topnav-item:nth-child(n+3) { display: none; }
+  .clock, .auto-indicator { display: none; }
+  .user-chip > span:not(.user-avatar):not(.user-tag) { display: none; }
+  .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  .kpi { border-right: 1px solid var(--border) !important; }
+  .kpi:nth-child(2n) { border-right: none !important; }
+}
 </style>
 </head>
 <body>
-<header class="header">
-  <div class="header-left">
-    <div class="logo">🚀</div>
-    <span class="site-name">Home Lab Dashboard</span>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">
+          <path d="M3 12 L9 6 L15 12 L21 6"></path>
+          <path d="M3 18 L9 12 L15 18 L21 12" opacity="0.45"></path>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">Home Lab</div>
+        <div class="brand-sub">Operator console</div>
+      </div>
+    </div>
+    <nav class="topnav">
+      <a class="topnav-item active" href="/">Overview</a>
+      <a class="topnav-item" href="/meraki.html">Meraki</a>
+      <a class="topnav-item" href="/topology.html">Topology</a>
+      <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
+      <a class="topnav-item" id="admin-link" href="/users.html" style="display:none">Users</a>
+    </nav>
   </div>
-  <div class="header-right">
-    <span class="auto-badge" id="autoLabel">● Auto 60s</span>
-    <span class="clock" id="clock">--:--:--</span>
-    <button class="refresh-btn" onclick="runChecks()">&#8635; Refresh</button>
-    <div id="user-menu" style="display:flex;align-items:center;gap:8px">
-      <span id="user-badge" style="font-size:12px;padding:4px 10px;border-radius:20px;background:#27272a;color:var(--muted);font-weight:500;display:flex;align-items:center;gap:6px"></span>
-      <a id="admin-link" href="/users.html" style="display:none;font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);color:var(--muted);text-decoration:none;transition:all .15s" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">👥 Users</a>
-      <button onclick="doLogout()" style="font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s" onmouseover="this.style.color='var(--red)';this.style.borderColor='rgba(239,68,68,.4)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">↩ Đăng xuất</button>
+  <div class="topbar-right">
+    <div class="auto-indicator">
+      <span class="auto-dot"></span>
+      <span id="autoLabel">Auto · 120s</span>
+    </div>
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="btn ghost" onclick="runChecks()" title="Refresh ngay">↻</button>
+    <button class="btn ghost theme-toggle" id="themeToggle" title="Toggle dark/light" aria-label="Toggle theme">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <circle cx="8" cy="8" r="3"></circle>
+        <path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"></path>
+      </svg>
+    </button>
+    <div class="user-chip">
+      <span class="user-avatar" id="user-avatar">?</span>
+      <span id="user-name">?</span>
+      <span class="user-tag" id="user-tag" style="display:none">admin</span>
+      <button class="btn ghost" onclick="doLogout()" title="Đăng xuất" style="padding:2px 8px;font-size:11px;border:none">↩</button>
     </div>
   </div>
 </header>
 
-<div class="container">
-  
-  <!-- SUMMARY CARDS -->
-  <div class="summary">
-    <div class="sum-card"><div class="sum-icon total">📡</div><div><div class="sum-label">Tổng services</div><div class="sum-value" id="totalCount">—</div></div></div>
-    <div class="sum-card"><div class="sum-icon online">✅</div><div><div class="sum-label">Online</div><div class="sum-value green" id="onlineCount">—</div></div></div>
-    <div class="sum-card"><div class="sum-icon offline">🔴</div><div><div class="sum-label">Offline</div><div class="sum-value red" id="offlineCount">—</div></div></div>
-    <div class="sum-card"><div class="sum-icon local">🏠</div><div><div class="sum-label">LAN Only</div><div class="sum-value amber" id="localCount">—</div></div></div>
-  </div>
-  <div id="speedtest-card" style="margin:18px 0 0 0;max-width:340px;">
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1rem 1.25rem;display:flex;align-items:center;gap:14px;">
-      <div style="font-size:22px;">⚡</div>
-      <div style="flex:1;">
-        <div style="font-size:13px;color:var(--muted);font-weight:500;">Tốc độ mạng của bạn lên Cloudflare</div>
-        <div id="speedtest-result" style="font-size:18px;font-weight:700;">Đang đo...</div>
+<main class="main">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-head">
+      <div>
+        <div class="section-eyebrow">Overview</div>
+        <h1 class="hero-title">All systems <span class="hero-accent" id="hero-state">running</span>.</h1>
+        <p class="hero-sub" id="hero-sub">Đang kiểm tra services…</p>
+      </div>
+      <div class="hero-meta">
+        <div class="hero-meta-row"><span>Node</span><span>Cloudflare Edge</span></div>
+        <div class="hero-meta-row"><span>Last check</span><span class="mono" id="lastCheck">—</span></div>
+        <div class="hero-meta-row"><span>Total checks</span><span class="mono" id="checkCount">0</span></div>
       </div>
     </div>
-  </div>
 
-  <!-- OFFLINE ALERT BANNER -->
+    <!-- KPI strip -->
+    <div class="kpi-strip">
+      <div class="kpi">
+        <div class="kpi-label">Total services</div>
+        <div class="kpi-value" id="totalCount">—</div>
+        <div class="kpi-sub">tracked</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Online</div>
+        <div class="kpi-value" style="color:var(--ok)" id="onlineCount">—</div>
+        <div class="kpi-sub">reachable now</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">LAN only</div>
+        <div class="kpi-value" style="color:var(--warn)" id="localCount">—</div>
+        <div class="kpi-sub">no public route</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Offline</div>
+        <div class="kpi-value" id="offlineCount" style="color:var(--muted)">—</div>
+        <div class="kpi-sub">need attention</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Avg latency</div>
+        <div class="kpi-value" id="avgPing">—</div>
+        <div class="kpi-sub">cloudflare edge</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OFFLINE BANNER -->
   <div id="offline-banner" style="display:none"></div>
 
-  <!-- QUICK STATUS STRIP -->
-  <div>
-    <div class="section-title">⚡ Trạng thái nhanh</div>
-    <div class="status-strip" id="statusStrip"></div>
-  </div>
-
-  <!-- MAIN SERVICES — grouped by category -->
-  <div>
-    <div class="section-title">📊 Services</div>
-    <div class="cat-wrap" id="catWrap"></div>
-  </div>
-
-  <!-- BOOKMARKS -->
-  <div>
-    <div class="section-title">🔖 Bookmarks</div>
-    <a class="bm-launch-card" href="/bookmarks.html">
-      <div class="bm-launch-left">
-        <div class="bm-launch-icon">📌</div>
-        <div class="bm-launch-info">
-          <div class="bm-launch-name">Mở trang Bookmarks</div>
-          <div class="bm-launch-sub" id="bm-preview-sub">Đồng hồ · Tìm kiếm · Nhóm bookmark</div>
-        </div>
-      </div>
-      <div class="bm-launch-arrow">→</div>
-    </a>
-    <div class="bm-preview" id="bm-preview-chips"></div>
-  </div>
-
-  <!-- BỐ CỤC CHIA 2 CỘT CHO CHI TIẾT TRẠNG THÁI VÀ GỢI Ý MỞ RỘNG -->
-  <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px; margin-top: 24px; align-items: start;">
-
-    <!-- CỘT TRÁI: Trạng thái & Mạng -->
-    <div>
-      <div class="section-title">⏱ Trạng Thái Hệ Thống</div>
-      <div class="boxed-section" style="gap: 10px;">
-        <div class="info-rows">
-          <div class="info-row"><span class="info-key">Lần cuối check</span><span class="info-val" id="lastCheck">—</span></div>
-          <div class="info-row"><span class="info-key">Tổng lần check</span><span class="info-val" id="checkCount">0</span></div>
-          <div class="info-row"><span class="info-key">Avg Response</span><span class="info-val green" id="avgPing">—</span></div>
-          <div class="info-row"><span class="info-key">Node</span><span class="info-val">Cloudflare Edge</span></div>
-        </div>
-        <div class="note">⚠ Services LAN cần Tunnel để check từ internet.</div>
-        <div style="border-top: 1px dashed var(--border); padding-top: 16px; margin-top: 12px;">
-          <div class="info-rows">
-            <div class="info-row"><span class="info-key">Mạng nội bộ</span><span class="info-val">192.168.110.0/24</span></div>
-            <div class="info-row"><span class="info-key">Host chính</span><span class="info-val">192.168.110.21</span></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- CỘT PHẢI: Quick Links & Lịch Trình / Monitor -->
-    <div style="display: flex; flex-direction: column; gap: 24px;">
-      
+  <!-- SERVICES — grouped -->
+  <section class="card-flush">
+    <header class="card-head">
       <div>
-        <div class="section-title">🔗 Lối tắt truy cập nhanh</div>
-        <div class="boxed-section">
-          <div class="qlink-grid" id="quickLinks"></div>
+        <div class="section-eyebrow">Services</div>
+        <div class="section-title">2 nhóm · <span id="totalSrvCount">—</span> entries</div>
+      </div>
+    </header>
+    <div class="cmdbar">
+      <div class="cmdbar-search">
+        <span class="cmdbar-prefix">/</span>
+        <input id="srv-search" placeholder="Lọc services, hosts, tags…" oninput="renderServices()"/>
+      </div>
+    </div>
+    <div class="grouped-services" id="catWrap"></div>
+  </section>
+
+  <!-- THROUGHPUT + NETWORK INFO -->
+  <div class="two-col">
+    <!-- Speed -->
+    <section class="card-flush">
+      <header class="card-head">
+        <div>
+          <div class="section-eyebrow">Throughput</div>
+          <div class="section-title">Uplink to Cloudflare</div>
+        </div>
+        <span class="muted small mono" id="speed-time">live · 3 MB test</span>
+      </header>
+      <div class="speed-body">
+        <div>
+          <div class="speed-value"><span id="speedtest-result">Đang đo…</span></div>
+          <div class="speed-meta">3 MB test · edge POP gần nhất</div>
         </div>
       </div>
-
-    </div>
-
-  </div> <!-- KẾT THÚC BỐ CỤC CHIA CỘT -->
-
-  <!-- ACTIVITY LOG (admin only) -->
-  <div id="activity-section" style="display:none">
-    <div class="section-title">📋 Lịch sử hoạt động <span style="font-size:11px;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">· Chỉ admin thấy</span></div>
-    <div class="boxed-section" style="padding:0;overflow:hidden">
-      <div id="act-list" style="max-height:340px;overflow-y:auto">
-        <div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px">Đang tải...</div>
-      </div>
-    </div>
+    </section>
+    <!-- Network info -->
+    <section class="card-flush">
+      <header class="card-head">
+        <div>
+          <div class="section-eyebrow">Network</div>
+          <div class="section-title">Infrastructure</div>
+        </div>
+        <span class="muted small mono">Cloudflare edge · APAC</span>
+      </header>
+      <dl class="kv">
+        <div><dt>LAN subnet</dt><dd class="mono">192.168.110.0/24</dd></div>
+        <div><dt>Primary host</dt><dd class="mono">192.168.110.21</dd></div>
+        <div><dt>Tunnel</dt><dd>CasaOS · cloudflared</dd></div>
+        <div><dt>Worker</dt><dd>dashboard-homelab</dd></div>
+      </dl>
+    </section>
   </div>
 
-</div>
+  <!-- BOOKMARKS + ACTIVITY -->
+  <div class="two-col">
+    <!-- Bookmarks -->
+    <section class="card-flush">
+      <header class="card-head">
+        <div>
+          <div class="section-eyebrow">Bookmarks</div>
+          <div class="section-title" id="bm-title">Đang tải…</div>
+        </div>
+        <a class="row-action" href="/bookmarks.html">Mở →</a>
+      </header>
+      <div class="bm-folders" id="bm-folders"></div>
+    </section>
 
-<footer class="footer">Home Lab Dashboard · Powered by Cloudflare Web Workers</footer>
+    <!-- Activity log (admin only) -->
+    <section class="card-flush" id="activity-section" style="display:none">
+      <header class="card-head">
+        <div>
+          <div class="section-eyebrow">Audit log · admin</div>
+          <div class="section-title">Lịch sử hoạt động</div>
+        </div>
+      </header>
+      <ul class="act-list" id="act-list">
+        <li style="padding:20px;text-align:center;color:var(--muted);font-size:13px">Đang tải…</li>
+      </ul>
+    </section>
+  </div>
+
+  <footer class="footer">
+    <span>Home Lab Dashboard · Powered by Cloudflare Workers · KV · n8n proxy</span>
+    <span class="mono" id="footer-domain">dashboard.home-server.id.vn</span>
+  </footer>
+</main>
 
 <script>
-// Đo tốc độ mạng tự động khi mở trang
-window.addEventListener('DOMContentLoaded', function() {
-  const url = 'https://speed.cloudflare.com/__down?bytes=3000000'; // 3MB file
-  const resultEl = document.getElementById('speedtest-result');
-  const start = performance.now();
-  fetch(url, {cache:'no-store'}).then(r=>r.blob()).then(blob=>{
-    const end = performance.now();
-    const sizeMB = blob.size / (1024*1024);
-    const timeSec = (end-start)/1000;
-    const speedMbps = ((sizeMB*8)/timeSec).toFixed(2);
-    resultEl.textContent = speedMbps+' Mbps';
-  }).catch(()=>{
-    resultEl.textContent = 'Không đo được';
-  });
-});
-// ── User session (injection or cookie fallback) ──
+/* ═══════════════════════════════════════════════════════════════
+   USER SESSION (preserved from original — injection or cookie)
+   ═══════════════════════════════════════════════════════════════ */
 function _readUserCookie() {
   try {
     var m = document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/);
@@ -501,57 +629,64 @@ function _readUserCookie() {
   } catch(e) { return null; }
 }
 var __USER__ = window.__USER__ || _readUserCookie() || { username:'?', role:'user', permissions:{}, isAdmin:false };
+
 (function initUserUI() {
-  var badge = document.getElementById('user-badge');
-  badge.innerHTML = ((__USER__.isAdmin ? '👑 ' : '👤 ') + __USER__.username);
+  document.getElementById('user-avatar').textContent = (__USER__.username || '?').charAt(0).toUpperCase();
+  document.getElementById('user-name').textContent   = __USER__.username || '?';
   if (__USER__.isAdmin) {
-    badge.style.color = '#818cf8';
-    badge.style.background = 'rgba(99,102,241,.12)';
-    badge.style.border = '1px solid rgba(99,102,241,.25)';
-    document.getElementById('admin-link').style.display = '';
+    document.getElementById('user-tag').style.display    = '';
+    document.getElementById('admin-link').style.display  = '';
   }
 })();
 
 function doLogout() {
-  fetch('/api/auth/logout', {method:'POST'}).finally(function(){
+  fetch('/api/auth/logout', { method:'POST' }).finally(function(){
     window.location.href = '/login.html';
   });
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   THEME TOGGLE (persisted to localStorage)
+   ═══════════════════════════════════════════════════════════════ */
+(function initTheme() {
+  var saved = null;
+  try { saved = localStorage.getItem('dh_theme'); } catch(e) {}
+  if (saved === 'light') document.documentElement.dataset.theme = 'light';
+  document.getElementById('themeToggle').addEventListener('click', function() {
+    var cur = document.documentElement.dataset.theme;
+    var next = cur === 'light' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('dh_theme', next); } catch(e) {}
+  });
+})();
+
+/* ═══════════════════════════════════════════════════════════════
+   SERVICES DEFINITION (matches worker.js / api/status keys exactly)
+   ═══════════════════════════════════════════════════════════════ */
 var ALL_SERVICES_DEF = [
-  { id:'esxi',        name:'VMware ESXi',    icon:'🖥️', desc:'Hypervisor - Bare Metal',       url:'https://esxi.home-server.id.vn',             local:false, detailPage:'/esxi.html' },
-  { id:'n8n',         name:'n8n Automation', icon:'⚡', desc:'Workflow & Bot Automation',      url:'https://n8n-home.home-server.id.vn',          local:false, detailPage:'/n8n.html' },
-  { id:'casaos',      name:'CasaOS',         icon:'🏠', desc:'Home Server OS Dashboard',       url:'https://casaos.home-server.id.vn',            local:false, detailPage:'/casaos.html' },
-  { id:'9router',     name:'9Router',        icon:'🔀', desc:'Router & Network Management',    url:'https://9router.home-server.id.vn/dashboard', local:false, detailPage:'/9router.html' },
-  { id:'uptime-kuma', name:'Uptime Kuma',    icon:'📊', desc:'Service Health Monitor',         url:'http://192.168.110.21:3005/dashboard',        local:true,  detailPage:null },
-  { id:'ssh',         name:'SSH Terminal',   icon:'🖧', desc:'Web SSH · Termix',               url:'https://termix.home-server.id.vn',            local:false, detailPage:'/ssh.html' },
-  { id:'fortigate',   name:'FortiGate',      icon:'🔥', desc:'Firewall · Security Gateway',   url:'http://192.168.110.1',                        local:true,  detailPage:'/fortigate.html' },
-  { id:'asus',        name:'ASUS Router',    icon:'📡', desc:'ASUS Router · Home Network',    url:'http://192.168.10.1:8443',                    local:true,  detailPage:'/asus.html' },
-  { id:'camera',      name:'Camera',         icon:'📷', desc:'Hệ thống camera · go2rtc WebRTC', url:'https://camera.home-server.id.vn',           local:false, detailPage:'/hikvision.html', newTab:true },
-  { id:'meraki',      name:'Meraki-Network', icon:'🌐', desc:'Network Client Monitor · Cisco Meraki', url:'https://dashboard.meraki.com',             local:false, detailPage:'/meraki.html', noCheck:true },
-  { id:'movi',        name:'Movi Map Network', icon:'🗺️', desc:'Sơ đồ Topology Mạng · Cisco Meraki',   url:'/topology.html',                           local:false, detailPage:'/topology.html', noCheck:true },
+  { id:'esxi',        name:'VMware ESXi',     icon:'🖥', desc:'Hypervisor · bare-metal',                     url:'https://esxi.home-server.id.vn',             local:false, detailPage:'/esxi.html' },
+  { id:'n8n',         name:'n8n Automation',  icon:'⚡', desc:'Workflow & bot automation',                    url:'https://n8n-home.home-server.id.vn',         local:false, detailPage:'/n8n.html' },
+  { id:'casaos',      name:'CasaOS',          icon:'🏠', desc:'Home server OS dashboard',                     url:'https://casaos.home-server.id.vn',           local:false, detailPage:'/casaos.html' },
+  { id:'9router',     name:'9Router',         icon:'🔀', desc:'Router & network management',                  url:'https://9router.home-server.id.vn/dashboard',local:false, detailPage:'/9router.html' },
+  { id:'uptime-kuma', name:'Uptime Kuma',     icon:'📊', desc:'Service health monitor',                       url:'http://192.168.110.21:3005/dashboard',       local:true,  detailPage:null },
+  { id:'ssh',         name:'SSH Terminal',    icon:'⌨',  desc:'Web SSH · Termix',                             url:'https://termix.home-server.id.vn',           local:false, detailPage:'/ssh.html' },
+  { id:'fortigate',   name:'FortiGate',       icon:'🛡', desc:'Firewall · security gateway',                  url:'http://192.168.110.1',                       local:true,  detailPage:'/fortigate.html' },
+  { id:'asus',        name:'ASUS Router',     icon:'📡', desc:'ASUS · home network',                          url:'http://192.168.10.1:8443',                   local:true,  detailPage:'/asus.html' },
+  { id:'camera',      name:'Camera',          icon:'📷', desc:'Camera system · go2rtc WebRTC',                url:'https://camera.home-server.id.vn',           local:false, detailPage:'/hikvision.html', newTab:true },
+  { id:'meraki',      name:'Meraki-Network',  icon:'🌐', desc:'Cisco Meraki · client monitor',                url:'https://dashboard.meraki.com',               local:false, detailPage:'/meraki.html', noCheck:true },
+  { id:'movi',        name:'Movi Map Network',icon:'🗺', desc:'Network topology · wiring · L3',               url:'/topology.html',                             local:false, detailPage:'/topology.html', noCheck:true },
 ];
 
-// ── Service categories ──
+/* Categories (matches original SERVICE_CATEGORIES) */
 var SERVICE_CATEGORIES = [
-  {
-    id: 'home',
-    icon: '🏠',
-    name: 'Service Home',
-    desc: 'Hạ tầng & Hệ thống',
-    serviceIds: ['esxi','n8n','casaos','9router','uptime-kuma','ssh','fortigate','asus','camera']
-  },
-  {
-    id: 'movi',
-    icon: '🎬',
-    name: 'Service Movi',
-    desc: 'Quản lý & Giám sát',
-    serviceIds: ['meraki', 'movi']
-  }
+  { id:'home', icon:'🏠', name:'Service Home', desc:'Hạ tầng & hệ thống · home-server.id.vn', accent:'var(--accent)',
+    serviceIds: ['esxi','n8n','casaos','9router','uptime-kuma','ssh','fortigate','asus','camera'] },
+  { id:'movi', icon:'🎬', name:'Service Movi', desc:'Văn phòng Movi · Meraki & Topology',    accent:'var(--violet)',
+    serviceIds: ['meraki','movi'] },
 ];
 
-// Filter services based on user permissions
-var _permMap = {movi:'topology'};
+/* Permission filter (NOTE: server-side check for 'movi' uses 'topology' permission key) */
+var _permMap = { movi:'topology' };
 var SERVICES = __USER__.isAdmin
   ? ALL_SERVICES_DEF
   : ALL_SERVICES_DEF.filter(function(s){
@@ -559,373 +694,366 @@ var SERVICES = __USER__.isAdmin
       return !!__USER__.permissions[pid];
     });
 
-var prev = {}, checks = {}, onlineCnt = {}, log = [], totalChecks = 0;
-var pingHistory  = {};   // { id: [p1..p10] }
-var statusSince  = {};   // { id: { status, ts } }
-SERVICES.forEach(function(s){ checks[s.id]=0; onlineCnt[s.id]=0; pingHistory[s.id]=[]; if(s.noCheck){prev[s.id]='online';} });
+/* ═══════════════════════════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════════════════════════ */
+var prev = {}, checks = {}, onlineCnt = {}, totalChecks = 0;
+var pingHistory = {};   // { id: [ping1..ping10] }
+var statusSince = {};   // { id: { status, ts } }
+SERVICES.forEach(function(s){
+  checks[s.id] = 0; onlineCnt[s.id] = 0; pingHistory[s.id] = [];
+  if (s.noCheck) prev[s.id] = 'online';
+});
 
-setInterval(function(){
-  document.getElementById('clock').textContent = new Date().toLocaleTimeString('vi-VN',{hour12:false});
-}, 1000);
-
-function makeSrvCard(s) {
-  var href   = s.detailPage ? s.detailPage : s.url;
-  var target = (s.newTab || !s.detailPage) ? '_blank' : '_self';
-  var initSt = s.noCheck ? 'online' : 'checking';
-  var initLbl = s.noCheck ? 'Sẵn sàng' : 'Checking…';
-  return '<a class="srv-card '+initSt+'" id="card-'+s.id+'" href="'+href+'" target="'+target+'" rel="noopener" style="text-decoration:none;display:block;">'
-    +'<div class="srv-header">'
-      +'<div class="srv-icon">'+s.icon+'</div>'
-      +'<span class="srv-link" onclick="event.preventDefault();window.open(\''+s.url+'\',\'_blank\',\'noopener\')">Mở ↗</span>'
-    +'</div>'
-    +'<div class="srv-name-wrap">'
-      +'<div class="srv-name">'+s.name+'</div>'
-      +'<div class="srv-desc">'+s.desc+'</div>'
-    +'</div>'
-    +'<div class="srv-footer">'
-      +'<div class="srv-status-wrap">'
-        +'<div class="srv-dot '+initSt+'" id="dot-'+s.id+'"></div>'
-        +'<span class="srv-badge '+initSt+'" id="badge-'+s.id+'">'+initLbl+'</span>'
-      +'</div>'
-      +'<span class="srv-ping" id="ping-'+s.id+'">—</span>'
-    +'</div></a>';
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════════ */
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function timeAgo(ts) {
+  var m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1) return 'vừa xong';
+  if (m < 60) return m + 'ph';
+  var h = Math.floor(m / 60);
+  if (h < 24) return h + 'h';
+  return Math.floor(h / 24) + 'd';
+}
+function statusLabel(s) {
+  return s === 'online' ? 'Online' : s === 'offline' ? 'Offline' : s === 'local' ? 'LAN' : 'Checking…';
+}
+function statusColor(s) {
+  return s === 'online' ? 'var(--ok)' : s === 'offline' ? 'var(--bad)' : s === 'local' ? 'var(--warn)' : 'var(--muted)';
+}
+function sparkSVG(values, color) {
+  if (!values || values.length < 2) return '';
+  var w = 80, h = 22;
+  var min = Math.min.apply(null, values), max = Math.max.apply(null, values);
+  var range = max - min || 1, step = w / (values.length - 1);
+  var pts = values.map(function(v, i){
+    var x = i * step;
+    var y = h - ((v - min) / range) * (h - 4) - 2;
+    return { x: x.toFixed(1), y: y.toFixed(1) };
+  });
+  var d = pts.map(function(p, i){ return (i === 0 ? 'M' : 'L') + p.x + ',' + p.y; }).join(' ');
+  var fillD = d + ' L' + w + ',' + h + ' L0,' + h + ' Z';
+  return '<svg class="spark" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" style="color:' + color + '">'
+    + '<path d="' + fillD + '" fill="currentColor" opacity="0.12"></path>'
+    + '<path d="' + d + '" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"></path>'
+    + '</svg>';
 }
 
-function initUI() {
-  // ── Category accordion ──
+/* ═══════════════════════════════════════════════════════════════
+   RENDER SERVICES
+   ═══════════════════════════════════════════════════════════════ */
+function renderServices() {
+  var q = (document.getElementById('srv-search').value || '').toLowerCase();
   var wrap = document.getElementById('catWrap');
-  wrap.innerHTML = SERVICE_CATEGORIES.map(function(cat) {
-    var catSvcs = SERVICES.filter(function(s) {
-      return cat.serviceIds.indexOf(s.id) >= 0;
+  var total = 0;
+  var html = SERVICE_CATEGORIES.map(function(cat) {
+    var catSvcs = SERVICES.filter(function(s){ return cat.serviceIds.indexOf(s.id) >= 0; });
+    total += catSvcs.length;
+
+    var filtered = q
+      ? catSvcs.filter(function(s){ return (s.name + ' ' + s.id + ' ' + s.desc).toLowerCase().indexOf(q) >= 0; })
+      : catSvcs;
+
+    /* Group counts */
+    var online = 0, offline = 0, lan = 0;
+    catSvcs.forEach(function(s){
+      if (s.noCheck) { online++; return; }
+      var st = prev[s.id];
+      if (st === 'online') online++;
+      else if (st === 'local') lan++;
+      else if (st === 'offline') offline++;
     });
-    var bodyContent = catSvcs.length === 0
-      ? '<div class="cat-empty">🔧 Chưa có service nào<br><span style="font-size:12px">Sẽ được thêm sau</span></div>'
-      : '<div class="cat-grid">' + catSvcs.map(makeSrvCard).join('') + '</div>';
+    var pills = '';
+    if (online)  pills += '<span class="tag-pill ok">'   + online  + ' online</span>';
+    if (lan)     pills += '<span class="tag-pill warn">' + lan     + ' LAN</span>';
+    if (offline) pills += '<span class="tag-pill bad">'  + offline + ' offline</span>';
 
-    // Restore collapsed state from localStorage
+    /* Restore open state */
     var savedOpen = true;
-    try { if (localStorage.getItem('cat_' + cat.id) === '0') savedOpen = false; } catch(e) {}
+    try { if (localStorage.getItem('dh_cat_' + cat.id) === '0') savedOpen = false; } catch(e) {}
 
-    return '<div class="cat-section">'
-      + '<div class="cat-header ' + (savedOpen ? 'open' : '') + '" id="cathdr-'+cat.id+'" onclick="toggleCat(\''+cat.id+'\')">'
-        + '<div class="cat-left">'
-          + '<span class="cat-emoji">'+cat.icon+'</span>'
+    /* Service rows */
+    var rows = filtered.map(function(s){
+      var r = { status: s.noCheck ? 'online' : (prev[s.id] || 'checking'), ping: pingHistory[s.id].slice(-1)[0] };
+      var hist = pingHistory[s.id];
+      var spark = hist.length >= 2 ? sparkSVG(hist.slice(-16), 'var(--accent)') : '<span class="muted small">—</span>';
+      var since = statusSince[s.id] ? timeAgo(statusSince[s.id].ts) : '—';
+      var href = s.detailPage ? s.detailPage : s.url;
+      var target = (s.newTab || !s.detailPage) ? '_blank' : '_self';
+      return ''
+        + '<tr id="svc-row-' + s.id + '">'
+        + '<td><div class="svc-icon-sm">' + s.icon + '</div></td>'
+        + '<td>'
+          + '<div class="svc-name-cell">'
+            + '<span class="svc-name">' + esc(s.name) + '</span>'
+            + (s.local   ? '<span class="tag-pill warn">LAN</span>' : '')
+            + (s.noCheck ? '<span class="tag-pill mute">no-check</span>' : '')
+          + '</div>'
+          + '<div class="svc-desc">' + esc(s.desc) + '</div>'
+        + '</td>'
+        + '<td><span class="svc-host" title="' + esc(s.url) + '">' + esc((s.url || '').replace(/^https?:\/\//, '')) + '</span></td>'
+        + '<td><span class="status-pip" style="--c:' + statusColor(r.status) + '"><i class="' + (r.status === 'checking' ? 'checking' : '') + '"></i><span>' + statusLabel(r.status) + '</span></span></td>'
+        + '<td style="text-align:right"><span class="num">' + (r.ping ? r.ping + 'ms' : '—') + '</span></td>'
+        + '<td>' + spark + '</td>'
+        + '<td><span class="muted small">' + since + '</span></td>'
+        + '<td style="text-align:right"><a class="row-action" href="' + href + '" target="' + target + '" rel="noopener">Open ↗</a></td>'
+        + '</tr>';
+    }).join('') || '<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--muted)">Không có service khớp filter.</td></tr>';
+
+    return ''
+      + '<section class="svc-group ' + (savedOpen ? 'is-open' : 'is-closed') + '" style="--group-accent:' + cat.accent + '">'
+      + '<header class="svc-group-head" onclick="toggleCat(\'' + cat.id + '\')">'
+        + '<div class="svc-group-title-wrap">'
+          + '<span class="svc-group-icon">' + cat.icon + '</span>'
           + '<div>'
-            + '<div class="cat-name">'+cat.name+'</div>'
-            + '<div class="cat-meta">'+cat.desc+(catSvcs.length ? ' · '+catSvcs.length+' services' : '')+'</div>'
+            + '<div class="svc-group-title">' + esc(cat.name) + '</div>'
+            + '<div class="svc-group-sub">' + esc(cat.desc) + ' · ' + catSvcs.length + ' service' + (catSvcs.length === 1 ? '' : 's') + '</div>'
           + '</div>'
         + '</div>'
-        + '<div class="cat-right">'
-          + '<div class="cat-pills" id="catpills-'+cat.id+'">'
-            + (catSvcs.length ? '<span class="cat-pill check">Checking…</span>' : '<span class="cat-pill empty">Chưa có service</span>')
-          + '</div>'
-          + '<div class="cat-chevron '+(savedOpen ? 'open' : 'closed')+'" id="catchev-'+cat.id+'">▼</div>'
+        + '<div class="svc-group-stats">'
+          + pills
+          + '<button class="svc-group-chev" aria-label="Toggle"><svg viewBox="0 0 12 12" width="11" height="11"><path d="M2 4 L6 8 L10 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
         + '</div>'
+      + '</header>'
+      + '<div class="svc-group-body">'
+        + '<div class="svc-table-wrap"><table class="svc-table">'
+          + '<thead><tr>'
+            + '<th style="width:32px"></th>'
+            + '<th>Service</th>'
+            + '<th>Endpoint</th>'
+            + '<th>Status</th>'
+            + '<th style="text-align:right">Latency</th>'
+            + '<th>Trend (15m)</th>'
+            + '<th>Since</th>'
+            + '<th style="text-align:right">Actions</th>'
+          + '</tr></thead>'
+          + '<tbody>' + rows + '</tbody>'
+        + '</table></div>'
       + '</div>'
-      + '<div class="cat-body '+(savedOpen ? 'open' : 'closed')+'" id="catbody-'+cat.id+'" style="max-height:'+(savedOpen ? '4000px' : '0')+';">'
-        + bodyContent
-      + '</div>'
-    + '</div>';
+      + '</section>';
   }).join('');
-
-  // ── Quick links (flat list of all accessible services) ──
-  document.getElementById('quickLinks').innerHTML = SERVICES.map(function(s){
-    return '<a class="qlink" href="'+s.url+'" target="_blank" rel="noopener">'
-      +'<div class="qlink-icon">'+s.icon+'</div>'
-      +'<div class="qlink-text"><span class="qlink-name">'+s.name+'</span></div>'
-      +'</a>';
-  }).join('');
+  wrap.innerHTML = html;
+  document.getElementById('totalSrvCount').textContent = total;
 }
 
 function toggleCat(id) {
-  var body = document.getElementById('catbody-' + id);
-  var chev = document.getElementById('catchev-' + id);
-  var hdr  = document.getElementById('cathdr-'  + id);
-  var isOpen = body.style.maxHeight !== '0px' && body.style.maxHeight !== '';
-  if (isOpen) {
-    body.style.maxHeight = '0px';
-    body.classList.remove('open'); body.classList.add('closed');
-    chev.classList.remove('open'); chev.classList.add('closed');
-    hdr.classList.remove('open');
-    try { localStorage.setItem('cat_' + id, '0'); } catch(e) {}
-  } else {
-    body.style.maxHeight = '4000px';
-    body.classList.remove('closed'); body.classList.add('open');
-    chev.classList.remove('closed'); chev.classList.add('open');
-    hdr.classList.add('open');
-    try { localStorage.setItem('cat_' + id, '1'); } catch(e) {}
-  }
-}
-
-function updateCatPills() {
-  SERVICE_CATEGORIES.forEach(function(cat) {
-    var catSvcs = SERVICES.filter(function(s) { return cat.serviceIds.indexOf(s.id) >= 0; });
-    var pillsEl = document.getElementById('catpills-' + cat.id);
-    if (!pillsEl) return;
-    if (!catSvcs.length) {
-      pillsEl.innerHTML = '<span class="cat-pill empty">Chưa có service</span>';
-      return;
+  var els = document.querySelectorAll('.svc-group');
+  els.forEach(function(g) {
+    var head = g.querySelector('.svc-group-head');
+    if (head && head.getAttribute('onclick').indexOf("'" + id + "'") >= 0) {
+      var isOpen = g.classList.contains('is-open');
+      g.classList.toggle('is-open',   !isOpen);
+      g.classList.toggle('is-closed',  isOpen);
+      try { localStorage.setItem('dh_cat_' + id, isOpen ? '0' : '1'); } catch(e) {}
     }
-    var online = 0, offline = 0, local = 0;
-    catSvcs.forEach(function(s) {
-      var st = prev[s.id];
-      if (st === 'online')  online++;
-      else if (st === 'local')  local++;
-      else if (st === 'offline') offline++;
-    });
-    var html = '';
-    if (online)  html += '<span class="cat-pill online">'  + online  + ' online</span>';
-    if (local)   html += '<span class="cat-pill local">'   + local   + ' local</span>';
-    if (offline) html += '<span class="cat-pill offline">' + offline + ' offline</span>';
-    if (!html)   html  = '<span class="cat-pill check">Checking…</span>';
-    pillsEl.innerHTML = html;
   });
 }
 
-function updateCard(s, status, ping) {
-  var card  = document.getElementById('card-'+s.id);
-  var dot   = document.getElementById('dot-'+s.id);
-  var badge = document.getElementById('badge-'+s.id);
-  var pingEl= document.getElementById('ping-'+s.id);
-  if(!card) return;
-  var label = status==='online' ? 'Online' : status==='local' ? 'LAN Only' : 'Offline';
-  card.className  = 'srv-card '+status;
-  dot.className   = 'srv-dot '+status;
-  badge.className = 'srv-badge '+status;
-  badge.textContent = label;
-  if (ping != null) {
-    var tr = getTrend(s.id);
-    var ti = tr==='up' ? '↑' : tr==='down' ? '↓' : '→';
-    pingEl.innerHTML = '<span class="ping-box"><span>'+ping+'ms</span><span class="ping-trend '+tr+'">'+ti+'</span></span>';
-  } else {
-    pingEl.textContent = '—';
-  }
-}
-
-/* ── Helpers ── */
-function timeAgoShort(ts) {
-  var d = Date.now() - ts, m = Math.floor(d/60000);
-  if (m < 1)  return 'vừa xong';
-  if (m < 60) return m+'ph';
-  var h = Math.floor(m/60);
-  if (h < 24) return h+'h';
-  return Math.floor(h/24)+'d';
-}
-
-function getTrend(id) {
-  var h = pingHistory[id];
-  if (!h || h.length < 4) return 'same';
-  var half = Math.floor(h.length / 2);
-  var avg = function(arr){ return arr.reduce(function(a,b){return a+b;},0)/arr.length; };
-  var delta = avg(h.slice(-half)) - avg(h.slice(0, half));
-  return delta < -6 ? 'up' : delta > 6 ? 'down' : 'same';  // up = faster = good
-}
-
-/* ── Quick Status Strip ── */
-function updateStatusStrip() {
-  var strip = document.getElementById('statusStrip');
-  if (!strip) return;
-  strip.innerHTML = SERVICES.filter(function(s){ return !s.noCheck; }).map(function(s) {
-    var st    = prev[s.id] || 'checking';
-    var ping  = pingHistory[s.id].slice(-1)[0];
-    var trend = getTrend(s.id);
-    var since = statusSince[s.id];
-    var sinceText = since ? timeAgoShort(since.ts) : '';
-    var trendIcon = trend==='up' ? '↑' : trend==='down' ? '↓' : '→';
-    var pingText  = ping != null ? ping+'ms'
-                  : st==='local' ? 'LAN' : st==='offline' ? 'Down' : '…';
-    return '<div class="sp '+st+'" title="'+s.name+' · '+pingText+(sinceText?' · từ '+sinceText:'')+'">'+
-      '<div class="sp-dot '+st+'"></div>'+
-      '<div>'+
-        '<div class="sp-name">'+s.icon+' '+s.name+'</div>'+
-        '<div class="sp-meta">'+
-          '<span class="sp-ping">'+pingText+'</span>'+
-          (ping!=null ? '<span class="sp-trend '+trend+'">'+trendIcon+'</span>' : '')+
-          (sinceText ? '<span class="sp-since">· '+sinceText+'</span>' : '')+
-        '</div>'+
-      '</div>'+
-    '</div>';
-  }).join('');
-}
-
-/* ── Offline Alert Banner ── */
-function updateOfflineBanner() {
-  var banner   = document.getElementById('offline-banner');
-  var offlines = SERVICES.filter(function(s){ return prev[s.id]==='offline'; });
-  if (!offlines.length){ banner.style.display='none'; return; }
-  banner.style.display = '';
-  var oldest = offlines.reduce(function(min, s){
-    var t = statusSince[s.id] ? statusSince[s.id].ts : Date.now();
-    return t < min ? t : min;
-  }, Date.now());
-  var names = offlines.map(function(s){ return s.icon+' '+s.name; }).join(' · ');
-  banner.innerHTML = '<div class="offline-banner">'+
-    '<div class="b-icon">🚨</div>'+
-    '<div>'+
-      '<div class="b-title">'+offlines.length+' service offline · từ '+timeAgoShort(oldest)+' trước</div>'+
-      '<div class="b-list">'+names+'</div>'+
-    '</div>'+
-  '</div>';
-}
-
-// Đã loại bỏ renderUptimeBars và addLog vì không còn uptime/log
+/* ═══════════════════════════════════════════════════════════════
+   STATUS CHECK (matches /api/status response exactly)
+   ═══════════════════════════════════════════════════════════════ */
 function runChecks() {
   totalChecks++;
   document.getElementById('checkCount').textContent = totalChecks;
-  document.getElementById('lastCheck').textContent = new Date().toLocaleTimeString('vi-VN',{hour12:false});
+  document.getElementById('lastCheck').textContent = new Date().toLocaleTimeString('vi-VN', { hour12:false });
 
-  fetch('/api/status', {cache:'no-store'})
+  fetch('/api/status', { cache:'no-store' })
     .then(function(r){ return r.json(); })
-    .then(function(data){
-      var onlineN=0, offlineN=0, localN=0, pings=[];
+    .then(function(data) {
+      var onlineN = 0, offlineN = 0, localN = 0, pings = [];
 
       SERVICES.forEach(function(s){
-        if (s.noCheck) return; // handled separately
-        var r = data.services[s.id] || {};
+        if (s.noCheck) return;
+        var r = (data.services || {})[s.id] || {};
         var status = r.status || 'offline';
         var ping = r.ping || null;
 
         checks[s.id]++;
-        if(status==='online'){ onlineCnt[s.id]++; onlineN++; if(ping) pings.push(ping); }
-        else if(status==='local') localN++;
+        if (status === 'online') { onlineCnt[s.id]++; onlineN++; if (ping) pings.push(ping); }
+        else if (status === 'local') localN++;
         else offlineN++;
 
-        // Track ping history (last 10)
         if (ping != null) {
           pingHistory[s.id].push(ping);
-          if (pingHistory[s.id].length > 10) pingHistory[s.id].shift();
+          if (pingHistory[s.id].length > 16) pingHistory[s.id].shift();
         }
-        // Track status change time
         if (!statusSince[s.id] || statusSince[s.id].status !== status) {
           statusSince[s.id] = { status: status, ts: Date.now() };
         }
-
-        updateCard(s, status, ping);
         prev[s.id] = status;
       });
 
-      document.getElementById('totalCount').textContent   = SERVICES.length;
+      document.getElementById('totalCount').textContent   = SERVICES.filter(function(s){return !s.noCheck;}).length;
       document.getElementById('onlineCount').textContent  = onlineN;
       document.getElementById('offlineCount').textContent = offlineN;
       document.getElementById('localCount').textContent   = localN;
 
-      var avg = pings.length ? Math.round(pings.reduce(function(a,b){return a+b;},0)/pings.length) : null;
-      document.getElementById('avgPing').textContent = avg ? avg+'ms' : '—';
+      var avg = pings.length ? Math.round(pings.reduce(function(a,b){return a+b;}, 0) / pings.length) : null;
+      document.getElementById('avgPing').textContent = avg ? avg + 'ms' : '—';
 
-      updateCatPills();
-      updateStatusStrip();
-      updateOfflineBanner();
+      /* Update hero state */
+      if (offlineN === 0 && localN === 0) {
+        document.getElementById('hero-state').textContent = 'running';
+        document.getElementById('hero-state').style.color = 'var(--ok)';
+      } else if (offlineN === 0) {
+        document.getElementById('hero-state').textContent = 'mostly ok';
+        document.getElementById('hero-state').style.color = 'var(--accent)';
+      } else {
+        document.getElementById('hero-state').textContent = offlineN + ' offline';
+        document.getElementById('hero-state').style.color = 'var(--bad)';
+      }
+      document.getElementById('hero-sub').textContent =
+        SERVICES.length + ' services tracked · ' +
+        onlineN + ' online · ' + localN + ' LAN · ' + offlineN + ' offline · last check ' +
+        new Date().toLocaleTimeString('vi-VN', { hour12:false });
+
+      /* Offline banner */
+      var offlines = SERVICES.filter(function(s){ return prev[s.id] === 'offline'; });
+      var banner = document.getElementById('offline-banner');
+      if (offlines.length) {
+        var oldest = offlines.reduce(function(min, s){
+          var t = statusSince[s.id] ? statusSince[s.id].ts : Date.now();
+          return t < min ? t : min;
+        }, Date.now());
+        var names = offlines.map(function(s){ return s.icon + ' ' + s.name; }).join(' · ');
+        banner.style.display = '';
+        banner.innerHTML = '<div class="alerts-banner">'
+          + '<span class="alerts-icon">⚠</span>'
+          + '<div class="alerts-body">'
+            + '<div class="alerts-title">' + offlines.length + ' service offline · từ ' + timeAgo(oldest) + ' trước</div>'
+            + '<div class="alerts-sub">' + esc(names) + '</div>'
+          + '</div>'
+        + '</div>';
+      } else {
+        banner.style.display = 'none';
+      }
+
+      renderServices();
     })
-    .catch(function(e){ console.error('API error', e); });
+    .catch(function(e){ console.error('API /api/status error', e); });
 }
 
+/* Auto-refresh countdown */
 var cd = 120;
-setInterval(function(){
+setInterval(function() {
   cd--;
-  const m=Math.floor(cd/60), s=cd%60;
-  document.getElementById('autoLabel').textContent = '● Auto '+(m>0?m+'m ':'')+s+'s';
-  if(cd<=0){ runChecks(); cd=120; }
+  var m = Math.floor(cd / 60), s = cd % 60;
+  document.getElementById('autoLabel').textContent = 'Auto · ' + (m > 0 ? m + 'm ' : '') + s + 's';
+  if (cd <= 0) { runChecks(); cd = 120; }
 }, 1000);
 
-/* ── Meraki card live update ── */
+setInterval(function() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('vi-VN', { hour12:false });
+}, 1000);
+
+/* ═══════════════════════════════════════════════════════════════
+   MERAKI BADGE — fetch /api/meraki-clients for client count
+   ═══════════════════════════════════════════════════════════════ */
 function updateMerakiCard() {
-  var badge = document.getElementById('badge-meraki');
-  var pingEl = document.getElementById('ping-meraki');
-  var card   = document.getElementById('card-meraki');
-  if (!badge) return;
   fetch('/api/meraki-clients', { cache:'no-store' })
     .then(function(r){ return r.ok ? r.json() : null; })
-    .then(function(d) {
-      if (!d) { badge.textContent='Lỗi'; return; }
-      var total = d.total || (d.clients||[]).length;
-      if (card)  card.className  = 'srv-card online';
-      if (document.getElementById('dot-meraki'))
-        document.getElementById('dot-meraki').className = 'srv-dot online';
-      badge.className   = 'srv-badge online';
-      badge.textContent = total + ' clients';
-      if (pingEl) pingEl.textContent = 'Online';
+    .then(function(d){
+      if (!d) return;
+      var total = d.total || (d.clients || []).length;
+      var row = document.getElementById('svc-row-meraki');
+      if (row) {
+        var statusCell = row.querySelectorAll('td')[3];
+        statusCell.innerHTML = '<span class="status-pip" style="--c:var(--ok)"><i></i><span>' + total + ' clients</span></span>';
+      }
     })
-    .catch(function(){ if(badge){ badge.className='srv-badge offline'; badge.textContent='Offline'; } });
+    .catch(function(){});
 }
 
-initUI();
-updateStatusStrip();
-runChecks();
-updateMerakiCard();
+/* ═══════════════════════════════════════════════════════════════
+   SPEED TEST
+   ═══════════════════════════════════════════════════════════════ */
+window.addEventListener('DOMContentLoaded', function() {
+  var url = 'https://speed.cloudflare.com/__down?bytes=3000000';
+  var resultEl = document.getElementById('speedtest-result');
+  var start = performance.now();
+  fetch(url, { cache:'no-store' })
+    .then(function(r){ return r.blob(); })
+    .then(function(blob){
+      var sec = (performance.now() - start) / 1000;
+      var mbps = ((blob.size / (1024 * 1024)) * 8 / sec).toFixed(2);
+      resultEl.innerHTML = mbps + ' <span class="speed-unit">Mbps</span>';
+    })
+    .catch(function(){ resultEl.textContent = 'Không đo được'; });
+});
 
-/* ── Activity Log (admin only) ── */
-(function() {
+/* ═══════════════════════════════════════════════════════════════
+   BOOKMARKS PREVIEW
+   ═══════════════════════════════════════════════════════════════ */
+(function loadBookmarks() {
+  fetch('/api/bookmarks', { credentials:'include' })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){
+      var folders = (d && d.bookmarks && d.bookmarks.folders) || [];
+      var count = folders.reduce(function(a, f){ return a + (f.items || []).length; }, 0);
+      document.getElementById('bm-title').textContent = count + ' saved · ' + folders.length + ' folders';
+      document.getElementById('bm-folders').innerHTML = folders.slice(0, 4).map(function(f){
+        var items = (f.items || []).slice(0, 8).map(function(b){
+          return '<a class="bm-chip" href="' + esc(b.url) + '" target="_blank" rel="noopener">' + esc(b.name) + '</a>';
+        }).join('');
+        return '<div class="bm-folder">'
+          + '<div class="bm-folder-head">'
+            + '<span>' + esc(f.icon || '📁') + '</span>'
+            + '<span class="bm-folder-name">' + esc(f.name) + '</span>'
+            + '<span class="bm-folder-count">' + (f.items || []).length + '</span>'
+          + '</div>'
+          + '<div class="bm-chips">' + items + '</div>'
+        + '</div>';
+      }).join('') || '<div style="padding:20px;text-align:center;color:var(--muted)">Chưa có bookmark</div>';
+    })
+    .catch(function(){ document.getElementById('bm-title').textContent = 'Không tải được'; });
+})();
+
+/* ═══════════════════════════════════════════════════════════════
+   ACTIVITY LOG (admin only)
+   ═══════════════════════════════════════════════════════════════ */
+(function loadActivity() {
   if (!__USER__.isAdmin) return;
-  var sec = document.getElementById('activity-section');
-  if (sec) sec.style.display = '';
-
+  document.getElementById('activity-section').style.display = '';
   var ACTION_MAP = {
-    login_success: { label:'✓ Đăng nhập', cls:'act-ok' },
-    login_fail:    { label:'✕ Đăng nhập thất bại', cls:'act-err' },
-    login_mfa:     { label:'🔐 Cần MFA', cls:'act-info' },
-    mfa_success:   { label:'✓ MFA thành công', cls:'act-ok' },
-    mfa_fail:      { label:'✕ MFA thất bại', cls:'act-err' },
-    logout:        { label:'↩ Đăng xuất', cls:'act-muted' },
+    login_success: { label:'Login',          tone:'ok'   },
+    login_fail:    { label:'Login failed',   tone:'bad'  },
+    login_mfa:     { label:'MFA required',   tone:'mute' },
+    mfa_success:   { label:'MFA OK',         tone:'ok'   },
+    mfa_fail:      { label:'MFA failed',     tone:'bad'  },
+    logout:        { label:'Logout',         tone:'mute' },
   };
-
-  function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
-
   fetch('/api/activity')
     .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(d){
       var list = document.getElementById('act-list');
-      if (!list) return;
-      var log = d && d.log || [];
+      var log = (d && d.log) || [];
       if (!log.length) {
-        list.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:13px">Chưa có hoạt động nào</div>';
+        list.innerHTML = '<li style="padding:20px;text-align:center;color:var(--muted);font-size:13px">Chưa có hoạt động</li>';
         return;
       }
-      list.innerHTML = log.map(function(e) {
-        var dt = new Date(e.ts);
-        var timeStr = dt.toLocaleDateString('vi-VN',{day:'2-digit',month:'2-digit'})
-          + ' ' + dt.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',hour12:false});
-        var a = ACTION_MAP[e.action] || { label: e.action, cls: 'act-muted' };
-        return '<div class="act-row">'
-          +'<span class="act-badge '+a.cls+'">'+a.label+'</span>'
-          +'<span class="act-user">👤 '+_esc(e.username)+'</span>'
-          +'<span class="act-ip">'+_esc(e.ip)+'</span>'
-          +'<span class="act-time">'+timeStr+'</span>'
-        +'</div>';
+      list.innerHTML = log.slice(0, 12).map(function(e){
+        var a = ACTION_MAP[e.action] || { label: e.action, tone:'mute' };
+        return '<li class="act-row">'
+          + '<span class="tag-pill ' + a.tone + '">' + esc(a.label) + '</span>'
+          + '<span class="act-user">' + esc(e.username) + '</span>'
+          + '<span class="act-ip mono">' + esc(e.ip) + '</span>'
+          + '<span class="act-time">' + timeAgo(e.ts) + ' trước</span>'
+        + '</li>';
       }).join('');
-    }).catch(function(){
-      var list = document.getElementById('act-list');
-      if (list) list.innerHTML = '<div style="padding:1rem;color:var(--red);font-size:13px">Không tải được dữ liệu</div>';
+    })
+    .catch(function(){
+      document.getElementById('act-list').innerHTML = '<li style="padding:20px;text-align:center;color:var(--bad);font-size:13px">Không tải được</li>';
     });
 })();
 
-/* ── Bookmark preview chips ── */
-(function() {
-  function esc2(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-  function migrate(raw) {
-    if (!raw) return [];
-    if (Array.isArray(raw)) return raw.map(function(b){ return { name: b.name }; });
-    if (raw.v === 2 && Array.isArray(raw.folders)) {
-      var items = [];
-      raw.folders.forEach(function(f){ (f.items||[]).forEach(function(b){ items.push({ name:b.name }); }); });
-      return items;
-    }
-    return [];
-  }
-  fetch('/api/bookmarks', { credentials:'include' })
-    .then(function(r){ return r.ok ? r.json() : null; })
-    .then(function(d) {
-      if (!d) return;
-      var items = migrate(d.bookmarks);
-      var chips = document.getElementById('bm-preview-chips');
-      var sub   = document.getElementById('bm-preview-sub');
-      if (!items.length) return;
-      sub.textContent = items.length + ' bookmark' + (items.length > 1 ? 's' : '');
-      chips.innerHTML = items.slice(0,8).map(function(b){
-        return '<span class="bm-chip">'+esc2(b.name)+'</span>';
-      }).join('') + (items.length > 8 ? '<span class="bm-chip" style="color:var(--accent)">+' + (items.length-8) + '</span>' : '');
-    }).catch(function(){});
-})();
-
+/* ═══════════════════════════════════════════════════════════════
+   BOOT
+   ═══════════════════════════════════════════════════════════════ */
+renderServices();
+runChecks();
+updateMerakiCard();
 </script>
 </body>
 </html>
