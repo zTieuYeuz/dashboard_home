@@ -1309,7 +1309,23 @@ async function handleMerakiClients(request, env) {
     const data = await resp.json();
     // n8n trả array, lấy phần tử đầu
     const payload = Array.isArray(data) ? data[0] : data;
-    return json(payload);
+    // Normalize raw Meraki client fields that the API doesn't return
+    const rawList = Array.isArray(payload) ? payload : (payload.clients || []);
+    const clients = rawList.map(c => {
+      const wired  = c.recentDeviceConnection === 'Wired' || !c.ssid;
+      const online = c.status === 'Online';
+      const recv   = (c.usage && c.usage.recv) || 0;
+      const sent   = (c.usage && c.usage.sent) || 0;
+      return {
+        ...c,
+        name:   c.name   || c.description || c.mac,
+        ssid:   c.ssid   || (wired ? 'Wired' : '—'),
+        signal: c.signal != null ? c.signal : (wired ? 0 : online ? 3 : 1),
+        rxKbps: c.rxKbps != null ? c.rxKbps : Math.round(recv / 10),
+        txKbps: c.txKbps != null ? c.txKbps : Math.round(sent / 10),
+      };
+    });
+    return json({ clients });
   } catch (e) {
     return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
   }
