@@ -134,9 +134,10 @@ input { font: inherit; }
 .cmdseg.active .cmdseg-count { background: color-mix(in oklch, var(--accent) 22%, transparent); color: var(--accent); }
 
 /* TABLE */
-.tbl-wrap { overflow-x: auto; }
+.tbl-wrap { overflow-x: auto; overflow-y: auto; max-height: 460px; border-radius: 0 0 var(--radius) var(--radius); }
+.tbl-wrap--tall { max-height: 580px; }
 .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
-.tbl thead th { text-align: left; font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface-2); white-space: nowrap; user-select: none; cursor: pointer; }
+.tbl thead th { position: sticky; top: 0; z-index: 2; text-align: left; font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface-2); white-space: nowrap; user-select: none; cursor: pointer; }
 .tbl thead th:hover { color: var(--text-2); }
 .tbl tbody tr { border-bottom: 1px solid var(--border-soft); transition: background .1s; }
 .tbl tbody tr:last-child { border-bottom: none; }
@@ -401,7 +402,7 @@ input { font: inherit; }
         <div class="cmdbar-search"><span class="cmdbar-prefix">🔍</span><input id="clientSearch" placeholder="Tìm tên · MAC · IP · SSID…" oninput="filterClients()"/></div>
         <div class="cmdbar-segment" id="ssidFilters"></div>
       </div>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap tbl-wrap--tall">
         <table class="tbl">
           <thead><tr>
             <th>Thiết bị</th><th>IP</th><th class="hide-md">MAC</th><th>SSID / VLAN</th><th class="hide-md">VLAN</th>
@@ -1444,7 +1445,7 @@ function renderSwitchCard(sw){
       + '</div>'
     + '</div>'
     + '<div class="sw-port-grid">' + portSquares + '</div>'
-    + (connRows ? '<div style="overflow-x:auto"><table class="sw-port-tbl">' + connRows + '</table></div>' : '')
+    + (connRows ? '<div style="overflow-x:auto;overflow-y:auto;max-height:320px"><table class="sw-port-tbl">' + connRows + '</table></div>' : '')
     + '</div>';
 }
 
