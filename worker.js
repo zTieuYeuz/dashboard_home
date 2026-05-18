@@ -4,8 +4,8 @@
 const SESSION_COOKIE    = 'dh_session';
 const SESSION_TTL       = 60 * 60 * 24 * 7; // 7 days
 const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma'];
-const IDLE_TIMEOUT_MS   = 30 * 60 * 1000;   // auto-logout after 30 min inactivity
-const IDLE_WARN_MS      = 25 * 60 * 1000;   // show warning 5 min before logout
+const IDLE_TIMEOUT_MS   = 8 * 60 * 60 * 1000;  // auto-logout after 8h inactivity
+const IDLE_WARN_MS      = (8 * 60 - 5) * 60 * 1000; // show warning 5 min before logout
 
 /* Idle-timer script injected into every authenticated HTML page */
 const IDLE_SCRIPT = `<script>(function(){
@@ -19,6 +19,14 @@ const IDLE_SCRIPT = `<script>(function(){
   ['mousemove','mousedown','keydown','scroll','touchstart','click','pointerdown'].forEach(function(e) {
     document.addEventListener(e, window._idleReset, { passive: true, capture: true });
   });
+  /* Reset timer when user switches back to this tab + refresh session */
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) { window._idleReset(); _refreshSession(); }
+  });
+  /* Refresh session on page load and every 30 min of activity */
+  function _refreshSession() { fetch('/api/auth/refresh', { method: 'POST' }).catch(function(){}); }
+  _refreshSession();
+  setInterval(function() { if (Date.now() - last < 30 * 60 * 1000) _refreshSession(); }, 30 * 60 * 1000);
 
   function fmt(ms) {
     var s = Math.ceil(ms / 1000), m = Math.floor(s / 60); s %= 60;
@@ -220,6 +228,21 @@ async function handleLogin(request, env) {
   h.append('Set-Cookie', `dh_user=${userInfo}; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}`);
   await logActivity(env, { action: 'login_success', username, ip, success: true });
   return new Response(JSON.stringify({ success: true, role: user.role }), { status: 200, headers: h });
+}
+
+async function handleSessionRefresh(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'No session' }, 401);
+  const token = session.token;
+  const newExpires = Date.now() + SESSION_TTL * 1000;
+  await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
+    username: session.username, role: session.role,
+    permissions: session.permissions || {},
+    expires: newExpires,
+  }), { expirationTtl: SESSION_TTL });
+  const h = new Headers({ 'Content-Type': 'application/json' });
+  h.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}`);
+  return new Response(JSON.stringify({ ok: true }), { status: 200, headers: h });
 }
 
 async function handleLogout(request, env) {
@@ -2959,6 +2982,7 @@ export default {
     // ── Auth API (public) ──
     if (p === '/api/auth/login')      return handleLogin(request, env);
     if (p === '/api/auth/logout')     return handleLogout(request, env);
+    if (p === '/api/auth/refresh')    return handleSessionRefresh(request, env);
     if (p === '/api/auth/mfa/verify') return handleMfaVerify(request, env);
 
     // ── MFA API (require session) ──
