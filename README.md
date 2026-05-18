@@ -1,6 +1,6 @@
 # Home Lab Dashboard — Tài liệu Kỹ thuật
 
-> **Cập nhật lần cuối:** 2026-05-15  
+> **Cập nhật lần cuối:** 2026-05-18  
 > Tài liệu này ghi lại toàn bộ kiến trúc, những gì đã làm, những gì đang dở, để AI hoặc người khác có thể tiếp tục ngay lập tức mà không làm hỏng.
 
 ---
@@ -36,6 +36,7 @@ npx wrangler deploy
 **Bước 4 — Các file cốt lõi cần biết:**
 - `worker.js` — backend (Cloudflare Worker), mọi API route đều ở đây
 - `public/meraki.html` — trang Meraki monitor (4 collapsible panels)
+- `public/fortigate-movi.html` — ★ MỚI — FortiGate Movi dashboard (system, VPN, policy, routing)
 - `public/index.html` — trang chủ dashboard
 
 **⛔ KHÔNG BAO GIỜ:**
@@ -70,20 +71,21 @@ Browser → https://dashboard.home-server.id.vn
 
 ```
 dashboard/
-├── worker.js            # Toàn bộ backend (Cloudflare Worker) — ~1600+ dòng
+├── worker.js            # Toàn bộ backend (Cloudflare Worker) — ~1700+ dòng
 ├── wrangler.toml        # Config deploy (KV binding, assets, custom domain)
 ├── public/
 │   ├── index.html       # Trang chủ dashboard
 │   ├── login.html       # Trang đăng nhập
 │   ├── bookmarks.html   # Trang bookmark (start.me-like)
 │   ├── users.html       # Quản lý user (admin only)
-│   ├── meraki.html      # ★ MỚI — Meraki Network Monitor
+│   ├── meraki.html      # Meraki Network Monitor (4 panels)
+│   ├── fortigate-movi.html  # ★ FortiGate Movi Dashboard (7 panels)
 │   ├── esxi.html        # Chi tiết VMware ESXi
 │   ├── asus.html        # Chi tiết ASUS Router
 │   ├── casaos.html      # Chi tiết CasaOS
 │   ├── n8n.html         # Chi tiết n8n
 │   ├── 9router.html     # Chi tiết AI Router
-│   ├── fortigate.html   # Chi tiết FortiGate
+│   ├── fortigate.html   # Chi tiết FortiGate (trang cũ)
 │   ├── ssh.html         # Web SSH terminal
 │   ├── hikvision.html   # Camera page (TRỐNG — chờ cài go2rtc)
 │   └── favicon.svg
@@ -185,6 +187,13 @@ GET  /api/meraki-clients      # ★ Meraki: danh sách clients
 GET  /api/meraki-devices      # ★ Meraki: inventory thiết bị
 GET  /api/meraki-device-status # ★ Meraki: real-time status
 GET  /api/meraki-events       # ★ Meraki: network events log
+GET  /api/movi-system         # FortiGate Movi: system info + CPU/RAM/sessions
+GET  /api/movi-license        # FortiGate Movi: license status (FortiCare, AV, IPS...)
+GET  /api/movi-interfaces     # FortiGate Movi: interfaces + bandwidth realtime
+GET  /api/movi-vpn            # FortiGate Movi: IPSec tunnels + Phase2 selectors
+GET  /api/movi-ssl-vpn        # FortiGate Movi: SSL VPN active sessions
+GET  /api/movi-policy         # FortiGate Movi: firewall policies (CMDB + hit stats)
+GET  /api/movi-dhcp           # FortiGate Movi: routing table (route `/api/movi-dhcp`)
 ```
 
 ---
@@ -291,6 +300,159 @@ Stats row (4 cards): Clients Online · Devices Online · Devices Offline · SSID
 
 ---
 
+## 5b. ★ FortiGate Movi Dashboard — Kiến trúc đầy đủ
+
+### Cùng pattern với Meraki — qua n8n làm proxy
+
+```
+fortigate-movi.html
+    ↓ fetch /api/movi-*
+Worker (Cloudflare)
+    ↓ fetch webhook URL + Basic Auth (MOVI_N8N_USER / MOVI_N8N_PASS)
+n8n (https://n8n.movi-finance.com)
+    ↓ HTTP Request node + FortiGate access_token
+FortiGate REST API (https://192.168.140.254)
+    ↓ JSON
+n8n Code Node (transform)
+    ↓ Respond to Webhook
+Worker → JSON → fortigate-movi.html
+```
+
+### n8n Webhooks FortiGate Movi
+
+| Worker Route | n8n Webhook URL | FortiGate API |
+|---|---|---|
+| `/api/movi-system` | `webhook/52d4503a-66ec-49cc-b4c2-f4605349b17b` | `/monitor/system/status` + `/monitor/system/resource/usage?interval=1-min` |
+| `/api/movi-license` | `webhook/8bd446f5-d1d4-4de6-a679-a26fcb0f5f60` | `/monitor/license/status` |
+| `/api/movi-interfaces` | *(có sẵn từ trước)* | `/monitor/system/interface` |
+| `/api/movi-vpn` | `webhook/2d3b9660-b99a-4bd3-92ba-165efb23c741` | `/monitor/vpn/ipsec` |
+| `/api/movi-ssl-vpn` | `webhook/30b5ff6d-0065-4150-8c7f-0d25f2b6bc76` | `/monitor/vpn/ssl` |
+| `/api/movi-policy` | `webhook/fed29e7e-aa06-483c-9709-1e7bcaf79c3b` | `/monitor/firewall/policy` + `/cmdb/firewall/policy` |
+| `/api/movi-dhcp` | `webhook/ea8d7f9b-903b-4855-abdf-b73aa02ba1e8` | `/monitor/router/ipv4` |
+
+**Auth:** `moviN8nAuth(env)` → Basic Auth từ secrets `MOVI_N8N_USER` / `MOVI_N8N_PASS`
+
+### FortiGate API — Quirks quan trọng
+
+```
+❗ CPU/RAM không phải số thẳng — FortiGate 7.2 trả ARRAY:
+   cpu: [{ current: 12, historical: {...} }]
+   → Worker normalize: cpu = Array.isArray(data.cpu) ? data.cpu[0].current : data.cpu
+
+❗ System status: version/serial/uptime ở TOP LEVEL response (KHÔNG phải trong results{})
+   hostname, model → trong results{}
+   version, serial, build, uptime → ở ngoài top level
+
+❗ DHCP lease KHÔNG có trên FortiGate 7.2.10
+   /api/v2/monitor/dhcp/lease → 404 dù thêm bất kỳ param nào
+   → Thay bằng /api/v2/monitor/router/ipv4 (routing table), route /api/movi-dhcp
+
+❗ SSL VPN field names:
+   user_name (KHÔNG phải user), remote_host (KHÔNG phải source_ip)
+   tunnel IP → subsessions[0].aip
+   two_factor_auth (KHÔNG phải two_factor)
+
+❗ Firewall Policy CMDB → srcintf/dstintf là ARRAY [{name:'x'}]
+   → arr2names(arr) = arr.map(x => x.name).join(', ')
+
+❗ CMDB không có hit_count — Monitor không có name
+   → Policy workflow cần 2 nodes: FG CMDB + FG Monitor, merge trong Code
+```
+
+### n8n Policy Workflow — cấu trúc chuẩn
+
+```
+Webhook → FG Stats (HTTP GET /cmdb/firewall/policy) 
+        → FG Monitor (HTTP GET /monitor/firewall/policy)
+        → FG CMDB (HTTP GET /cmdb/firewall/policy?fields=policyid,name,status,...)
+        → Code in JavaScript
+        → Respond to Webhook
+```
+
+**Code node — merge pattern:**
+```javascript
+const cmdbRaw    = $input.all()[0].json;           // direct parent (FG CMDB)
+const monitorRaw = $('FG Monitor').all()[0].json;  // named reference
+const configs    = Array.isArray(cmdbRaw?.results) ? cmdbRaw.results : [];
+const stats      = Array.isArray(monitorRaw?.results) ? monitorRaw.results : [];
+const hitMap     = {};
+stats.forEach(s => { hitMap[s.policyid] = s; });
+// map configs với cfg['av-profile'], cfg['webfilter-profile'], cfg['ips-sensor'],
+//   cfg['application-list'], cfg['ssl-ssh-profile'], cfg['dnsfilter-profile']
+```
+
+### CMDB fields cần fetch cho Policy
+
+```
+/api/v2/cmdb/firewall/policy?fields=policyid,name,status,srcintf,dstintf,
+srcaddr,dstaddr,action,service,schedule,nat,logtraffic,comments,
+av-profile,webfilter-profile,ips-sensor,application-list,ssl-ssh-profile,dnsfilter-profile
+```
+
+### fortigate-movi.html — UI Layout
+
+```
+[topbar] ← nav link đến fortigate-movi.html
+[sys-bar] hostname | model | FortiOS version | uptime | CPU% | RAM% | Sessions
+[lic-warn-banner] ← ẩn, chỉ hiện nếu license sắp hết
+[lic-strip] FortiCare chip | AV chip | IPS chip | ... (màu theo trạng thái)
+[stats-row] 5 cards: Interfaces Up | SD-WAN | Download | Upload | Top WAN
+[body-grid 2 cột]
+  Left: UP interface cards (bandwidth bars) | DOWN table (collapsible)
+  Right: Bandwidth chart realtime (Chart.js)
+[sec-panel] VPN IPSec — Site-to-Site (collapsible, full width)
+  → bảng tunnels, click expand thấy Phase2 selectors
+[sec-panel] VPN SSL — Active Sessions (collapsible)
+  → bảng user/srcIP/tunnelIP/interface/traffic/2FA
+[sec-panel] Firewall Policy — Top Hit (collapsible, có search)
+  → bảng: ID | Tên | Interface/Address | Security Profiles chips | Hits bar | Traffic | Sessions | Action
+  → click row → expand thấy profile names đầy đủ
+[sec-panel] Routing Table (collapsible, có search)
+  → bảng: Network | Gateway | Interface | Type | Distance | Metric
+```
+
+### Security Profile chips trong Policy table
+
+```
+AV  = đỏ  (av-profile)
+WF  = xanh dương  (webfilter-profile)
+IPS = vàng  (ips-sensor)
+APP = tím  (application-list)
+SSL = xanh lá  (ssl-ssh-profile)
+DNS = teal  (dnsfilter-profile)
+```
+Hover chip → tooltip hiện tên profile. Click row → expand detail row.
+
+### Collapsible panel pattern (dùng lại cho trang mới)
+
+```javascript
+function togglePanel(id){
+  const body = document.getElementById('body-'+id);
+  const hdr  = document.querySelector(`#sp-${id} .sec-panel-hdr`);
+  const chev = document.getElementById('chev-'+id);
+  const isOpen = !body.classList.contains('hidden');
+  body.classList.toggle('hidden', isOpen);
+  hdr.classList.toggle('open', !isOpen);
+  chev.classList.toggle('closed', isOpen);
+}
+```
+
+HTML structure:
+```html
+<div class="sec-panel" id="sp-xxx">
+  <div class="sec-panel-hdr open" onclick="togglePanel('xxx')">
+    <div class="sec-title" style="margin:0">...</div>
+    <span class="panel-chev" id="chev-xxx">▼</span>
+  </div>
+  <div class="sec-panel-body" id="body-xxx">
+    ... content ...
+  </div>
+</div>
+```
+CSS: `.sec-panel { grid-column: 1/-1 }` → full width trong body-grid
+
+---
+
 ## 6. Frontend — index.html
 
 ### Service Cards
@@ -393,10 +555,28 @@ Stats row (4 cards): Clients Online · Devices Online · Devices Offline · SSID
   - [x] meraki.html với 4 collapsible panels
   - [x] Service card Meraki trong category Movi
   - [x] Ẩn Meraki khỏi Trạng thái nhanh (noCheck + filter strip)
+- [x] **FortiGate Movi Dashboard (fortigate-movi.html) — 2026-05-18:**
+  - [x] System info bar (hostname, model, version, uptime, CPU%, RAM%, sessions)
+  - [x] License strip (FortiCare, AV, IPS, WebFilter, AppCtrl... màu theo trạng thái)
+  - [x] Interfaces (UP cards + bandwidth bars, DOWN table collapsible)
+  - [x] Bandwidth chart realtime (Chart.js, multi-interface tabs)
+  - [x] VPN IPSec — tunnels + Phase2 expandable
+  - [x] VPN SSL — active sessions với 2FA badge
+  - [x] Firewall Policy — CMDB + Monitor stats merged, security profile chips, search, expand
+  - [x] Routing Table — thay DHCP (FG 7.2.10 không có DHCP API), có search
+  - [x] Tất cả sections là collapsible panels full width
 
 ---
 
 ## 12. VIỆC CÒN LẠI 🔧
+
+### FortiGate Movi — Uptime hiển thị "0m" — CẦN KIỂM TRA
+- `sys-uptime` hiển thị 0 → n8n Code node có thể đang đọc `s.uptime` từ `results{}` thay vì top level
+- Sửa trong n8n System Info workflow: đọc `status.uptime` (top level) thay vì `status.results.uptime`
+
+### FortiGate Movi — Thêm vào index.html — CHƯA LÀM
+- Thêm service card `fortigate-movi` vào category Movi trong index.html
+- Thêm nav link trong topbar của fortigate-movi.html trỏ về dashboard
 
 ### Meraki — Workflow AI Diagnosis (W6) — CHƯA LÀM
 Ý tưởng: thêm AI vào trang meraki.html để phân tích dữ liệu (clients, devices, events) và đưa ra chuẩn đoán/khuyến nghị.

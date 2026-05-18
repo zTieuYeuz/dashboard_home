@@ -954,7 +954,7 @@ async function injectUser(request, env) {
         // Google Fonts files + data URIs
         "font-src 'self' data: https://fonts.gstatic.com; " +
         // Allow camera (go2rtc) and SSH terminal (termix) iframes
-        "frame-src 'self' https://camera.home-server.id.vn https://termix.home-server.id.vn; " +
+        "frame-src 'self' https://camera.home-server.id.vn https://termix.home-server.id.vn https://cam.movi-finance.com; " +
         "object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
     }
   });
@@ -1555,6 +1555,325 @@ async function handleMerakiEvents(request, env) {
     // Code Node trả { events, total, high, medium, fetchedAt }
     const payload = Array.isArray(raw) ? raw[0] : raw;
     return json(payload);
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ── FortiGate Movi — SD-WAN Rules ── */
+async function handleMoviSdwanRules(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/79b39d3c-debd-4e25-ad1f-21aa7d9b3908';
+  const N8N_AUTH = moviN8nAuth(env);
+  try {
+    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw  = await resp.json();
+    const data = Array.isArray(raw) ? raw[0] : raw;
+    return json({
+      rules:     data.rules    || [],
+      total:     data.total    || 0,
+      enabled:   data.enabled  || 0,
+      fetchedAt: data.fetchedAt || new Date().toISOString()
+    });
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ── FortiGate Movi — SD-WAN Members ── */
+async function handleMoviSdwan(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/635ec656-db89-48b5-9d57-66d8b154958b';
+  const N8N_AUTH = moviN8nAuth(env);
+  try {
+    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw  = await resp.json();
+    const data = Array.isArray(raw) ? raw[0] : raw;
+    return json({
+      members:   data.members   || [],
+      total:     data.total     || 0,
+      zone:      data.zone      || '',
+      fetchedAt: data.fetchedAt || new Date().toISOString()
+    });
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ── Camera Movi — Token ── */
+async function handleCameraToken(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const url = env.MOVI_CAM_URL || '';
+  if (!url) return json({ error: 'Camera not configured' }, 503);
+  const streams = [];
+  for (let i = 1; i <= 16; i++) streams.push('cam' + i);
+  return json({ url, streams });
+}
+
+/* ── Camera Movi — Full Reverse Proxy (HTTP + WebSocket) ── */
+async function handleCamEmbed(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return new Response('Unauthorized', { status: 401 });
+
+  const user   = env.MOVI_CAM_USER || '';
+  const pass   = env.MOVI_CAM_PASS || '';
+  const camUrl = env.MOVI_CAM_URL  || '';
+  if (!camUrl) return new Response('Camera not configured', { status: 503 });
+
+  const auth    = 'Basic ' + btoa(`${user}:${pass}`);
+  const reqUrl  = new URL(request.url);
+  const subPath = reqUrl.pathname.replace('/cam-embed', '') || '/';
+  const target  = `${camUrl}${subPath}${reqUrl.search}`;
+
+  // WebSocket proxy (for go2rtc MSE video stream)
+  if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+    const wsTarget = target.replace(/^https/, 'wss').replace(/^http(?!s)/, 'ws');
+
+    // Connect to upstream go2rtc WebSocket with auth
+    const upstreamResp = await fetch(wsTarget, {
+      headers: {
+        'Authorization':        auth,
+        'Upgrade':              'websocket',
+        'Connection':           'Upgrade',
+        'Sec-WebSocket-Version': request.headers.get('Sec-WebSocket-Version') || '13',
+        'Sec-WebSocket-Key':     request.headers.get('Sec-WebSocket-Key')     || '',
+      },
+    });
+
+    const upstream = upstreamResp.webSocket;
+    if (!upstream) return new Response('WebSocket upstream failed', { status: 502 });
+
+    // Create browser-facing WebSocket pair
+    const { 0: client, 1: server } = new WebSocketPair();
+    server.accept();
+    upstream.accept();
+
+    // Bridge bidirectionally
+    server.addEventListener('message',   ({ data }) => { try { upstream.send(data); } catch(_) {} });
+    upstream.addEventListener('message', ({ data }) => { try { server.send(data);   } catch(_) {} });
+    server.addEventListener('close',   ({ code, reason }) => { try { upstream.close(code, reason); } catch(_) {} });
+    upstream.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason);   } catch(_) {} });
+
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  const upstream = await fetch(target, {
+    method:  request.method,
+    headers: { 'Authorization': auth },
+  });
+
+  const ct = upstream.headers.get('Content-Type') || 'application/octet-stream';
+
+  // Inject JS patch into HTML so go2rtc's stream.html routes API calls through proxy
+  if (ct.includes('text/html')) {
+    let html = await upstream.text();
+    const patch = `<script>
+(function(){
+  var _W=window.WebSocket;
+  window.WebSocket=function(u,p){
+    if(typeof u==='string') u=u.replace(/(wss?:\\/\\/[^\\/]+)\\/api\\//,'$1/cam-embed/api/');
+    return p!=null?new _W(u,p):new _W(u);
+  };
+  var _f=window.fetch;
+  window.fetch=function(u){
+    var a=Array.prototype.slice.call(arguments);
+    if(typeof u==='string') a[0]=u.replace(/https?:\\/\\/[^\\/]+\\/api\\//,'/cam-embed/api/');
+    return _f.apply(this,a);
+  };
+  var _xo=XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open=function(m,u){
+    var a=Array.prototype.slice.call(arguments);
+    if(typeof u==='string') a[1]=u.replace(/https?:\\/\\/[^\\/]+\\/api\\//,'/cam-embed/api/');
+    return _xo.apply(this,a);
+  };
+})();
+<\/script>`;
+    html = html.includes('</head>') ? html.replace('</head>', patch + '</head>') : patch + html;
+    return new Response(html, {
+      status: upstream.status,
+      headers: { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' },
+    });
+  }
+
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: { 'Content-Type': ct, 'Cache-Control': 'no-cache' },
+  });
+}
+
+/* ── FortiGate Movi — Interfaces & Bandwidth ── */
+async function handleMoviInterfaces(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/ccd8b0a9-730e-4767-aa29-6f99ba8d9a4b';
+  const N8N_AUTH = moviN8nAuth(env);
+  try {
+    const resp = await fetch(N8N_URL, {
+      headers: { 'Authorization': N8N_AUTH },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw  = await resp.json();
+    const data = Array.isArray(raw) ? raw[0] : raw;
+    return json({
+      interfaces: data.interfaces || [],
+      ts:         data.ts         || Date.now(),
+      fetchedAt:  data.fetchedAt  || new Date().toISOString()
+    });
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ── FortiGate Movi — Firewall Policy Hit ── */
+async function handleMoviPolicy(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/fed29e7e-aa06-483c-9709-1e7bcaf79c3b';
+  const N8N_AUTH = moviN8nAuth(env);
+  try {
+    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw  = await resp.json();
+    const data = Array.isArray(raw) ? raw[0] : raw;
+    return json({ policies: data.policies || [], total: data.total || 0, fetchedAt: data.fetchedAt || new Date().toISOString() });
+  } catch (e) { return json({ error: 'Failed to reach n8n', detail: e.message }, 502); }
+}
+
+/* ── FortiGate Movi — Routing Table ── */
+async function handleMoviDhcp(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/ea8d7f9b-903b-4855-abdf-b73aa02ba1e8';
+  const N8N_AUTH = moviN8nAuth(env);
+  try {
+    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw  = await resp.json();
+    const data = Array.isArray(raw) ? raw[0] : raw;
+    return json({ routes: data.routes || data.leases || [], total: data.total || 0, fetchedAt: data.fetchedAt || new Date().toISOString() });
+  } catch (e) { return json({ error: 'Failed to reach n8n', detail: e.message }, 502); }
+}
+
+/* ── FortiGate Movi — SSL VPN ── */
+async function handleMoviSslVpn(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/30b5ff6d-0065-4150-8c7f-0d25f2b6bc76';
+  const N8N_AUTH = moviN8nAuth(env);
+  try {
+    const resp = await fetch(N8N_URL, {
+      headers: { 'Authorization': N8N_AUTH },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw  = await resp.json();
+    const data = Array.isArray(raw) ? raw[0] : raw;
+    return json({
+      sessions:  data.sessions  || [],
+      total:     data.total     || 0,
+      fetchedAt: data.fetchedAt || new Date().toISOString()
+    });
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ── FortiGate Movi — VPN IPSec ── */
+async function handleMoviVpn(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/2d3b9660-b99a-4bd3-92ba-165efb23c741';
+  const N8N_AUTH = moviN8nAuth(env);
+  try {
+    const resp = await fetch(N8N_URL, {
+      headers: { 'Authorization': N8N_AUTH },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw  = await resp.json();
+    const data = Array.isArray(raw) ? raw[0] : raw;
+    return json({
+      tunnels:  data.tunnels  || [],
+      total:    data.total    || 0,
+      up:       data.up       || 0,
+      down:     data.down     || 0,
+      fetchedAt: data.fetchedAt || new Date().toISOString()
+    });
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ── FortiGate Movi — License ── */
+async function handleMoviLicense(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/8bd446f5-d1d4-4de6-a679-a26fcb0f5f60';
+  const N8N_AUTH = moviN8nAuth(env);
+  try {
+    const resp = await fetch(N8N_URL, {
+      headers: { 'Authorization': N8N_AUTH },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw  = await resp.json();
+    const data = Array.isArray(raw) ? raw[0] : raw;
+    return json({
+      licenses:   data.licenses   || [],
+      hasWarning: data.hasWarning || false,
+      fetchedAt:  data.fetchedAt  || new Date().toISOString()
+    });
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ── FortiGate Movi — System Info ── */
+async function handleMoviSystem(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/52d4503a-66ec-49cc-b4c2-f4605349b17b';
+  const N8N_AUTH = moviN8nAuth(env);
+  try {
+    const resp = await fetch(N8N_URL, {
+      headers: { 'Authorization': N8N_AUTH },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    const raw  = await resp.json();
+    const data = Array.isArray(raw) ? raw[0] : raw;
+
+    // Normalize CPU — n8n may return number or [{current: N, historical: ...}]
+    let cpu = null;
+    if (typeof data.cpu === 'number') cpu = data.cpu;
+    else if (Array.isArray(data.cpu) && data.cpu.length > 0) cpu = data.cpu[0].current ?? null;
+
+    // Normalize MEM
+    let mem = null;
+    if (typeof data.mem === 'number') mem = data.mem;
+    else if (Array.isArray(data.mem) && data.mem.length > 0) mem = data.mem[0].current ?? null;
+
+    // Normalize sessions — may be number or array
+    let sessions = 0;
+    if (typeof data.sessions === 'number') sessions = data.sessions;
+    else if (Array.isArray(data.sessions) && data.sessions.length > 0) sessions = data.sessions[0].current ?? 0;
+
+    return json({
+      hostname:  data.hostname  || '',
+      model:     data.model     || '',
+      version:   data.version   || '',
+      build:     data.build     || '',
+      serial:    data.serial    || '',
+      uptime:    data.uptime    || 0,
+      cpu, mem, sessions,
+      fetchedAt: data.fetchedAt || new Date().toISOString()
+    });
   } catch (e) {
     return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
   }
@@ -2684,6 +3003,17 @@ export default {
     if (p === '/api/meraki-link-aggregations')  return handleMerakiLinkAggregations(request, env);
     if (p === '/api/meraki-uplinks')            return handleMerakiUplinks(request, env);
     if (p === '/api/meraki-l3-routing')          return handleMerakiL3Routing(request, env);
+    if (p === '/api/movi-sdwan')                return handleMoviSdwan(request, env);
+    if (p === '/api/movi-sdwan-rules')          return handleMoviSdwanRules(request, env);
+    if (p === '/api/camera-token')               return handleCameraToken(request, env);
+    if (p.startsWith('/cam-embed/'))             return handleCamEmbed(request, env);
+    if (p === '/api/movi-interfaces')            return handleMoviInterfaces(request, env);
+    if (p === '/api/movi-system')               return handleMoviSystem(request, env);
+    if (p === '/api/movi-license')              return handleMoviLicense(request, env);
+    if (p === '/api/movi-vpn')                  return handleMoviVpn(request, env);
+    if (p === '/api/movi-ssl-vpn')              return handleMoviSslVpn(request, env);
+    if (p === '/api/movi-policy')               return handleMoviPolicy(request, env);
+    if (p === '/api/movi-dhcp')                 return handleMoviDhcp(request, env);
 
     if (p === '/api/status')      return handleStatus();
     if (p === '/api/n8n')         return handleN8n(env);

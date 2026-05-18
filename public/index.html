@@ -685,7 +685,9 @@ var ALL_SERVICES_DEF = [
   { id:'asus',        name:'ASUS Router',     icon:'📡', desc:'ASUS · home network',                          url:'http://192.168.10.1:8443',                   local:true,  detailPage:'/asus.html' },
   { id:'camera',      name:'Camera',          icon:'📷', desc:'Camera system · go2rtc WebRTC',                url:'https://camera.home-server.id.vn',           local:false, detailPage:'/hikvision.html', newTab:true },
   { id:'meraki',      name:'Meraki-Network',  icon:'🌐', desc:'Cisco Meraki · client monitor',                url:'https://dashboard.meraki.com',               local:false, detailPage:'/meraki.html', noCheck:true },
-  { id:'movi',        name:'Movi Map Network',icon:'🗺', desc:'Network topology · wiring · L3',               url:'/topology.html',                             local:false, detailPage:'/topology.html', noCheck:true },
+  { id:'movi',         name:'Movi Map Network', icon:'🗺', desc:'Network topology · wiring · L3',               url:'/topology.html',                             local:false, detailPage:'/topology.html',       noCheck:true },
+  { id:'fortigate-movi',name:'FortiGate Movi',  icon:'🔥', desc:'Firewall Movi-HO-200F · SD-WAN Bandwidth',    url:'https://192.168.140.254:4434',               local:true,  detailPage:'/fortigate-movi.html', noCheck:true },
+  { id:'camera-movi',   name:'Camera Movi',     icon:'📷', desc:'Camera giám sát · go2rtc · 16 kênh',            url:'https://cam.movi-finance.com',               local:true,  detailPage:'/camera-movi.html',    noCheck:true },
 ];
 
 /* Categories (matches original SERVICE_CATEGORIES) */
@@ -693,7 +695,7 @@ var SERVICE_CATEGORIES = [
   { id:'home', icon:'🏠', name:'Service Home', desc:'Hạ tầng & hệ thống · home-server.id.vn', accent:'var(--accent)',
     serviceIds: ['esxi','n8n','casaos','9router','uptime-kuma','ssh','fortigate','asus','camera'] },
   { id:'movi', icon:'🎬', name:'Service Movi', desc:'Văn phòng Movi · Meraki & Topology',    accent:'var(--violet)',
-    serviceIds: ['meraki','movi'] },
+    serviceIds: ['meraki','movi','fortigate-movi','camera-movi'] },
 ];
 
 /* Permission filter (NOTE: server-side check for 'movi' uses 'topology' permission key) */
