@@ -1277,7 +1277,7 @@ async function handleMerakiDevices(request, env) {
         lanIp:      ip,
         productType: d.productType || 'switch',
         typeIcon:   TYPE_ICON[d.productType] || '📦',
-        tags:       (d.tags || []).join(', '),
+        tags:       Array.isArray(d.tags) ? d.tags : (d.tags ? String(d.tags).split(',').map(function(t){return t.trim();}).filter(Boolean) : []),
         firmware:   d.firmware || '—',
         firmwareOk: firmwareOk,
         status:     firmwareOk ? 'online' : 'alerting',
