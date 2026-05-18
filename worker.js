@@ -2,10 +2,10 @@
    Auth & User Management System
    ═══════════════════════════════════════════════ */
 const SESSION_COOKIE    = 'dh_session';
-const SESSION_TTL       = 60 * 60 * 24 * 7; // 7 days
+const SESSION_TTL       = 60 * 60 * 8;      // 8 hours absolute session lifetime
 const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma'];
-const IDLE_TIMEOUT_MS   = 8 * 60 * 60 * 1000;  // auto-logout after 8h inactivity
-const IDLE_WARN_MS      = (8 * 60 - 5) * 60 * 1000; // show warning 5 min before logout
+const IDLE_TIMEOUT_MS   = 30 * 60 * 1000;   // auto-logout after 30 min inactivity
+const IDLE_WARN_MS      = 25 * 60 * 1000;   // show warning 5 min before logout
 
 /* Idle-timer script injected into every authenticated HTML page */
 const IDLE_SCRIPT = `<script>(function(){
@@ -19,14 +19,10 @@ const IDLE_SCRIPT = `<script>(function(){
   ['mousemove','mousedown','keydown','scroll','touchstart','click','pointerdown'].forEach(function(e) {
     document.addEventListener(e, window._idleReset, { passive: true, capture: true });
   });
-  /* Reset timer when user switches back to this tab + refresh session */
+  /* Reset timer when user switches back to this tab */
   document.addEventListener('visibilitychange', function() {
-    if (!document.hidden) { window._idleReset(); _refreshSession(); }
+    if (!document.hidden) window._idleReset();
   });
-  /* Refresh session on page load and every 30 min of activity */
-  function _refreshSession() { fetch('/api/auth/refresh', { method: 'POST' }).catch(function(){}); }
-  _refreshSession();
-  setInterval(function() { if (Date.now() - last < 30 * 60 * 1000) _refreshSession(); }, 30 * 60 * 1000);
 
   function fmt(ms) {
     var s = Math.ceil(ms / 1000), m = Math.floor(s / 60); s %= 60;
