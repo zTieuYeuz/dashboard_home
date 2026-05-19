@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════ */
 const SESSION_COOKIE    = 'dh_session';
 const SESSION_TTL       = 60 * 60 * 8;      // 8 hours absolute session lifetime
-const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma'];
+const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','meraki','topology','fortigate-movi','camera-movi'];
 const IDLE_TIMEOUT_MS   = 30 * 60 * 1000;   // auto-logout after 30 min inactivity
 const IDLE_WARN_MS      = 25 * 60 * 1000;   // show warning 5 min before logout
 

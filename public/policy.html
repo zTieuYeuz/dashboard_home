@@ -211,6 +211,9 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-hei
           <div class="section-label">Quyền panel (Movi Map Network)</div>
           <table class="mx-table" id="detail-topo"><thead><tr><th>Panel</th><th>Hiển thị</th></tr></thead><tbody></tbody></table>
 
+          <div class="section-label">Quyền panel (FortiGate Movi)</div>
+          <table class="mx-table" id="detail-fgmovi"><thead><tr><th>Panel</th><th>Hiển thị</th></tr></thead><tbody></tbody></table>
+
           <div class="section-label">Quyền camera</div>
           <table class="mx-table" id="detail-cam"><thead><tr><th>Camera</th><th>Xem được</th></tr></thead><tbody></tbody></table>
 
@@ -259,6 +262,9 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-hei
 
     <div class="section-label">Quyền panel — Movi Map Network</div>
     <table class="mx-table"><thead><tr><th>Panel</th><th>Hiển thị</th></tr></thead><tbody id="grp-topo"></tbody></table>
+
+    <div class="section-label">Quyền panel — FortiGate Movi</div>
+    <table class="mx-table"><thead><tr><th>Panel</th><th>Hiển thị</th></tr></thead><tbody id="grp-fgmovi"></tbody></table>
 
     <div class="section-label">Quyền camera</div>
     <div id="grp-cams" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px"></div>
@@ -317,6 +323,8 @@ var ALL_PAGES = [
   {id:'uptime-kuma',name:'Uptime Kuma'},
   {id:'meraki',name:'Meraki Network'},
   {id:'topology',name:'Movi Map Network'},
+  {id:'fortigate-movi',name:'FortiGate Movi'},
+  {id:'camera-movi',name:'Camera Movi'},
   {id:'camera',name:'Camera'}
 ];
 
@@ -336,6 +344,15 @@ var TOPO_PANELS = [
   {id:'topology.topo',name:'Sơ đồ Topology'},
   {id:'topology.route',name:'Route Map'},
   {id:'topology.wiring',name:'Sơ đồ dây switch'}
+];
+
+var FGMOVI_PANELS = [
+  {id:'fortigate-movi.interfaces',name:'Interfaces & Bandwidth'},
+  {id:'fortigate-movi.sdwan',name:'SD-WAN Members & Rules'},
+  {id:'fortigate-movi.vpn',name:'VPN IPSec'},
+  {id:'fortigate-movi.ssl',name:'SSL VPN Users'},
+  {id:'fortigate-movi.policy',name:'Firewall Policies'},
+  {id:'fortigate-movi.dhcp',name:'DHCP Leases'}
 ];
 
 var groups = [], users = [], cameras = [];
@@ -412,6 +429,10 @@ function openGroupModal(gid){
   }).join('');
 
   document.getElementById('grp-topo').innerHTML=TOPO_PANELS.map(function(p){
+    return '<tr><td>'+p.name+'</td><td><input type="checkbox" class="mx-cb" data-pnl="'+p.id+'"'+(panels[p.id]?' checked':'')+'></td></tr>';
+  }).join('');
+
+  document.getElementById('grp-fgmovi').innerHTML=FGMOVI_PANELS.map(function(p){
     return '<tr><td>'+p.name+'</td><td><input type="checkbox" class="mx-cb" data-pnl="'+p.id+'"'+(panels[p.id]?' checked':'')+'></td></tr>';
   }).join('');
 
@@ -541,6 +562,10 @@ function loadDetailUser(){
   }).join('');
 
   document.querySelector('#detail-topo tbody').innerHTML=TOPO_PANELS.map(function(p){
+    return '<tr><td>'+p.name+'</td><td><input type="checkbox" class="mx-cb" data-pnl="'+p.id+'"'+(panels[p.id]?' checked':'')+'></td></tr>';
+  }).join('');
+
+  document.querySelector('#detail-fgmovi tbody').innerHTML=FGMOVI_PANELS.map(function(p){
     return '<tr><td>'+p.name+'</td><td><input type="checkbox" class="mx-cb" data-pnl="'+p.id+'"'+(panels[p.id]?' checked':'')+'></td></tr>';
   }).join('');
 
