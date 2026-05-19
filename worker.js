@@ -273,20 +273,25 @@ async function handleListUsers(request, env) {
 }
 
 async function handleCreateUser(request, env) {
-  const session = await getSession(request, env);
-  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  const { username, password } = body || {};
-  if (!username || !password) return json({ error: 'Thiếu username hoặc password' }, 400);
-  if (!/^[a-zA-Z0-9_.@-]{3,64}$/.test(username)) return json({ error: 'Username không hợp lệ (3-64 ký tự, a-z 0-9 . @ _ -)' }, 400);
-  if (await env.DASHBOARD_KV.get(`user:${username}`)) return json({ error: 'User đã tồn tại' }, 409);
-  await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify({
-    password: await hashPw(password), role: 'user', permissions: {}, created: Date.now()
-  }));
-  const list = await env.DASHBOARD_KV.get('userlist', 'json') || ['admin'];
-  if (!list.includes(username)) { list.push(username); await env.DASHBOARD_KV.put('userlist', JSON.stringify(list)); }
-  return json({ success: true, username });
+  try {
+    const session = await getSession(request, env);
+    if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+    if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+    let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+    const { username, password } = body || {};
+    if (!username || !password) return json({ error: 'Thiếu username hoặc password' }, 400);
+    if (!/^[a-zA-Z0-9_.@-]{3,64}$/.test(username)) return json({ error: 'Username không hợp lệ (3-64 ký tự, a-z 0-9 . @ _ -)' }, 400);
+    if (await env.DASHBOARD_KV.get(`user:${username}`)) return json({ error: 'User đã tồn tại' }, 409);
+    const hashed = await hashPw(password);
+    await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify({
+      password: hashed, role: 'user', permissions: {}, created: Date.now()
+    }));
+    const list = await env.DASHBOARD_KV.get('userlist', 'json') || ['admin'];
+    if (!list.includes(username)) { list.push(username); await env.DASHBOARD_KV.put('userlist', JSON.stringify(list)); }
+    return json({ success: true, username });
+  } catch (e) {
+    return json({ error: 'Lỗi tạo user: ' + e.message }, 500);
+  }
 }
 
 async function handleUpdatePermissions(request, env, username) {
@@ -2974,6 +2979,9 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const p   = url.pathname;
+    // Global safety net: API paths always return JSON errors, never HTML
+    const isApi = p.startsWith('/api/');
+    try {
 
     // ── Auth API (public) ──
     if (p === '/api/auth/login')      return handleLogin(request, env);
@@ -3067,5 +3075,9 @@ export default {
     if (p === '/' || p.endsWith('.html')) return injectUser(request, env);
 
     return env.ASSETS.fetch(request);
+    } catch (e) {
+      if (isApi) return json({ error: 'Internal server error', detail: e.message }, 500);
+      return new Response('Internal Server Error', { status: 500 });
+    }
   },
 };
