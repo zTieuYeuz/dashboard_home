@@ -279,7 +279,7 @@ async function handleCreateUser(request, env) {
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const { username, password } = body || {};
   if (!username || !password) return json({ error: 'Thiếu username hoặc password' }, 400);
-  if (!/^[a-zA-Z0-9_-]{3,32}$/.test(username)) return json({ error: 'Username không hợp lệ (3-32 ký tự, a-z 0-9 _ -)' }, 400);
+  if (!/^[a-zA-Z0-9_.@-]{3,64}$/.test(username)) return json({ error: 'Username không hợp lệ (3-64 ký tự, a-z 0-9 . @ _ -)' }, 400);
   if (await env.DASHBOARD_KV.get(`user:${username}`)) return json({ error: 'User đã tồn tại' }, 409);
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify({
     password: await hashPw(password), role: 'user', permissions: {}, created: Date.now()
