@@ -73,7 +73,7 @@ const IDLE_SCRIPT = `<script>(function(){
    New format (string): "pbkdf2$<iter>$<saltHex>$<hashHex>"
    Legacy format: bare 64-hex SHA-256(pw + ':dh-salt-2024'). Verified for
    backward-compat, then transparently re-hashed to PBKDF2 on next login. */
-const PW_PBKDF2_ITER = 210000;
+const PW_PBKDF2_ITER = 100000; // Cloudflare Workers WebCrypto max supported
 
 function _bytesToHex(buf) {
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
