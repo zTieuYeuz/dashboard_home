@@ -15,3 +15,6 @@ node_modules/
 *.secret
 sp_tmp.json
 dev_tmp.json
+
+# Technical notes — contains sensitive info (IPs, URLs, credentials)
+NOTES.md
