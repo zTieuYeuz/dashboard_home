@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Cài đặt Hệ thống — Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root,[data-theme="dark"]{
+  --bg:oklch(0.18 0.012 250);--surface:oklch(0.22 0.012 250);--surface-2:oklch(0.26 0.012 250);
+  --card:oklch(0.21 0.012 250);--border:oklch(0.31 0.012 250);--border-soft:oklch(0.27 0.012 250);
+  --text:oklch(0.96 0.005 250);--text-2:oklch(0.86 0.008 250);--muted:oklch(0.62 0.012 250);
+  --accent:oklch(0.72 0.18 290);--ok:oklch(0.74 0.16 155);--warn:oklch(0.78 0.16 70);--bad:oklch(0.68 0.20 25);
+  --font-sans:'IBM Plex Sans',system-ui,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  --radius:12px;--radius-sm:8px;
+}
+[data-theme="light"]{
+  --bg:oklch(0.985 0.003 250);--surface:oklch(1 0 0);--surface-2:oklch(0.965 0.005 250);
+  --card:oklch(1 0 0);--border:oklch(0.91 0.008 250);--border-soft:oklch(0.94 0.008 250);
+  --text:oklch(0.22 0.015 250);--text-2:oklch(0.36 0.015 250);--muted:oklch(0.55 0.012 250);
+  --accent:oklch(0.55 0.18 290);--ok:oklch(0.52 0.15 155);--warn:oklch(0.62 0.16 70);--bad:oklch(0.55 0.20 25);
+}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-height:100vh}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── Topbar ── */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:52px;
+  background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+.topbar-left{display:flex;align-items:center;gap:28px}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:30px;height:30px;display:grid;place-items:center;background:var(--accent);color:var(--bg);border-radius:var(--radius-sm);flex-shrink:0}
+.brand-name{font-weight:600;font-size:14px;line-height:1.1}
+.brand-sub{font-size:11px;color:var(--muted);margin-top:1px}
+.topnav{display:flex;gap:2px}
+.topnav-item{font-size:13px;font-weight:500;color:var(--muted);padding:6px 12px;border-radius:var(--radius-sm);transition:all .12s;text-decoration:none;white-space:nowrap}
+.topnav-item:hover,.topnav-item.active{color:var(--text);background:var(--surface-2)}
+.clock{font-family:var(--font-mono);font-size:13px;color:var(--text-2);padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm)}
+.tbtn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);transition:all .12s;cursor:pointer;font-family:var(--font-sans);white-space:nowrap}
+.tbtn:hover{color:var(--text);border-color:var(--muted)}
+.theme-toggle{width:32px;height:32px;display:grid;place-items:center;padding:0;border:1px solid var(--border);background:var(--surface-2);border-radius:var(--radius-sm);cursor:pointer;color:var(--text-2)}
+.theme-toggle:hover{color:var(--text)}
+.user-chip{display:flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:999px;font-size:13px}
+.user-avatar{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--accent),oklch(0.60 0.18 310));color:var(--bg);display:grid;place-items:center;font-size:11px;font-weight:600}
+.user-tag{font-size:10px;padding:2px 6px;background:color-mix(in oklch,var(--accent) 15%,transparent);color:var(--accent);border-radius:4px;font-weight:600;letter-spacing:.03em;text-transform:uppercase}
+
+/* ── Page Layout ── */
+.container{max-width:1300px;margin:0 auto;padding:2rem 1.5rem;display:flex;flex-direction:column;gap:20px}
+.page-title{font-size:22px;font-weight:600;letter-spacing:-.02em}
+.page-sub{font-size:13px;color:var(--muted);margin-top:4px}
+
+/* ── Main Tabs ── */
+.main-tabs{display:flex;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:4px;width:fit-content}
+.main-tab{font-size:13px;font-weight:600;padding:8px 20px;border-radius:var(--radius-sm);border:none;background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap}
+.main-tab.active{background:color-mix(in oklch,var(--accent) 12%,transparent);color:var(--accent);border:1px solid color-mix(in oklch,var(--accent) 25%,transparent)}
+.main-tab:hover:not(.active){color:var(--text)}
+.tab-content{display:none}
+.tab-content.active{display:flex;flex-direction:column;gap:16px}
+
+/* ── Panels ── */
+.panel{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.panel-header{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.panel-title{font-size:15px;font-weight:700}
+.panel-desc{font-size:12px;color:var(--muted);margin-top:3px}
+.panel-body{padding:1.25rem 1.5rem}
+
+/* ── Buttons ── */
+.btn{font-size:13px;font-weight:600;padding:7px 16px;border-radius:var(--radius-sm);border:none;cursor:pointer;transition:all .15s;font-family:var(--font-sans);display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{opacity:.85}
+.btn-danger{background:color-mix(in oklch,var(--bad) 15%,transparent);color:var(--bad);border:1px solid color-mix(in oklch,var(--bad) 30%,transparent)}.btn-danger:hover{background:var(--bad);color:#fff}
+.btn-outline{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-outline:hover{color:var(--text);border-color:var(--muted)}
+.btn-sm{font-size:12px;padding:5px 11px}
+.btn-icon{width:30px;height:30px;padding:0;justify-content:center;border:1px solid var(--border);background:var(--surface-2);color:var(--muted);border-radius:var(--radius-sm)}.btn-icon:hover{color:var(--text);border-color:var(--muted)}
+
+/* ── Form ── */
+.form-row{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.form-row:last-child{margin-bottom:0}
+label.lbl{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.inp{width:100%;padding:8px 12px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);outline:none;transition:border-color .15s}
+.inp:focus{border-color:var(--accent)}
+.inp-sm{padding:5px 10px;font-size:12px}
+select.inp{cursor:pointer}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-help{font-size:11px;color:var(--muted);margin-top:3px}
+
+/* ── Tables ── */
+.data-table{width:100%;border-collapse:collapse;font-size:13px}
+.data-table thead th{text-align:left;font-family:var(--font-mono);font-size:10.5px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface-2);white-space:nowrap;position:sticky;top:0;z-index:1}
+.data-table tbody tr{border-bottom:1px solid var(--border-soft);transition:background .1s}
+.data-table tbody tr:last-child{border-bottom:none}
+.data-table tbody tr:hover{background:color-mix(in oklch,var(--accent) 4%,transparent)}
+.data-table td{padding:10px 14px;vertical-align:middle}
+.tbl-wrap{overflow-x:auto;overflow-y:auto;max-height:480px}
+
+/* ── Tags / Chips ── */
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--border);background:var(--surface-2);white-space:nowrap}
+.chip-accent{border-color:color-mix(in oklch,var(--accent) 30%,transparent);color:var(--accent);background:color-mix(in oklch,var(--accent) 8%,transparent)}
+.chip-ok{border-color:color-mix(in oklch,var(--ok) 30%,transparent);color:var(--ok);background:color-mix(in oklch,var(--ok) 8%,transparent)}
+.chip-warn{border-color:color-mix(in oklch,var(--warn) 30%,transparent);color:var(--warn);background:color-mix(in oklch,var(--warn) 8%,transparent)}
+.chip-bad{border-color:color-mix(in oklch,var(--bad) 30%,transparent);color:var(--bad);background:color-mix(in oklch,var(--bad) 8%,transparent)}
+
+/* ── Role Management Layout ── */
+.role-layout{display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start}
+.group-sidebar{display:flex;flex-direction:column;gap:8px}
+.group-item{padding:.875rem 1rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);cursor:pointer;transition:all .15s}
+.group-item:hover{border-color:var(--muted)}
+.group-item.selected{border-color:var(--accent);background:color-mix(in oklch,var(--accent) 6%,transparent)}
+.group-item-name{font-size:13px;font-weight:600}
+.group-item-desc{font-size:11px;color:var(--muted);margin-top:2px}
+.group-item-meta{font-size:11px;color:var(--muted);margin-top:4px;display:flex;gap:8px;flex-wrap:wrap}
+.group-editor{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.5rem;display:flex;flex-direction:column;gap:16px}
+.editor-title{font-size:16px;font-weight:700}
+
+/* ── Permission Sections ── */
+.svc-section{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.svc-section-head{display:flex;align-items:center;justify-content:space-between;padding:.875rem 1rem;background:var(--surface-2);cursor:pointer;user-select:none;border-bottom:1px solid var(--border)}
+.svc-section-head:hover{background:color-mix(in oklch,var(--accent) 6%,var(--surface-2))}
+.svc-section-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
+.svc-section-body{padding:.5rem 0}
+.svc-section.collapsed .svc-section-body{display:none}
+.svc-section.collapsed .chev{transform:rotate(-90deg)}
+.chev{transition:transform .2s;color:var(--muted);font-size:12px}
+
+/* ── Page Permission Row ── */
+.perm-row{display:flex;align-items:center;padding:.625rem 1rem;border-bottom:1px solid var(--border-soft);gap:12px;flex-wrap:wrap}
+.perm-row:last-child{border-bottom:none}
+.perm-row-icon{font-size:16px;flex-shrink:0;width:24px;text-align:center}
+.perm-row-name{font-size:13px;font-weight:500;flex:1;min-width:120px}
+.perm-radios{display:flex;gap:8px;flex-wrap:wrap}
+.perm-radio-label{display:flex;align-items:center;gap:5px;font-size:12px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer;transition:all .15s;white-space:nowrap}
+.perm-radio-label:has(input:checked){border-color:var(--accent);background:color-mix(in oklch,var(--accent) 10%,transparent);color:var(--accent)}
+.perm-radio-label input{display:none}
+
+/* ── Panel Rows ── */
+.panels-section{background:color-mix(in oklch,var(--accent) 3%,var(--bg));border-top:1px solid var(--border-soft);padding:.5rem 1rem .5rem 2.5rem}
+.panel-row{display:flex;align-items:center;gap:10px;padding:.5rem .75rem;border-radius:var(--radius-sm);border:1px solid var(--border-soft);margin-bottom:6px;background:var(--surface);flex-wrap:wrap}
+.panel-row:last-child{margin-bottom:0}
+.panel-row-name{font-size:12px;flex:1;min-width:120px}
+.panel-toggle{display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer}
+.panel-toggle input[type="checkbox"]{width:14px;height:14px;accent-color:var(--accent);cursor:pointer}
+.panel-rw{display:flex;gap:6px;margin-left:auto}
+.panel-rw label{display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;padding:3px 8px;border-radius:12px;border:1px solid var(--border);background:var(--surface-2)}
+.panel-rw label:has(input:checked){border-color:var(--ok);background:color-mix(in oklch,var(--ok) 10%,transparent);color:var(--ok)}
+.panel-rw input{display:none}
+.panel-rw.disabled{opacity:.4;pointer-events:none}
+
+/* ── Camera Grid ── */
+.cam-grid{display:flex;flex-wrap:wrap;gap:8px;padding:.5rem 1rem .75rem 2.5rem}
+.cam-check-label{display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 12px;border:1px solid var(--border);border-radius:20px;cursor:pointer;background:var(--surface);transition:all .15s;white-space:nowrap}
+.cam-check-label:has(input:checked){border-color:var(--warn);background:color-mix(in oklch,var(--warn) 10%,transparent);color:var(--warn)}
+.cam-check-label input{width:13px;height:13px;accent-color:var(--warn);cursor:pointer}
+
+/* ── User Row ── */
+.user-row{display:flex;align-items:center;gap:14px;padding:1rem 1.5rem;border-bottom:1px solid var(--border)}
+.user-row:last-child{border-bottom:none}
+.user-avatar{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),oklch(0.60 0.18 310));display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0;color:#fff}
+.user-info{flex:1;min-width:0}
+.user-name{font-size:14px;font-weight:600}
+.user-meta{font-size:12px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap}
+.user-actions{display:flex;gap:6px;flex-shrink:0}
+
+/* ── Audit Log ── */
+.log-row{display:flex;align-items:flex-start;gap:12px;padding:.875rem 1.5rem;border-bottom:1px solid var(--border-soft)}
+.log-row:last-child{border-bottom:none}
+.log-ts{font-family:var(--font-mono);font-size:11px;color:var(--muted);white-space:nowrap;min-width:115px}
+.log-user{font-size:12px;font-weight:600;min-width:80px}
+.log-action{font-size:12px;flex:1}
+.log-status{font-size:11px;padding:2px 8px;border-radius:20px;flex-shrink:0}
+.log-ok{background:color-mix(in oklch,var(--ok) 12%,transparent);color:var(--ok);border:1px solid color-mix(in oklch,var(--ok) 25%,transparent)}
+.log-fail{background:color-mix(in oklch,var(--bad) 12%,transparent);color:var(--bad);border:1px solid color-mix(in oklch,var(--bad) 25%,transparent)}
+
+/* ── System Config ── */
+.cfg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.cfg-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.25rem}
+.cfg-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+.cfg-value{font-size:24px;font-weight:700;font-family:var(--font-mono);color:var(--text)}
+.cfg-unit{font-size:13px;color:var(--muted);font-family:var(--font-sans)}
+
+/* ── Modal ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.hidden{display:none}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:20px;width:100%;max-width:580px;max-height:88vh;overflow-y:auto;padding:1.75rem}
+.modal-wide{max-width:750px}
+.modal-title{font-size:18px;font-weight:700;margin-bottom:1.25rem}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem}
+.err-msg{font-size:12px;color:var(--bad);margin-top:8px;padding:8px 12px;background:color-mix(in oklch,var(--bad) 8%,transparent);border:1px solid color-mix(in oklch,var(--bad) 20%,transparent);border-radius:var(--radius-sm);display:none}
+.err-msg.show{display:block}
+
+/* ── Toast ── */
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);z-index:9999;padding:11px 22px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 8px 28px rgba(0,0,0,.5);transition:all .25s;opacity:0;pointer-events:none}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.ok{background:color-mix(in oklch,var(--ok) 12%,var(--card));color:var(--ok);border:1px solid color-mix(in oklch,var(--ok) 30%,transparent)}
+#toast.err{background:color-mix(in oklch,var(--bad) 12%,var(--card));color:var(--bad);border:1px solid color-mix(in oklch,var(--bad) 30%,transparent)}
+#toast.info{background:color-mix(in oklch,var(--accent) 12%,var(--card));color:var(--accent);border:1px solid color-mix(in oklch,var(--accent) 30%,transparent)}
+
+/* ── Misc ── */
+.empty-state{padding:3rem 2rem;text-align:center;color:var(--muted);font-size:13px}
+.section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border-soft)}
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:.75rem 0;border-bottom:1px solid var(--border-soft);font-size:13px}
+.info-row:last-child{border-bottom:none}
+.info-row-label{color:var(--muted)}
+.info-row-val{font-family:var(--font-mono);font-weight:500}
+.badge{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.05em}
+.badge-admin{background:color-mix(in oklch,var(--accent) 15%,transparent);color:var(--accent);border:1px solid color-mix(in oklch,var(--accent) 30%,transparent)}
+.badge-user{background:color-mix(in oklch,var(--muted) 12%,transparent);color:var(--muted);border:1px solid var(--border)}
+@media(max-width:900px){.role-layout{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M4.93 4.93a10 10 0 0 0 0 14.14M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+      </div>
+      <div><div class="brand-name">Home Lab</div><div class="brand-sub">Cài đặt Hệ thống</div></div>
+    </div>
+    <nav class="topnav">
+      <a class="topnav-item" href="/">Overview</a>
+      <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
+      <a class="topnav-item active" id="settings-link" href="/settings.html">⚙ Settings</a>
+    </nav>
+  </div>
+  <div class="topbar-right">
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"/></svg>
+    </button>
+    <div class="user-chip">
+      <div class="user-avatar" id="user-avatar">?</div>
+      <span id="user-name">...</span>
+      <span class="user-tag" id="user-tag" style="display:none">Admin</span>
+    </div>
+    <button class="tbtn" onclick="doLogout()">Đăng xuất</button>
+  </div>
+</header>
+
+<!-- MAIN CONTENT -->
+<div class="container">
+  <div>
+    <div class="page-title">⚙ Cài đặt Hệ thống</div>
+    <div class="page-sub">Quản lý người dùng, cấu hình hệ thống, audit log và phân quyền truy cập</div>
+  </div>
+
+  <!-- Main Tab Navigation -->
+  <div class="main-tabs" id="main-tabs">
+    <button class="main-tab active" onclick="switchTab('users',this)">👥 User Management</button>
+    <button class="main-tab" onclick="switchTab('sysconfig',this)">🔧 System Config</button>
+    <button class="main-tab" onclick="switchTab('auditlog',this)">📋 Audit Log</button>
+    <button class="main-tab" onclick="switchTab('roles',this)">🔐 Role Management</button>
+    <button class="main-tab" onclick="switchTab('account',this)">👤 Tài khoản</button>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       TAB 1: USER MANAGEMENT
+       ══════════════════════════════════════════════ -->
+  <div class="tab-content active" id="tc-users">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">👥 Quản lý Người dùng</div>
+          <div class="panel-desc">Thêm, sửa, xóa tài khoản và phân quyền từng người dùng</div>
+        </div>
+        <button class="btn btn-primary" onclick="openAddUser()">+ Thêm user</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th>Avatar</th><th>Username</th><th>Role</th><th>Groups</th><th>Tạo lúc</th><th style="text-align:right">Hành động</th>
+          </tr></thead>
+          <tbody id="user-tbody"><tr><td colspan="6" class="empty-state">Đang tải...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Individual User Permissions panel (shown when editing) -->
+    <div class="panel" id="user-perm-panel" style="display:none">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title" id="user-perm-title">Quyền riêng của user</div>
+          <div class="panel-desc">Ghi đè quyền nhóm cho user này. Quyền "write" luôn ưu tiên hơn quyền nhóm.</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="closeUserPermPanel()">✕ Đóng</button>
+      </div>
+      <div class="panel-body">
+        <div id="user-perm-editor"></div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="saveUserPerms()">💾 Lưu quyền</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       TAB 2: SYSTEM CONFIG
+       ══════════════════════════════════════════════ -->
+  <div class="tab-content" id="tc-sysconfig">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">🔧 Cấu hình Hệ thống</div>
+          <div class="panel-desc">Session, idle timeout, kiểm soát người dùng và các thiết lập chung</div>
+        </div>
+        <button class="btn btn-primary" onclick="saveSysConfig()">💾 Lưu cấu hình</button>
+      </div>
+      <div class="panel-body">
+        <div class="section-label">Session & Bảo mật</div>
+        <div class="cfg-grid" style="margin-bottom:20px">
+          <div class="cfg-card">
+            <div class="cfg-label">Session TTL</div>
+            <div class="cfg-value" id="cfg-session-disp">8 <span class="cfg-unit">giờ</span></div>
+          </div>
+          <div class="cfg-card">
+            <div class="cfg-label">Idle Timeout</div>
+            <div class="cfg-value" id="cfg-idle-disp">30 <span class="cfg-unit">phút</span></div>
+          </div>
+          <div class="cfg-card">
+            <div class="cfg-label">Max Users</div>
+            <div class="cfg-value" id="cfg-maxusers-disp">50</div>
+          </div>
+          <div class="cfg-card">
+            <div class="cfg-label">Audit Retention</div>
+            <div class="cfg-value" id="cfg-audit-disp">30 <span class="cfg-unit">ngày</span></div>
+          </div>
+        </div>
+
+        <div class="section-label">Chỉnh sửa</div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label class="lbl">Session TTL (giờ)</label>
+            <input class="inp" id="cfg-session" type="number" min="1" max="24" placeholder="1-24"/>
+            <div class="form-help">Sau bao nhiêu giờ session hết hạn hoàn toàn. Mặc định: 8 giờ</div>
+          </div>
+          <div class="form-row">
+            <label class="lbl">Idle Timeout (phút)</label>
+            <input class="inp" id="cfg-idle" type="number" min="5" max="120" placeholder="5-120"/>
+            <div class="form-help">Tự đăng xuất nếu không hoạt động. Mặc định: 30 phút</div>
+          </div>
+          <div class="form-row">
+            <label class="lbl">Max Users</label>
+            <input class="inp" id="cfg-maxusers" type="number" min="1" max="200" placeholder="1-200"/>
+            <div class="form-help">Giới hạn tổng số tài khoản trong hệ thống</div>
+          </div>
+          <div class="form-row">
+            <label class="lbl">Audit Retention (ngày)</label>
+            <input class="inp" id="cfg-audit-ret" type="number" min="7" max="90" placeholder="7-90"/>
+            <div class="form-help">Số ngày lưu audit log. Log cũ hơn sẽ tự xóa</div>
+          </div>
+          <div class="form-row">
+            <label class="lbl">Default Role</label>
+            <select class="inp" id="cfg-default-role">
+              <option value="user">user</option>
+              <option value="admin">admin</option>
+            </select>
+            <div class="form-help">Role mặc định khi tạo user mới</div>
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:12px">
+          <label class="lbl">Login Banner (tuỳ chọn)</label>
+          <input class="inp" id="cfg-banner" type="text" maxlength="200" placeholder="Thông báo hiển thị trên trang đăng nhập"/>
+          <div class="form-help">Tối đa 200 ký tự. Để trống nếu không cần</div>
+        </div>
+
+        <div class="section-label" style="margin-top:16px">Thông tin Runtime</div>
+        <div id="cfg-runtime-info" style="color:var(--muted);font-size:12px">Đang tải...</div>
+        <div style="margin-top:6px;font-size:11px;color:var(--muted)">💡 Tất cả cài đặt trên đều có hiệu lực ngay sau khi lưu. Session TTL &amp; Idle Timeout áp dụng cho các phiên đăng nhập mới; Login Banner hiển thị trên trang đăng nhập; Max Users giới hạn số tài khoản tạo mới.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       TAB 3: AUDIT LOG
+       ══════════════════════════════════════════════ -->
+  <div class="tab-content" id="tc-auditlog">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">📋 Audit Log</div>
+          <div class="panel-desc">Lịch sử hoạt động 30 ngày gần nhất</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span id="audit-total-info" style="font-size:12px;color:var(--muted)"></span>
+          <input class="inp inp-sm" id="audit-filter" type="text" placeholder="Lọc user/action..." oninput="filterAuditLog()" style="width:180px"/>
+          <button class="btn btn-outline btn-sm" onclick="loadAuditLog()">↻ Làm mới</button>
+          <button class="btn btn-danger btn-sm" onclick="purgeAuditLog()">🗑 Purge cũ (>30 ngày)</button>
+        </div>
+      </div>
+      <div class="tbl-wrap" style="max-height:580px">
+        <div id="audit-list"><div class="empty-state">Đang tải...</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       TAB 4: ROLE MANAGEMENT
+       ══════════════════════════════════════════════ -->
+  <div class="tab-content" id="tc-roles">
+    <div class="role-layout">
+      <!-- Left: Group list -->
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:13px;font-weight:600">Policy Groups</span>
+          <button class="btn btn-primary btn-sm" onclick="openCreateGroup()">+ Nhóm mới</button>
+        </div>
+        <div class="group-sidebar" id="group-sidebar">
+          <div class="empty-state" style="padding:2rem 1rem">Đang tải...</div>
+        </div>
+      </div>
+
+      <!-- Right: Permission editor -->
+      <div class="group-editor" id="group-editor">
+        <div class="empty-state" style="padding:4rem 2rem">
+          <div style="font-size:2rem;margin-bottom:10px">🔐</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px">Chọn nhóm để chỉnh quyền</div>
+          <div style="font-size:12px">Chọn một Policy Group ở bên trái để xem và chỉnh sửa quyền truy cập</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       TAB 5: TÀI KHOẢN CỦA TÔI
+       ══════════════════════════════════════════════ -->
+  <div class="tab-content" id="tc-account">
+    <!-- Change Password -->
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">🔑 Đổi mật khẩu</div>
+          <div class="panel-desc">Cập nhật mật khẩu đăng nhập của bạn</div>
+        </div>
+      </div>
+      <div class="panel-body" style="max-width:420px">
+        <div class="form-row">
+          <label class="lbl">Mật khẩu mới</label>
+          <input class="inp" id="acc-pw" type="password" placeholder="Tối thiểu 6 ký tự" autocomplete="new-password"/>
+        </div>
+        <div class="form-row">
+          <label class="lbl">Xác nhận mật khẩu</label>
+          <input class="inp" id="acc-pw2" type="password" placeholder="Nhập lại mật khẩu mới"/>
+        </div>
+        <div class="err-msg" id="acc-pw-err"></div>
+        <button class="btn btn-primary" onclick="changeMyPassword()">Lưu mật khẩu</button>
+      </div>
+    </div>
+
+    <!-- MFA -->
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">🔐 Xác thực hai bước (MFA)</div>
+          <div class="panel-desc">Bảo vệ tài khoản bằng Microsoft/Google Authenticator</div>
+        </div>
+        <div id="mfa-status-badge"><span style="font-size:12px;color:var(--muted)">Đang tải...</span></div>
+      </div>
+      <div class="panel-body">
+        <p id="mfa-desc" style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6"></p>
+        <div style="display:flex;gap:8px">
+          <button id="btn-enable-mfa" class="btn btn-primary" onclick="startMfaSetup()" style="display:none">🔐 Thiết lập MFA</button>
+          <button id="btn-disable-mfa" class="btn btn-danger" onclick="openDisableMfa()" style="display:none">🔓 Tắt MFA</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /container -->
+
+<!-- MFA Setup Modal -->
+<div class="modal-overlay hidden" id="mfa-setup-modal" onclick="if(event.target.id==='mfa-setup-modal')closeModal('mfa-setup-modal')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
+    <div id="mfa-s1">
+      <div class="modal-title">📱 Thiết lập MFA — Bước 1/2</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6">
+        Mở <strong style="color:var(--text)">Microsoft Authenticator</strong> hoặc Google Authenticator → Thêm tài khoản → Quét mã QR bên dưới.
+      </p>
+      <div style="display:flex;justify-content:center;margin-bottom:1rem">
+        <img id="mfa-qr-img" src="" width="180" height="180" style="border-radius:10px;background:#fff;padding:6px"/>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em">Hoặc nhập thủ công (Secret Key):</div>
+      <div id="mfa-secret-box" style="font-family:var(--font-mono);font-size:13px;background:var(--bg);padding:9px 12px;border-radius:8px;border:1px solid var(--border);letter-spacing:3px;word-break:break-all;text-align:center;cursor:pointer;user-select:all" title="Click để copy"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:5px;text-align:center">Click để copy secret key</div>
+      <div class="modal-btns" style="margin-top:1.25rem">
+        <button class="btn btn-outline" onclick="closeModal('mfa-setup-modal')">Hủy</button>
+        <button class="btn btn-primary" onclick="goMfaStep2()">Tiếp theo →</button>
+      </div>
+    </div>
+    <div id="mfa-s2" style="display:none">
+      <div class="modal-title">📱 Thiết lập MFA — Bước 2/2</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem;line-height:1.6">
+        Nhập mã <strong style="color:var(--text)">6 chữ số</strong> từ app Authenticator để xác nhận.
+      </p>
+      <div class="form-row">
+        <label class="lbl">Mã OTP</label>
+        <input class="inp" id="mfa-setup-code" type="text" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code"
+               style="text-align:center;font-size:22px;font-weight:700;letter-spacing:8px"/>
+      </div>
+      <div class="err-msg" id="mfa-setup-err"></div>
+      <div class="modal-btns">
+        <button class="btn btn-outline" onclick="backMfaStep1()">← Quay lại</button>
+        <button class="btn btn-primary" onclick="confirmEnableMfa()">✓ Bật MFA</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MFA Disable Modal -->
+<div class="modal-overlay hidden" id="mfa-disable-modal" onclick="if(event.target.id==='mfa-disable-modal')closeModal('mfa-disable-modal')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:400px">
+    <div class="modal-title">🔓 Tắt MFA</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem;line-height:1.6">
+      Nhập mã OTP từ Authenticator để xác nhận tắt bảo vệ hai bước.
+    </p>
+    <div class="form-row">
+      <label class="lbl">Mã OTP xác nhận</label>
+      <input class="inp" id="mfa-disable-code" type="text" inputmode="numeric" maxlength="6" placeholder="000000"
+             style="text-align:center;font-size:22px;font-weight:700;letter-spacing:8px"/>
+    </div>
+    <div class="err-msg" id="mfa-disable-err"></div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal('mfa-disable-modal')">Hủy</button>
+      <button class="btn btn-danger" onclick="confirmDisableMfa()">Tắt MFA</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ MODALS ══════ -->
+
+<!-- Add/Edit User Modal -->
+<div class="modal-overlay hidden" id="user-modal" onclick="if(event.target.id==='user-modal')closeModal('user-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title" id="user-modal-title">Thêm User</div>
+    <div class="form-grid">
+      <div class="form-row">
+        <label class="lbl">Username</label>
+        <input class="inp" id="um-username" placeholder="VD: long.vd hoặc user@movi.vn" autocomplete="off"/>
+        <div class="form-help">3-64 ký tự: a-z 0-9 . @ _ -</div>
+      </div>
+      <div class="form-row">
+        <label class="lbl">Role</label>
+        <select class="inp" id="um-role">
+          <option value="user">user</option>
+          <option value="admin">admin</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="lbl" id="um-pw-label">Mật khẩu</label>
+      <input class="inp" id="um-password" type="password" placeholder="Tối thiểu 6 ký tự" autocomplete="new-password"/>
+    </div>
+    <div class="form-row" id="um-groups-row">
+      <label class="lbl">Policy Groups</label>
+      <div id="um-groups-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
+        <span style="font-size:12px;color:var(--muted)">Đang tải groups...</span>
+      </div>
+    </div>
+    <div class="err-msg" id="user-modal-err"></div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal('user-modal')">Hủy</button>
+      <button class="btn btn-primary" id="user-modal-save" onclick="saveUser()">Tạo user</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create/Edit Group Modal -->
+<div class="modal-overlay hidden" id="grp-modal" onclick="if(event.target.id==='grp-modal')closeModal('grp-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title" id="grp-modal-title">Tạo Policy Group</div>
+    <div class="form-grid">
+      <div class="form-row">
+        <label class="lbl">Tên nhóm</label>
+        <input class="inp" id="gm-name" placeholder="VD: network-viewers"/>
+        <div class="form-help">Dùng a-z, số, dấu - (VD: movi-staff)</div>
+      </div>
+      <div class="form-row">
+        <label class="lbl">Mô tả</label>
+        <input class="inp" id="gm-desc" placeholder="VD: Nhóm xem thông tin mạng Movi"/>
+      </div>
+    </div>
+    <div class="err-msg" id="grp-modal-err"></div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal('grp-modal')">Hủy</button>
+      <button class="btn btn-primary" onclick="saveGroup()">Tạo nhóm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Delete Modal -->
+<div class="modal-overlay hidden" id="confirm-modal" onclick="if(event.target.id==='confirm-modal')closeModal('confirm-modal')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
+    <div class="modal-title" id="confirm-title">Xác nhận xóa</div>
+    <div id="confirm-body" style="font-size:13px;color:var(--text-2);line-height:1.6"></div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal('confirm-modal')">Hủy</button>
+      <button class="btn btn-danger" id="confirm-ok-btn">Xóa</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   USER / THEME SETUP
+   ═══════════════════════════════════════════════════════════ */
+function _readUserCookie() {
+  try { var m=document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/); return m?JSON.parse(decodeURIComponent(m[1])):null; } catch(e){return null;}
+}
+var __USER__ = window.__USER__ || _readUserCookie() || { username:'?', role:'user', isAdmin:false };
+
+(function initUI() {
+  document.getElementById('user-avatar').textContent = (__USER__.username||'?').charAt(0).toUpperCase();
+  document.getElementById('user-name').textContent = __USER__.username||'?';
+  if (__USER__.isAdmin) document.getElementById('user-tag').style.display='';
+  // Redirect non-admins
+  if (!__USER__.isAdmin) { window.location.href = '/'; return; }
+  // Theme
+  var saved=null; try{saved=localStorage.getItem('dh_theme')}catch(e){}
+  if(saved==='light') document.documentElement.dataset.theme='light';
+  document.getElementById('themeToggle').addEventListener('click',function(){
+    var next=document.documentElement.dataset.theme==='light'?'dark':'light';
+    document.documentElement.dataset.theme=next;
+    try{localStorage.setItem('dh_theme',next)}catch(e){}
+  });
+  setInterval(function(){var c=document.getElementById('clock');if(c)c.textContent=new Date().toLocaleTimeString('vi-VN',{hour12:false});},1000);
+})();
+
+function doLogout(){fetch('/api/auth/logout',{method:'POST'}).finally(function(){window.location.href='/login.html';})}
+
+/* ═══════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════ */
+var _toastT;
+function toast(msg, cls) {
+  var el=document.getElementById('toast');
+  el.textContent=msg; el.className='show '+(cls||'info');
+  clearTimeout(_toastT);
+  _toastT=setTimeout(function(){el.className='';},3000);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB SWITCHER
+   ═══════════════════════════════════════════════════════════ */
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-content').forEach(function(el){el.classList.remove('active');});
+  document.querySelectorAll('.main-tab').forEach(function(el){el.classList.remove('active');});
+  document.getElementById('tc-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MODAL HELPERS
+   ═══════════════════════════════════════════════════════════ */
+function openModal(id){document.getElementById(id).classList.remove('hidden');}
+function closeModal(id){document.getElementById(id).classList.add('hidden');}
+
+/* ═══════════════════════════════════════════════════════════
+   PERMISSION STRUCTURE DEFINITIONS
+   ─────────────────────────────────────────────────────────
+   HOW TO ADD A NEW SERVICE:
+   1. Add an entry to SERVICE_HOME_PAGES or SERVICE_MOVI_PAGES below.
+   2. Fields:
+      id        – matches the permission key in KV (e.g. 'my-service')
+      name      – display name shown in the editor
+      icon      – emoji icon
+      perms     – allowed permission levels: ['none','read','write'] or ['none','write']
+      permLabels– (optional) custom labels for the radio buttons
+      panels    – (optional) array of sub-panels, each {id, name}
+                  panel id MUST start with the page id: 'my-service.panel1'
+      hasCameras– (optional) true if this service has camera selection
+      camClass  – (required if hasCameras) unique CSS class for the checkboxes
+   3. That's it — renderPermEditor & collectPermissions iterate these arrays dynamically.
+   ═══════════════════════════════════════════════════════════ */
+var SERVICE_HOME_PAGES = [
+  {id:'esxi',        name:'VMware ESXi',    icon:'🖥', perms:['none','read','write']},
+  {id:'n8n',         name:'n8n Automation', icon:'⚡', perms:['none','read','write']},
+  {id:'casaos',      name:'CasaOS',         icon:'🏠', perms:['none','read','write']},
+  {id:'9router',     name:'9Router',        icon:'🔀', perms:['none','read','write']},
+  {id:'ssh',         name:'SSH Terminal',   icon:'⌨',  perms:['none','write'],  permLabels:{'none':'Không truy cập','write':'Truy cập'}},
+  {id:'fortigate',   name:'FortiGate',      icon:'🛡', perms:['none','read','write']},
+  {id:'asus',        name:'ASUS Router',    icon:'📡', perms:['none','read','write']},
+  {id:'uptime-kuma', name:'Uptime Kuma',    icon:'📊', perms:['none','read']},
+  {id:'camera',      name:'Camera Home',    icon:'📷', perms:['none','read'], hasCameras:true, camClass:'home-cam-cb'}
+];
+
+var SERVICE_MOVI_PAGES = [
+  {id:'meraki', name:'Meraki Network', icon:'🌐', perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'},
+   panels:[
+    {id:'meraki.clients',  name:'Clients đang kết nối + Thiết bị bị chặn'},
+    {id:'meraki.devices',  name:'Thiết bị Meraki (APs/Switches)'},
+    {id:'meraki.status',   name:'Device Status (Real-time)'},
+    {id:'meraki.events',   name:'Network Events'},
+    {id:'meraki.uplinks',  name:'WAN Uplinks'},
+    {id:'meraki.vlans',    name:'L3 Interface / SVI trên Switch'},
+    {id:'meraki.ports',    name:'Switch Ports'},
+   ]},
+  {id:'topology', name:'Network Topology (Movi Map)', icon:'🗺', perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'},
+   panels:[
+    {id:'topology.topo',   name:'Sơ đồ Topology'},
+    {id:'topology.route',  name:'Route Map'},
+    {id:'topology.wiring', name:'Sơ đồ dây switch (Wiring)'},
+   ]},
+  {id:'fortigate-movi', name:'FortiGate Movi', icon:'🔥', perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'},
+   panels:[
+    {id:'fortigate-movi.interfaces', name:'Interfaces + Bandwidth (đang chạy/dừng)'},
+    {id:'fortigate-movi.sdwan',      name:'SD-WAN Members & Rules'},
+    {id:'fortigate-movi.vpn',        name:'VPN IPSec + SSL VPN'},
+    {id:'fortigate-movi.policy',     name:'Firewall Policy'},
+    {id:'fortigate-movi.route',      name:'Route Table'},
+   ]},
+  {id:'camera-movi', name:'Camera Movi', icon:'📷', perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'},
+   hasCameras:true, camClass:'movi-cam-cb'}
+];
+
+var PERM_LABELS = {'none':'Không truy cập','read':'Chỉ xem','write':'Toàn quyền'};
+
+/* ═══════════════════════════════════════════════════════════
+   DATA STATE
+   ═══════════════════════════════════════════════════════════ */
+var allUsers = [];
+var allGroups = [];
+var allCameras = [];      // Camera Home
+var allCamerasMovi = [];  // Camera Movi (16 camera riêng biệt)
+var allAuditLog = [];
+var currentGroupId = null;
+var editingUsername = null;
+var currentUserPermUsername = null;
+
+/* ═══════════════════════════════════════════════════════════
+   MAIN LOAD ENTRY POINT
+   ═══════════════════════════════════════════════════════════ */
+function loadSettings() {
+  loadUsers();
+  loadGroups();
+  loadCameras();
+  loadSysConfig();
+  loadAuditLog();
+  loadMfaStatus();
+}
+
+/* ══════════════════════════════════════════
+   TAB 1: USER MANAGEMENT
+   ══════════════════════════════════════════ */
+function loadUsers() {
+  fetch('/api/admin/users',{cache:'no-store'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      allUsers = d.users || [];
+      renderUsers();
+    })
+    .catch(function(){toast('Lỗi tải user list','err');});
+}
+
+function renderUsers() {
+  var tbody = document.getElementById('user-tbody');
+  if (!allUsers.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Chưa có user nào</td></tr>';
+    return;
+  }
+  tbody.innerHTML = allUsers.map(function(u){
+    var groups = (u.groups||[]).map(function(g){return '<span class="chip chip-accent">'+esc(g)+'</span>';}).join('');
+    var roleChip = u.role==='admin'
+      ? '<span class="badge badge-admin">Admin</span>'
+      : '<span class="badge badge-user">User</span>';
+    var ts = u.created ? new Date(u.created).toLocaleDateString('vi-VN') : '—';
+    // Admin account: cannot be edited or deleted — show lock badge instead of action buttons
+    var isRootAdmin = (u.username === 'admin');
+    var actionCell = isRootAdmin
+      ? '<td style="text-align:right"><span style="font-size:11px;color:var(--muted);font-style:italic">⭐ Tài khoản gốc</span></td>'
+      : '<td style="text-align:right"><div style="display:flex;gap:6px;justify-content:flex-end">'
+          +'<button class="btn btn-outline btn-sm" onclick="openEditUser(\''+esc(u.username)+'\')">✏ Sửa</button>'
+          +'<button class="btn btn-outline btn-sm" onclick="openUserPerms(\''+esc(u.username)+'\')">🔑 Quyền</button>'
+          +'<button class="btn btn-danger btn-sm" onclick="confirmDeleteUser(\''+esc(u.username)+'\')">✕</button>'
+        +'</div></td>';
+    return '<tr>'
+      +'<td><div class="user-avatar" style="width:32px;height:32px;font-size:13px;display:grid;place-items:center">'+esc((u.username||'?').charAt(0).toUpperCase())+'</div></td>'
+      +'<td><span style="font-weight:600">'+esc(u.username)+'</span>'+(isRootAdmin?'<span class="chip chip-accent" style="margin-left:6px;font-size:10px">Super Admin</span>':'')+'</td>'
+      +'<td>'+roleChip+'</td>'
+      +'<td><div style="display:flex;flex-wrap:wrap;gap:4px">'+(groups||'<span style="color:var(--muted);font-size:12px">—</span>')+'</div></td>'
+      +'<td style="color:var(--muted);font-size:12px">'+ts+'</td>'
+      +actionCell
+    +'</tr>';
+  }).join('');
+}
+
+function openAddUser() {
+  editingUsername = null;
+  document.getElementById('user-modal-title').textContent = '+ Thêm User Mới';
+  document.getElementById('user-modal-save').textContent = 'Tạo user';
+  document.getElementById('um-username').value = '';
+  document.getElementById('um-username').disabled = false;
+  document.getElementById('um-password').value = '';
+  document.getElementById('um-pw-label').textContent = 'Mật khẩu';
+  document.getElementById('um-role').value = 'user';
+  document.getElementById('user-modal-err').classList.remove('show');
+  renderGroupCheckboxes('um-groups-list', []);
+  openModal('user-modal');
+  document.getElementById('um-username').focus();
+}
+
+function openEditUser(username) {
+  var u = allUsers.find(function(x){return x.username===username;});
+  if (!u) return;
+  editingUsername = username;
+  document.getElementById('user-modal-title').textContent = '✏ Sửa User: ' + username;
+  document.getElementById('user-modal-save').textContent = 'Lưu thay đổi';
+  document.getElementById('um-username').value = username;
+  document.getElementById('um-username').disabled = true;
+  document.getElementById('um-password').value = '';
+  document.getElementById('um-pw-label').textContent = 'Đổi mật khẩu (để trống nếu không đổi)';
+  document.getElementById('um-role').value = u.role || 'user';
+  document.getElementById('user-modal-err').classList.remove('show');
+  renderGroupCheckboxes('um-groups-list', u.groups||[]);
+  openModal('user-modal');
+}
+
+function renderGroupCheckboxes(containerId, selectedGroups) {
+  var container = document.getElementById(containerId);
+  if (!allGroups.length) {
+    container.innerHTML = '<span style="font-size:12px;color:var(--muted)">Chưa có nhóm nào</span>';
+    return;
+  }
+  container.innerHTML = allGroups.map(function(g){
+    var checked = selectedGroups.indexOf(g.id) >= 0;
+    return '<label class="cam-check-label">'
+      +'<input type="checkbox" class="um-group-cb" value="'+esc(g.id)+'"'+(checked?' checked':'')+'>'
+      +esc(g.name)
+    +'</label>';
+  }).join('');
+}
+
+function saveUser() {
+  var errEl = document.getElementById('user-modal-err');
+  errEl.classList.remove('show');
+  var username = document.getElementById('um-username').value.trim();
+  var password = document.getElementById('um-password').value;
+  var role = document.getElementById('um-role').value;
+  var groups = Array.from(document.querySelectorAll('.um-group-cb:checked')).map(function(cb){return cb.value;});
+
+  if (!editingUsername && !username) { errEl.textContent='Username không được để trống'; errEl.classList.add('show'); return; }
+  if (!editingUsername && !password) { errEl.textContent='Mật khẩu không được để trống khi tạo mới'; errEl.classList.add('show'); return; }
+
+  var btn = document.getElementById('user-modal-save');
+  btn.disabled = true; btn.textContent = 'Đang lưu...';
+
+  if (editingUsername) {
+    // Update: change password (if given) + groups + role
+    var tasks = [];
+    if (password) {
+      tasks.push(fetch('/api/admin/users/'+encodeURIComponent(editingUsername),{
+        method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({password:password})
+      }).then(function(r){return r.json();}));
+    }
+    tasks.push(fetch('/api/admin/users/'+encodeURIComponent(editingUsername)+'/groups',{
+      method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({groups:groups, role:role})
+    }).then(function(r){return r.json();}));
+
+    Promise.all(tasks).then(function(results){
+      btn.disabled=false; btn.textContent='Lưu thay đổi';
+      var hasErr = results.find(function(r){return r.error;});
+      if (hasErr) { errEl.textContent=hasErr.error; errEl.classList.add('show'); return; }
+      closeModal('user-modal');
+      toast('✓ Đã cập nhật user '+editingUsername,'ok');
+      loadUsers();
+    }).catch(function(e){
+      btn.disabled=false; btn.textContent='Lưu thay đổi';
+      errEl.textContent='Lỗi: '+e.message; errEl.classList.add('show');
+    });
+  } else {
+    fetch('/api/admin/users',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username,password,role,groups})
+    }).then(function(r){return r.json();}).then(function(d){
+      btn.disabled=false; btn.textContent='Tạo user';
+      if(d.error){errEl.textContent=d.error;errEl.classList.add('show');return;}
+      closeModal('user-modal');
+      toast('✓ Đã tạo user '+username,'ok');
+      loadUsers();
+    }).catch(function(e){
+      btn.disabled=false; btn.textContent='Tạo user';
+      errEl.textContent='Lỗi: '+e.message; errEl.classList.add('show');
+    });
+  }
+}
+
+function confirmDeleteUser(username) {
+  document.getElementById('confirm-title').textContent = 'Xóa User';
+  document.getElementById('confirm-body').innerHTML = 'Bạn có chắc muốn xóa user <strong>'+esc(username)+'</strong>?<br>Hành động này không thể hoàn tác.';
+  document.getElementById('confirm-ok-btn').onclick = function(){
+    fetch('/api/admin/users/'+encodeURIComponent(username),{method:'DELETE'})
+      .then(function(r){return r.json();}).then(function(d){
+        closeModal('confirm-modal');
+        if(d.error){toast('Lỗi: '+d.error,'err');return;}
+        toast('✓ Đã xóa user '+username,'ok');
+        loadUsers();
+      });
+  };
+  openModal('confirm-modal');
+}
+
+/* ── Individual user permission override ── */
+function openUserPerms(username) {
+  currentUserPermUsername = username;
+  document.getElementById('user-perm-title').textContent = '🔑 Quyền riêng của: ' + username;
+  document.getElementById('user-perm-panel').style.display = '';
+  document.getElementById('user-perm-editor').innerHTML = '<div style="padding:1rem 0;color:var(--muted);font-size:13px">⏳ Đang tải quyền...</div>';
+  document.getElementById('user-perm-panel').scrollIntoView({behavior:'smooth',block:'start'});
+  // Always fetch fresh data from server to show current saved permissions
+  fetch('/api/admin/users', {cache:'no-store'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      allUsers = d.users || [];
+      renderUsers();
+      var u = allUsers.find(function(x){return x.username===username;});
+      if (!u) {
+        document.getElementById('user-perm-editor').innerHTML = '<div class="empty-state">Không tìm thấy user</div>';
+        return;
+      }
+      renderPermEditor('user-perm-editor', u.permissions||{}, u.panels||{}, u.cameras||[], 'usr');
+    })
+    .catch(function(e){
+      document.getElementById('user-perm-editor').innerHTML = '<div class="empty-state">Lỗi tải dữ liệu: '+esc(e.message)+'</div>';
+    });
+}
+
+function closeUserPermPanel() {
+  document.getElementById('user-perm-panel').style.display = 'none';
+  currentUserPermUsername = null;
+}
+
+function saveUserPerms() {
+  if (!currentUserPermUsername) return;
+  var username = currentUserPermUsername;
+  var result = collectPermissions('usr');
+  var saveBtn = document.querySelector('#user-perm-panel .btn-primary');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Đang lưu...'; }
+
+  // ONE atomic call: permissions + panels + cameras saved together → no KV race condition
+  fetch('/api/admin/users/'+encodeURIComponent(username)+'/panels', {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      permissions: result.permissions,
+      panels:      result.panels,
+      cameras:     result.cameras
+    })
+  }).then(function(r){return r.json();}).then(function(d) {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Lưu quyền'; }
+    if (d.error) { toast('Lỗi: ' + d.error, 'err'); return; }
+    toast('✓ Đã lưu quyền riêng cho ' + username, 'ok');
+    // Re-render immediately from what we just saved — no KV consistency delay
+    renderPermEditor('user-perm-editor', result.permissions, result.panels, result.cameras, 'usr');
+    // Update local allUsers cache so the table reflects the change too
+    var u = allUsers.find(function(x){return x.username===username;});
+    if (u) {
+      u.permissions = result.permissions;
+      u.panels      = result.panels;
+      u.cameras     = result.cameras;
+      renderUsers();
+    }
+  }).catch(function(e) {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Lưu quyền'; }
+    toast('Lỗi: ' + e.message, 'err');
+  });
+}
+
+/* ══════════════════════════════════════════
+   TAB 2: SYSTEM CONFIG
+   ══════════════════════════════════════════ */
+function loadSysConfig() {
+  fetch('/api/system-config',{cache:'no-store'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      document.getElementById('cfg-session-disp').innerHTML = d.sessionTtlHours+' <span class="cfg-unit">giờ</span>';
+      document.getElementById('cfg-idle-disp').innerHTML = d.idleTimeoutMin+' <span class="cfg-unit">phút</span>';
+      document.getElementById('cfg-maxusers-disp').textContent = d.maxUsers;
+      document.getElementById('cfg-audit-disp').innerHTML = d.auditRetentionDays+' <span class="cfg-unit">ngày</span>';
+      document.getElementById('cfg-session').value = d.sessionTtlHours;
+      document.getElementById('cfg-idle').value = d.idleTimeoutMin;
+      document.getElementById('cfg-maxusers').value = d.maxUsers;
+      document.getElementById('cfg-audit-ret').value = d.auditRetentionDays;
+      document.getElementById('cfg-default-role').value = d.defaultRole || 'user';
+      document.getElementById('cfg-banner').value = d.loginBannerMsg || '';
+      var ri = document.getElementById('cfg-runtime-info');
+      ri.innerHTML = d.updatedAt
+        ? '📝 Cập nhật lần cuối bởi <strong>'+esc(d.updatedBy||'?')+'</strong> lúc '+new Date(d.updatedAt).toLocaleString('vi-VN')
+        : 'Chưa có thay đổi nào.';
+    })
+    .catch(function(){document.getElementById('cfg-runtime-info').textContent='Lỗi tải config';});
+}
+
+function saveSysConfig() {
+  var body = {
+    sessionTtlHours: Number(document.getElementById('cfg-session').value),
+    idleTimeoutMin:  Number(document.getElementById('cfg-idle').value),
+    maxUsers:        Number(document.getElementById('cfg-maxusers').value),
+    auditRetentionDays: Number(document.getElementById('cfg-audit-ret').value),
+    defaultRole:     document.getElementById('cfg-default-role').value,
+    loginBannerMsg:  document.getElementById('cfg-banner').value.trim(),
+  };
+  fetch('/api/system-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error){toast('Lỗi: '+d.error,'err');return;}
+      toast('✓ Đã lưu cấu hình hệ thống','ok');
+      loadSysConfig();
+    })
+    .catch(function(e){toast('Lỗi: '+e.message,'err');});
+}
+
+/* ══════════════════════════════════════════
+   TAB 3: AUDIT LOG
+   ══════════════════════════════════════════ */
+var _auditRaw = [];
+function loadAuditLog() {
+  document.getElementById('audit-list').innerHTML = '<div class="empty-state">Đang tải...</div>';
+  fetch('/api/activity',{cache:'no-store'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      _auditRaw = d.log || [];
+      document.getElementById('audit-total-info').textContent = _auditRaw.length + ' bản ghi (30 ngày)';
+      renderAuditLog(_auditRaw);
+    })
+    .catch(function(){document.getElementById('audit-list').innerHTML='<div class="empty-state">Lỗi tải audit log</div>';});
+}
+
+function filterAuditLog() {
+  var q = (document.getElementById('audit-filter').value||'').toLowerCase();
+  var filtered = q ? _auditRaw.filter(function(l){
+    return (l.username||'').toLowerCase().includes(q) || (l.action||'').toLowerCase().includes(q) || (l.detail||'').toLowerCase().includes(q);
+  }) : _auditRaw;
+  renderAuditLog(filtered);
+}
+
+function renderAuditLog(logs) {
+  var el = document.getElementById('audit-list');
+  if (!logs.length) { el.innerHTML = '<div class="empty-state">Không có bản ghi nào</div>'; return; }
+  el.innerHTML = logs.map(function(l){
+    var dt = new Date(l.ts);
+    var ts = dt.toLocaleDateString('vi-VN')+' '+dt.toLocaleTimeString('vi-VN',{hour12:false});
+    var statusCls = l.success === false ? 'log-fail' : 'log-ok';
+    var statusTxt = l.success === false ? 'Thất bại' : 'OK';
+    return '<div class="log-row">'
+      +'<div class="log-ts">'+esc(ts)+'</div>'
+      +'<div class="log-user">'+esc(l.username||'?')+'</div>'
+      +'<div class="log-action"><strong>'+esc(l.action||'?')+'</strong>'
+        +(l.detail?' <span style="color:var(--muted);font-size:11px">· '+esc(l.detail)+'</span>':'')
+        +(l.ip?' <span style="color:var(--muted);font-size:10px;font-family:var(--font-mono)">'+esc(l.ip)+'</span>':'')
+      +'</div>'
+      +'<span class="log-status '+statusCls+'">'+statusTxt+'</span>'
+    +'</div>';
+  }).join('');
+}
+
+function purgeAuditLog() {
+  if (!confirm('Xác nhận xóa tất cả audit log cũ hơn 30 ngày?\n\nHành động này không thể hoàn tác.')) return;
+  fetch('/api/audit-log/purge',{method:'POST'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error){toast('Lỗi: '+d.error,'err');return;}
+      toast('✓ Đã purge '+d.purged+' bản ghi cũ (còn '+d.kept+')','ok');
+      loadAuditLog();
+    })
+    .catch(function(e){toast('Lỗi: '+e.message,'err');});
+}
+
+/* ══════════════════════════════════════════
+   TAB 4: ROLE MANAGEMENT
+   ══════════════════════════════════════════ */
+function loadGroups() {
+  fetch('/api/policy/groups',{cache:'no-store'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      allGroups = d.groups || [];
+      renderGroupSidebar();
+    })
+    .catch(function(){toast('Lỗi tải groups','err');});
+}
+
+function loadCameras() {
+  fetch('/api/admin/cameras',{cache:'no-store'})
+    .then(function(r){return r.json();})
+    .then(function(d){allCameras = d.cameras || [];})
+    .catch(function(){});
+  fetch('/api/admin/cameras/movi',{cache:'no-store'})
+    .then(function(r){return r.json();})
+    .then(function(d){allCamerasMovi = d.cameras || [];})
+    .catch(function(){});
+}
+
+function renderGroupSidebar() {
+  var el = document.getElementById('group-sidebar');
+  if (!allGroups.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:2rem 1rem">Chưa có nhóm nào.<br>Tạo nhóm đầu tiên!</div>';
+    return;
+  }
+  el.innerHTML = allGroups.map(function(g){
+    var sel = g.id === currentGroupId ? ' selected' : '';
+    var pageCount = Object.keys(g.permissions||{}).filter(function(k){return g.permissions[k]&&g.permissions[k]!=='none';}).length;
+    var userCount = allUsers.filter(function(u){ return (u.groups||[]).indexOf(g.id) >= 0; }).length;
+    return '<div class="group-item'+sel+'" onclick="selectGroup(\''+esc(g.id)+'\')">'
+      +'<div class="group-item-name">'+esc(g.name)+'</div>'
+      +(g.description?'<div class="group-item-desc">'+esc(g.description)+'</div>':'')
+      +'<div class="group-item-meta">'
+        +'<span>📄 '+pageCount+' trang được cấp</span>'
+        +'<span>👤 '+userCount+' user</span>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+  el.innerHTML += '<div style="display:flex;gap:6px;margin-top:8px">'
+    +'<button class="btn btn-danger btn-sm" style="flex:1" id="grp-del-btn" onclick="confirmDeleteGroup()" style="display:none">🗑 Xóa nhóm</button>'
+    +'</div>';
+  updateGroupDelBtn();
+}
+
+function updateGroupDelBtn() {
+  var btn = document.getElementById('grp-del-btn');
+  if (btn) btn.style.display = currentGroupId ? '' : 'none';
+}
+
+function selectGroup(id) {
+  currentGroupId = id;
+  // Update sidebar selection
+  document.querySelectorAll('.group-item').forEach(function(el){
+    el.classList.toggle('selected', el.onclick && el.onclick.toString().indexOf("'"+id+"'")>=0);
+  });
+  // Re-render sidebar to apply selection
+  renderGroupSidebar();
+  // Show editor
+  var group = allGroups.find(function(g){return g.id===id;});
+  if (!group) return;
+  renderGroupEditor(group);
+}
+
+function renderGroupEditor(group) {
+  var el = document.getElementById('group-editor');
+  el.innerHTML = '';
+
+  // Title
+  var title = document.createElement('div');
+  title.innerHTML = '<div class="editor-title">🔐 Quyền nhóm: <span style="color:var(--accent)">'+esc(group.name)+'</span></div>'
+    +(group.description?'<div style="font-size:12px;color:var(--muted);margin-top:2px">'+esc(group.description)+'</div>':'');
+  el.appendChild(title);
+
+  // Render permission editor
+  var editorDiv = document.createElement('div');
+  editorDiv.id = 'grp-perm-editor';
+  el.appendChild(editorDiv);
+  renderPermEditor('grp-perm-editor', group.permissions||{}, group.panels||{}, group.cameras||[], 'grp');
+
+  // Save button
+  var saveRow = document.createElement('div');
+  saveRow.style.cssText = 'display:flex;gap:8px;padding-top:12px;border-top:1px solid var(--border-soft)';
+  saveRow.innerHTML = '<button class="btn btn-primary" onclick="saveGroupPerms()">💾 Lưu quyền nhóm</button>';
+  el.appendChild(saveRow);
+}
+
+/* ── Generic permission editor renderer ── */
+function renderPermEditor(containerId, permissions, panels, cameras, pfx) {
+  var el = document.getElementById(containerId);
+  el.innerHTML = '';
+
+  // Service Home section
+  el.appendChild(buildServiceSection(
+    '🏠 Service Home — Hạ tầng nội bộ',
+    SERVICE_HOME_PAGES,
+    permissions, panels, cameras, pfx, 'home'
+  ));
+
+  // Service Movi section
+  el.appendChild(buildServiceSection(
+    '🎬 Service Movi — Văn phòng Movi',
+    SERVICE_MOVI_PAGES,
+    permissions, panels, cameras, pfx, 'movi'
+  ));
+}
+
+function buildServiceSection(title, pages, permissions, panels, cameras, pfx, sectionId) {
+  var section = document.createElement('div');
+  section.className = 'svc-section';
+  section.id = pfx+'-sec-'+sectionId;
+
+  var head = document.createElement('div');
+  head.className = 'svc-section-head';
+  head.innerHTML = '<div class="svc-section-title">'+title+'</div><span class="chev">▼</span>';
+  head.onclick = function(){ section.classList.toggle('collapsed'); };
+  section.appendChild(head);
+
+  var body = document.createElement('div');
+  body.className = 'svc-section-body';
+
+  pages.forEach(function(page) {
+    var perm = (permissions[page.id] || 'none');
+    var permRow = document.createElement('div');
+    permRow.className = 'perm-row';
+    permRow.id = pfx+'-row-'+page.id;
+
+    var icon = '<span class="perm-row-icon">'+page.icon+'</span>';
+    var name = '<span class="perm-row-name">'+esc(page.name)+'</span>';
+    var radios = page.perms.map(function(p){
+      var lbl = (page.permLabels && page.permLabels[p]) || PERM_LABELS[p] || p;
+      var chk = (perm===p) ? ' checked' : '';
+      return '<label class="perm-radio-label">'
+        +'<input type="radio" name="'+pfx+'-perm-'+page.id+'" value="'+p+'"'+chk
+        +' onchange="onPermChange(\''+pfx+'\',\''+page.id+'\')">'
+        +lbl+'</label>';
+    }).join('');
+
+    permRow.innerHTML = icon+name+'<div class="perm-radios">'+radios+'</div>';
+    body.appendChild(permRow);
+
+    // Panels sub-section (for Movi pages with panels)
+    if (page.panels) {
+      var panelSec = document.createElement('div');
+      panelSec.className = 'panels-section';
+      panelSec.id = pfx+'-panels-'+page.id;
+      panelSec.style.display = (perm !== 'none') ? '' : 'none';
+
+      page.panels.forEach(function(panel) {
+        var pv = panels[panel.id]; // 'read', 'write', true, false, undefined
+        var isVisible = !!pv;
+        var isWrite = (pv === 'write' || pv === true);
+
+        var panelRow = document.createElement('div');
+        panelRow.className = 'panel-row';
+
+        var visChk = '<label class="panel-toggle">'
+          +'<input type="checkbox" id="'+pfx+'-pvis-'+panel.id+'"'+(isVisible?' checked':'')
+          +' onchange="onPanelVisChange(\''+pfx+'\',\''+panel.id+'\')">'
+          +'<span>Hiển thị</span></label>';
+
+        var rwDisabled = isVisible ? '' : ' disabled';
+        var rwSection = '<div class="panel-rw'+(isVisible?'':' disabled')+'" id="'+pfx+'-prw-'+panel.id+'">'
+          +'<label><input type="radio" name="'+pfx+'-prw-'+panel.id+'" value="read"'+((!isWrite&&isVisible)?' checked':'')+'>📖 Chỉ xem</label>'
+          +'<label><input type="radio" name="'+pfx+'-prw-'+panel.id+'" value="write"'+(isWrite?' checked':'')+'>✏ Toàn quyền</label>'
+          +'</div>';
+
+        panelRow.innerHTML = '<span class="panel-row-name">'+esc(panel.name)+'</span>'+visChk+rwSection;
+        panelSec.appendChild(panelRow);
+      });
+
+      body.appendChild(panelSec);
+    }
+
+    // Camera section (for pages with cameras)
+    if (page.hasCameras) {
+      var camSec = document.createElement('div');
+      camSec.className = 'cam-grid';
+      camSec.id = pfx+'-cams-'+page.id;
+      camSec.style.display = (perm !== 'none') ? '' : 'none';
+
+      // Use separate lists: Movi section → allCamerasMovi (16 camera), Home section → allCameras
+      var pageCams = (sectionId === 'movi') ? allCamerasMovi : allCameras;
+
+      pageCams.forEach(function(cam){
+        var checked = cameras.indexOf(cam.id) >= 0;
+        var lbl = document.createElement('label');
+        lbl.className = 'cam-check-label';
+        lbl.innerHTML = '<input type="checkbox" class="'+page.camClass+'" value="'+esc(cam.id)+'"'+(checked?' checked':'')+'>'
+          +'📷 '+esc(cam.name||cam.id);
+        camSec.appendChild(lbl);
+      });
+
+      if (!pageCams.length) {
+        camSec.innerHTML = '<span style="font-size:12px;color:var(--muted);padding:.5rem 0">Chưa có camera nào trong hệ thống</span>';
+      }
+
+      body.appendChild(camSec);
+    }
+  });
+
+  section.appendChild(body);
+  return section;
+}
+
+function onPermChange(pfx, pageId) {
+  var radio = document.querySelector('input[name="'+pfx+'-perm-'+pageId+'"]:checked');
+  var perm = radio ? radio.value : 'none';
+  // Show/hide panels section
+  var panelSec = document.getElementById(pfx+'-panels-'+pageId);
+  if (panelSec) panelSec.style.display = (perm !== 'none') ? '' : 'none';
+  // Show/hide camera section
+  var camSec = document.getElementById(pfx+'-cams-'+pageId);
+  if (camSec) camSec.style.display = (perm !== 'none') ? '' : 'none';
+}
+
+function onPanelVisChange(pfx, panelId) {
+  var chk = document.getElementById(pfx+'-pvis-'+panelId);
+  var rw = document.getElementById(pfx+'-prw-'+panelId);
+  if (!chk || !rw) return;
+  if (chk.checked) {
+    rw.classList.remove('disabled');
+    // Default to read if nothing selected
+    var selected = rw.querySelector('input:checked');
+    if (!selected) { var first = rw.querySelector('input[value="read"]'); if(first) first.checked=true; }
+  } else {
+    rw.classList.add('disabled');
+  }
+}
+
+/* ── Collect permissions from the editor ──
+   pfx = 'usr' for user editor, 'grp' for group editor.
+   Camera queries are SCOPED to their own container (not document-wide) to prevent
+   cross-contamination between user editor and group editor when both exist in the DOM.
+   Adding a new service: just add it to SERVICE_HOME_PAGES or SERVICE_MOVI_PAGES —
+   this function iterates both arrays dynamically, nothing else to change here.
+── */
+function collectPermissions(pfx) {
+  var permissions = {};
+  var panels = {};
+  var cameras = [];
+
+  // Helper: collect cameras scoped to the specific cam-grid container
+  function collectCamsFrom(containerId) {
+    var c = document.getElementById(containerId);
+    if (!c) return;
+    c.querySelectorAll('input[type="checkbox"]:checked').forEach(function(cb){ cameras.push(cb.value); });
+  }
+
+  // Service Home
+  SERVICE_HOME_PAGES.forEach(function(page){
+    var radio = document.querySelector('input[name="'+pfx+'-perm-'+page.id+'"]:checked');
+    permissions[page.id] = radio ? radio.value : 'none';
+    if (page.hasCameras && permissions[page.id] !== 'none') {
+      collectCamsFrom(pfx+'-cams-'+page.id);
+    }
+  });
+
+  // Service Movi
+  SERVICE_MOVI_PAGES.forEach(function(page){
+    var radio = document.querySelector('input[name="'+pfx+'-perm-'+page.id+'"]:checked');
+    permissions[page.id] = radio ? radio.value : 'none';
+    // Sub-panels (Meraki, Topology, FortiGate Movi…)
+    if (page.panels && permissions[page.id] !== 'none') {
+      page.panels.forEach(function(panel){
+        var visChk = document.getElementById(pfx+'-pvis-'+panel.id);
+        if (visChk && visChk.checked) {
+          var rwRadio = document.querySelector('input[name="'+pfx+'-prw-'+panel.id+'"]:checked');
+          panels[panel.id] = (rwRadio && rwRadio.value === 'write') ? 'write' : 'read';
+        } else {
+          panels[panel.id] = false;
+        }
+      });
+    }
+    // Cameras (scoped to container, not document-wide)
+    if (page.hasCameras && permissions[page.id] !== 'none') {
+      collectCamsFrom(pfx+'-cams-'+page.id);
+    }
+  });
+
+  return {permissions: permissions, panels: panels, cameras: cameras};
+}
+
+/* ── Save group permissions ── */
+function saveGroupPerms() {
+  if (!currentGroupId) return;
+  var gid = currentGroupId;
+  var result = collectPermissions('grp');
+  var saveBtn = document.querySelector('#group-editor .btn-primary');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Đang lưu...'; }
+  fetch('/api/policy/groups/'+encodeURIComponent(gid),{
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({permissions: result.permissions, panels: result.panels, cameras: result.cameras})
+  }).then(function(r){return r.json();}).then(function(d){
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Lưu quyền nhóm'; }
+    if (d.error) { toast('Lỗi: '+d.error,'err'); return; }
+    toast('✓ Đã lưu quyền nhóm '+gid,'ok');
+    // Update local cache immediately — no KV lag
+    var g = allGroups.find(function(x){return x.id===gid;});
+    if (g) {
+      g.permissions = result.permissions;
+      g.panels      = result.panels;
+      g.cameras     = result.cameras;
+    }
+    renderGroupSidebar();
+    // Re-render the editor with confirmed saved data
+    renderPermEditor('grp-perm-editor', result.permissions, result.panels, result.cameras, 'grp');
+  }).catch(function(e){
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Lưu quyền nhóm'; }
+    toast('Lỗi: '+e.message,'err');
+  });
+}
+
+/* ── Create/Delete Group ── */
+function openCreateGroup() {
+  document.getElementById('grp-modal-title').textContent = '+ Tạo Policy Group Mới';
+  document.getElementById('gm-name').value = '';
+  document.getElementById('gm-desc').value = '';
+  document.getElementById('grp-modal-err').classList.remove('show');
+  openModal('grp-modal');
+  document.getElementById('gm-name').focus();
+}
+
+function saveGroup() {
+  var errEl = document.getElementById('grp-modal-err');
+  var name = document.getElementById('gm-name').value.trim();
+  var desc = document.getElementById('gm-desc').value.trim();
+  if (!name) { errEl.textContent='Tên nhóm không được để trống'; errEl.classList.add('show'); return; }
+  fetch('/api/policy/groups',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name,description:desc})
+  }).then(function(r){return r.json();}).then(function(d){
+    if(d.error){errEl.textContent=d.error;errEl.classList.add('show');return;}
+    closeModal('grp-modal');
+    toast('✓ Đã tạo nhóm '+name,'ok');
+    loadGroups();
+  }).catch(function(e){errEl.textContent='Lỗi: '+e.message;errEl.classList.add('show');});
+}
+
+function confirmDeleteGroup() {
+  if (!currentGroupId) return;
+  var g = allGroups.find(function(x){return x.id===currentGroupId;});
+  if (!g) return;
+  document.getElementById('confirm-title').textContent = 'Xóa Policy Group';
+  document.getElementById('confirm-body').innerHTML = 'Bạn có chắc muốn xóa nhóm <strong>'+esc(g.name)+'</strong>?<br>Các user thuộc nhóm này sẽ mất quyền tương ứng.';
+  document.getElementById('confirm-ok-btn').onclick = function(){
+    fetch('/api/policy/groups/'+encodeURIComponent(currentGroupId),{method:'DELETE'})
+      .then(function(r){return r.json();}).then(function(d){
+        closeModal('confirm-modal');
+        if(d.error){toast('Lỗi: '+d.error,'err');return;}
+        toast('✓ Đã xóa nhóm '+currentGroupId,'ok');
+        currentGroupId=null;
+        document.getElementById('group-editor').innerHTML='<div class="empty-state" style="padding:4rem 2rem"><div style="font-size:2rem;margin-bottom:10px">🔐</div><div>Chọn nhóm để chỉnh quyền</div></div>';
+        loadGroups();
+      });
+  };
+  openModal('confirm-modal');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 5: TÀI KHOẢN CỦA TÔI
+   ═══════════════════════════════════════════════════════════ */
+function changeMyPassword() {
+  var pw  = document.getElementById('acc-pw').value;
+  var pw2 = document.getElementById('acc-pw2').value;
+  var errEl = document.getElementById('acc-pw-err');
+  errEl.classList.remove('show');
+  if (!pw) { errEl.textContent='Mật khẩu không được để trống'; errEl.classList.add('show'); return; }
+  if (pw.length < 6) { errEl.textContent='Mật khẩu phải có ít nhất 6 ký tự'; errEl.classList.add('show'); return; }
+  if (pw !== pw2) { errEl.textContent='Mật khẩu xác nhận không khớp'; errEl.classList.add('show'); return; }
+  fetch('/api/admin/users/'+encodeURIComponent(__USER__.username), {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({password: pw})
+  }).then(function(r){return r.json();}).then(function(d){
+    if (d.error) { errEl.textContent='Lỗi: '+d.error; errEl.classList.add('show'); return; }
+    document.getElementById('acc-pw').value='';
+    document.getElementById('acc-pw2').value='';
+    toast('✓ Đã đổi mật khẩu thành công','ok');
+  }).catch(function(e){ errEl.textContent='Lỗi: '+e.message; errEl.classList.add('show'); });
+}
+
+/* ── MFA Management ── */
+var _mfaSecret = null;
+
+function loadMfaStatus() {
+  fetch('/api/auth/mfa/status')
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      var on = d.enabled;
+      var badge = document.getElementById('mfa-status-badge');
+      if (!badge) return;
+      badge.innerHTML = on
+        ? '<span class="chip chip-ok" style="font-size:12px;padding:3px 12px">✓ Đang bật</span>'
+        : '<span class="chip" style="font-size:12px;padding:3px 12px">✗ Chưa bật</span>';
+      var desc = document.getElementById('mfa-desc');
+      if (desc) desc.textContent = on
+        ? 'Tài khoản đang được bảo vệ bởi xác thực hai bước (Microsoft/Google Authenticator).'
+        : 'Bật MFA để tăng bảo mật. Mỗi lần đăng nhập sẽ cần thêm mã 6 chữ số từ Authenticator.';
+      var btnEn = document.getElementById('btn-enable-mfa');
+      var btnDis = document.getElementById('btn-disable-mfa');
+      if (btnEn) btnEn.style.display  = on ? 'none' : '';
+      if (btnDis) btnDis.style.display = on ? '' : 'none';
+    })
+    .catch(function(){});
+}
+
+function startMfaSetup() {
+  fetch('/api/auth/mfa/setup', { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      _mfaSecret = d.secret;
+      var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=0&data=' + encodeURIComponent(d.otpauth);
+      document.getElementById('mfa-qr-img').src = qrUrl;
+      document.getElementById('mfa-secret-box').textContent = d.secret;
+      document.getElementById('mfa-secret-box').onclick = function() {
+        navigator.clipboard.writeText(d.secret)
+          .then(function(){ toast('Đã copy secret key!', 'ok'); })
+          .catch(function(){});
+      };
+      document.getElementById('mfa-s1').style.display = '';
+      document.getElementById('mfa-s2').style.display = 'none';
+      document.getElementById('mfa-setup-err').classList.remove('show');
+      openModal('mfa-setup-modal');
+    })
+    .catch(function(e){ toast('Lỗi khởi tạo MFA: ' + e.message, 'err'); });
+}
+
+function goMfaStep2() {
+  document.getElementById('mfa-s1').style.display = 'none';
+  document.getElementById('mfa-s2').style.display = '';
+  document.getElementById('mfa-setup-code').value = '';
+  document.getElementById('mfa-setup-err').textContent = '';
+  document.getElementById('mfa-setup-err').classList.remove('show');
+  setTimeout(function(){ document.getElementById('mfa-setup-code').focus(); }, 60);
+}
+
+function backMfaStep1() {
+  document.getElementById('mfa-s2').style.display = 'none';
+  document.getElementById('mfa-s1').style.display = '';
+}
+
+function confirmEnableMfa() {
+  var code = document.getElementById('mfa-setup-code').value.trim();
+  var err  = document.getElementById('mfa-setup-err');
+  if (!/^\d{6}$/.test(code)) { err.textContent='Mã OTP phải có đúng 6 chữ số'; err.classList.add('show'); return; }
+  err.classList.remove('show');
+  fetch('/api/auth/mfa/enable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret: _mfaSecret, code: code })
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (d.success) {
+      closeModal('mfa-setup-modal');
+      toast('✓ MFA đã được bật thành công!', 'ok');
+      loadMfaStatus();
+    } else {
+      err.textContent = d.error || 'Mã OTP không đúng';
+      err.classList.add('show');
+      document.getElementById('mfa-setup-code').value = '';
+      document.getElementById('mfa-setup-code').focus();
+    }
+  }).catch(function(e){ err.textContent='Lỗi: '+e.message; err.classList.add('show'); });
+}
+
+function openDisableMfa() {
+  document.getElementById('mfa-disable-code').value = '';
+  document.getElementById('mfa-disable-err').textContent = '';
+  document.getElementById('mfa-disable-err').classList.remove('show');
+  openModal('mfa-disable-modal');
+  setTimeout(function(){ document.getElementById('mfa-disable-code').focus(); }, 60);
+}
+
+function confirmDisableMfa() {
+  var code = document.getElementById('mfa-disable-code').value.trim();
+  var err  = document.getElementById('mfa-disable-err');
+  if (!/^\d{6}$/.test(code)) { err.textContent='Mã OTP phải có đúng 6 chữ số'; err.classList.add('show'); return; }
+  err.classList.remove('show');
+  fetch('/api/auth/mfa/disable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: code })
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (d.success) {
+      closeModal('mfa-disable-modal');
+      toast('MFA đã được tắt', 'ok');
+      loadMfaStatus();
+    } else {
+      err.textContent = d.error || 'Mã OTP không đúng';
+      err.classList.add('show');
+      document.getElementById('mfa-disable-code').value = '';
+      document.getElementById('mfa-disable-code').focus();
+    }
+  }).catch(function(e){ err.textContent='Lỗi: '+e.message; err.classList.add('show'); });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════ */
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ═══════════════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════════════ */
+window.addEventListener('DOMContentLoaded', function(){
+  if (!__USER__.isAdmin) return; // already redirected above
+  loadSettings();
+  // Auto-submit OTP when 6 digits entered
+  ['mfa-setup-code','mfa-disable-code'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', function(){ this.value = this.value.replace(/\D/g,''); });
+    el.addEventListener('keydown', function(e){
+      if (e.key==='Enter'){ if(id==='mfa-setup-code') confirmEnableMfa(); else confirmDisableMfa(); }
+    });
+  });
+});
+</script>
+</body>
+</html>

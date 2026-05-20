@@ -180,9 +180,8 @@ a{color:inherit;text-decoration:none}
     </div>
     <nav class="topnav">
       <a class="topnav-item" href="/">Overview</a>
-      <a class="topnav-item" href="/meraki.html">Meraki</a>
-      <a class="topnav-item" href="/topology.html">Topology</a>
       <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
+      <a class="topnav-item" id="settings-link" href="/settings.html" style="display:none">⚙ Settings</a>
     </nav>
   </div>
   <div class="topbar-right">
@@ -193,6 +192,11 @@ a{color:inherit;text-decoration:none}
     <button class="theme-toggle" id="themeToggle" title="Toggle theme">
       <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"/></svg>
     </button>
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:999px;font-size:13px">
+      <div id="user-avatar" style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#a78bfa);color:var(--bg);display:grid;place-items:center;font-size:11px;font-weight:600">?</div>
+      <span id="user-name">...</span>
+    </div>
+    <button class="tbtn ghost" onclick="fetch('/api/auth/logout',{method:'POST'}).finally(function(){window.location.href='/login.html'})">Đăng xuất</button>
   </div>
 </header>
 
@@ -328,6 +332,16 @@ a{color:inherit;text-decoration:none}
 </div>
 
 <script>
+/* ── User session ── */
+(function initUser(){
+  function _readUserCookie(){try{var m=document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/);return m?JSON.parse(decodeURIComponent(m[1])):null;}catch(e){return null;}}
+  var U=window.__USER__||_readUserCookie()||{username:'?',isAdmin:false};
+  var av=document.getElementById('user-avatar');
+  var nm=document.getElementById('user-name');
+  if(av) av.textContent=(U.username||'?').charAt(0).toUpperCase();
+  if(nm) nm.textContent=U.username||'?';
+})();
+
 var allConns = [], allCombos = [], allUsage = {};
 
 /* ── helpers ── */
@@ -584,14 +598,50 @@ function renderQuota() {
 }
 
 /* ── LOAD ── */
+function makeErrHtml(title, detail) {
+  var needsPassword = detail && (detail.indexOf('NINEROUTER_PASSWORD') >= 0 || detail.indexOf('mật khẩu') >= 0 || detail.indexOf('login') >= 0);
+  var extra = '';
+  if (needsPassword) {
+    extra = '<div style="font-size:11px;margin-top:8px;padding:8px;background:rgba(0,0,0,.25);border-radius:6px;line-height:1.8">'
+      +'<strong>⚙ Cách cấu hình mật khẩu 9Router:</strong><br>'
+      +'Chạy lệnh trong terminal tại thư mục dashboard:<br>'
+      +'<code style="font-size:10px;background:rgba(0,0,0,.3);padding:2px 6px;border-radius:3px">npx wrangler secret put NINEROUTER_PASSWORD</code><br>'
+      +'→ Nhập mật khẩu dashboard 9Router → Enter<br>'
+      +'Sau đó: <code style="font-size:10px;background:rgba(0,0,0,.3);padding:2px 6px;border-radius:3px">npx wrangler deploy</code>'
+      +'</div>';
+  }
+  return '<div class="err-banner" style="margin:0">'
+    +'<div style="font-weight:600;margin-bottom:4px">⚠ '+title+'</div>'
+    +(detail ? '<div style="font-size:11px;opacity:.85;margin-bottom:4px;line-height:1.5">'+detail+'</div>' : '')
+    +extra
+    +'<button onclick="loadData()" style="margin-top:8px;font-size:11px;padding:3px 10px;border:1px solid currentColor;border-radius:4px;background:transparent;color:inherit;cursor:pointer">↻ Thử lại</button>'
+    +'</div>';
+}
+
 function loadData() {
+  var connListEl = document.getElementById('connList');
+  var comboListEl = document.getElementById('comboList');
+  var loading = '<div class="loading"><div class="spin"></div>Đang tải dữ liệu từ 9Router...</div>';
+  if (connListEl)  connListEl.innerHTML  = loading;
+  if (comboListEl) comboListEl.innerHTML = loading;
+
   fetch('/api/9router', {cache:'no-store'})
-    .then(function(r){ return r.json(); })
+    .then(function(r){
+      if (!r.ok && r.status !== 502) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
     .then(function(data){
       if (data.error){
-        document.getElementById('connList').innerHTML='<div class="err-banner">⚠ '+data.error+'</div>';
+        var errHtml = makeErrHtml('Không thể kết nối đến 9Router backend', data.error);
+        if (connListEl)  connListEl.innerHTML  = errHtml;
+        if (comboListEl) comboListEl.innerHTML = errHtml;
+        // Reset stats to show "?"
+        ['st-conns','st-active','st-errors','st-combos'].forEach(function(id){
+          var el=document.getElementById(id); if(el) el.textContent='—';
+        });
         return;
       }
+
       var s = data.stats||{};
       document.getElementById('st-conns').textContent  = s.totalConnections||0;
       document.getElementById('st-active').textContent = s.activeConnections||0;
@@ -603,8 +653,8 @@ function loadData() {
       allUsage   = data.usage||{};
 
       var now = new Date();
-      document.getElementById('lastUpdate').textContent =
-        now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+      var lu = document.getElementById('lastUpdate');
+      if (lu) lu.textContent = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
 
       renderConnections();
       renderCombos();
@@ -612,7 +662,9 @@ function loadData() {
       renderQuota();
     })
     .catch(function(e){
-      document.getElementById('connList').innerHTML='<div class="err-banner">⚠ '+e.message+'</div>';
+      var errHtml = makeErrHtml('Lỗi kết nối', e.message);
+      if (connListEl)  connListEl.innerHTML  = errHtml;
+      if (comboListEl) comboListEl.innerHTML = errHtml;
     });
 }
 
