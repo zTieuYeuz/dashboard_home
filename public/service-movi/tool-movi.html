@@ -46,16 +46,12 @@ a{color:inherit;text-decoration:none}
 
 /* ── Container ── */
 .container{max-width:1200px;margin:0 auto;padding:2rem 1.5rem}
-
-/* ── Section header ── */
 .section-header{margin-bottom:1.5rem}
 .section-title{font-size:18px;font-weight:600;margin-bottom:4px}
 .section-desc{font-size:13px;color:var(--muted)}
 
-/* ── Tool grid ── */
+/* ── Tool grid & card ── */
 .tool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
-
-/* ── Tool card ── */
 .tool-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;display:flex;flex-direction:column;gap:12px;transition:border-color .15s,box-shadow .15s}
 .tool-card:hover{border-color:color-mix(in oklch,var(--violet) 50%,transparent);box-shadow:0 4px 20px oklch(0 0 0 / .15)}
 .tool-card-top{display:flex;align-items:flex-start;gap:12px}
@@ -72,6 +68,16 @@ a{color:inherit;text-decoration:none}
 .tool-btn:hover{background:color-mix(in oklch,var(--violet) 85%,white 15%)}
 .tool-btn:active{transform:scale(.98)}
 
+/* ── Step indicator ── */
+.step-bar{display:flex;align-items:center;gap:0;margin-bottom:1.25rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 16px;gap:8px}
+.step-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);flex:1}
+.step-item.active{color:var(--text);font-weight:600}
+.step-item.done{color:var(--ok)}
+.step-num{width:20px;height:20px;border-radius:50%;border:1.5px solid currentColor;display:grid;place-items:center;font-size:11px;font-weight:600;flex-shrink:0}
+.step-item.active .step-num{background:var(--violet);border-color:var(--violet);color:#fff}
+.step-item.done .step-num{background:var(--ok);border-color:var(--ok);color:#fff}
+.step-divider{width:24px;height:1px;background:var(--border);flex-shrink:0}
+
 /* ── Modal overlay ── */
 .modal-overlay{position:fixed;inset:0;background:oklch(0 0 0 / .65);backdrop-filter:blur(6px);z-index:200;display:flex;align-items:center;justify-content:center;padding:1rem;opacity:0;pointer-events:none;transition:opacity .2s}
 .modal-overlay.open{opacity:1;pointer-events:auto}
@@ -81,7 +87,7 @@ a{color:inherit;text-decoration:none}
 .modal-overlay.open .modal{transform:translateY(0)}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:1.1rem 1.25rem;border-bottom:1px solid var(--border);flex-shrink:0}
 .modal-title{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
-.modal-close{width:28px;height:28px;display:grid;place-items:center;border:1px solid var(--border);background:var(--surface-2);border-radius:var(--radius-sm);cursor:pointer;color:var(--muted);font-size:16px;transition:all .12s}
+.modal-close{width:28px;height:28px;display:grid;place-items:center;border:1px solid var(--border);background:var(--surface-2);border-radius:var(--radius-sm);cursor:pointer;color:var(--muted);font-size:18px;line-height:1;transition:all .12s}
 .modal-close:hover{color:var(--text);border-color:var(--muted)}
 .modal-body{padding:1.25rem;overflow-y:auto;flex:1}
 .modal-footer{padding:.875rem 1.25rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-shrink:0}
@@ -96,17 +102,33 @@ a{color:inherit;text-decoration:none}
 .form-input:focus,.form-select:focus{border-color:var(--accent)}
 .form-input::placeholder{color:var(--muted)}
 .form-select option{background:var(--surface);color:var(--text)}
-.form-hint{font-size:11px;color:var(--muted)}
+.form-input.error{border-color:var(--bad)}
+
+/* ── Review table ── */
+.review-section{margin-bottom:1rem}
+.review-section-title{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.review-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.review-row{display:contents}
+.review-key{font-size:12px;color:var(--muted);padding:7px 10px 7px 0;border-bottom:1px solid var(--border-soft)}
+.review-val{font-size:12px;font-weight:500;padding:7px 0;border-bottom:1px solid var(--border-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.review-val.empty{color:var(--muted);font-weight:400;font-style:italic}
+.review-val.highlight{color:var(--accent);font-family:var(--font-mono);font-size:11px}
+.review-badge{display:inline-block;background:color-mix(in oklch,var(--violet) 12%,transparent);color:var(--violet);border:1px solid color-mix(in oklch,var(--violet) 25%,transparent);border-radius:4px;padding:1px 7px;font-size:11px;font-family:var(--font-mono)}
 
 /* ── Buttons ── */
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;font-family:var(--font-sans);border:none;transition:all .15s}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;font-family:var(--font-sans);border:none;transition:all .15s;white-space:nowrap}
 .btn-primary{background:var(--violet);color:#fff}
 .btn-primary:hover{background:color-mix(in oklch,var(--violet) 85%,white 15%)}
 .btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-ok{background:var(--ok);color:#fff}
+.btn-ok:hover{background:color-mix(in oklch,var(--ok) 85%,white 15%)}
+.btn-ok:disabled{opacity:.5;cursor:not-allowed}
+.btn-danger{background:var(--bad);color:#fff}
+.btn-danger:hover{background:color-mix(in oklch,var(--bad) 85%,white 15%)}
 .btn-ghost{background:transparent;color:var(--text-2);border:1px solid var(--border)}
 .btn-ghost:hover{color:var(--text);border-color:var(--muted)}
 
-/* ── States ── */
+/* ── Spinner ── */
 .spin{width:14px;height:14px;border:2px solid oklch(1 0 0 / .3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
 
@@ -116,8 +138,24 @@ a{color:inherit;text-decoration:none}
 .result-success{background:color-mix(in oklch,var(--ok) 12%,transparent);border:1px solid color-mix(in oklch,var(--ok) 30%,transparent);color:var(--ok)}
 .result-error{background:color-mix(in oklch,var(--bad) 12%,transparent);border:1px solid color-mix(in oklch,var(--bad) 30%,transparent);color:var(--bad)}
 
+/* ── Confirm dialog ── */
+.confirm-overlay{position:absolute;inset:0;background:oklch(0 0 0 / .6);backdrop-filter:blur(4px);z-index:10;display:flex;align-items:center;justify-content:center;border-radius:var(--radius);opacity:0;pointer-events:none;transition:opacity .18s}
+.confirm-overlay.open{opacity:1;pointer-events:auto}
+.confirm-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;max-width:380px;width:90%;text-align:center;box-shadow:0 8px 32px oklch(0 0 0 / .4);transform:scale(.95);transition:transform .18s}
+.confirm-overlay.open .confirm-box{transform:scale(1)}
+.confirm-icon{font-size:32px;margin-bottom:.75rem}
+.confirm-title{font-size:14px;font-weight:600;margin-bottom:.5rem}
+.confirm-msg{font-size:13px;color:var(--text-2);line-height:1.6;margin-bottom:1.25rem}
+.confirm-actions{display:flex;gap:8px;justify-content:center}
+
+/* ── Success state ── */
+.success-box{text-align:center;padding:2rem 1rem}
+.success-icon{font-size:48px;margin-bottom:1rem}
+.success-title{font-size:16px;font-weight:600;color:var(--ok);margin-bottom:.5rem}
+.success-msg{font-size:13px;color:var(--muted);line-height:1.6}
+
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-@media(max-width:600px){.form-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.form-grid{grid-template-columns:1fr}.review-grid{grid-template-columns:1fr}.review-key{padding-bottom:2px;border-bottom:none}.review-val{padding-top:0;margin-bottom:8px}}
 </style>
 </head>
 <body>
@@ -145,7 +183,7 @@ a{color:inherit;text-decoration:none}
 <div class="container">
   <div class="section-header">
     <div class="section-title">&#128295; Tool Movi</div>
-    <div class="section-desc">Các công cụ tự động ho&#225; &mdash; k&#237;ch hoạt workflow n8n Movi</div>
+    <div class="section-desc">Các công cụ tự động hoá &mdash; kích hoạt workflow n8n Movi</div>
   </div>
 
   <div class="tool-grid">
@@ -155,8 +193,8 @@ a{color:inherit;text-decoration:none}
       <div class="tool-card-top">
         <div class="tool-icon tool-icon-violet">&#128100;</div>
         <div class="tool-info">
-          <div class="tool-name">T&#7841;o User Movi</div>
-          <div class="tool-desc">T&#7841;o t&#224;i kho&#7843;n Microsoft 365 cho nh&#226;n vi&#234;n m&#7899;i &mdash; t&#7921; động g&#225;n nh&#243;m v&#224; quy&#7873;n theo ph&#242;ng ban</div>
+          <div class="tool-name">Tạo User Movi</div>
+          <div class="tool-desc">Tạo tài khoản Microsoft 365 cho nhân viên mới &mdash; tự động gán nhóm và quyền theo phòng ban</div>
         </div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between">
@@ -165,28 +203,29 @@ a{color:inherit;text-decoration:none}
       </div>
       <button class="tool-btn" onclick="openModal('create-user')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-        M&#7903; form t&#7841;o t&#224;i kho&#7843;n
+        Tạo Tài Khoản Email Movi
       </button>
     </div>
 
-    <!-- Placeholder cards (future tools) -->
+    <!-- Placeholder: Reset Password -->
     <div class="tool-card" style="opacity:.45;pointer-events:none">
       <div class="tool-card-top">
         <div class="tool-icon tool-icon-blue">&#128274;</div>
         <div class="tool-info">
           <div class="tool-name">Reset Password</div>
-          <div class="tool-desc">&#272;&#7863;t lại mật khẩu Microsoft 365 cho nh&#226;n vi&#234;n</div>
+          <div class="tool-desc">Đặt lại mật khẩu Microsoft 365 cho nhân viên</div>
         </div>
       </div>
       <div style="text-align:center;font-size:12px;color:var(--muted);padding:.25rem 0">Coming soon</div>
     </div>
 
+    <!-- Placeholder: Offboard User -->
     <div class="tool-card" style="opacity:.45;pointer-events:none">
       <div class="tool-card-top">
         <div class="tool-icon tool-icon-green">&#128228;</div>
         <div class="tool-info">
           <div class="tool-name">Offboard User</div>
-          <div class="tool-desc">Kh&#243;a t&#224;i kho&#7843;n v&#224; thu hồi quy&#7873;n khi nh&#226;n vi&#234;n ngh&#7881; vi&#7879;c</div>
+          <div class="tool-desc">Khóa tài khoản và thu hồi quyền khi nhân viên nghỉ việc</div>
         </div>
       </div>
       <div style="text-align:center;font-size:12px;color:var(--muted);padding:.25rem 0">Coming soon</div>
@@ -195,220 +234,323 @@ a{color:inherit;text-decoration:none}
   </div>
 </div>
 
-<!-- ══════════════════════════════════
-     Modal: Tạo User Movi
-══════════════════════════════════ -->
+<!-- ═══════════════════════════════════════
+     Modal: Tạo Tài Khoản Email Movi
+═══════════════════════════════════════ -->
 <div class="modal-overlay" id="modal-create-user" onclick="handleOverlayClick(event)">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal" role="dialog" aria-modal="true" style="position:relative">
 
+    <!-- Header -->
     <div class="modal-header">
       <div class="modal-title">
         <span>&#128100;</span>
-        <span id="modal-title">T&#7841;o t&#224;i kho&#7843;n Movi</span>
+        <span id="modal-title-text">Tạo Tài Khoản Email Movi</span>
       </div>
-      <button class="modal-close" onclick="closeModal()" aria-label="&#272;&#243;ng">&times;</button>
+      <button class="modal-close" onclick="closeModal()" aria-label="Đóng">&times;</button>
     </div>
 
-    <div class="modal-body">
+    <!-- Body -->
+    <div class="modal-body" id="modal-body">
 
-      <!-- Result banner -->
-      <div class="result-banner result-success" id="banner-success">
-        <span>&#10003;</span>
-        <div>
-          <div style="font-weight:600;margin-bottom:2px">T&#7841;o t&#224;i kho&#7843;n th&#224;nh c&#244;ng!</div>
-          <div id="banner-success-msg" style="font-size:12px;opacity:.85"></div>
+      <!-- ── STEP 1: Form ── -->
+      <div id="step-form">
+        <!-- Step bar -->
+        <div class="step-bar">
+          <div class="step-item active" id="step1-indicator">
+            <div class="step-num">1</div>
+            <span>Nhập thông tin</span>
+          </div>
+          <div class="step-divider"></div>
+          <div class="step-item" id="step2-indicator">
+            <div class="step-num">2</div>
+            <span>Xem lại &amp; xác nhận</span>
+          </div>
+        </div>
+
+        <!-- Error banner -->
+        <div class="result-banner result-error" id="banner-error">
+          <span>&#9888;</span>
+          <div>
+            <div style="font-weight:600;margin-bottom:2px">Vui lòng kiểm tra lại</div>
+            <div id="banner-error-msg" style="font-size:12px;opacity:.85"></div>
+          </div>
+        </div>
+
+        <form id="form-create-user" novalidate>
+          <div class="form-grid">
+
+            <div class="form-group">
+              <label class="form-label" for="f-email">Email User Movi<span class="req">*</span></label>
+              <input class="form-input" type="email" id="f-email" name="email"
+                placeholder="email của nhân viên" autocomplete="off"/>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="f-personal-email">Personal Email<span class="req">*</span></label>
+              <input class="form-input" type="email" id="f-personal-email" name="personalEmail"
+                placeholder="Email cá nhân của nhân viên" autocomplete="off"/>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="f-firstname">First Name<span class="req">*</span></label>
+              <input class="form-input" type="text" id="f-firstname" name="firstName"
+                placeholder="Tên của nhân viên"/>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="f-lastname">Last Name<span class="req">*</span></label>
+              <input class="form-input" type="text" id="f-lastname" name="lastName"
+                placeholder="Họ và tên đệm"/>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="f-jobtitle">Job Title</label>
+              <input class="form-input" type="text" id="f-jobtitle" name="jobTitle"
+                placeholder="Title của nhân viên"/>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="f-department">Department</label>
+              <input class="form-input" type="text" id="f-department" name="department"
+                placeholder="Phòng ban / bộ phận"/>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="f-office">Office</label>
+              <input class="form-input" type="text" id="f-office" name="office"
+                placeholder="Nơi làm việc"/>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="f-mobile">Mobile Phone</label>
+              <input class="form-input" type="text" id="f-mobile" name="mobilePhone"
+                placeholder="Số điện thoại"/>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="f-manager">Manager</label>
+              <input class="form-input" type="email" id="f-manager" name="manager"
+                placeholder="Email người quản lý" autocomplete="off"/>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="f-company">Company</label>
+              <input class="form-input" type="text" id="f-company" name="company"
+                placeholder="Công ty"/>
+            </div>
+
+            <div class="form-group form-full">
+              <label class="form-label" for="f-group">Phòng Ban (Group)<span class="req">*</span></label>
+              <select class="form-select" id="f-group" name="group">
+                <option value="">&#8212; Chọn phòng ban &#8212;</option>
+                <option>GP_IT_PMO</option>
+                <option>GP_BI</option>
+                <option>GP_ACCOUNTING_STAFF</option>
+                <option>GP_AntiFraud_STAFF</option>
+                <option>GP_HR_TA_STAFF</option>
+                <option>GP_HR_STAFF</option>
+                <option>GP_Scorecard_STAFF</option>
+                <option>GP_Specialist_STAFF</option>
+                <option>GP_MKT_STAFF</option>
+                <option>GP_collection_STAFF</option>
+                <option>GP_Risk_Control_STAFF</option>
+                <option>GP_IT_Designer_STAFF</option>
+                <option>GP_TELESALE_STAFF</option>
+                <option>GP_Legal_STAFF</option>
+                <option>GP_Support_Sale_STAFF</option>
+                <option>GP_SupplyChain_STAFF</option>
+                <option>GP_Product_STAFF</option>
+                <option>GP_Admin-Procurement</option>
+                <option>GP_ENG_STAFF</option>
+                <option>Strategy &amp; Transformation</option>
+              </select>
+            </div>
+
+            <input type="hidden" id="f-created-by" name="createdBy"/>
+          </div>
+        </form>
+      </div><!-- /step-form -->
+
+      <!-- ── STEP 2: Review ── -->
+      <div id="step-review" style="display:none">
+        <!-- Step bar -->
+        <div class="step-bar">
+          <div class="step-item done" id="step1-indicator-r">
+            <div class="step-num">&#10003;</div>
+            <span>Nhập thông tin</span>
+          </div>
+          <div class="step-divider"></div>
+          <div class="step-item active" id="step2-indicator-r">
+            <div class="step-num">2</div>
+            <span>Xem lại &amp; xác nhận</span>
+          </div>
+        </div>
+
+        <div style="background:color-mix(in oklch,var(--warn) 8%,transparent);border:1px solid color-mix(in oklch,var(--warn) 25%,transparent);border-radius:var(--radius-sm);padding:.625rem .875rem;font-size:12px;color:var(--warn);margin-bottom:1rem;display:flex;align-items:center;gap:6px">
+          <span>&#9432;</span> Vui lòng kiểm tra lại tất cả thông tin trước khi tạo tài khoản.
+        </div>
+
+        <div id="review-content"></div>
+      </div><!-- /step-review -->
+
+      <!-- ── STEP 3: Success ── -->
+      <div id="step-success" style="display:none">
+        <div class="success-box">
+          <div class="success-icon">&#10003;&#65039;</div>
+          <div class="success-title">Tạo tài khoản thành công!</div>
+          <div class="success-msg" id="success-detail"></div>
         </div>
       </div>
-      <div class="result-banner result-error" id="banner-error">
-        <span>&#9888;</span>
-        <div>
-          <div style="font-weight:600;margin-bottom:2px">C&#243; lỗi xảy ra</div>
-          <div id="banner-error-msg" style="font-size:12px;opacity:.85"></div>
-        </div>
-      </div>
 
-      <form id="form-create-user" onsubmit="submitCreateUser(event)" novalidate>
-        <div class="form-grid">
+    </div><!-- /modal-body -->
 
-          <!-- Email User Movi -->
-          <div class="form-group">
-            <label class="form-label" for="f-email">Email User Movi<span class="req">*</span></label>
-            <input class="form-input" type="email" id="f-email" name="email"
-              placeholder="email của nhân viên" required autocomplete="off"/>
-          </div>
-
-          <!-- Personal Email -->
-          <div class="form-group">
-            <label class="form-label" for="f-personal-email">Personal Email<span class="req">*</span></label>
-            <input class="form-input" type="email" id="f-personal-email" name="personalEmail"
-              placeholder="Email cá nhân của nhân viên" required autocomplete="off"/>
-          </div>
-
-          <!-- FirstName -->
-          <div class="form-group">
-            <label class="form-label" for="f-firstname">First Name<span class="req">*</span></label>
-            <input class="form-input" type="text" id="f-firstname" name="firstName"
-              placeholder="Tên của nhân viên" required/>
-          </div>
-
-          <!-- LastName -->
-          <div class="form-group">
-            <label class="form-label" for="f-lastname">Last Name<span class="req">*</span></label>
-            <input class="form-input" type="text" id="f-lastname" name="lastName"
-              placeholder="Họ và tên đệm" required/>
-          </div>
-
-          <!-- JobTitle -->
-          <div class="form-group">
-            <label class="form-label" for="f-jobtitle">Job Title</label>
-            <input class="form-input" type="text" id="f-jobtitle" name="jobTitle"
-              placeholder="Title của nhân viên"/>
-          </div>
-
-          <!-- Department -->
-          <div class="form-group">
-            <label class="form-label" for="f-department">Department</label>
-            <input class="form-input" type="text" id="f-department" name="department"
-              placeholder="Phòng ban / bộ phận"/>
-          </div>
-
-          <!-- Office -->
-          <div class="form-group">
-            <label class="form-label" for="f-office">Office</label>
-            <input class="form-input" type="text" id="f-office" name="office"
-              placeholder="Nơi làm việc"/>
-          </div>
-
-          <!-- Mobile Phone -->
-          <div class="form-group">
-            <label class="form-label" for="f-mobile">Mobile Phone</label>
-            <input class="form-input" type="text" id="f-mobile" name="mobilePhone"
-              placeholder="Số điện thoại"/>
-          </div>
-
-          <!-- Manager -->
-          <div class="form-group">
-            <label class="form-label" for="f-manager">Manager</label>
-            <input class="form-input" type="email" id="f-manager" name="manager"
-              placeholder="Email người quản lý" autocomplete="off"/>
-          </div>
-
-          <!-- Company -->
-          <div class="form-group">
-            <label class="form-label" for="f-company">Company</label>
-            <input class="form-input" type="text" id="f-company" name="company"
-              placeholder="Công ty"/>
-          </div>
-
-          <!-- Phòng Ban (dropdown) — full width -->
-          <div class="form-group form-full">
-            <label class="form-label" for="f-group">Ph&ograve;ng Ban (Group)<span class="req">*</span></label>
-            <select class="form-select" id="f-group" name="group" required>
-              <option value="">&#8212; Ch&#7885;n ph&ograve;ng ban &#8212;</option>
-              <option>GP_IT_PMO</option>
-              <option>GP_BI</option>
-              <option>GP_ACCOUNTING_STAFF</option>
-              <option>GP_AntiFraud_STAFF</option>
-              <option>GP_HR_TA_STAFF</option>
-              <option>GP_HR_STAFF</option>
-              <option>GP_Scorecard_STAFF</option>
-              <option>GP_Specialist_STAFF</option>
-              <option>GP_MKT_STAFF</option>
-              <option>GP_collection_STAFF</option>
-              <option>GP_Risk_Control_STAFF</option>
-              <option>GP_IT_Designer_STAFF</option>
-              <option>GP_TELESALE_STAFF</option>
-              <option>GP_Legal_STAFF</option>
-              <option>GP_Support_Sale_STAFF</option>
-              <option>GP_SupplyChain_STAFF</option>
-              <option>GP_Product_STAFF</option>
-              <option>GP_Admin-Procurement</option>
-              <option>GP_ENG_STAFF</option>
-              <option>Strategy &amp; Transformation</option>
-            </select>
-          </div>
-
-          <!-- Người Tạo (hidden — auto filled) -->
-          <input type="hidden" id="f-created-by" name="createdBy"/>
-
-        </div>
-      </form>
+    <!-- Footer -->
+    <div class="modal-footer" id="modal-footer">
+      <!-- rendered by JS -->
     </div>
 
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">H&#7911;y</button>
-      <button class="btn btn-primary" id="btn-submit" onclick="submitCreateUser(event)">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-        T&#7841;o T&#224;i Kho&#7843;n
-      </button>
+    <!-- ── Confirm dialog (overlay on top of modal) ── -->
+    <div class="confirm-overlay" id="confirm-overlay">
+      <div class="confirm-box">
+        <div class="confirm-icon">&#9888;&#65039;</div>
+        <div class="confirm-title">Xác nhận tạo tài khoản</div>
+        <div class="confirm-msg">
+          Khi xác nhận, quá trình tạo sẽ <strong>không thể dừng được</strong>.<br>
+          Bạn có muốn tiếp tục tạo tài khoản không?
+        </div>
+        <div class="confirm-actions">
+          <button class="btn btn-ghost" onclick="closeConfirm()">&#8592; Hủy</button>
+          <button class="btn btn-ok" id="btn-confirm-ok" onclick="doSubmit()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Xác Nhận Tạo
+          </button>
+        </div>
+      </div>
     </div>
 
   </div>
-</div>
+</div><!-- /modal-overlay -->
 
 <script>
-/* ── User info ── */
-function _readUserCookie() {
-  try { var m = document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/); return m ? JSON.parse(decodeURIComponent(m[1])) : null; } catch(e) { return null; }
-}
-var __USER__ = window.__USER__ || _readUserCookie() || { role:'user', permissions:{}, isAdmin:false, username:'' };
+/* ── User ── */
+function _readUserCookie(){try{var m=document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/);return m?JSON.parse(decodeURIComponent(m[1])):null;}catch(e){return null;}}
+var __USER__ = window.__USER__ || _readUserCookie() || {role:'user',permissions:{},isAdmin:false,username:''};
 
-/* ── Modal ── */
+/* ── State ── */
+var _currentStep = 1; // 1=form, 2=review, 3=success
+var _payload = null;
+
+/* ── Field meta (for review display) ── */
+var FIELDS = [
+  { key:'email',         label:'Email User Movi',    section:'Tài khoản',  highlight:true },
+  { key:'firstName',     label:'First Name',          section:'Tài khoản' },
+  { key:'lastName',      label:'Last Name',           section:'Tài khoản' },
+  { key:'personalEmail', label:'Personal Email',      section:'Tài khoản' },
+  { key:'jobTitle',      label:'Job Title',           section:'Thông tin công việc' },
+  { key:'department',    label:'Department',          section:'Thông tin công việc' },
+  { key:'group',         label:'Phòng Ban (Group)',   section:'Thông tin công việc', badge:true },
+  { key:'office',        label:'Office',              section:'Thông tin công việc' },
+  { key:'company',       label:'Company',             section:'Thông tin công việc' },
+  { key:'mobilePhone',   label:'Mobile Phone',        section:'Liên hệ' },
+  { key:'manager',       label:'Manager',             section:'Liên hệ' },
+  { key:'createdBy',     label:'Người tạo',           section:'Hệ thống' },
+];
+
+/* ── Open / close modal ── */
 function openModal(id) {
-  hideBanners();
+  _currentStep = 1;
   document.getElementById('form-create-user').reset();
-  // Auto-fill hidden field
   document.getElementById('f-created-by').value = __USER__.username || __USER__.email || 'unknown';
-  var el = document.getElementById('modal-' + id);
-  if (el) el.classList.add('open');
+  document.getElementById('banner-error').classList.remove('show');
+  showStep(1);
+  document.getElementById('modal-create-user').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
 function closeModal() {
-  document.querySelectorAll('.modal-overlay').forEach(function(el){ el.classList.remove('open'); });
+  document.getElementById('modal-create-user').classList.remove('open');
+  closeConfirm();
   document.body.style.overflow = '';
 }
 function handleOverlayClick(e) {
   if (e.target === e.currentTarget) closeModal();
 }
-document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') {
+    var co = document.getElementById('confirm-overlay');
+    if (co.classList.contains('open')) { closeConfirm(); return; }
+    closeModal();
+  }
+});
 
-/* ── Banners ── */
-function hideBanners() {
-  document.getElementById('banner-success').classList.remove('show');
-  document.getElementById('banner-error').classList.remove('show');
+/* ── Steps ── */
+function showStep(n) {
+  _currentStep = n;
+  document.getElementById('step-form').style.display    = n === 1 ? '' : 'none';
+  document.getElementById('step-review').style.display  = n === 2 ? '' : 'none';
+  document.getElementById('step-success').style.display = n === 3 ? '' : 'none';
+  renderFooter(n);
+  // Scroll body to top
+  var mb = document.getElementById('modal-body');
+  if (mb) mb.scrollTop = 0;
 }
-function showSuccess(msg) {
-  hideBanners();
-  document.getElementById('banner-success-msg').textContent = msg || '';
-  document.getElementById('banner-success').classList.add('show');
+
+function renderFooter(n) {
+  var f = document.getElementById('modal-footer');
+  if (n === 1) {
+    f.innerHTML =
+      '<button class="btn btn-ghost" onclick="closeModal()">Hủy</button>' +
+      '<button class="btn btn-primary" onclick="goToReview()">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
+        'Tiếp Theo' +
+      '</button>';
+  } else if (n === 2) {
+    f.innerHTML =
+      '<button class="btn btn-ghost" onclick="showStep(1)">&#8592; Quay lại</button>' +
+      '<button class="btn btn-primary" onclick="openConfirm()">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>' +
+        'Tạo Tài Khoản' +
+      '</button>';
+  } else {
+    f.innerHTML =
+      '<button class="btn btn-ghost" onclick="closeModal()">Đóng</button>' +
+      '<button class="btn btn-primary" onclick="openModal(\'create-user\')">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+        'Tạo tài khoản khác' +
+      '</button>';
+  }
 }
-function showError(msg) {
-  hideBanners();
-  document.getElementById('banner-error-msg').textContent = msg || 'Vui lòng thử lại.';
-  document.getElementById('banner-error').classList.add('show');
-}
 
-/* ── Submit ── */
-async function submitCreateUser(e) {
-  e.preventDefault();
-  hideBanners();
+/* ── Step 1 → Step 2: validate & build payload ── */
+function goToReview() {
+  var form  = document.getElementById('form-create-user');
+  var err   = document.getElementById('banner-error');
+  var errMsg= document.getElementById('banner-error-msg');
+  err.classList.remove('show');
 
-  var form = document.getElementById('form-create-user');
+  // Clear previous errors
+  form.querySelectorAll('.form-input,.form-select').forEach(function(el){ el.classList.remove('error'); });
 
-  // Simple validation
-  var email   = form.email.value.trim();
-  var first   = form.firstName.value.trim();
-  var last    = form.lastName.value.trim();
-  var group   = form.group.value;
-  var persMail= form.personalEmail.value.trim();
+  var email    = form.email.value.trim();
+  var first    = form.firstName.value.trim();
+  var last     = form.lastName.value.trim();
+  var persMail = form.personalEmail.value.trim();
+  var group    = form.group.value;
 
-  if (!email)    { form.email.focus();        return showError('Email User Movi là bắt buộc.'); }
-  if (!first)    { form.firstName.focus();    return showError('First Name là bắt buộc.'); }
-  if (!last)     { form.lastName.focus();     return showError('Last Name là bắt buộc.'); }
-  if (!persMail) { form.personalEmail.focus();return showError('Personal Email là bắt buộc.'); }
-  if (!group)    { form.group.focus();        return showError('Vui lòng chọn Phòng Ban.'); }
+  function fail(msg, el) {
+    errMsg.textContent = msg;
+    err.classList.add('show');
+    if (el) { el.classList.add('error'); el.focus(); }
+  }
 
-  var payload = {
+  if (!email)    return fail('Email User Movi là bắt buộc.', form.email);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Email User Movi không hợp lệ.', form.email);
+  if (!first)    return fail('First Name là bắt buộc.', form.firstName);
+  if (!last)     return fail('Last Name là bắt buộc.', form.lastName);
+  if (!persMail) return fail('Personal Email là bắt buộc.', form['personalEmail']);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(persMail)) return fail('Personal Email không hợp lệ.', form['personalEmail']);
+  if (!group)    return fail('Vui lòng chọn Phòng Ban.', form.group);
+
+  _payload = {
     email:         email,
     firstName:     first,
     lastName:      last,
@@ -423,7 +565,46 @@ async function submitCreateUser(e) {
     createdBy:     form.createdBy.value || __USER__.username || 'unknown',
   };
 
-  var btn = document.getElementById('btn-submit');
+  renderReview(_payload);
+  showStep(2);
+}
+
+/* ── Render review table ── */
+function renderReview(data) {
+  var sections = {};
+  FIELDS.forEach(function(f) {
+    if (!sections[f.section]) sections[f.section] = [];
+    sections[f.section].push(f);
+  });
+
+  var html = '';
+  Object.keys(sections).forEach(function(sec) {
+    html += '<div class="review-section"><div class="review-section-title">' + sec + '</div><div class="review-grid">';
+    sections[sec].forEach(function(f) {
+      var val = data[f.key] || '';
+      var valHtml = val
+        ? (f.badge
+            ? '<span class="review-badge">' + val + '</span>'
+            : '<span class="review-val' + (f.highlight ? ' highlight' : '') + '">' + val + '</span>')
+        : '<span class="review-val empty">&#8212;</span>';
+      html += '<span class="review-key">' + f.label + '</span>' + valHtml;
+    });
+    html += '</div></div>';
+  });
+  document.getElementById('review-content').innerHTML = html;
+}
+
+/* ── Confirm dialog ── */
+function openConfirm() {
+  document.getElementById('confirm-overlay').classList.add('open');
+}
+function closeConfirm() {
+  document.getElementById('confirm-overlay').classList.remove('open');
+}
+
+/* ── Final submit ── */
+async function doSubmit() {
+  var btn = document.getElementById('btn-confirm-ok');
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Đang xử lý...';
 
@@ -431,23 +612,45 @@ async function submitCreateUser(e) {
     var res = await fetch('/api/tool-movi/create-user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(_payload),
     });
     var data = await res.json();
+
+    closeConfirm();
+
     if (!res.ok || data.error) {
-      showError(data.error || ('HTTP ' + res.status));
+      // Go back to review with error
+      showStep(2);
+      // Show error inline
+      var errEl = document.createElement('div');
+      errEl.className = 'result-banner result-error show';
+      errEl.style.marginBottom = '1rem';
+      errEl.innerHTML = '<span>&#9888;</span><div><div style="font-weight:600;margin-bottom:2px">Có lỗi xảy ra</div><div style="font-size:12px;opacity:.85">' + (data.error || 'HTTP ' + res.status) + '</div></div>';
+      var rc = document.getElementById('review-content');
+      rc.parentNode.insertBefore(errEl, rc);
     } else {
-      showSuccess('Tài khoản "' + email + '" đã được tạo thành công. Workflow n8n đang xử lý.');
-      form.reset();
-      document.getElementById('f-created-by').value = __USER__.username || '';
+      // Success
+      document.getElementById('success-detail').innerHTML =
+        'Tài khoản <strong>' + (_payload.email || '') + '</strong> đã được gửi đến workflow n8n.<br>Quá trình tạo đang được xử lý tự động.';
+      showStep(3);
     }
   } catch(err) {
-    showError('Lỗi kết nối: ' + err.message);
+    closeConfirm();
+    showStep(2);
+    var errEl2 = document.createElement('div');
+    errEl2.className = 'result-banner result-error show';
+    errEl2.style.marginBottom = '1rem';
+    errEl2.innerHTML = '<span>&#9888;</span><div><div style="font-weight:600;margin-bottom:2px">Lỗi kết nối</div><div style="font-size:12px;opacity:.85">' + err.message + '</div></div>';
+    var rc2 = document.getElementById('review-content');
+    rc2.parentNode.insertBefore(errEl2, rc2);
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg> Tạo Tài Khoản';
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Xác Nhận Tạo';
   }
 }
+
+/* ── Init ── */
+showStep(1);
 
 /* ── Theme + Clock ── */
 (function(){
@@ -459,7 +662,7 @@ async function submitCreateUser(e) {
     try{localStorage.setItem('dh_theme',next)}catch(e){}
   });
   var sl=document.getElementById('settings-link');
-  if(sl && (__USER__.isAdmin||__USER__.role==='admin')) sl.style.display='';
+  if(sl&&(__USER__.isAdmin||__USER__.role==='admin'))sl.style.display='';
   setInterval(function(){var c=document.getElementById('clock');if(c)c.textContent=new Date().toLocaleTimeString('vi-VN',{hour12:false});},1000);
 })();
 </script>
