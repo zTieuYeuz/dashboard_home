@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Tool Movi — Home Lab Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root,[data-theme="dark"]{
+  --bg:oklch(0.18 0.012 250);--surface:oklch(0.22 0.012 250);--surface-2:oklch(0.26 0.012 250);
+  --card:oklch(0.21 0.012 250);--border:oklch(0.31 0.012 250);--border-soft:oklch(0.27 0.012 250);
+  --text:oklch(0.96 0.005 250);--text-2:oklch(0.86 0.008 250);--muted:oklch(0.62 0.012 250);
+  --accent:oklch(0.72 0.18 290);--ok:oklch(0.74 0.16 155);--warn:oklch(0.78 0.16 70);--bad:oklch(0.68 0.20 25);
+  --violet:oklch(0.72 0.18 310);
+  --font-sans:'IBM Plex Sans',system-ui,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  --radius:12px;--radius-sm:8px;
+}
+[data-theme="light"]{
+  --bg:oklch(0.985 0.003 250);--surface:oklch(1 0 0);--surface-2:oklch(0.965 0.005 250);
+  --card:oklch(1 0 0);--border:oklch(0.91 0.008 250);--border-soft:oklch(0.94 0.008 250);
+  --text:oklch(0.22 0.015 250);--text-2:oklch(0.36 0.015 250);--muted:oklch(0.55 0.012 250);
+  --accent:oklch(0.55 0.18 290);--ok:oklch(0.52 0.15 155);--warn:oklch(0.62 0.16 70);--bad:oklch(0.55 0.20 25);
+  --violet:oklch(0.55 0.18 310);
+}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+/* ── Topbar ── */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:52px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;backdrop-filter:blur(12px)}
+.topbar-left{display:flex;align-items:center;gap:28px}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:30px;height:30px;display:grid;place-items:center;background:var(--violet);color:#fff;border-radius:var(--radius-sm);font-size:15px}
+.brand-name{font-weight:600;font-size:14px;line-height:1.1}
+.brand-sub{font-size:11px;color:var(--muted);margin-top:1px}
+.topnav{display:flex;gap:2px}
+.topnav-item{font-size:13px;font-weight:500;color:var(--muted);padding:6px 12px;border-radius:var(--radius-sm);transition:all .12s}
+.topnav-item:hover,.topnav-item.active{color:var(--text);background:var(--surface-2)}
+.clock{font-family:var(--font-mono);font-size:13px;color:var(--text-2);padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm)}
+.theme-toggle{width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--border);background:var(--surface-2);border-radius:var(--radius-sm);cursor:pointer;color:var(--text-2)}
+.theme-toggle:hover{color:var(--text)}
+
+/* ── Container ── */
+.container{max-width:1200px;margin:0 auto;padding:2rem 1.5rem}
+
+/* ── Section header ── */
+.section-header{margin-bottom:1.5rem}
+.section-title{font-size:18px;font-weight:600;margin-bottom:4px}
+.section-desc{font-size:13px;color:var(--muted)}
+
+/* ── Tool grid ── */
+.tool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+
+/* ── Tool card ── */
+.tool-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;display:flex;flex-direction:column;gap:12px;transition:border-color .15s,box-shadow .15s}
+.tool-card:hover{border-color:color-mix(in oklch,var(--violet) 50%,transparent);box-shadow:0 4px 20px oklch(0 0 0 / .15)}
+.tool-card-top{display:flex;align-items:flex-start;gap:12px}
+.tool-icon{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;font-size:20px;flex-shrink:0}
+.tool-icon-violet{background:color-mix(in oklch,var(--violet) 15%,transparent)}
+.tool-icon-blue{background:color-mix(in oklch,var(--accent) 15%,transparent)}
+.tool-icon-green{background:color-mix(in oklch,var(--ok) 15%,transparent)}
+.tool-info{flex:1;min-width:0}
+.tool-name{font-weight:600;font-size:14px;line-height:1.3;margin-bottom:4px}
+.tool-desc{font-size:12px;color:var(--muted);line-height:1.5}
+.tool-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid var(--border);color:var(--muted);background:var(--surface);font-family:var(--font-mono)}
+.tool-badge-dot{width:5px;height:5px;border-radius:50%;background:var(--ok)}
+.tool-btn{width:100%;padding:8px;border-radius:var(--radius-sm);border:none;background:var(--violet);color:#fff;font-family:var(--font-sans);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px}
+.tool-btn:hover{background:color-mix(in oklch,var(--violet) 85%,white 15%)}
+.tool-btn:active{transform:scale(.98)}
+
+/* ── Modal overlay ── */
+.modal-overlay{position:fixed;inset:0;background:oklch(0 0 0 / .65);backdrop-filter:blur(6px);z-index:200;display:flex;align-items:center;justify-content:center;padding:1rem;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:auto}
+
+/* ── Modal box ── */
+.modal{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:720px;max-height:90vh;display:flex;flex-direction:column;transform:translateY(12px);transition:transform .2s;overflow:hidden}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:1.1rem 1.25rem;border-bottom:1px solid var(--border);flex-shrink:0}
+.modal-title{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.modal-close{width:28px;height:28px;display:grid;place-items:center;border:1px solid var(--border);background:var(--surface-2);border-radius:var(--radius-sm);cursor:pointer;color:var(--muted);font-size:16px;transition:all .12s}
+.modal-close:hover{color:var(--text);border-color:var(--muted)}
+.modal-body{padding:1.25rem;overflow-y:auto;flex:1}
+.modal-footer{padding:.875rem 1.25rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-shrink:0}
+
+/* ── Form ── */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-full{grid-column:1/-1}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-label{font-size:12px;font-weight:500;color:var(--text-2)}
+.form-label .req{color:var(--bad);margin-left:2px}
+.form-input,.form-select{width:100%;padding:7px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-family:var(--font-sans);outline:none;transition:border-color .15s}
+.form-input:focus,.form-select:focus{border-color:var(--accent)}
+.form-input::placeholder{color:var(--muted)}
+.form-select option{background:var(--surface);color:var(--text)}
+.form-hint{font-size:11px;color:var(--muted)}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;font-family:var(--font-sans);border:none;transition:all .15s}
+.btn-primary{background:var(--violet);color:#fff}
+.btn-primary:hover{background:color-mix(in oklch,var(--violet) 85%,white 15%)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-ghost{background:transparent;color:var(--text-2);border:1px solid var(--border)}
+.btn-ghost:hover{color:var(--text);border-color:var(--muted)}
+
+/* ── States ── */
+.spin{width:14px;height:14px;border:2px solid oklch(1 0 0 / .3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Result banner ── */
+.result-banner{border-radius:var(--radius-sm);padding:.75rem 1rem;font-size:13px;margin-bottom:1rem;display:none}
+.result-banner.show{display:flex;align-items:flex-start;gap:8px}
+.result-success{background:color-mix(in oklch,var(--ok) 12%,transparent);border:1px solid color-mix(in oklch,var(--ok) 30%,transparent);color:var(--ok)}
+.result-error{background:color-mix(in oklch,var(--bad) 12%,transparent);border:1px solid color-mix(in oklch,var(--bad) 30%,transparent);color:var(--bad)}
+
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+@media(max-width:600px){.form-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark">&#9881;</div>
+      <div><div class="brand-name">Home Lab</div><div class="brand-sub">Tool Movi &middot; Workflow</div></div>
+    </div>
+    <nav class="topnav">
+      <a class="topnav-item" href="/">Overview</a>
+      <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
+      <a class="topnav-item" id="settings-link" href="/settings.html" style="display:none">&#9881; Settings</a>
+    </nav>
+  </div>
+  <div class="topbar-right">
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="container">
+  <div class="section-header">
+    <div class="section-title">&#128295; Tool Movi</div>
+    <div class="section-desc">Các công cụ tự động ho&#225; &mdash; k&#237;ch hoạt workflow n8n Movi</div>
+  </div>
+
+  <div class="tool-grid">
+
+    <!-- Card: Tạo User Movi -->
+    <div class="tool-card">
+      <div class="tool-card-top">
+        <div class="tool-icon tool-icon-violet">&#128100;</div>
+        <div class="tool-info">
+          <div class="tool-name">T&#7841;o User Movi</div>
+          <div class="tool-desc">T&#7841;o t&#224;i kho&#7843;n Microsoft 365 cho nh&#226;n vi&#234;n m&#7899;i &mdash; t&#7921; động g&#225;n nh&#243;m v&#224; quy&#7873;n theo ph&#242;ng ban</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span class="tool-badge"><span class="tool-badge-dot"></span>n8n Movi</span>
+        <span style="font-size:11px;color:var(--muted)">Microsoft 365</span>
+      </div>
+      <button class="tool-btn" onclick="openModal('create-user')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        M&#7903; form t&#7841;o t&#224;i kho&#7843;n
+      </button>
+    </div>
+
+    <!-- Placeholder cards (future tools) -->
+    <div class="tool-card" style="opacity:.45;pointer-events:none">
+      <div class="tool-card-top">
+        <div class="tool-icon tool-icon-blue">&#128274;</div>
+        <div class="tool-info">
+          <div class="tool-name">Reset Password</div>
+          <div class="tool-desc">&#272;&#7863;t lại mật khẩu Microsoft 365 cho nh&#226;n vi&#234;n</div>
+        </div>
+      </div>
+      <div style="text-align:center;font-size:12px;color:var(--muted);padding:.25rem 0">Coming soon</div>
+    </div>
+
+    <div class="tool-card" style="opacity:.45;pointer-events:none">
+      <div class="tool-card-top">
+        <div class="tool-icon tool-icon-green">&#128228;</div>
+        <div class="tool-info">
+          <div class="tool-name">Offboard User</div>
+          <div class="tool-desc">Kh&#243;a t&#224;i kho&#7843;n v&#224; thu hồi quy&#7873;n khi nh&#226;n vi&#234;n ngh&#7881; vi&#7879;c</div>
+        </div>
+      </div>
+      <div style="text-align:center;font-size:12px;color:var(--muted);padding:.25rem 0">Coming soon</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     Modal: Tạo User Movi
+══════════════════════════════════ -->
+<div class="modal-overlay" id="modal-create-user" onclick="handleOverlayClick(event)">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+
+    <div class="modal-header">
+      <div class="modal-title">
+        <span>&#128100;</span>
+        <span id="modal-title">T&#7841;o t&#224;i kho&#7843;n Movi</span>
+      </div>
+      <button class="modal-close" onclick="closeModal()" aria-label="&#272;&#243;ng">&times;</button>
+    </div>
+
+    <div class="modal-body">
+
+      <!-- Result banner -->
+      <div class="result-banner result-success" id="banner-success">
+        <span>&#10003;</span>
+        <div>
+          <div style="font-weight:600;margin-bottom:2px">T&#7841;o t&#224;i kho&#7843;n th&#224;nh c&#244;ng!</div>
+          <div id="banner-success-msg" style="font-size:12px;opacity:.85"></div>
+        </div>
+      </div>
+      <div class="result-banner result-error" id="banner-error">
+        <span>&#9888;</span>
+        <div>
+          <div style="font-weight:600;margin-bottom:2px">C&#243; lỗi xảy ra</div>
+          <div id="banner-error-msg" style="font-size:12px;opacity:.85"></div>
+        </div>
+      </div>
+
+      <form id="form-create-user" onsubmit="submitCreateUser(event)" novalidate>
+        <div class="form-grid">
+
+          <!-- Email User Movi -->
+          <div class="form-group">
+            <label class="form-label" for="f-email">Email User Movi<span class="req">*</span></label>
+            <input class="form-input" type="email" id="f-email" name="email"
+              placeholder="email của nhân viên" required autocomplete="off"/>
+          </div>
+
+          <!-- Personal Email -->
+          <div class="form-group">
+            <label class="form-label" for="f-personal-email">Personal Email<span class="req">*</span></label>
+            <input class="form-input" type="email" id="f-personal-email" name="personalEmail"
+              placeholder="Email cá nhân của nhân viên" required autocomplete="off"/>
+          </div>
+
+          <!-- FirstName -->
+          <div class="form-group">
+            <label class="form-label" for="f-firstname">First Name<span class="req">*</span></label>
+            <input class="form-input" type="text" id="f-firstname" name="firstName"
+              placeholder="Tên của nhân viên" required/>
+          </div>
+
+          <!-- LastName -->
+          <div class="form-group">
+            <label class="form-label" for="f-lastname">Last Name<span class="req">*</span></label>
+            <input class="form-input" type="text" id="f-lastname" name="lastName"
+              placeholder="Họ và tên đệm" required/>
+          </div>
+
+          <!-- JobTitle -->
+          <div class="form-group">
+            <label class="form-label" for="f-jobtitle">Job Title</label>
+            <input class="form-input" type="text" id="f-jobtitle" name="jobTitle"
+              placeholder="Title của nhân viên"/>
+          </div>
+
+          <!-- Department -->
+          <div class="form-group">
+            <label class="form-label" for="f-department">Department</label>
+            <input class="form-input" type="text" id="f-department" name="department"
+              placeholder="Phòng ban / bộ phận"/>
+          </div>
+
+          <!-- Office -->
+          <div class="form-group">
+            <label class="form-label" for="f-office">Office</label>
+            <input class="form-input" type="text" id="f-office" name="office"
+              placeholder="Nơi làm việc"/>
+          </div>
+
+          <!-- Mobile Phone -->
+          <div class="form-group">
+            <label class="form-label" for="f-mobile">Mobile Phone</label>
+            <input class="form-input" type="text" id="f-mobile" name="mobilePhone"
+              placeholder="Số điện thoại"/>
+          </div>
+
+          <!-- Manager -->
+          <div class="form-group">
+            <label class="form-label" for="f-manager">Manager</label>
+            <input class="form-input" type="email" id="f-manager" name="manager"
+              placeholder="Email người quản lý" autocomplete="off"/>
+          </div>
+
+          <!-- Company -->
+          <div class="form-group">
+            <label class="form-label" for="f-company">Company</label>
+            <input class="form-input" type="text" id="f-company" name="company"
+              placeholder="Công ty"/>
+          </div>
+
+          <!-- Phòng Ban (dropdown) — full width -->
+          <div class="form-group form-full">
+            <label class="form-label" for="f-group">Ph&ograve;ng Ban (Group)<span class="req">*</span></label>
+            <select class="form-select" id="f-group" name="group" required>
+              <option value="">&#8212; Ch&#7885;n ph&ograve;ng ban &#8212;</option>
+              <option>GP_IT_PMO</option>
+              <option>GP_BI</option>
+              <option>GP_ACCOUNTING_STAFF</option>
+              <option>GP_AntiFraud_STAFF</option>
+              <option>GP_HR_TA_STAFF</option>
+              <option>GP_HR_STAFF</option>
+              <option>GP_Scorecard_STAFF</option>
+              <option>GP_Specialist_STAFF</option>
+              <option>GP_MKT_STAFF</option>
+              <option>GP_collection_STAFF</option>
+              <option>GP_Risk_Control_STAFF</option>
+              <option>GP_IT_Designer_STAFF</option>
+              <option>GP_TELESALE_STAFF</option>
+              <option>GP_Legal_STAFF</option>
+              <option>GP_Support_Sale_STAFF</option>
+              <option>GP_SupplyChain_STAFF</option>
+              <option>GP_Product_STAFF</option>
+              <option>GP_Admin-Procurement</option>
+              <option>GP_ENG_STAFF</option>
+              <option>Strategy &amp; Transformation</option>
+            </select>
+          </div>
+
+          <!-- Người Tạo (hidden — auto filled) -->
+          <input type="hidden" id="f-created-by" name="createdBy"/>
+
+        </div>
+      </form>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">H&#7911;y</button>
+      <button class="btn btn-primary" id="btn-submit" onclick="submitCreateUser(event)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        T&#7841;o T&#224;i Kho&#7843;n
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ── User info ── */
+function _readUserCookie() {
+  try { var m = document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/); return m ? JSON.parse(decodeURIComponent(m[1])) : null; } catch(e) { return null; }
+}
+var __USER__ = window.__USER__ || _readUserCookie() || { role:'user', permissions:{}, isAdmin:false, username:'' };
+
+/* ── Modal ── */
+function openModal(id) {
+  hideBanners();
+  document.getElementById('form-create-user').reset();
+  // Auto-fill hidden field
+  document.getElementById('f-created-by').value = __USER__.username || __USER__.email || 'unknown';
+  var el = document.getElementById('modal-' + id);
+  if (el) el.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal() {
+  document.querySelectorAll('.modal-overlay').forEach(function(el){ el.classList.remove('open'); });
+  document.body.style.overflow = '';
+}
+function handleOverlayClick(e) {
+  if (e.target === e.currentTarget) closeModal();
+}
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeModal(); });
+
+/* ── Banners ── */
+function hideBanners() {
+  document.getElementById('banner-success').classList.remove('show');
+  document.getElementById('banner-error').classList.remove('show');
+}
+function showSuccess(msg) {
+  hideBanners();
+  document.getElementById('banner-success-msg').textContent = msg || '';
+  document.getElementById('banner-success').classList.add('show');
+}
+function showError(msg) {
+  hideBanners();
+  document.getElementById('banner-error-msg').textContent = msg || 'Vui lòng thử lại.';
+  document.getElementById('banner-error').classList.add('show');
+}
+
+/* ── Submit ── */
+async function submitCreateUser(e) {
+  e.preventDefault();
+  hideBanners();
+
+  var form = document.getElementById('form-create-user');
+
+  // Simple validation
+  var email   = form.email.value.trim();
+  var first   = form.firstName.value.trim();
+  var last    = form.lastName.value.trim();
+  var group   = form.group.value;
+  var persMail= form.personalEmail.value.trim();
+
+  if (!email)    { form.email.focus();        return showError('Email User Movi là bắt buộc.'); }
+  if (!first)    { form.firstName.focus();    return showError('First Name là bắt buộc.'); }
+  if (!last)     { form.lastName.focus();     return showError('Last Name là bắt buộc.'); }
+  if (!persMail) { form.personalEmail.focus();return showError('Personal Email là bắt buộc.'); }
+  if (!group)    { form.group.focus();        return showError('Vui lòng chọn Phòng Ban.'); }
+
+  var payload = {
+    email:         email,
+    firstName:     first,
+    lastName:      last,
+    jobTitle:      form.jobTitle.value.trim(),
+    department:    form.department.value.trim(),
+    personalEmail: persMail,
+    office:        form.office.value.trim(),
+    mobilePhone:   form.mobilePhone.value.trim(),
+    manager:       form.manager.value.trim(),
+    company:       form.company.value.trim(),
+    group:         group,
+    createdBy:     form.createdBy.value || __USER__.username || 'unknown',
+  };
+
+  var btn = document.getElementById('btn-submit');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Đang xử lý...';
+
+  try {
+    var res = await fetch('/api/tool-movi/create-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    var data = await res.json();
+    if (!res.ok || data.error) {
+      showError(data.error || ('HTTP ' + res.status));
+    } else {
+      showSuccess('Tài khoản "' + email + '" đã được tạo thành công. Workflow n8n đang xử lý.');
+      form.reset();
+      document.getElementById('f-created-by').value = __USER__.username || '';
+    }
+  } catch(err) {
+    showError('Lỗi kết nối: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg> Tạo Tài Khoản';
+  }
+}
+
+/* ── Theme + Clock ── */
+(function(){
+  var saved=null; try{saved=localStorage.getItem('dh_theme')}catch(e){}
+  if(saved==='light') document.documentElement.dataset.theme='light';
+  document.getElementById('themeToggle').addEventListener('click',function(){
+    var next=document.documentElement.dataset.theme==='light'?'dark':'light';
+    document.documentElement.dataset.theme=next;
+    try{localStorage.setItem('dh_theme',next)}catch(e){}
+  });
+  var sl=document.getElementById('settings-link');
+  if(sl && (__USER__.isAdmin||__USER__.role==='admin')) sl.style.display='';
+  setInterval(function(){var c=document.getElementById('clock');if(c)c.textContent=new Date().toLocaleTimeString('vi-VN',{hour12:false});},1000);
+})();
+</script>
+</body>
+</html>

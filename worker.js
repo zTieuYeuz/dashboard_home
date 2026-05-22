@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════ */
 const SESSION_COOKIE    = 'dh_session';
 const SESSION_TTL       = 60 * 60 * 8;      // default fallback only — runtime reads from KV system_config
-const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi'];
+const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi'];
 
 /* Idle-timer script injected into every authenticated HTML page.
    T = idle timeout ms, W = warning threshold ms (must be < T) */
@@ -843,6 +843,7 @@ const WAYFIND_NAV = `<style>
   {i:'\\uD83D\\uDD25',n:'FortiGate Movi',d:'Firewall dashboard · bandwidth · interfaces live',h:'/service-movi/fortigate-movi.html'},
   {i:'\\uD83D\\uDCF9',n:'Camera Movi',d:'Camera live · go2rtc · RTSP streams',h:'/service-movi/camera-movi.html'},
   {i:'\\u26A1',n:'n8n Movi',d:'Workflow automation · Movi Finance',h:'/service-movi/n8n-movi.html'},
+  {i:'🛠',n:'Tool Movi',d:'Workflow triggers ? n8n automation',h:'/service-movi/tool-movi.html'},
   {i:'\uD83D\uDDA5',n:'VMware01 Movi',d:'ESXi host 01 ? Movi Finance datacenter',h:'/service-movi/vmware01-movi.html'},
   {i:'\uD83D\uDDA5',n:'VMware02 Movi',d:'ESXi host 02 ? Movi Finance datacenter',h:'/service-movi/vmware02-movi.html'},
   {i:'\\uD83D\\uDD25',n:'FortiGate',d:'Firewall · security gateway',h:'/service-home/fortigate.html'},
@@ -958,6 +959,7 @@ const DATA_REFRESH = `<style>
   '/service-movi/n8n-movi.html':['loadData'],
   '/service-movi/vmware01-movi.html':['loadData'],
   '/service-movi/vmware02-movi.html':['loadData'],
+  '/service-movi/tool-movi.html':[],
   '/service-home/fortigate.html':['load'],'/service-home/esxi.html':['loadData'],'/service-home/casaos.html':['loadData'],
   '/service-home/asus.html':['load'],'/service-home/9router.html':['loadData'],'/service-home/n8n.html':['loadData'],
   '/service-home/hikvision.html':['loadState'],'/service-home/ssh.html':['loadData'],
@@ -1460,6 +1462,46 @@ async function handleMoviN8nExecDetail(request, env) {
     });
   } catch (e) {
     return json({ error: e.message }, 502);
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   Tool Movi — Workflow triggers via n8n webhook
+   Secret: MOVI_TOOL_CREATE_USER_WEBHOOK
+   ═══════════════════════════════════════════════ */
+async function handleToolMoviCreateUser(request, env, session) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  const webhookUrl = env.MOVI_TOOL_CREATE_USER_WEBHOOK;
+  if (!webhookUrl) return json({ error: 'MOVI_TOOL_CREATE_USER_WEBHOOK not configured. Run: npx wrangler secret put MOVI_TOOL_CREATE_USER_WEBHOOK' }, 500);
+
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
+
+  // Validate required fields
+  const required = ['email','firstName','lastName','personalEmail','group'];
+  for (const f of required) {
+    if (!body[f] || !String(body[f]).trim()) return json({ error: `Missing required field: ${f}` }, 400);
+  }
+
+  // Force createdBy from server-side session (cannot be spoofed by client)
+  body.createdBy = session.username || session.email || 'unknown';
+  body.createdAt = new Date().toISOString();
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      return json({ error: `n8n webhook returned ${res.status}`, detail: txt.slice(0, 300) }, 502);
+    }
+    const result = await res.json().catch(() => ({ received: true }));
+    return json({ success: true, result });
+  } catch (e) {
+    return json({ error: `Webhook error: ${e.message}` }, 502);
   }
 }
 
@@ -3868,6 +3910,12 @@ export default {
       if (!_s) return json({ error: 'Unauthorized' }, 401);
       if (!(await hasPerm(env, _s, 'n8n-movi'))) return json({ error: 'Không có quyền truy cập n8n Movi' }, 403);
       return handleMoviN8nExecDetail(request, env);
+    }
+    if (p === '/api/tool-movi/create-user') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'tool-movi'))) return json({ error: 'Không có quyền truy cập Tool Movi' }, 403);
+      return handleToolMoviCreateUser(request, env, _s);
     }
     if (p === '/api/vmware01-movi') {
       const _s = await getSession(request, env);
