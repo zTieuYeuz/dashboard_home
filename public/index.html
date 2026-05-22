@@ -793,6 +793,9 @@ function renderServices() {
     var savedOpen = q ? filtered.length > 0 : false;
 
     /* Service rows */
+    /* Nếu tất cả services trong nhóm đều noCheck → ẩn cột Latency & Since */
+    var allNoCheck = catSvcs.every(function(s){ return s.noCheck; });
+
     var rows = filtered.map(function(s){
       var r = { status: s.noCheck ? 'online' : (prev[s.id] || 'checking'), ping: pingHistory[s.id].slice(-1)[0] };
       var since = statusSince[s.id] ? timeAgo(statusSince[s.id].ts) : '—';
@@ -810,11 +813,11 @@ function renderServices() {
           + '<div class="svc-desc">' + esc(s.desc) + '</div>'
         + '</td>'
         + '<td><span class="status-pip" style="--c:' + statusColor(r.status) + '"><i class="' + (r.status === 'checking' ? 'checking' : '') + '"></i><span>' + statusLabel(r.status) + '</span></span></td>'
-        + '<td style="text-align:right"><span class="num">' + (r.ping ? r.ping + 'ms' : '—') + '</span></td>'
-        + '<td><span class="muted small">' + since + '</span></td>'
+        + (allNoCheck ? '' : '<td style="text-align:right"><span class="num">' + (r.ping ? r.ping + 'ms' : '—') + '</span></td>')
+        + (allNoCheck ? '' : '<td><span class="muted small">' + since + '</span></td>')
         + '<td style="text-align:right"><a class="row-action" href="' + href + '" target="' + target + '" rel="noopener">Open ↗</a></td>'
         + '</tr>';
-    }).join('') || '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--muted)">Không có service khớp filter.</td></tr>';
+    }).join('') || '<tr><td colspan="' + (allNoCheck ? 4 : 6) + '" style="padding:24px;text-align:center;color:var(--muted)">Không có service khớp filter.</td></tr>';
 
     return ''
       + '<section class="svc-group ' + (savedOpen ? 'is-open' : 'is-closed') + '" style="--group-accent:' + cat.accent + '">'
@@ -837,8 +840,8 @@ function renderServices() {
             + '<th style="width:32px"></th>'
             + '<th>Service</th>'
             + '<th>Status</th>'
-            + '<th style="text-align:right">Latency</th>'
-            + '<th>Since</th>'
+            + (allNoCheck ? '' : '<th style="text-align:right">Latency</th>')
+            + (allNoCheck ? '' : '<th>Since</th>')
             + '<th style="text-align:right">Actions</th>'
           + '</tr></thead>'
           + '<tbody>' + rows + '</tbody>'
