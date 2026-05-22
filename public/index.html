@@ -691,6 +691,8 @@ var ALL_SERVICES_DEF = [
   { id:'fortigate-movi',name:'FortiGate Movi',  icon:'🔥', desc:'Firewall Movi-HO-200F · SD-WAN Bandwidth',    url:'https://192.168.140.254:4434',               local:true,  detailPage:'/service-movi/fortigate-movi.html', noCheck:true },
   { id:'camera-movi',   name:'Camera Movi',     icon:'📷', desc:'Camera giám sát · go2rtc · 16 kênh',          url:'https://cam.movi-finance.com',               local:true,  detailPage:'/service-movi/camera-movi.html',    noCheck:true },
   { id:'n8n-movi',      name:'n8n Movi',        icon:'⚡', desc:'Workflow automation · Movi Finance',           url:'https://n8n.movi-finance.com',               local:false, detailPage:'/service-movi/n8n-movi.html',        noCheck:true },
+  { id:'vmware01-movi', name:'VMware01 Movi',   icon:'🖥', desc:'ESXi host 01 · Movi Finance datacenter',        url:'https://vmw01.movi-finance.com',             local:false, detailPage:'/service-movi/vmware01-movi.html',   noCheck:true },
+  { id:'vmware02-movi', name:'VMware02 Movi',   icon:'🖥', desc:'ESXi host 02 · Movi Finance datacenter',        url:'https://vmw02.movi-finance.com',             local:false, detailPage:'/service-movi/vmware02-movi.html',   noCheck:true },
 ];
 
 /* Categories (matches original SERVICE_CATEGORIES) */
@@ -698,7 +700,7 @@ var SERVICE_CATEGORIES = [
   { id:'home', icon:'🏠', name:'Service Home', desc:'Hạ tầng & hệ thống · home-server.id.vn', accent:'var(--accent)',
     serviceIds: ['esxi','n8n','casaos','9router','uptime-kuma','ssh','fortigate','asus','camera'] },
   { id:'movi', icon:'🎬', name:'Service Movi', desc:'Văn phòng Movi · Meraki & Topology',    accent:'var(--violet)',
-    serviceIds: ['meraki','movi','fortigate-movi','camera-movi','n8n-movi'] },
+    serviceIds: ['meraki','movi','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi'] },
 ];
 
 /* Permission filter (NOTE: server-side check for 'movi' uses 'topology' permission key) */

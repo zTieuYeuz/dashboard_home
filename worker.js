@@ -1,9 +1,9 @@
-/* ═══════════════════════════════════════════════
+﻿/* ═══════════════════════════════════════════════
    Auth & User Management System
    ═══════════════════════════════════════════════ */
 const SESSION_COOKIE    = 'dh_session';
 const SESSION_TTL       = 60 * 60 * 8;      // default fallback only — runtime reads from KV system_config
-const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','meraki','topology','fortigate-movi','camera-movi','n8n-movi'];
+const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi'];
 
 /* Idle-timer script injected into every authenticated HTML page.
    T = idle timeout ms, W = warning threshold ms (must be < T) */
@@ -843,6 +843,8 @@ const WAYFIND_NAV = `<style>
   {i:'\\uD83D\\uDD25',n:'FortiGate Movi',d:'Firewall dashboard · bandwidth · interfaces live',h:'/service-movi/fortigate-movi.html'},
   {i:'\\uD83D\\uDCF9',n:'Camera Movi',d:'Camera live · go2rtc · RTSP streams',h:'/service-movi/camera-movi.html'},
   {i:'\\u26A1',n:'n8n Movi',d:'Workflow automation · Movi Finance',h:'/service-movi/n8n-movi.html'},
+  {i:'\uD83D\uDDA5',n:'VMware01 Movi',d:'ESXi host 01 ? Movi Finance datacenter',h:'/service-movi/vmware01-movi.html'},
+  {i:'\uD83D\uDDA5',n:'VMware02 Movi',d:'ESXi host 02 ? Movi Finance datacenter',h:'/service-movi/vmware02-movi.html'},
   {i:'\\uD83D\\uDD25',n:'FortiGate',d:'Firewall · security gateway',h:'/service-home/fortigate.html'},
   {i:'\\uD83D\\uDDA5',n:'VMware ESXi',d:'Hypervisor · bare metal',h:'/service-home/esxi.html'},
   {i:'\\uD83C\\uDFE0',n:'CasaOS',d:'Home server OS',h:'/service-home/casaos.html'},
@@ -954,6 +956,8 @@ const DATA_REFRESH = `<style>
   '/service-movi/fortigate-movi.html':['loadAll'],
   '/service-movi/camera-movi.html':['loadState'],
   '/service-movi/n8n-movi.html':['loadData'],
+  '/service-movi/vmware01-movi.html':['loadData'],
+  '/service-movi/vmware02-movi.html':['loadData'],
   '/service-home/fortigate.html':['load'],'/service-home/esxi.html':['loadData'],'/service-home/casaos.html':['loadData'],
   '/service-home/asus.html':['load'],'/service-home/9router.html':['loadData'],'/service-home/n8n.html':['loadData'],
   '/service-home/hikvision.html':['loadState'],'/service-home/ssh.html':['loadData'],
@@ -2475,6 +2479,295 @@ async function esxiSoap(bodyXml, cookie = '') {
   return { text, cookie: ck, ok: res.ok };
 }
 
+// SOAP variant for Movi ESXi — configurable URL + CF ZT headers
+async function esxiSoapEx(bodyXml, sdkUrl, cfId, cfSec, cookie = '') {
+  const headers = {
+    'Content-Type': 'text/xml; charset=UTF-8',
+    'SOAPAction': '"urn:vim25/8.0"',
+  };
+  if (cookie) headers['Cookie'] = cookie;
+  if (cfId && cfSec) {
+    headers['CF-Access-Client-Id']     = cfId;
+    headers['CF-Access-Client-Secret'] = cfSec;
+  }
+  const envelope = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"',
+    ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
+    '<soapenv:Body>', bodyXml, '</soapenv:Body></soapenv:Envelope>',
+  ].join('');
+  const res  = await fetch(sdkUrl, { method: 'POST', headers, body: envelope, signal: AbortSignal.timeout(15000) });
+  const text = await res.text();
+  const sc   = res.headers.get('set-cookie') || '';
+  const ck   = (sc.match(/vmware_soap_session[^;]+/) || [''])[0];
+  return { text, cookie: ck, ok: res.ok };
+}
+
+/* ═══════════════════════════════════════════════
+   Movi VMware ESXi — SOAP (via CF Tunnel + ZT Service Token)
+   Secrets: MOVI_VMWARE01_URL, MOVI_VMWARE01_USER, MOVI_VMWARE01_PASS
+            MOVI_VMWARE02_URL, MOVI_VMWARE02_USER, MOVI_VMWARE02_PASS
+            MOVI_VMWARE_CF_ID, MOVI_VMWARE_CF_SECRET
+   ═══════════════════════════════════════════════ */
+async function handleMoviESXi(env, hostNum) {
+  const base  = env[`MOVI_VMWARE0${hostNum}_URL`];
+  const user  = env[`MOVI_VMWARE0${hostNum}_USER`];
+  const pass  = env[`MOVI_VMWARE0${hostNum}_PASS`];
+  const cfId  = env.MOVI_VMWARE_CF_ID;
+  const cfSec = env.MOVI_VMWARE_CF_SECRET;
+
+  if (!base) return json({ error: `MOVI_VMWARE0${hostNum}_URL not configured` }, 500);
+
+  const sdkUrl = base.replace(/\/$/, '') + '/sdk';
+  const soap   = (body, ck = '') => esxiSoapEx(body, sdkUrl, cfId, cfSec, ck);
+
+  // ── Step 1: basic info, no auth ──
+  const { text: svcText } = await soap(
+    '<RetrieveServiceContent xmlns="urn:vim25">' +
+    '<_this type="ServiceInstance">ServiceInstance</_this>' +
+    '</RetrieveServiceContent>'
+  );
+  const about = {
+    fullName:   x1(svcText, 'fullName'),
+    version:    x1(svcText, 'version'),
+    build:      x1(svcText, 'build'),
+    apiVersion: x1(svcText, 'apiVersion'),
+  };
+
+  if (!user || !pass) {
+    return json({ about, host: null, vms: [], datastores: [], stats: {},
+      error: `MOVI_VMWARE0${hostNum}_USER / MOVI_VMWARE0${hostNum}_PASS not configured` });
+  }
+
+  // ── Step 2: login ──
+  const smRef = x1(svcText, 'sessionManager') || 'ha-sessionmanager';
+  const { text: loginText, cookie } = await soap(
+    '<Login xmlns="urn:vim25">' +
+    '<_this type="SessionManager">' + escXml(smRef) + '</_this>' +
+    '<userName>' + escXml(user) + '</userName>' +
+    '<password>' + escXml(pass) + '</password>' +
+    '</Login>'
+  );
+
+  if (!cookie || loginText.includes('Fault>')) {
+    const msg = x1(loginText, 'localizedMessage') || x1(loginText, 'faultstring') || 'Login failed';
+    return json({ about, host: null, vms: [], datastores: [], stats: {}, error: msg });
+  }
+
+  // ── Step 3: fetch host, VMs, datastores in parallel ──
+  const hostBody = `<RetrievePropertiesEx xmlns="urn:vim25">
+<_this type="PropertyCollector">ha-property-collector</_this>
+<specSet>
+  <propSet><type>HostSystem</type>
+    <pathSet>summary.config.name</pathSet>
+    <pathSet>summary.hardware.memorySize</pathSet>
+    <pathSet>summary.hardware.cpuModel</pathSet>
+    <pathSet>summary.hardware.numCpuCores</pathSet>
+    <pathSet>summary.hardware.numCpuThreads</pathSet>
+    <pathSet>summary.hardware.cpuMhz</pathSet>
+    <pathSet>summary.quickStats.overallCpuUsage</pathSet>
+    <pathSet>summary.quickStats.overallMemoryUsage</pathSet>
+    <pathSet>summary.runtime.connectionState</pathSet>
+    <pathSet>summary.overallStatus</pathSet>
+  </propSet>
+  <objectSet><obj type="HostSystem">ha-host</obj></objectSet>
+</specSet><options/></RetrievePropertiesEx>`;
+
+  const vmBody = `<RetrievePropertiesEx xmlns="urn:vim25">
+<_this type="PropertyCollector">ha-property-collector</_this>
+<specSet>
+  <propSet><type>VirtualMachine</type>
+    <pathSet>name</pathSet>
+    <pathSet>runtime.powerState</pathSet>
+    <pathSet>config.hardware.numCPU</pathSet>
+    <pathSet>config.hardware.memoryMB</pathSet>
+    <pathSet>guest.ipAddress</pathSet>
+    <pathSet>guest.hostName</pathSet>
+    <pathSet>guest.guestFullName</pathSet>
+    <pathSet>summary.quickStats.overallCpuUsage</pathSet>
+    <pathSet>summary.quickStats.guestMemoryUsage</pathSet>
+    <pathSet>summary.storage.committed</pathSet>
+    <pathSet>summary.runtime.bootTime</pathSet>
+    <pathSet>config.annotation</pathSet>
+  </propSet>
+  <objectSet>
+    <obj type="HostSystem">ha-host</obj>
+    <selectSet xsi:type="TraversalSpec">
+      <type>HostSystem</type><path>vm</path><skip>false</skip>
+    </selectSet>
+  </objectSet>
+</specSet><options><maxObjects>100</maxObjects></options></RetrievePropertiesEx>`;
+
+  const dsBody = `<RetrievePropertiesEx xmlns="urn:vim25">
+<_this type="PropertyCollector">ha-property-collector</_this>
+<specSet>
+  <propSet><type>Datastore</type>
+    <pathSet>name</pathSet>
+    <pathSet>summary.capacity</pathSet>
+    <pathSet>summary.freeSpace</pathSet>
+    <pathSet>summary.type</pathSet>
+    <pathSet>summary.accessible</pathSet>
+  </propSet>
+  <objectSet>
+    <obj type="HostSystem">ha-host</obj>
+    <selectSet xsi:type="TraversalSpec">
+      <type>HostSystem</type><path>datastore</path><skip>false</skip>
+    </selectSet>
+  </objectSet>
+</specSet><options/></RetrievePropertiesEx>`;
+
+  try {
+    const [hostRes, vmRes, dsRes] = await Promise.all([
+      soap(hostBody, cookie),
+      soap(vmBody,   cookie),
+      soap(dsBody,   cookie),
+    ]);
+
+    // ── Parse host ──
+    let host = null;
+    for (const obj of xAll(hostRes.text, 'objects')) {
+      const p = parsePropSets(obj);
+      const totalMhz = parseInt(p['summary.hardware.numCpuCores'] || 0)
+                     * parseInt(p['summary.hardware.cpuMhz'] || 0);
+      const cpuUsed  = parseInt(p['summary.quickStats.overallCpuUsage'] || 0);
+      const memTotal = parseInt(p['summary.hardware.memorySize'] || 0);
+      const memUsed  = parseInt(p['summary.quickStats.overallMemoryUsage'] || 0);
+      host = {
+        name: p['summary.config.name'],
+        cpuModel: p['summary.hardware.cpuModel'],
+        numCpuCores: parseInt(p['summary.hardware.numCpuCores'] || 0),
+        numCpuThreads: parseInt(p['summary.hardware.numCpuThreads'] || 0),
+        cpuMhz: parseInt(p['summary.hardware.cpuMhz'] || 0),
+        totalCpuMhz: totalMhz,
+        usedCpuMhz: cpuUsed,
+        cpuPct: totalMhz > 0 ? Math.round(cpuUsed / totalMhz * 100) : 0,
+        memTotalMB: Math.round(memTotal / 1048576),
+        memUsedMB: memUsed,
+        memPct: memTotal > 0 ? Math.round(memUsed / (memTotal / 1048576) * 100) : 0,
+        connectionState: p['summary.runtime.connectionState'],
+        overallStatus: p['summary.overallStatus'],
+      };
+    }
+
+    // ── Parse VMs ──
+    const vms = [];
+    for (const obj of xAll(vmRes.text, 'objects')) {
+      if (!obj.includes('type="VirtualMachine"')) continue;
+      const moId = x1(obj, 'obj');
+      const p    = parsePropSets(obj);
+      const cpuMhz = parseInt(p['summary.quickStats.overallCpuUsage'] || 0);
+      const cpuPct = host && host.cpuMhz > 0 ? Math.round(cpuMhz / host.cpuMhz * 100) : 0;
+      const memMB  = parseInt(p['config.hardware.memoryMB'] || 0);
+      const memUsed= parseInt(p['summary.quickStats.guestMemoryUsage'] || 0);
+      vms.push({
+        id: moId, name: p['name'] || '(unnamed)',
+        powerState: p['runtime.powerState'],
+        numCPU: parseInt(p['config.hardware.numCPU'] || 0),
+        memoryMB: memMB, ipAddress: p['guest.ipAddress'] || null,
+        hostName: p['guest.hostName'] || null,
+        guestOS: p['guest.guestFullName'] || null,
+        cpuUsageMhz: cpuMhz, cpuPct: Math.min(cpuPct, 100),
+        memUsedMB: memUsed,
+        memPct: memMB > 0 ? Math.round(memUsed / memMB * 100) : 0,
+        storageGB: Math.round(parseInt(p['summary.storage.committed'] || 0) / 1073741824 * 10) / 10,
+        bootTime: p['summary.runtime.bootTime'] || null,
+        annotation: p['config.annotation'] || null,
+      });
+    }
+    vms.sort((a, b) => {
+      if (a.powerState !== b.powerState) return a.powerState === 'poweredOn' ? -1 : 1;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+
+    // ── Parse Datastores ──
+    const datastores = [];
+    for (const obj of xAll(dsRes.text, 'objects')) {
+      const p = parsePropSets(obj);
+      const cap  = parseInt(p['summary.capacity']  || 0);
+      const free = parseInt(p['summary.freeSpace'] || 0);
+      datastores.push({
+        name: p['name'], type: p['summary.type'],
+        accessible: p['summary.accessible'] === 'true',
+        capacityGB: Math.round(cap  / 1073741824 * 10) / 10,
+        freeGB:     Math.round(free / 1073741824 * 10) / 10,
+        usedGB:     Math.round((cap - free) / 1073741824 * 10) / 10,
+        usedPct: cap > 0 ? Math.round((cap - free) / cap * 100) : 0,
+      });
+    }
+
+    const poweredOn  = vms.filter(v => v.powerState === 'poweredOn').length;
+    const poweredOff = vms.filter(v => v.powerState === 'poweredOff').length;
+    const suspended  = vms.filter(v => v.powerState === 'suspended').length;
+    return json({ about, host, vms, datastores, stats: { totalVMs: vms.length, poweredOn, poweredOff, suspended } });
+  } finally {
+    soap('<Logout xmlns="urn:vim25"><_this type="SessionManager">ha-sessionmanager</_this></Logout>', cookie).catch(() => {});
+  }
+}
+
+async function handleMoviESXiPower(request, env, hostNum) {
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: {
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    }});
+  }
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+
+  const base  = env[`MOVI_VMWARE0${hostNum}_URL`];
+  const user  = env[`MOVI_VMWARE0${hostNum}_USER`];
+  const pass  = env[`MOVI_VMWARE0${hostNum}_PASS`];
+  const cfId  = env.MOVI_VMWARE_CF_ID;
+  const cfSec = env.MOVI_VMWARE_CF_SECRET;
+  if (!base || !user || !pass) return json({ error: `MOVI_VMWARE0${hostNum} credentials not configured` }, 500);
+
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
+  const { vmId, action } = body;
+  if (!vmId || !action) return json({ error: 'Missing vmId or action' }, 400);
+
+  const actionMap = {
+    'powerOn': 'PowerOnVM_Task', 'powerOff': 'PowerOffVM_Task',
+    'suspend': 'SuspendVM_Task', 'reset': 'ResetVM_Task',
+    'shutdownGuest': 'ShutdownGuest', 'rebootGuest': 'RebootGuest',
+  };
+  const soapMethod = actionMap[action];
+  if (!soapMethod) return json({ error: 'Invalid action. Allowed: ' + Object.keys(actionMap).join(', ') }, 400);
+
+  const sdkUrl = base.replace(/\/$/, '') + '/sdk';
+  const soap   = (bodyXml, ck = '') => esxiSoapEx(bodyXml, sdkUrl, cfId, cfSec, ck);
+
+  try {
+    const { text: svcText } = await soap(
+      '<RetrieveServiceContent xmlns="urn:vim25"><_this type="ServiceInstance">ServiceInstance</_this></RetrieveServiceContent>'
+    );
+    const smRef = x1(svcText, 'sessionManager') || 'ha-sessionmanager';
+    const { cookie } = await soap(
+      '<Login xmlns="urn:vim25">' +
+      '<_this type="SessionManager">' + escXml(smRef) + '</_this>' +
+      '<userName>' + escXml(user) + '</userName>' +
+      '<password>' + escXml(pass) + '</password>' +
+      '</Login>'
+    );
+    if (!cookie) return json({ error: 'ESXi login failed' }, 502);
+
+    const powerBody =
+      '<' + soapMethod + ' xmlns="urn:vim25">' +
+      '<_this type="VirtualMachine">' + escXml(vmId) + '</_this>' +
+      '</' + soapMethod + '>';
+    const { text: resultText } = await soap(powerBody, cookie);
+
+    soap('<Logout xmlns="urn:vim25"><_this type="SessionManager">ha-sessionmanager</_this></Logout>', cookie).catch(() => {});
+
+    if (resultText.includes('Fault>')) {
+      const faultMsg = x1(resultText, 'localizedMessage') || x1(resultText, 'faultstring') || 'Unknown fault';
+      return json({ success: false, error: faultMsg });
+    }
+    return json({ success: true, action, vmId });
+  } catch (e) {
+    return json({ error: e.message }, 502);
+  }
+}
+
 async function handleESXi(env) {
   const user = env.ESXI_USER;
   const pass = env.ESXI_PASSWORD;
@@ -3575,6 +3868,34 @@ export default {
       if (!_s) return json({ error: 'Unauthorized' }, 401);
       if (!(await hasPerm(env, _s, 'n8n-movi'))) return json({ error: 'Không có quyền truy cập n8n Movi' }, 403);
       return handleMoviN8nExecDetail(request, env);
+    }
+    if (p === '/api/vmware01-movi') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'vmware01-movi'))) return json({ error: 'Không có quyền truy cập VMware01 Movi' }, 403);
+      return handleMoviESXi(env, '1');
+    }
+    if (p === '/api/vmware02-movi') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'vmware02-movi'))) return json({ error: 'Không có quyền truy cập VMware02 Movi' }, 403);
+      return handleMoviESXi(env, '2');
+    }
+    if (p === '/api/vmware01-movi/power') {
+      if (request.method !== 'OPTIONS') {
+        const _s = await getSession(request, env);
+        if (!_s) return json({ error: 'Unauthorized' }, 401);
+        if (_s.role !== 'admin') return json({ error: 'Admin required' }, 403);
+      }
+      return handleMoviESXiPower(request, env, '1');
+    }
+    if (p === '/api/vmware02-movi/power') {
+      if (request.method !== 'OPTIONS') {
+        const _s = await getSession(request, env);
+        if (!_s) return json({ error: 'Unauthorized' }, 401);
+        if (_s.role !== 'admin') return json({ error: 'Admin required' }, 403);
+      }
+      return handleMoviESXiPower(request, env, '2');
     }
     if (p === '/api/9router') {
       const _s = await getSession(request, env);
