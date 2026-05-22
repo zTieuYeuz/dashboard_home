@@ -397,7 +397,7 @@ function timeAgo(iso) {
   if (m < 60) return m + 'ph trước';
   var h = Math.floor(m/60);
   if (h < 24) return h + 'h trước';
-  return Math.floor(h/24) + 'ng trước';
+  return Math.floor(h/24) + ' ngày trước';
 }
 function dur(s, e) {
   if (!s||!e) return '';
