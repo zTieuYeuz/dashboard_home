@@ -598,8 +598,8 @@ input { font: inherit; }
 
   <!-- QUICK ACCESS + BLOCKED DEVICES + ACTIVITY -->
   <div class="two-col">
-    <!-- Quick Access -->
-    <section class="card-flush">
+    <!-- Quick Access (admin only) -->
+    <section class="card-flush" id="endpoints-section" style="display:none">
       <header class="card-head">
         <div>
           <div class="section-eyebrow">Quick Access</div>
@@ -644,9 +644,11 @@ var __USER__ = window.__USER__ || _readUserCookie() || { username:'?', role:'use
 (function initUserUI() {
   document.getElementById('user-avatar').textContent = (__USER__.username || '?').charAt(0).toUpperCase();
   document.getElementById('user-name').textContent   = __USER__.username || '?';
+  // Settings link visible to all logged-in users
+  document.getElementById('settings-link').style.display = '';
   if (__USER__.isAdmin) {
     document.getElementById('user-tag').style.display      = '';
-    document.getElementById('settings-link').style.display = '';
+    document.getElementById('endpoints-section').style.display = '';
   }
 })();
 
@@ -688,6 +690,7 @@ var ALL_SERVICES_DEF = [
   { id:'movi',          name:'Movi Map Network',icon:'🗺', desc:'Network topology · wiring · L3',               url:'/service-movi/topology.html',                local:false, detailPage:'/service-movi/topology.html',       noCheck:true },
   { id:'fortigate-movi',name:'FortiGate Movi',  icon:'🔥', desc:'Firewall Movi-HO-200F · SD-WAN Bandwidth',    url:'https://192.168.140.254:4434',               local:true,  detailPage:'/service-movi/fortigate-movi.html', noCheck:true },
   { id:'camera-movi',   name:'Camera Movi',     icon:'📷', desc:'Camera giám sát · go2rtc · 16 kênh',          url:'https://cam.movi-finance.com',               local:true,  detailPage:'/service-movi/camera-movi.html',    noCheck:true },
+  { id:'n8n-movi',      name:'n8n Movi',        icon:'⚡', desc:'Workflow automation · Movi Finance',           url:'https://n8n.movi-finance.com',               local:false, detailPage:'/service-movi/n8n-movi.html',        noCheck:true },
 ];
 
 /* Categories (matches original SERVICE_CATEGORIES) */
@@ -695,7 +698,7 @@ var SERVICE_CATEGORIES = [
   { id:'home', icon:'🏠', name:'Service Home', desc:'Hạ tầng & hệ thống · home-server.id.vn', accent:'var(--accent)',
     serviceIds: ['esxi','n8n','casaos','9router','uptime-kuma','ssh','fortigate','asus','camera'] },
   { id:'movi', icon:'🎬', name:'Service Movi', desc:'Văn phòng Movi · Meraki & Topology',    accent:'var(--violet)',
-    serviceIds: ['meraki','movi','fortigate-movi','camera-movi'] },
+    serviceIds: ['meraki','movi','fortigate-movi','camera-movi','n8n-movi'] },
 ];
 
 /* Permission filter (NOTE: server-side check for 'movi' uses 'topology' permission key) */
@@ -704,7 +707,8 @@ var SERVICES = __USER__.isAdmin
   ? ALL_SERVICES_DEF
   : ALL_SERVICES_DEF.filter(function(s){
       var pid = _permMap[s.id] || s.id;
-      return !!__USER__.permissions[pid];
+      var perm = __USER__.permissions[pid] || 'none';
+      return perm !== 'none';
     });
 
 /* ═══════════════════════════════════════════════════════════════
@@ -763,6 +767,8 @@ function renderServices() {
   var total = 0;
   var html = SERVICE_CATEGORIES.map(function(cat) {
     var catSvcs = SERVICES.filter(function(s){ return cat.serviceIds.indexOf(s.id) >= 0; });
+    // Hide entire category if no services are visible for this user
+    if (catSvcs.length === 0) return '';
     total += catSvcs.length;
 
     var filtered = q
@@ -789,8 +795,6 @@ function renderServices() {
     /* Service rows */
     var rows = filtered.map(function(s){
       var r = { status: s.noCheck ? 'online' : (prev[s.id] || 'checking'), ping: pingHistory[s.id].slice(-1)[0] };
-      var hist = pingHistory[s.id];
-      var spark = hist.length >= 2 ? sparkSVG(hist.slice(-16), 'var(--accent)') : '<span class="muted small">—</span>';
       var since = statusSince[s.id] ? timeAgo(statusSince[s.id].ts) : '—';
       var href = s.detailPage ? s.detailPage : s.url;
       var target = (s.newTab || !s.detailPage) ? '_blank' : '_self';
@@ -807,11 +811,10 @@ function renderServices() {
         + '</td>'
         + '<td><span class="status-pip" style="--c:' + statusColor(r.status) + '"><i class="' + (r.status === 'checking' ? 'checking' : '') + '"></i><span>' + statusLabel(r.status) + '</span></span></td>'
         + '<td style="text-align:right"><span class="num">' + (r.ping ? r.ping + 'ms' : '—') + '</span></td>'
-        + '<td>' + spark + '</td>'
         + '<td><span class="muted small">' + since + '</span></td>'
         + '<td style="text-align:right"><a class="row-action" href="' + href + '" target="' + target + '" rel="noopener">Open ↗</a></td>'
         + '</tr>';
-    }).join('') || '<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--muted)">Không có service khớp filter.</td></tr>';
+    }).join('') || '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--muted)">Không có service khớp filter.</td></tr>';
 
     return ''
       + '<section class="svc-group ' + (savedOpen ? 'is-open' : 'is-closed') + '" style="--group-accent:' + cat.accent + '">'
@@ -835,7 +838,6 @@ function renderServices() {
             + '<th>Service</th>'
             + '<th>Status</th>'
             + '<th style="text-align:right">Latency</th>'
-            + '<th>Trend (15m)</th>'
             + '<th>Since</th>'
             + '<th style="text-align:right">Actions</th>'
           + '</tr></thead>'
@@ -946,12 +948,12 @@ function runChecks() {
 }
 
 /* Auto-refresh countdown */
-var cd = 120;
+var cd = 300;
 setInterval(function() {
   cd--;
   var m = Math.floor(cd / 60), s = cd % 60;
   document.getElementById('autoLabel').textContent = 'Auto · ' + (m > 0 ? m + 'm ' : '') + s + 's';
-  if (cd <= 0) { runChecks(); cd = 120; }
+  if (cd <= 0) { runChecks(); cd = 300; }
 }, 1000);
 
 setInterval(function() {
@@ -1045,12 +1047,20 @@ function cliToast(msg, ok) {
 }
 
 function cliActHtml(mac, blocked, cName, cIp) {
-  var n = esc(cName || '').replace(/'/g, "\\'");
-  var ip = esc(cIp || '').replace(/'/g, "\\'");
-  if (blocked) {
-    return '<button class="cli-act unblk" onclick="cliPolicy(this,\'' + mac + '\',\'Normal\',\'' + n + '\',\'' + ip + '\')">✅ Mở chặn</button>';
-  }
-  return '<button class="cli-act blk" onclick="cliPolicy(this,\'' + mac + '\',\'Blocked\',\'' + n + '\',\'' + ip + '\')">⛔ Chặn</button>';
+  // Dùng data-* thay vì nối chuỗi vào onclick để tránh XSS injection
+  var cls = blocked ? 'cli-act unblk' : 'cli-act blk';
+  var lbl = blocked ? '✅ Mở chặn' : '⛔ Chặn';
+  var pol = blocked ? 'Normal' : 'Blocked';
+  return '<button class="'+cls+'"'
+    +' data-mac="'+esc(mac)+'"'
+    +' data-policy="'+pol+'"'
+    +' data-name="'+esc(cName||'')+'"'
+    +' data-ip="'+esc(cIp||'')+'"'
+    +' onclick="cliPolicyClick(this)">'+lbl+'</button>';
+}
+
+function cliPolicyClick(btn) {
+  cliPolicy(btn, btn.dataset.mac, btn.dataset.policy, btn.dataset.name, btn.dataset.ip);
 }
 
 function cliPolicy(btn, mac, policy, clientName, clientIp) {

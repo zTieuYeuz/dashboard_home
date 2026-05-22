@@ -255,11 +255,11 @@ select.inp{cursor:pointer}
 
   <!-- Main Tab Navigation -->
   <div class="main-tabs" id="main-tabs">
-    <button class="main-tab active" onclick="switchTab('users',this)">👥 User Management</button>
-    <button class="main-tab" onclick="switchTab('sysconfig',this)">🔧 System Config</button>
-    <button class="main-tab" onclick="switchTab('auditlog',this)">📋 Audit Log</button>
-    <button class="main-tab" onclick="switchTab('roles',this)">🔐 Role Management</button>
-    <button class="main-tab" onclick="switchTab('account',this)">👤 Tài khoản</button>
+    <button class="main-tab admin-only active" id="tab-btn-users"    onclick="switchTab('users',this)">👥 User Management</button>
+    <button class="main-tab admin-only"         id="tab-btn-sysconfig" onclick="switchTab('sysconfig',this)">🔧 System Config</button>
+    <button class="main-tab"                    id="tab-btn-auditlog"  onclick="switchTab('auditlog',this)">📋 Audit Log</button>
+    <button class="main-tab admin-only"         id="tab-btn-roles"     onclick="switchTab('roles',this)">🔐 Role Management</button>
+    <button class="main-tab"                    id="tab-btn-account"   onclick="switchTab('account',this)">👤 Tài khoản</button>
   </div>
 
   <!-- ══════════════════════════════════════════════
@@ -388,13 +388,13 @@ select.inp{cursor:pointer}
       <div class="panel-header">
         <div>
           <div class="panel-title">📋 Audit Log</div>
-          <div class="panel-desc">Lịch sử hoạt động 30 ngày gần nhất</div>
+          <div class="panel-desc" id="audit-panel-desc">Lịch sử hoạt động 30 ngày gần nhất</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <span id="audit-total-info" style="font-size:12px;color:var(--muted)"></span>
           <input class="inp inp-sm" id="audit-filter" type="text" placeholder="Lọc user/action..." oninput="filterAuditLog()" style="width:180px"/>
           <button class="btn btn-outline btn-sm" onclick="loadAuditLog()">↻ Làm mới</button>
-          <button class="btn btn-danger btn-sm" onclick="purgeAuditLog()">🗑 Purge cũ (>30 ngày)</button>
+          <button class="btn btn-danger btn-sm admin-only" onclick="purgeAuditLog()">🗑 Purge cũ (>30 ngày)</button>
         </div>
       </div>
       <div class="tbl-wrap" style="max-height:580px">
@@ -621,9 +621,22 @@ var __USER__ = window.__USER__ || _readUserCookie() || { username:'?', role:'use
 (function initUI() {
   document.getElementById('user-avatar').textContent = (__USER__.username||'?').charAt(0).toUpperCase();
   document.getElementById('user-name').textContent = __USER__.username||'?';
-  if (__USER__.isAdmin) document.getElementById('user-tag').style.display='';
-  // Redirect non-admins
-  if (!__USER__.isAdmin) { window.location.href = '/'; return; }
+  if (__USER__.isAdmin) {
+    document.getElementById('user-tag').style.display='';
+  } else {
+    // Non-admin: hide admin-only tabs, switch to account tab as default
+    document.querySelectorAll('.admin-only').forEach(function(el){ el.style.display='none'; });
+    // Deactivate users tab, activate account tab
+    document.getElementById('tc-users').classList.remove('active');
+    document.getElementById('tc-account').classList.add('active');
+    document.getElementById('tab-btn-account').classList.add('active');
+    document.getElementById('tab-btn-users').classList.remove('active');
+    // Update descriptions for regular users
+    var sub = document.querySelector('.page-sub');
+    if (sub) sub.textContent = 'Quản lý tài khoản cá nhân và xem lịch sử hoạt động';
+    var auditDesc = document.getElementById('audit-panel-desc');
+    if (auditDesc) auditDesc.textContent = 'Lịch sử hoạt động của tài khoản bạn (30 ngày)';
+  }
   // Theme
   var saved=null; try{saved=localStorage.getItem('dh_theme')}catch(e){}
   if(saved==='light') document.documentElement.dataset.theme='light';
@@ -1583,8 +1596,14 @@ function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
    INIT
    ═══════════════════════════════════════════════════════════ */
 window.addEventListener('DOMContentLoaded', function(){
-  if (!__USER__.isAdmin) return; // already redirected above
-  loadSettings();
+  if (__USER__.isAdmin) {
+    // Admin: load everything
+    loadSettings();
+  } else {
+    // Non-admin: only load what they can see (Account tab + Audit Log)
+    loadMfaStatus();
+    loadAuditLog();
+  }
   // Auto-submit OTP when 6 digits entered
   ['mfa-setup-code','mfa-disable-code'].forEach(function(id){
     var el = document.getElementById(id);

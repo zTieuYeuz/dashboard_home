@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════ */
 const SESSION_COOKIE    = 'dh_session';
 const SESSION_TTL       = 60 * 60 * 8;      // default fallback only — runtime reads from KV system_config
-const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','meraki','topology','fortigate-movi','camera-movi'];
+const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','meraki','topology','fortigate-movi','camera-movi','n8n-movi'];
 
 /* Idle-timer script injected into every authenticated HTML page.
    T = idle timeout ms, W = warning threshold ms (must be < T) */
@@ -224,7 +224,7 @@ async function handleLogin(request, env) {
   }));
   const h = new Headers({ 'Content-Type': 'application/json' });
   h.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
-  h.append('Set-Cookie', `dh_user=${userInfo}; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
+  h.append('Set-Cookie', `dh_user=${userInfo}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
   await logActivity(env, { action: 'login_success', username, ip, success: true });
   return new Response(JSON.stringify({ success: true, role: user.role }), { status: 200, headers: h });
 }
@@ -247,6 +247,17 @@ async function handleSessionRefresh(request, env) {
   const h = new Headers({ 'Content-Type': 'application/json' });
   h.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${refreshTtl}`);
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: h });
+}
+
+/** Xóa tất cả session KV của một user (dùng khi delete / demote / đổi password) */
+async function invalidateUserSessions(env, username) {
+  try {
+    const listed = await env.DASHBOARD_KV.list({ prefix: 'session:' });
+    await Promise.all(listed.keys.map(async k => {
+      const s = await env.DASHBOARD_KV.get(k.name, 'json');
+      if (s && s.username === username) await env.DASHBOARD_KV.delete(k.name);
+    }));
+  } catch (_) { /* best-effort */ }
 }
 
 async function handleLogout(request, env) {
@@ -329,9 +340,11 @@ async function handleDeleteUser(request, env, username) {
   const session = await getSession(request, env);
   if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
   if (username === 'admin') return json({ error: 'Không thể xoá admin' }, 400);
+  await invalidateUserSessions(env, username);   // xóa session trước khi xóa user
   await env.DASHBOARD_KV.delete(`user:${username}`);
   const list = (await env.DASHBOARD_KV.get('userlist', 'json') || []).filter(u => u !== username);
   await env.DASHBOARD_KV.put('userlist', JSON.stringify(list));
+  await logActivity(env, { action: 'user-delete', username: session.username, success: true, detail: `Deleted user: ${username}` });
   return json({ success: true });
 }
 
@@ -340,11 +353,14 @@ async function handleChangePw(request, env, username) {
   if (!session) return json({ error: 'Not authenticated' }, 401);
   if (session.role !== 'admin' && session.username !== username) return json({ error: 'Forbidden' }, 403);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  if (!body?.password || body.password.length < 4) return json({ error: 'Password quá ngắn (tối thiểu 4 ký tự)' }, 400);
+  if (!body?.password || body.password.length < 8) return json({ error: 'Password quá ngắn (tối thiểu 8 ký tự)' }, 400);
   const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
   if (!user) return json({ error: 'User not found' }, 404);
   user.password = await hashPw(body.password);
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  // Invalidate all existing sessions so old sessions can't reuse stale auth
+  await invalidateUserSessions(env, username);
+  await logActivity(env, { action: 'password-change', username: session.username, success: true, detail: `Changed password for: ${username}` });
   return json({ success: true });
 }
 
@@ -396,6 +412,37 @@ async function hasPerm(env, session, permKey) {
   return (eff.permissions[permKey] || 'none') !== 'none';
 }
 
+/** Whitelist permission keys/values để chặn XSS qua group names/permission keys */
+function sanitizePermissions(raw) {
+  if (!raw || typeof raw !== 'object') return {};
+  const out = {};
+  const VALID_VALS = ['none', 'read', 'write'];
+  for (const k of Object.keys(raw)) {
+    if (ALL_SERVICES.includes(k) && VALID_VALS.includes(raw[k])) out[k] = raw[k];
+  }
+  return out;
+}
+function sanitizePanels(raw) {
+  if (!raw || typeof raw !== 'object') return {};
+  const out = {};
+  const VALID_VALS = ['read', 'write', false, true];
+  for (const k of Object.keys(raw)) {
+    // panel key must start with a known service ID
+    const svc = ALL_SERVICES.find(s => k.startsWith(s + '.'));
+    if (svc && k.length <= 64 && VALID_VALS.includes(raw[k])) out[k] = raw[k];
+  }
+  return out;
+}
+function sanitizeCameraIds(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(c => typeof c === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(c));
+}
+function sanitizeName(s, maxLen = 64) {
+  if (typeof s !== 'string') return '';
+  // strip HTML tags / control chars
+  return s.replace(/<[^>]*>/g, '').replace(/[^\x20-\x7EÀ-ɏ]/g, '').trim().slice(0, maxLen);
+}
+
 async function handleListGroups(request, env) {
   const session = await getSession(request, env);
   if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
@@ -413,16 +460,16 @@ async function handleCreateGroup(request, env) {
   if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  const name = String(body?.name || '').trim();
+  const name = sanitizeName(String(body?.name || ''));
   if (!name || name.length > 64) return json({ error: 'Tên group không hợp lệ' }, 400);
   const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || ('g-' + Date.now());
   if (await env.DASHBOARD_KV.get(`policy_group:${id}`)) return json({ error: 'Group đã tồn tại' }, 409);
   const group = {
     id, name,
-    description: String(body?.description || ''),
-    permissions: body?.permissions || {},
-    panels: body?.panels || {},
-    cameras: body?.cameras || [],
+    description: sanitizeName(String(body?.description || ''), 256),
+    permissions: sanitizePermissions(body?.permissions),
+    panels:      sanitizePanels(body?.panels),
+    cameras:     sanitizeCameraIds(body?.cameras),
     created: Date.now()
   };
   await env.DASHBOARD_KV.put(`policy_group:${id}`, JSON.stringify(group));
@@ -437,11 +484,11 @@ async function handleUpdateGroup(request, env, groupId) {
   const group = await env.DASHBOARD_KV.get(`policy_group:${groupId}`, 'json');
   if (!group) return json({ error: 'Group not found' }, 404);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  if (body.name !== undefined) group.name = String(body.name).trim();
-  if (body.description !== undefined) group.description = String(body.description);
-  if (body.permissions !== undefined) group.permissions = body.permissions;
-  if (body.panels !== undefined) group.panels = body.panels;
-  if (body.cameras !== undefined) group.cameras = body.cameras;
+  if (body.name !== undefined) group.name = sanitizeName(String(body.name));
+  if (body.description !== undefined) group.description = sanitizeName(String(body.description), 256);
+  if (body.permissions !== undefined) group.permissions = sanitizePermissions(body.permissions);
+  if (body.panels !== undefined) group.panels = sanitizePanels(body.panels);
+  if (body.cameras !== undefined) group.cameras = sanitizeCameraIds(body.cameras);
   await env.DASHBOARD_KV.put(`policy_group:${groupId}`, JSON.stringify(group));
   return json({ success: true, group });
 }
@@ -472,11 +519,21 @@ async function handleUpdateUserGroups(request, env, username) {
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   user.groups = Array.isArray(body.groups) ? body.groups : [];
   // Allow role change (admin→user or user→admin) when explicitly provided
+  const oldRole = user.role;
   if (body.role !== undefined) {
     const allowed = ['user', 'admin'];
     if (allowed.includes(body.role)) user.role = body.role;
   }
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  // If role changed, invalidate existing sessions so change takes effect immediately
+  if (body.role !== undefined && body.role !== oldRole) {
+    await invalidateUserSessions(env, username);
+    await logActivity(env, { action: 'role-change', username: session.username, ip, success: true,
+      detail: `${username}: ${oldRole} → ${user.role}` });
+  }
+  await logActivity(env, { action: 'group-update', username: session.username, ip, success: true,
+    detail: `${username} groups: [${user.groups.join(', ')}]` });
   return json({ success: true, username, groups: user.groups });
 }
 
@@ -488,8 +545,8 @@ async function handleUpdateUserPanels(request, env, username) {
   if (!user) return json({ error: 'User not found' }, 404);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   // Allow saving permissions + panels + cameras atomically in a single write (avoids race condition)
-  if (body.permissions !== undefined) user.permissions = body.permissions;
-  user.panels  = body.panels || {};
+  if (body.permissions !== undefined) user.permissions = sanitizePermissions(body.permissions);
+  user.panels  = sanitizePanels(body.panels || {});
   user.cameras = Array.isArray(body.cameras) ? body.cameras : (user.cameras || []);
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
   return json({ success: true, username, permissions: user.permissions, panels: user.panels, cameras: user.cameras });
@@ -505,22 +562,22 @@ const DEFAULT_CAMERAS = [
 ];
 
 const DEFAULT_CAMERAS_MOVI = [
-  { id: 'movi-cam01', name: 'Movi Camera 01',  type: 'ip', stream: 'movi-cam01' },
-  { id: 'movi-cam02', name: 'Movi Camera 02',  type: 'ip', stream: 'movi-cam02' },
-  { id: 'movi-cam03', name: 'Movi Camera 03',  type: 'ip', stream: 'movi-cam03' },
-  { id: 'movi-cam04', name: 'Movi Camera 04',  type: 'ip', stream: 'movi-cam04' },
-  { id: 'movi-cam05', name: 'Movi Camera 05',  type: 'ip', stream: 'movi-cam05' },
-  { id: 'movi-cam06', name: 'Movi Camera 06',  type: 'ip', stream: 'movi-cam06' },
-  { id: 'movi-cam07', name: 'Movi Camera 07',  type: 'ip', stream: 'movi-cam07' },
-  { id: 'movi-cam08', name: 'Movi Camera 08',  type: 'ip', stream: 'movi-cam08' },
-  { id: 'movi-cam09', name: 'Movi Camera 09',  type: 'ip', stream: 'movi-cam09' },
-  { id: 'movi-cam10', name: 'Movi Camera 10',  type: 'ip', stream: 'movi-cam10' },
-  { id: 'movi-cam11', name: 'Movi Camera 11',  type: 'ip', stream: 'movi-cam11' },
-  { id: 'movi-cam12', name: 'Movi Camera 12',  type: 'ip', stream: 'movi-cam12' },
-  { id: 'movi-cam13', name: 'Movi Camera 13',  type: 'ip', stream: 'movi-cam13' },
-  { id: 'movi-cam14', name: 'Movi Camera 14',  type: 'ip', stream: 'movi-cam14' },
-  { id: 'movi-cam15', name: 'Movi Camera 15',  type: 'ip', stream: 'movi-cam15' },
-  { id: 'movi-cam16', name: 'Movi Camera 16',  type: 'ip', stream: 'movi-cam16' },
+  { id: 'cam1',  name: 'Camera 1',  type: 'ip', stream: 'cam1'  },
+  { id: 'cam2',  name: 'Camera 2',  type: 'ip', stream: 'cam2'  },
+  { id: 'cam3',  name: 'Camera 3',  type: 'ip', stream: 'cam3'  },
+  { id: 'cam4',  name: 'Camera 4',  type: 'ip', stream: 'cam4'  },
+  { id: 'cam5',  name: 'Camera 5',  type: 'ip', stream: 'cam5'  },
+  { id: 'cam6',  name: 'Camera 6',  type: 'ip', stream: 'cam6'  },
+  { id: 'cam7',  name: 'Camera 7',  type: 'ip', stream: 'cam7'  },
+  { id: 'cam8',  name: 'Camera 8',  type: 'ip', stream: 'cam8'  },
+  { id: 'cam9',  name: 'Camera 9',  type: 'ip', stream: 'cam9'  },
+  { id: 'cam10', name: 'Camera 10', type: 'ip', stream: 'cam10' },
+  { id: 'cam11', name: 'Camera 11', type: 'ip', stream: 'cam11' },
+  { id: 'cam12', name: 'Camera 12', type: 'ip', stream: 'cam12' },
+  { id: 'cam13', name: 'Camera 13', type: 'ip', stream: 'cam13' },
+  { id: 'cam14', name: 'Camera 14', type: 'ip', stream: 'cam14' },
+  { id: 'cam15', name: 'Camera 15', type: 'ip', stream: 'cam15' },
+  { id: 'cam16', name: 'Camera 16', type: 'ip', stream: 'cam16' },
 ];
 
 async function handleMoviCameraList(request, env) {
@@ -712,7 +769,7 @@ async function handleMfaVerify(request, env) {
   }));
   const h = new Headers({ 'Content-Type': 'application/json' });
   h.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${mfaSessionTtl}`);
-  h.append('Set-Cookie', `dh_user=${userInfo}; Secure; SameSite=Lax; Path=/; Max-Age=${mfaSessionTtl}`);
+  h.append('Set-Cookie', `dh_user=${userInfo}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${mfaSessionTtl}`);
   await logActivity(env, { action: 'mfa_success', username: temp.username, ip, success: true });
   return new Response(JSON.stringify({ success: true, role: user.role }), { status: 200, headers: h });
 }
@@ -785,6 +842,7 @@ const WAYFIND_NAV = `<style>
   {i:'\\uD83D\\uDDFA',n:'Movi Map Network',d:'Sơ đồ topology · route · dây switch',h:'/service-movi/topology.html'},
   {i:'\\uD83D\\uDD25',n:'FortiGate Movi',d:'Firewall dashboard · bandwidth · interfaces live',h:'/service-movi/fortigate-movi.html'},
   {i:'\\uD83D\\uDCF9',n:'Camera Movi',d:'Camera live · go2rtc · RTSP streams',h:'/service-movi/camera-movi.html'},
+  {i:'\\u26A1',n:'n8n Movi',d:'Workflow automation · Movi Finance',h:'/service-movi/n8n-movi.html'},
   {i:'\\uD83D\\uDD25',n:'FortiGate',d:'Firewall · security gateway',h:'/service-home/fortigate.html'},
   {i:'\\uD83D\\uDDA5',n:'VMware ESXi',d:'Hypervisor · bare metal',h:'/service-home/esxi.html'},
   {i:'\\uD83C\\uDFE0',n:'CasaOS',d:'Home server OS',h:'/service-home/casaos.html'},
@@ -895,6 +953,7 @@ const DATA_REFRESH = `<style>
   '/service-movi/topology.html':['loadData'],
   '/service-movi/fortigate-movi.html':['loadAll'],
   '/service-movi/camera-movi.html':['loadState'],
+  '/service-movi/n8n-movi.html':['loadData'],
   '/service-home/fortigate.html':['load'],'/service-home/esxi.html':['loadData'],'/service-home/casaos.html':['loadData'],
   '/service-home/asus.html':['load'],'/service-home/9router.html':['loadData'],'/service-home/n8n.html':['loadData'],
   '/service-home/hikvision.html':['loadState'],'/service-home/ssh.html':['loadData'],
@@ -1056,15 +1115,16 @@ async function injectUser(request, env) {
     groups: isAdmin ? [] : effPerms.groups,
     isAdmin
   })};
-  /* Auto-inject Settings link into any page topnav for admin users */
+  /* Auto-inject Settings link into any page topnav for all logged-in users */
   (function(){
-    if(!window.__USER__||!window.__USER__.isAdmin)return;
+    if(!window.__USER__)return;
     document.addEventListener('DOMContentLoaded',function(){
       var sl=document.getElementById('settings-link');
       if(sl){sl.style.display='';return;}
-      var nav=document.querySelector('nav.topnav')||document.querySelector('.topnav');
+      var nav=document.querySelector('nav.topnav')||document.querySelector('nav.topbar-nav')||document.querySelector('.topnav');
       if(!nav)return;
       var a=document.createElement('a');
+      a.id='settings-link';
       a.className='topnav-item';a.href='/settings.html';a.textContent='⚙ Settings';
       nav.appendChild(a);
     });
@@ -1121,6 +1181,7 @@ const SERVICES = [
 ];
 
 const N8N_BASE        = 'https://n8n-home.home-server.id.vn/api/v1';
+const MOVI_N8N_BASE   = 'https://n8n.movi-finance.com/api/v1';
 const NINEROUTER_BASE = 'https://9router.home-server.id.vn';
 const ESXI_SDK        = 'https://esxi.home-server.id.vn/sdk';
 
@@ -1259,6 +1320,127 @@ async function handleExecDetail(request, env) {
 
   try {
     const res = await fetch(`${N8N_BASE}/executions/${execId}?includeData=true`, {
+      headers: { 'X-N8N-API-KEY': key, 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(12000),
+    });
+    const data = await res.json();
+    const err  = data.data?.resultData?.error || null;
+    const last = data.data?.resultData?.lastNodeExecuted || null;
+    return json({
+      id: data.id, status: data.status,
+      startedAt: data.startedAt, stoppedAt: data.stoppedAt,
+      mode: data.mode,
+      error: err ? { message: err.message, name: err.name, stack: err.stack, description: err.description } : null,
+      lastNodeExecuted: last,
+    });
+  } catch (e) {
+    return json({ error: e.message }, 502);
+  }
+}
+
+/* ── Movi n8n API (direct API key auth) ──
+   Set via:  wrangler secret put MOVI_N8N_API_KEY */
+async function handleMoviN8n(env) {
+  const key = env.MOVI_N8N_API_KEY;
+  if (!key) return json({ error: 'MOVI_N8N_API_KEY not configured' }, 500);
+
+  const h = { 'X-N8N-API-KEY': key, 'Accept': 'application/json' };
+  const opts = (extra = {}) => ({ headers: h, signal: AbortSignal.timeout(10000), ...extra });
+
+  try {
+    // Fetch running executions separately — n8n default list only returns finished ones
+    const [wfRes, exRes, exRunRes, credRes, varRes, tagRes] = await Promise.all([
+      fetch(`${MOVI_N8N_BASE}/workflows?limit=100`, opts()),
+      fetch(`${MOVI_N8N_BASE}/executions?limit=50&includeData=false`, opts()),
+      fetch(`${MOVI_N8N_BASE}/executions?limit=20&includeData=false&status=running`, opts()),
+      fetch(`${MOVI_N8N_BASE}/credentials`, opts()),
+      fetch(`${MOVI_N8N_BASE}/variables`, opts()),
+      fetch(`${MOVI_N8N_BASE}/tags?limit=100`, opts()),
+    ]);
+
+    const [wfData, exData, exRunData, credData, varData, tagData] = await Promise.all([
+      wfRes.json(),
+      exRes.json(),
+      exRunRes.ok ? exRunRes.json() : { data: [] },
+      credRes.json(),
+      varRes.json(),
+      tagRes.json(),
+    ]);
+
+    const workflows = (wfData.data || []).map(w => ({
+      id: w.id, name: w.name, active: w.active,
+      updatedAt: w.updatedAt, createdAt: w.createdAt,
+      triggerCount: w.triggerCount || 0,
+      tags: (w.tags || []).map(t => t.name || t),
+    }));
+
+    const wfNameMap = {};
+    workflows.forEach(w => { wfNameMap[w.id] = w.name; });
+
+    const seenIds = new Set();
+    const mergedRaw = [...(exRunData.data || []), ...(exData.data || [])].filter(e => {
+      if (seenIds.has(e.id)) return false;
+      seenIds.add(e.id);
+      return true;
+    });
+    mergedRaw.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+
+    const executions = mergedRaw.map(e => ({
+      id: e.id,
+      workflowName: wfNameMap[e.workflowId] || e.workflowData?.name || '(không rõ)',
+      workflowId: e.workflowId,
+      status: e.status,
+      startedAt: e.startedAt,
+      stoppedAt: e.stoppedAt,
+      mode: e.mode,
+    }));
+
+    const credentials = (credData.data || []).map(c => ({
+      id: c.id, name: c.name, type: c.type,
+      createdAt: c.createdAt, updatedAt: c.updatedAt,
+    }));
+
+    const variables = (varData.data || []).map(v => ({
+      id: v.id, key: v.key, value: v.value, type: v.type,
+    }));
+
+    const tags = (tagData.data || []).map(t => ({
+      id: t.id, name: t.name, usageCount: t.usageCount || 0,
+    }));
+
+    const active   = workflows.filter(w => w.active).length;
+    const inactive = workflows.length - active;
+    const success  = executions.filter(e => e.status === 'success').length;
+    const failed   = executions.filter(e => e.status === 'error' || e.status === 'failed').length;
+    const running  = executions.filter(e => e.status === 'running').length;
+
+    const lastRun = {};
+    executions.forEach(e => {
+      if (!lastRun[e.workflowId] || new Date(e.startedAt) > new Date(lastRun[e.workflowId].startedAt)) {
+        lastRun[e.workflowId] = { status: e.status, startedAt: e.startedAt, execId: e.id };
+      }
+    });
+
+    return json({
+      workflows, executions, credentials, variables, tags, lastRun,
+      stats: { total: workflows.length, active, inactive, success, failed, running,
+               totalCreds: credentials.length, totalVars: variables.length },
+    });
+  } catch (e) {
+    return json({ error: e.message }, 502);
+  }
+}
+
+async function handleMoviN8nExecDetail(request, env) {
+  const key = env.MOVI_N8N_API_KEY;
+  if (!key) return json({ error: 'MOVI_N8N_API_KEY not configured' }, 500);
+
+  const url = new URL(request.url);
+  const execId = url.searchParams.get('id');
+  if (!execId) return json({ error: 'Missing id' }, 400);
+
+  try {
+    const res = await fetch(`${MOVI_N8N_BASE}/executions/${execId}?includeData=true`, {
       headers: { 'X-N8N-API-KEY': key, 'Accept': 'application/json' },
       signal: AbortSignal.timeout(12000),
     });
@@ -1472,6 +1654,7 @@ async function handleMerakiDevices(request, env) {
       const firmwareOk = d.firmware && !d.firmware.includes('Not running');
       return {
         name:       d.name || '—',
+        mac:        d.mac  || null,
         model:      d.model || '—',
         serial:     d.serial || '—',
         lanIp:      ip,
@@ -1846,15 +2029,33 @@ async function handleCameraToken(request, env) {
   const labels = Object.fromEntries(allCams.map(c => [c.stream, c.name || c.id]));
 
   // Permission check + camera filtering for non-admin users
-  if (session.role !== 'admin') {
-    const eff = await computeEffectivePermissions(env, session.username);
+  // Re-check role from KV (handles promoted/demoted users whose session may be stale)
+  const sessionRole = session.role;
+  const effForRole  = sessionRole !== 'admin' ? await computeEffectivePermissions(env, session.username) : null;
+  const effectiveAdmin = sessionRole === 'admin' || (effForRole && effForRole.role === 'admin');
+
+  if (!effectiveAdmin) {
+    const eff = effForRole;
     const perm = (eff && eff.permissions['camera-movi']) || 'none';
     if (perm === 'none') return json({ error: 'Không có quyền truy cập Camera Movi' }, 403);
-    // Filter: eff.cameras holds camera IDs → map to stream IDs
-    const allowedIds = eff && eff.cameras && eff.cameras.length > 0 ? eff.cameras : null;
-    const streams = allowedIds
-      ? allCams.filter(c => allowedIds.includes(c.id)).map(c => c.stream)
-      : allStreams;
+
+    // Filter by assigned camera IDs (eff.cameras).
+    // Normalize IDs to handle legacy 'movi-camXX' → 'camX' migration.
+    const normalize = id => {
+      if (!id) return id;
+      const m = id.match(/^movi-cam(\d+)$/i);
+      return m ? 'cam' + parseInt(m[1], 10) : id;
+    };
+    const allowedIds = eff && Array.isArray(eff.cameras) && eff.cameras.length > 0 ? eff.cameras : null;
+    let streams;
+    if (allowedIds) {
+      const normalizedAllowed = allowedIds.map(normalize);
+      streams = allCams.filter(c => normalizedAllowed.includes(normalize(c.id))).map(c => c.stream);
+      // Graceful fallback: if stale/unknown IDs produced 0 results, show all cameras
+      if (streams.length === 0) streams = allStreams;
+    } else {
+      streams = allStreams;
+    }
     return json({ url, streams, labels });
   }
   return json({ url, streams: allStreams, labels });
@@ -2134,11 +2335,17 @@ async function handleMoviSystem(request, env) {
 
 async function handleGetActivity(request, env) {
   const session = await getSession(request, env);
-  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
   const log = await env.DASHBOARD_KV.get('activity_log', 'json') || [];
   const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 days
-  const filtered = log.filter(l => l.ts >= cutoff);
-  return json({ log: filtered.slice(0, 500), total: filtered.length, cutoffDays: 30 });
+  const byTime = log.filter(l => l.ts >= cutoff);
+  // Admin sees all entries; regular users see only their own activity
+  const eff = session.role !== 'admin' ? await computeEffectivePermissions(env, session.username) : null;
+  const isAdmin = session.role === 'admin' || (eff && eff.role === 'admin');
+  const filtered = isAdmin
+    ? byTime
+    : byTime.filter(l => l.username === session.username);
+  return json({ log: filtered.slice(0, 500), total: filtered.length, cutoffDays: 30, isAdmin });
 }
 
 async function handlePurgeAuditLog(request, env) {
@@ -2490,7 +2697,6 @@ async function handleESXi(env) {
 async function handleESXiPower(request, env) {
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: {
-      'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     }});
@@ -3340,16 +3546,82 @@ export default {
     if (p === '/api/movi-policy')               return handleMoviPolicy(request, env);
     if (p === '/api/movi-dhcp')                 return handleMoviDhcp(request, env);
 
-    if (p === '/api/status')      return handleStatus();
-    if (p === '/api/n8n')         return handleN8n(env);
-    if (p === '/api/n8n/exec')    return handleExecDetail(request, env);
-    if (p === '/api/9router')     return handle9Router(request, env);
-    if (p === '/api/esxi')        return handleESXi(env);
-    if (p === '/api/esxi/power')  return handleESXiPower(request, env);
-    if (p === '/api/casaos')      return handleCasaOS(env);
-    if (p === '/api/fortigate')   return handleFortigate(env, url.searchParams.has('debug'));
-    if (p === '/api/asus')        return handleAsus(env);
-    if (p === '/api/asus/reboot') return handleAsusReboot(request, env);
+    // ── Service endpoints — require session + permission ──
+    if (p === '/api/status') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      return handleStatus();
+    }
+    if (p === '/api/n8n') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'n8n'))) return json({ error: 'Không có quyền truy cập n8n' }, 403);
+      return handleN8n(env);
+    }
+    if (p === '/api/n8n/exec') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'n8n'))) return json({ error: 'Không có quyền truy cập n8n' }, 403);
+      return handleExecDetail(request, env);
+    }
+    if (p === '/api/n8n-movi') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'n8n-movi'))) return json({ error: 'Không có quyền truy cập n8n Movi' }, 403);
+      return handleMoviN8n(env);
+    }
+    if (p === '/api/n8n-movi/exec') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'n8n-movi'))) return json({ error: 'Không có quyền truy cập n8n Movi' }, 403);
+      return handleMoviN8nExecDetail(request, env);
+    }
+    if (p === '/api/9router') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, '9router'))) return json({ error: 'Không có quyền truy cập 9Router' }, 403);
+      return handle9Router(request, env);
+    }
+    if (p === '/api/esxi') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'esxi'))) return json({ error: 'Không có quyền truy cập ESXi' }, 403);
+      return handleESXi(env);
+    }
+    if (p === '/api/esxi/power') {
+      if (request.method !== 'OPTIONS') {
+        const _s = await getSession(request, env);
+        if (!_s) return json({ error: 'Unauthorized' }, 401);
+        if (_s.role !== 'admin') return json({ error: 'Admin required' }, 403);
+      }
+      return handleESXiPower(request, env);
+    }
+    if (p === '/api/casaos') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'casaos'))) return json({ error: 'Không có quyền truy cập CasaOS' }, 403);
+      return handleCasaOS(env);
+    }
+    if (p === '/api/fortigate') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'fortigate'))) return json({ error: 'Không có quyền truy cập FortiGate' }, 403);
+      // debug mode chỉ dành cho admin
+      const _dbg = url.searchParams.has('debug') && _s.role === 'admin';
+      return handleFortigate(env, _dbg);
+    }
+    if (p === '/api/asus') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'asus'))) return json({ error: 'Không có quyền truy cập ASUS Router' }, 403);
+      return handleAsus(env);
+    }
+    if (p === '/api/asus/reboot') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (_s.role !== 'admin') return json({ error: 'Admin required' }, 403);
+      return handleAsusReboot(request, env);
+    }
     if (p === '/proxy')           return handleProxy(request, env);
 
     // ── HTML pages: inject user or redirect to login ──

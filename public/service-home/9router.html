@@ -669,7 +669,7 @@ function loadData() {
 }
 
 loadData();
-setInterval(loadData, 120000);
+setInterval(loadData, 300000);
 (function(){
   var saved=null;try{saved=localStorage.getItem('dh_theme')}catch(e){}
   if(saved==='light')document.documentElement.dataset.theme='light';

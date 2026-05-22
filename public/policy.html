@@ -357,6 +357,9 @@ var FGMOVI_PANELS = [
 var groups = [], users = [], cameras = [];
 var editingGroupId = null;
 
+/* XSS protection: escape HTML đặc biệt trước khi đưa vào innerHTML */
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
 function toast(msg,ok){var t=document.getElementById('toast');t.textContent=msg;t.className='toast show '+(ok?'ok':'fail');setTimeout(function(){t.classList.remove('show');},3000);}
 function closeModal(id){document.getElementById(id).classList.add('hidden');}
 
@@ -391,12 +394,12 @@ function renderGroups(){
     (g.cameras||[]).forEach(function(c){chips+='<span class="chip cam">📷 '+c+'</span>';});
     var memberCount=users.filter(function(u){return(u.groups||[]).indexOf(g.id)>=0;}).length;
     return '<div class="grp-card">'
-      +'<div class="grp-name">'+g.name+' <span style="font-size:11px;color:var(--muted);font-weight:400">· '+memberCount+' users</span></div>'
-      +'<div class="grp-desc">'+(g.description||'Không có mô tả')+'</div>'
+      +'<div class="grp-name">'+esc(g.name)+' <span style="font-size:11px;color:var(--muted);font-weight:400">· '+memberCount+' users</span></div>'
+      +'<div class="grp-desc">'+esc(g.description||'Không có mô tả')+'</div>'
       +'<div class="grp-meta">'+(chips||'<span style="font-size:11px;color:var(--muted)">Chưa có quyền</span>')+'</div>'
       +'<div class="grp-actions">'
-        +'<button class="btn btn-outline btn-sm" onclick="editGroup(\''+g.id+'\')">✏️ Sửa</button>'
-        +'<button class="btn btn-danger btn-sm" onclick="deleteGroup(\''+g.id+'\',\''+g.name+'\')">🗑️ Xoá</button>'
+        +'<button class="btn btn-outline btn-sm" onclick="editGroup(\''+esc(g.id)+'\')">✏️ Sửa</button>'
+        +'<button class="btn btn-danger btn-sm" onclick="deleteGroup(\''+esc(g.id)+'\',\''+esc(g.name)+'\')">🗑️ Xoá</button>'
       +'</div>'
     +'</div>';
   }).join('');
@@ -439,8 +442,8 @@ function openGroupModal(gid){
   if(!cameras.length){camEl.innerHTML='<span style="font-size:12px;color:var(--muted)">Chưa có camera. Thêm camera ở tab Camera trước.</span>';}
   else{camEl.innerHTML=cameras.map(function(c){
     return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:4px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg)">'
-      +'<input type="checkbox" class="mx-cb" data-cam="'+c.id+'"'+(gcams.indexOf(c.id)>=0?' checked':'')+'>'
-      +c.name+'</label>';
+      +'<input type="checkbox" class="mx-cb" data-cam="'+esc(c.id)+'"'+(gcams.indexOf(c.id)>=0?' checked':'')+'>'
+      +esc(c.name)+'</label>';
   }).join('');}
 
   document.getElementById('grp-modal').classList.remove('hidden');
@@ -494,17 +497,17 @@ function renderAssign(){
     var uGroups=u.groups||[];
     var chips=uGroups.map(function(gid){
       var g=groups.find(function(x){return x.id===gid;});
-      return '<span class="chip page">'+(g?g.name:gid)+'</span>';
+      return '<span class="chip page">'+esc(g?g.name:gid)+'</span>';
     }).join('');
     if(!chips)chips='<span style="font-size:11px;color:var(--muted)">Chưa thuộc nhóm nào</span>';
     var opts=groups.map(function(g){
-      return '<option value="'+g.id+'"'+(uGroups.indexOf(g.id)>=0?' selected':'')+'>'+g.name+'</option>';
+      return '<option value="'+esc(g.id)+'"'+(uGroups.indexOf(g.id)>=0?' selected':'')+'>'+esc(g.name)+'</option>';
     }).join('');
     return '<div class="ug-row">'
-      +'<div class="ug-avatar">'+u.username[0].toUpperCase()+'</div>'
-      +'<div class="ug-name">'+u.username+'</div>'
-      +'<div class="ug-chips" id="ug-chips-'+u.username+'">'+chips+'</div>'
-      +'<select class="ug-select" multiple size="'+(Math.min(groups.length,4)||1)+'" data-user="'+u.username+'" onchange="assignGroups(this)" style="min-width:160px">'
+      +'<div class="ug-avatar">'+esc(u.username[0].toUpperCase())+'</div>'
+      +'<div class="ug-name">'+esc(u.username)+'</div>'
+      +'<div class="ug-chips" id="ug-chips-'+esc(u.username)+'">'+chips+'</div>'
+      +'<select class="ug-select" multiple size="'+(Math.min(groups.length,4)||1)+'" data-user="'+esc(u.username)+'" onchange="assignGroups(this)" style="min-width:160px">'
         +opts
       +'</select>'
     +'</div>';
@@ -522,7 +525,7 @@ function assignGroups(sel){
       toast('Đã cập nhật nhóm cho '+username,true);
       var u=users.find(function(x){return x.username===username;});
       if(u)u.groups=selected;
-      var chips=selected.map(function(gid){var g=groups.find(function(x){return x.id===gid;});return '<span class="chip page">'+(g?g.name:gid)+'</span>';}).join('');
+      var chips=selected.map(function(gid){var g=groups.find(function(x){return x.id===gid;});return '<span class="chip page">'+esc(g?g.name:gid)+'</span>';}).join('');
       var ce=document.getElementById('ug-chips-'+username);
       if(ce)ce.innerHTML=chips||'<span style="font-size:11px;color:var(--muted)">Chưa thuộc nhóm nào</span>';
     } else toast(d.error||'Lỗi',false);
