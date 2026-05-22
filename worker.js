@@ -1486,23 +1486,21 @@ async function handleToolMoviCreateUser(request, env, session) {
   // Force createdBy from server-side session (cannot be spoofed by client)
   const createdBy = session.username || session.email || 'unknown';
 
-  // Transform to n8n expected format: [{ data: { "Field Name": value, ... } }]
-  const n8nPayload = [{
-    data: {
-      'Email User Movi': body.email         || '',
-      'First Name':      body.firstName     || '',
-      'Last Name':       body.lastName      || '',
-      'JobTitle':        body.jobTitle      || '',
-      'Department':      body.department    || '',
-      'Personal Email':  body.personalEmail || '',
-      'Office':          body.office        || '',
-      'MobilePhone':     body.mobilePhone   || '',
-      'Manager':         body.manager       || '',
-      'Company':         body.company       || '',
-      'Phòng Ban':       body.group         || '',
-      'Người Tạo user':  createdBy,
-    }
-  }];
+  // Transform to n8n expected format: flat object, fields accessible as $json['Field Name']
+  const n8nPayload = {
+    'Email User Movi': body.email         || '',
+    'First Name':      body.firstName     || '',
+    'Last Name':       body.lastName      || '',
+    'JobTitle':        body.jobTitle      || '',
+    'Department':      body.department    || '',
+    'Personal Email':  body.personalEmail || '',
+    'Office':          body.office        || '',
+    'MobilePhone':     body.mobilePhone   || '',
+    'Manager':         body.manager       || '',
+    'Company':         body.company       || '',
+    'Phòng Ban':       body.group         || '',
+    'Người Tạo user':  createdBy,
+  };
 
   let auth;
   try { auth = moviN8nAuth(env); } catch (e) { return json({ error: e.message }, 500); }
