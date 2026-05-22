@@ -1487,10 +1487,16 @@ async function handleToolMoviCreateUser(request, env, session) {
   body.createdBy = session.username || session.email || 'unknown';
   body.createdAt = new Date().toISOString();
 
+  let auth;
+  try { auth = moviN8nAuth(env); } catch (e) { return json({ error: e.message }, 500); }
+
   try {
     const res = await fetch(webhookUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': auth,
+      },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(30000),
     });

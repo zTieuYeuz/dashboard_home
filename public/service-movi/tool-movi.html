@@ -602,6 +602,24 @@ function closeConfirm() {
   document.getElementById('confirm-overlay').classList.remove('open');
 }
 
+/* ── Clear stale error banners in review step ── */
+function clearReviewErrors() {
+  var rc = document.getElementById('review-content');
+  if (!rc) return;
+  var parent = rc.parentNode;
+  parent.querySelectorAll('.result-banner').forEach(function(el){ el.remove(); });
+}
+
+function showReviewError(msg) {
+  clearReviewErrors();
+  var rc = document.getElementById('review-content');
+  var errEl = document.createElement('div');
+  errEl.className = 'result-banner result-error show';
+  errEl.style.marginBottom = '1rem';
+  errEl.innerHTML = '<span>&#9888;</span><div><div style="font-weight:600;margin-bottom:2px">Có lỗi xảy ra</div><div style="font-size:12px;opacity:.85">' + msg + '</div></div>';
+  rc.parentNode.insertBefore(errEl, rc);
+}
+
 /* ── Final submit ── */
 async function doSubmit() {
   var btn = document.getElementById('btn-confirm-ok');
@@ -619,17 +637,9 @@ async function doSubmit() {
     closeConfirm();
 
     if (!res.ok || data.error) {
-      // Go back to review with error
       showStep(2);
-      // Show error inline
-      var errEl = document.createElement('div');
-      errEl.className = 'result-banner result-error show';
-      errEl.style.marginBottom = '1rem';
-      errEl.innerHTML = '<span>&#9888;</span><div><div style="font-weight:600;margin-bottom:2px">Có lỗi xảy ra</div><div style="font-size:12px;opacity:.85">' + (data.error || 'HTTP ' + res.status) + '</div></div>';
-      var rc = document.getElementById('review-content');
-      rc.parentNode.insertBefore(errEl, rc);
+      showReviewError(data.error || 'HTTP ' + res.status + (data.detail ? ' — ' + data.detail : ''));
     } else {
-      // Success
       document.getElementById('success-detail').innerHTML =
         'Tài khoản <strong>' + (_payload.email || '') + '</strong> đã được gửi đến workflow n8n.<br>Quá trình tạo đang được xử lý tự động.';
       showStep(3);
@@ -637,12 +647,7 @@ async function doSubmit() {
   } catch(err) {
     closeConfirm();
     showStep(2);
-    var errEl2 = document.createElement('div');
-    errEl2.className = 'result-banner result-error show';
-    errEl2.style.marginBottom = '1rem';
-    errEl2.innerHTML = '<span>&#9888;</span><div><div style="font-weight:600;margin-bottom:2px">Lỗi kết nối</div><div style="font-size:12px;opacity:.85">' + err.message + '</div></div>';
-    var rc2 = document.getElementById('review-content');
-    rc2.parentNode.insertBefore(errEl2, rc2);
+    showReviewError('Lỗi kết nối: ' + err.message);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Xác Nhận Tạo';
