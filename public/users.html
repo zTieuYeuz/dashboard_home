@@ -270,17 +270,25 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-hei
 
 <script>
 var ALL_SERVICES = [
-  {id:'esxi',name:'VMware ESXi'},
-  {id:'n8n',name:'n8n Automation'},
-  {id:'casaos',name:'CasaOS'},
-  {id:'9router',name:'9Router'},
-  {id:'fortigate',name:'FortiGate'},
-  {id:'asus',name:'ASUS Router'},
-  {id:'ssh',name:'SSH Terminal'},
-  {id:'uptime-kuma',name:'Uptime Kuma'},
-  {id:'meraki',name:'Meraki Network'},
-  {id:'topology',name:'Movi Map Network'},
-  {id:'camera',name:'Camera'}
+  // ── Service Home ──
+  {id:'esxi',         name:'VMware ESXi'},
+  {id:'n8n',          name:'n8n Automation'},
+  {id:'casaos',       name:'CasaOS'},
+  {id:'9router',      name:'9Router'},
+  {id:'fortigate',    name:'FortiGate'},
+  {id:'asus',         name:'ASUS Router'},
+  {id:'ssh',          name:'SSH Terminal'},
+  {id:'uptime-kuma',  name:'Uptime Kuma'},
+  {id:'camera',       name:'Camera Home'},
+  // ── Service Movi ──
+  {id:'meraki',       name:'Meraki Network'},
+  {id:'topology',     name:'Network Topology (Movi Map)'},
+  {id:'fortigate-movi', name:'FortiGate Movi'},
+  {id:'camera-movi',  name:'Camera Movi'},
+  {id:'n8n-movi',     name:'n8n Movi Automation'},
+  {id:'vmware01-movi',name:'VMware ESXi 01 (Movi)'},
+  {id:'vmware02-movi',name:'VMware ESXi 02 (Movi)'},
+  {id:'tool-movi',    name:'Tool Movi'},
 ];
 
 function _readUserCookie() {
@@ -319,11 +327,16 @@ function renderUsers(users) {
   }
   document.getElementById('user-list').innerHTML = users.map(function(u) {
     var isAdmin = u.role === 'admin';
-    var grpChips = (u.groups||[]).map(function(g){ return '<span class="perm-chip" style="border-color:rgba(139,92,246,.3);color:#8b5cf6;background:rgba(139,92,246,.08)">📋 '+g+'</span>'; }).join('');
+    var grpChips = (u.groups||[]).map(function(g){
+      return '<span class="perm-chip" style="border-color:rgba(139,92,246,.3);color:#8b5cf6;background:rgba(139,92,246,.08)">📋 '+g+'</span>';
+    }).join('');
+    var ugChips = (u.userGroups||[]).map(function(g){
+      return '<span class="perm-chip" style="border-color:rgba(20,184,166,.3);color:#2dd4bf;background:rgba(20,184,166,.08)">🗂 '+g+'</span>';
+    }).join('');
     var perms = Object.entries(u.permissions || {})
       .filter(function(e){ return e[1] && e[1] !== 'none'; })
       .map(function(e){ return '<span class="perm-chip '+e[1]+'">'+e[0]+': '+e[1]+'</span>'; }).join('');
-    var allChips = grpChips + perms;
+    var allChips = ugChips + grpChips + perms;
     if (!allChips && !isAdmin) allChips = '<span style="color:var(--muted);font-size:11px">Chưa có quyền nào</span>';
     if (isAdmin) allChips = '<span style="color:#818cf8;font-size:11px">Toàn quyền tất cả services</span>';
     return '<div class="user-row">'

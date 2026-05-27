@@ -788,9 +788,9 @@ function renderClients() {
     var mac = (c.mac || '').toLowerCase();
     var isBlocked = clientPolicy[mac] === 'Blocked';
     var nameLbl = esc(c.name || '?') + (isBlocked ? ' <span class="blocked-badge">⛔ CHẶN</span>' : '');
-    var actCell = ADM && mac
+    var actCell = (__PERM__ === 'write') && mac
       ? '<td style="text-align:right" id="clipa-' + mac.replace(/[^a-z0-9]/g,'') + '">' + cliActHtml(mac, isBlocked, c.name, c.ip) + '</td>'
-      : (ADM ? '<td><span class="muted small">—</span></td>' : '');
+      : ((__PERM__ === 'write') ? '<td><span class="muted small">—</span></td>' : '');
     var _rMac    = c.recentDeviceMac    ? c.recentDeviceMac.toLowerCase()    : null;
     var _rSerial = c.recentDeviceSerial ? c.recentDeviceSerial.toLowerCase() : null;
     var apName = c.recentDeviceName
@@ -832,7 +832,7 @@ function renderClients() {
       + '<td>' + osLbl + '</td>'
       + actCell
       + '</tr>';
-  }).join('') || '<tr><td colspan="' + (ADM ? 11 : 10) + '" class="tbl-empty">Không có client khớp filter</td></tr>';
+  }).join('') || '<tr><td colspan="' + ((__PERM__ === 'write') ? 11 : 10) + '" class="tbl-empty">Không có client khớp filter</td></tr>';
   document.getElementById('badge-clients').textContent = rows.length + ' / ' + clients.length + ' clients';
   document.getElementById('badge-clients').className = 'panel-badge tone-ok';
 }
@@ -882,7 +882,7 @@ function cliPolicy(btn, mac, policy, clientName, clientIp) {
       cliToast(blocking ? ('⛔ Đã chặn ' + label) : ('✅ Đã mở chặn ' + label), true);
       cell.innerHTML = cliActHtml(mac, blocking, clientName, clientIp);
       filterClients();
-      if (ADM) loadBlockedList();
+      if (__PERM__ === 'write') loadBlockedList();
     })
     .catch(function(e) {
       cliToast('✗ Lỗi: ' + e, false);
@@ -890,10 +890,10 @@ function cliPolicy(btn, mac, policy, clientName, clientIp) {
     });
 }
 
-/* ── Blocked clients list (admin) ── */
+/* ── Blocked clients list (meraki:write) ── */
 var blockedClients = [];
 function loadBlockedList() {
-  if (!ADM) return;
+  if (__PERM__ !== 'write') return;
   fetch('/api/meraki-blocked-clients', { cache: 'no-store' })
     .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function(d){
@@ -1690,7 +1690,7 @@ setInterval(function() {
 }, 1000);
 
 /* Boot */
-if (ADM) {
+if (__PERM__ === 'write') {
   var thBlock = document.getElementById('th-block');
   if (thBlock) thBlock.style.display = '';
   var panelBlocked = document.getElementById('panel-blocked');

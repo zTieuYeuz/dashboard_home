@@ -299,7 +299,8 @@ input { font: inherit; }
 }
 .svc-table tbody tr { border-bottom: 1px solid var(--border-soft); transition: background .1s; }
 .svc-table tbody tr:last-child { border-bottom: none; }
-.svc-table tbody tr:hover { background: color-mix(in oklch, var(--accent) 5%, transparent); }
+.svc-table tbody tr[onclick]:hover { background: color-mix(in oklch, var(--accent) 8%, transparent); }
+.svc-table tbody tr[onclick]:active { background: color-mix(in oklch, var(--accent) 14%, transparent); }
 .svc-table td { padding: 12px 16px; vertical-align: middle; }
 .svc-icon-sm {
   width: 28px; height: 28px; border-radius: 6px;
@@ -694,6 +695,7 @@ var ALL_SERVICES_DEF = [
   { id:'vmware01-movi', name:'VMware01 Movi',   icon:'🖥', desc:'ESXi host 01 · Movi Finance datacenter',        url:'https://vmw01.movi-finance.com',             local:false, detailPage:'/service-movi/vmware01-movi.html',   noCheck:true },
   { id:'vmware02-movi', name:'VMware02 Movi',   icon:'🖥', desc:'ESXi host 02 · Movi Finance datacenter',        url:'https://vmw02.movi-finance.com',             local:false, detailPage:'/service-movi/vmware02-movi.html',   noCheck:true },
   { id:'tool-movi',     name:'Tool Movi',       icon:'🛠', desc:'Workflow triggers · tạo user · tự động hoá',    url:'/service-movi/tool-movi.html',               local:false, detailPage:'/service-movi/tool-movi.html',        noCheck:true },
+  { id:'ssh-movi',      name:'Termix Movi',     icon:'⌨', desc:'Termix · SSH Movi server · token auth',         url:'/service-movi/ssh-movi.html',                local:false, detailPage:'/service-movi/ssh-movi.html',          noCheck:true },
 ];
 
 /* Categories (matches original SERVICE_CATEGORIES) */
@@ -701,14 +703,22 @@ var SERVICE_CATEGORIES = [
   { id:'home', icon:'🏠', name:'Service Home', desc:'Hạ tầng & hệ thống · home-server.id.vn', accent:'var(--accent)',
     serviceIds: ['esxi','n8n','casaos','9router','uptime-kuma','ssh','fortigate','asus','camera'] },
   { id:'movi', icon:'🎬', name:'Service Movi', desc:'Văn phòng Movi · Meraki & Topology',    accent:'var(--violet)',
-    serviceIds: ['meraki','movi','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi'] },
+    serviceIds: ['meraki','movi','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi','ssh-movi'] },
 ];
 
-/* Permission filter (NOTE: server-side check for 'movi' uses 'topology' permission key) */
+/* Permission filter
+   - 'movi' card maps to 'topology' key (server-side matches this too)
+   - 'tool-movi' card is visible if user has ANY of the 4 sub-permissions
+*/
 var _permMap = { movi:'topology' };
+var _TOOL_MOVI_KEYS = ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search'];
 var SERVICES = __USER__.isAdmin
   ? ALL_SERVICES_DEF
   : ALL_SERVICES_DEF.filter(function(s){
+      // tool-movi: show card if user has at least one sub-permission
+      if (s.id === 'tool-movi') {
+        return _TOOL_MOVI_KEYS.some(function(k){ return (__USER__.permissions[k] || 'none') !== 'none'; });
+      }
       var pid = _permMap[s.id] || s.id;
       var perm = __USER__.permissions[pid] || 'none';
       return perm !== 'none';
@@ -804,8 +814,11 @@ function renderServices() {
       var since = statusSince[s.id] ? timeAgo(statusSince[s.id].ts) : '—';
       var href = s.detailPage ? s.detailPage : s.url;
       var target = (s.newTab || !s.detailPage) ? '_blank' : '_self';
+      var rowClick = target === '_blank'
+        ? 'onclick="window.open(\'' + href.replace(/'/g, "\\'") + '\',\'_blank\')"'
+        : 'onclick="window.location.href=\'' + href.replace(/'/g, "\\'") + '\'"';
       return ''
-        + '<tr id="svc-row-' + s.id + '">'
+        + '<tr id="svc-row-' + s.id + '" ' + rowClick + ' style="cursor:pointer">'
         + '<td><div class="svc-icon-sm">' + s.icon + '</div></td>'
         + '<td>'
           + '<div class="svc-name-cell">'
@@ -818,7 +831,7 @@ function renderServices() {
         + '<td><span class="status-pip" style="--c:' + statusColor(r.status) + '"><i class="' + (r.status === 'checking' ? 'checking' : '') + '"></i><span>' + statusLabel(r.status) + '</span></span></td>'
         + (allNoCheck ? '' : '<td style="text-align:right"><span class="num">' + (r.ping ? r.ping + 'ms' : '—') + '</span></td>')
         + (allNoCheck ? '' : '<td><span class="muted small">' + since + '</span></td>')
-        + '<td style="text-align:right"><a class="row-action" href="' + href + '" target="' + target + '" rel="noopener">Open ↗</a></td>'
+        + '<td style="text-align:right"><a class="row-action" href="' + href + '" target="' + target + '" rel="noopener" onclick="event.stopPropagation()">Open ↗</a></td>'
         + '</tr>';
     }).join('') || '<tr><td colspan="' + (allNoCheck ? 4 : 6) + '" style="padding:24px;text-align:center;color:var(--muted)">Không có service khớp filter.</td></tr>';
 
@@ -880,7 +893,8 @@ function runChecks() {
   fetch('/api/status', { cache:'no-store' })
     .then(function(r){ return r.json(); })
     .then(function(data) {
-      var onlineN = 0, offlineN = 0, localN = 0, pings = [];
+      /* noCheck services (links/tools with no ping endpoint) are always counted as online */
+      var onlineN = SERVICES.filter(function(s){return s.noCheck;}).length, offlineN = 0, localN = 0, pings = [];
 
       SERVICES.forEach(function(s){
         if (s.noCheck) return;
@@ -903,7 +917,7 @@ function runChecks() {
         prev[s.id] = status;
       });
 
-      document.getElementById('totalCount').textContent   = SERVICES.filter(function(s){return !s.noCheck;}).length;
+      document.getElementById('totalCount').textContent   = SERVICES.length;
       document.getElementById('onlineCount').textContent  = onlineN;
       document.getElementById('offlineCount').textContent = offlineN;
       document.getElementById('localCount').textContent   = localN;

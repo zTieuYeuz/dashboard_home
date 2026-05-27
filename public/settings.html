@@ -153,6 +153,17 @@ select.inp{cursor:pointer}
 .panel-rw input{display:none}
 .panel-rw.disabled{opacity:.4;pointer-events:none}
 
+/* ── Perm Group Header (sub-group inside a section) ── */
+.perm-group-header{display:flex;align-items:center;gap:8px;padding:.5rem 1rem .375rem;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid var(--border-soft);background:color-mix(in oklch,var(--surface-2) 60%,transparent);margin-top:4px}
+.perm-group-header:first-child{margin-top:0}
+.perm-row.perm-indented{padding-left:2.25rem}
+
+/* ── Tool Group Sub-section ── */
+.tool-group-sec{padding:.375rem 1rem .625rem 2.5rem;display:flex;flex-wrap:wrap;gap:6px}
+.tool-check-label{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:500;padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer;transition:all .15s;user-select:none}
+.tool-check-label:has(input:checked){border-color:var(--ok);background:color-mix(in oklch,var(--ok) 9%,transparent);color:var(--ok)}
+.tool-check-label input{accent-color:var(--ok);width:13px;height:13px}
+
 /* ── Camera Grid ── */
 .cam-grid{display:flex;flex-wrap:wrap;gap:8px;padding:.5rem 1rem .75rem 2.5rem}
 .cam-check-label{display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 12px;border:1px solid var(--border);border-radius:20px;cursor:pointer;background:var(--surface);transition:all .15s;white-space:nowrap}
@@ -179,11 +190,18 @@ select.inp{cursor:pointer}
 .log-fail{background:color-mix(in oklch,var(--bad) 12%,transparent);color:var(--bad);border:1px solid color-mix(in oklch,var(--bad) 25%,transparent)}
 
 /* ── System Config ── */
-.cfg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.cfg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
 .cfg-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.25rem}
 .cfg-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
 .cfg-value{font-size:24px;font-weight:700;font-family:var(--font-mono);color:var(--text)}
 .cfg-unit{font-size:13px;color:var(--muted);font-family:var(--font-sans)}
+
+/* ── Toggle Switch ── */
+.toggle-track{width:44px;height:24px;background:var(--border);border-radius:12px;position:relative;cursor:pointer;transition:background .2s}
+.toggle-track.on{background:var(--ok)}
+.toggle-track.warn-on{background:var(--warn)}
+.toggle-thumb{position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.toggle-track.on .toggle-thumb,.toggle-track.warn-on .toggle-thumb{transform:translateX(20px)}
 
 /* ── Modal ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
@@ -255,11 +273,12 @@ select.inp{cursor:pointer}
 
   <!-- Main Tab Navigation -->
   <div class="main-tabs" id="main-tabs">
-    <button class="main-tab admin-only active" id="tab-btn-users"    onclick="switchTab('users',this)">👥 User Management</button>
-    <button class="main-tab admin-only"         id="tab-btn-sysconfig" onclick="switchTab('sysconfig',this)">🔧 System Config</button>
-    <button class="main-tab"                    id="tab-btn-auditlog"  onclick="switchTab('auditlog',this)">📋 Audit Log</button>
-    <button class="main-tab admin-only"         id="tab-btn-roles"     onclick="switchTab('roles',this)">🔐 Role Management</button>
-    <button class="main-tab"                    id="tab-btn-account"   onclick="switchTab('account',this)">👤 Tài khoản</button>
+    <button class="main-tab admin-only active" id="tab-btn-users"      onclick="switchTab('users',this)">👥 Users</button>
+    <button class="main-tab admin-only"         id="tab-btn-usergroups" onclick="switchTab('usergroups',this)">🗂 User Groups</button>
+    <button class="main-tab admin-only"         id="tab-btn-roles"      onclick="switchTab('roles',this)">🔐 Role Management</button>
+    <button class="main-tab admin-only"         id="tab-btn-sysconfig"  onclick="switchTab('sysconfig',this)">🔧 System Config</button>
+    <button class="main-tab"                    id="tab-btn-auditlog"   onclick="switchTab('auditlog',this)">📋 Audit Log</button>
+    <button class="main-tab"                    id="tab-btn-account"    onclick="switchTab('account',this)">👤 Tài khoản</button>
   </div>
 
   <!-- ══════════════════════════════════════════════
@@ -277,9 +296,9 @@ select.inp{cursor:pointer}
       <div class="tbl-wrap">
         <table class="data-table">
           <thead><tr>
-            <th>Avatar</th><th>Username</th><th>Role</th><th>Groups</th><th>Tạo lúc</th><th style="text-align:right">Hành động</th>
+            <th>Avatar</th><th>Username</th><th>Role</th><th>Groups</th><th style="text-align:right">Hành động</th>
           </tr></thead>
-          <tbody id="user-tbody"><tr><td colspan="6" class="empty-state">Đang tải...</td></tr></tbody>
+          <tbody id="user-tbody"><tr><td colspan="5" class="empty-state">Đang tải...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -295,6 +314,15 @@ select.inp{cursor:pointer}
       </div>
       <div class="panel-body">
         <div id="user-perm-editor"></div>
+        <!-- Delegation section — only shown for admin editing another user's permissions -->
+        <div id="user-perm-delegate" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+          <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🛡 Ủy quyền quản lý — Cho phép user này xét quyền cho user khác</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">
+            Tích vào service nào thì user này có thể vào mục <b>User Management</b> và chỉnh permissions của user khác — <b>nhưng chỉ được chỉnh đúng service đó</b>, không nhiều hơn.
+          </div>
+          <div id="user-perm-delegate-list" style="display:flex;flex-wrap:wrap;gap:8px 16px;margin-bottom:12px"></div>
+          <button class="btn btn-outline" onclick="saveManagePerms()">🛡 Lưu ủy quyền</button>
+        </div>
         <div style="margin-top:14px;display:flex;gap:8px">
           <button class="btn btn-primary" onclick="saveUserPerms()">💾 Lưu quyền</button>
         </div>
@@ -306,6 +334,34 @@ select.inp{cursor:pointer}
        TAB 2: SYSTEM CONFIG
        ══════════════════════════════════════════════ -->
   <div class="tab-content" id="tc-sysconfig">
+
+    <!-- ── Maintenance Mode ── -->
+    <div class="panel" id="maintenance-panel" style="border-color:color-mix(in oklch,var(--warn) 40%,transparent)">
+      <div class="panel-header" style="background:color-mix(in oklch,var(--warn) 6%,transparent)">
+        <div>
+          <div class="panel-title">🚧 Maintenance Mode</div>
+          <div class="panel-desc">Khi bật, tất cả user thường sẽ thấy trang bảo trì. Admin vẫn truy cập bình thường.</div>
+        </div>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
+          <span style="font-size:13px;color:var(--text-2)" id="maint-status-text">Đang tải...</span>
+          <div class="toggle-wrap">
+            <input type="checkbox" id="cfg-maintenance" onchange="toggleMaintenance(this.checked)" style="display:none"/>
+            <div class="toggle-track" id="maint-track" onclick="document.getElementById('cfg-maintenance').click()">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+        </label>
+      </div>
+      <div class="panel-body" id="maint-msg-row" style="display:none">
+        <label class="lbl">Thông báo bảo trì</label>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <input class="inp" id="cfg-maint-msg" type="text" maxlength="300" placeholder="Hệ thống đang bảo trì. Vui lòng quay lại sau." style="flex:1"/>
+          <button class="btn btn-outline" onclick="saveMaintMsg()">Lưu thông báo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Core Settings ── -->
     <div class="panel">
       <div class="panel-header">
         <div>
@@ -315,7 +371,9 @@ select.inp{cursor:pointer}
         <button class="btn btn-primary" onclick="saveSysConfig()">💾 Lưu cấu hình</button>
       </div>
       <div class="panel-body">
-        <div class="section-label">Session & Bảo mật</div>
+
+        <!-- Status cards -->
+        <div class="section-label">Trạng thái hiện tại</div>
         <div class="cfg-grid" style="margin-bottom:20px">
           <div class="cfg-card">
             <div class="cfg-label">Session TTL</div>
@@ -335,18 +393,57 @@ select.inp{cursor:pointer}
           </div>
         </div>
 
-        <div class="section-label">Chỉnh sửa</div>
+        <!-- General Settings -->
+        <div class="section-label">Chung</div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label class="lbl">Tên Dashboard</label>
+            <input class="inp" id="cfg-dashboard-title" type="text" maxlength="60" placeholder="Home Lab Dashboard"/>
+            <div class="form-help">Tên hiển thị trên tab trình duyệt và topbar</div>
+          </div>
+          <div class="form-row">
+            <label class="lbl">Default Role khi tạo user</label>
+            <select class="inp" id="cfg-default-role">
+              <option value="user">user</option>
+              <option value="admin">admin</option>
+            </select>
+            <div class="form-help">Role mặc định khi tạo user mới</div>
+          </div>
+        </div>
+
+        <!-- Session Settings -->
+        <div class="section-label" style="margin-top:16px">Session & Bảo mật</div>
         <div class="form-grid">
           <div class="form-row">
             <label class="lbl">Session TTL (giờ)</label>
             <input class="inp" id="cfg-session" type="number" min="1" max="24" placeholder="1-24"/>
-            <div class="form-help">Sau bao nhiêu giờ session hết hạn hoàn toàn. Mặc định: 8 giờ</div>
+            <div class="form-help">Sau bao nhiêu giờ session hết hạn. Mặc định: 8 giờ</div>
           </div>
           <div class="form-row">
             <label class="lbl">Idle Timeout (phút)</label>
             <input class="inp" id="cfg-idle" type="number" min="5" max="120" placeholder="5-120"/>
             <div class="form-help">Tự đăng xuất nếu không hoạt động. Mặc định: 30 phút</div>
           </div>
+        </div>
+
+        <!-- Password Policy -->
+        <div class="section-label" style="margin-top:16px">Password Policy</div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label class="lbl">Độ dài mật khẩu tối thiểu</label>
+            <input class="inp" id="cfg-pw-minlen" type="number" min="4" max="32" placeholder="4-32"/>
+            <div class="form-help">Số ký tự tối thiểu khi tạo hoặc đổi mật khẩu. Mặc định: 6</div>
+          </div>
+          <div class="form-row">
+            <label class="lbl">Max Login Attempts</label>
+            <input class="inp" id="cfg-max-attempts" type="number" min="3" max="20" placeholder="3-20"/>
+            <div class="form-help">Số lần đăng nhập sai tối đa trong 15 phút trước khi bị tạm khóa. Mặc định: 8</div>
+          </div>
+        </div>
+
+        <!-- User Limits -->
+        <div class="section-label" style="margin-top:16px">Giới hạn & Lưu trữ</div>
+        <div class="form-grid">
           <div class="form-row">
             <label class="lbl">Max Users</label>
             <input class="inp" id="cfg-maxusers" type="number" min="1" max="200" placeholder="1-200"/>
@@ -357,17 +454,11 @@ select.inp{cursor:pointer}
             <input class="inp" id="cfg-audit-ret" type="number" min="7" max="90" placeholder="7-90"/>
             <div class="form-help">Số ngày lưu audit log. Log cũ hơn sẽ tự xóa</div>
           </div>
-          <div class="form-row">
-            <label class="lbl">Default Role</label>
-            <select class="inp" id="cfg-default-role">
-              <option value="user">user</option>
-              <option value="admin">admin</option>
-            </select>
-            <div class="form-help">Role mặc định khi tạo user mới</div>
-          </div>
         </div>
 
-        <div class="form-row" style="margin-top:12px">
+        <!-- Login Banner -->
+        <div class="section-label" style="margin-top:16px">Trang đăng nhập</div>
+        <div class="form-row">
           <label class="lbl">Login Banner (tuỳ chọn)</label>
           <input class="inp" id="cfg-banner" type="text" maxlength="200" placeholder="Thông báo hiển thị trên trang đăng nhập"/>
           <div class="form-help">Tối đa 200 ký tự. Để trống nếu không cần</div>
@@ -375,7 +466,7 @@ select.inp{cursor:pointer}
 
         <div class="section-label" style="margin-top:16px">Thông tin Runtime</div>
         <div id="cfg-runtime-info" style="color:var(--muted);font-size:12px">Đang tải...</div>
-        <div style="margin-top:6px;font-size:11px;color:var(--muted)">💡 Tất cả cài đặt trên đều có hiệu lực ngay sau khi lưu. Session TTL &amp; Idle Timeout áp dụng cho các phiên đăng nhập mới; Login Banner hiển thị trên trang đăng nhập; Max Users giới hạn số tài khoản tạo mới.</div>
+        <div style="margin-top:6px;font-size:11px;color:var(--muted)">💡 Tất cả cài đặt có hiệu lực ngay sau khi lưu. Session TTL &amp; Idle Timeout áp dụng cho phiên đăng nhập mới. Maintenance Mode ảnh hưởng ngay lập tức.</div>
       </div>
     </div>
   </div>
@@ -399,6 +490,43 @@ select.inp{cursor:pointer}
       </div>
       <div class="tbl-wrap" style="max-height:580px">
         <div id="audit-list"><div class="empty-state">Đang tải...</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       TAB: USER GROUPS
+       ═══════════════════════════════════════════════
+       Gom users thành nhóm → gán Role Management Group
+       ══════════════════════════════════════════════ -->
+  <div class="tab-content" id="tc-usergroups">
+
+    <!-- Info banner -->
+    <div style="background:color-mix(in oklch,var(--accent) 6%,transparent);border:1px solid color-mix(in oklch,var(--accent) 20%,transparent);border-radius:12px;padding:14px 18px;font-size:13px;color:var(--text-2);line-height:1.6">
+      <strong style="color:var(--accent)">🗂 User Groups</strong> là nhóm dùng để gom users lại (ví dụ: "IT Team", "Sales Team").<br>
+      Mỗi User Group có thể được gán một hoặc nhiều <strong>Role Management Group</strong> — tất cả thành viên sẽ tự động có permissions của những Role Group đó.<br>
+      <span style="color:var(--muted);font-size:12px">User Group ≠ Role Group. User Group = tổ chức người dùng. Role Group = định nghĩa quyền truy cập.</span>
+    </div>
+
+    <div class="role-layout">
+      <!-- Left: User Group list -->
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:13px;font-weight:600">User Groups</span>
+          <button class="btn btn-primary btn-sm" onclick="openCreateUserGroup()">+ Tạo nhóm</button>
+        </div>
+        <div class="group-sidebar" id="ug-sidebar">
+          <div class="empty-state" style="padding:2rem 1rem">Đang tải...</div>
+        </div>
+      </div>
+
+      <!-- Right: User Group editor -->
+      <div class="group-editor" id="ug-editor">
+        <div class="empty-state" style="padding:4rem 2rem">
+          <div style="font-size:2.5rem;margin-bottom:10px">🗂</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px">Chọn User Group để chỉnh sửa</div>
+          <div style="font-size:12px;color:var(--muted)">Chọn một nhóm ở bên trái để quản lý thành viên và gán Role Group</div>
+        </div>
       </div>
     </div>
   </div>
@@ -451,6 +579,11 @@ select.inp{cursor:pointer}
           <label class="lbl">Xác nhận mật khẩu</label>
           <input class="inp" id="acc-pw2" type="password" placeholder="Nhập lại mật khẩu mới"/>
         </div>
+        <div class="form-row" id="acc-mfa-row" style="display:none">
+          <label class="lbl">🔐 Mã MFA xác nhận</label>
+          <input class="inp" id="acc-mfa-code" type="text" inputmode="numeric" maxlength="6" placeholder="6 chữ số từ Authenticator" autocomplete="one-time-code"/>
+          <div class="form-help">Nhập mã từ Microsoft/Google Authenticator để xác nhận đổi mật khẩu.</div>
+        </div>
         <div class="err-msg" id="acc-pw-err"></div>
         <button class="btn btn-primary" onclick="changeMyPassword()">Lưu mật khẩu</button>
       </div>
@@ -461,15 +594,18 @@ select.inp{cursor:pointer}
       <div class="panel-header">
         <div>
           <div class="panel-title">🔐 Xác thực hai bước (MFA)</div>
-          <div class="panel-desc">Bảo vệ tài khoản bằng Microsoft/Google Authenticator</div>
+          <div class="panel-desc">Bắt buộc — không thể tắt. Chỉ có thể đổi mã (reset secret).</div>
         </div>
         <div id="mfa-status-badge"><span style="font-size:12px;color:var(--muted)">Đang tải...</span></div>
       </div>
       <div class="panel-body">
+        <div style="background:color-mix(in oklch,var(--warn) 8%,transparent);border:1px solid color-mix(in oklch,var(--warn) 25%,transparent);border-radius:8px;padding:.625rem .875rem;font-size:12px;color:var(--warn);margin-bottom:1rem;display:flex;align-items:center;gap:6px">
+          <span>⚠️</span> MFA là <strong>bắt buộc</strong> trên hệ thống này. Tắt MFA không được phép kể cả với Admin.
+        </div>
         <p id="mfa-desc" style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6"></p>
         <div style="display:flex;gap:8px">
           <button id="btn-enable-mfa" class="btn btn-primary" onclick="startMfaSetup()" style="display:none">🔐 Thiết lập MFA</button>
-          <button id="btn-disable-mfa" class="btn btn-danger" onclick="openDisableMfa()" style="display:none">🔓 Tắt MFA</button>
+          <button id="btn-reset-mfa"  class="btn btn-outline" onclick="startMfaSetup(true)" style="display:none">🔄 Đổi mã MFA</button>
         </div>
       </div>
     </div>
@@ -514,25 +650,7 @@ select.inp{cursor:pointer}
   </div>
 </div>
 
-<!-- MFA Disable Modal -->
-<div class="modal-overlay hidden" id="mfa-disable-modal" onclick="if(event.target.id==='mfa-disable-modal')closeModal('mfa-disable-modal')">
-  <div class="modal" onclick="event.stopPropagation()" style="max-width:400px">
-    <div class="modal-title">🔓 Tắt MFA</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem;line-height:1.6">
-      Nhập mã OTP từ Authenticator để xác nhận tắt bảo vệ hai bước.
-    </p>
-    <div class="form-row">
-      <label class="lbl">Mã OTP xác nhận</label>
-      <input class="inp" id="mfa-disable-code" type="text" inputmode="numeric" maxlength="6" placeholder="000000"
-             style="text-align:center;font-size:22px;font-weight:700;letter-spacing:8px"/>
-    </div>
-    <div class="err-msg" id="mfa-disable-err"></div>
-    <div class="modal-btns">
-      <button class="btn btn-outline" onclick="closeModal('mfa-disable-modal')">Hủy</button>
-      <button class="btn btn-danger" onclick="confirmDisableMfa()">Tắt MFA</button>
-    </div>
-  </div>
-</div>
+<!-- MFA Disable Modal removed — MFA is mandatory and cannot be disabled -->
 
 <!-- ══════ MODALS ══════ -->
 
@@ -575,16 +693,24 @@ select.inp{cursor:pointer}
 <!-- Create/Edit Group Modal -->
 <div class="modal-overlay hidden" id="grp-modal" onclick="if(event.target.id==='grp-modal')closeModal('grp-modal')">
   <div class="modal" onclick="event.stopPropagation()">
-    <div class="modal-title" id="grp-modal-title">Tạo Policy Group</div>
+    <div class="modal-title" id="grp-modal-title">Tạo Group mới</div>
     <div class="form-grid">
       <div class="form-row">
         <label class="lbl">Tên nhóm</label>
-        <input class="inp" id="gm-name" placeholder="VD: network-viewers"/>
-        <div class="form-help">Dùng a-z, số, dấu - (VD: movi-staff)</div>
+        <input class="inp" id="gm-name" placeholder="VD: movi-staff"/>
+        <div class="form-help">Dùng a-z, số, dấu - (VD: movi-staff, network-viewers)</div>
       </div>
       <div class="form-row">
-        <label class="lbl">Mô tả</label>
-        <input class="inp" id="gm-desc" placeholder="VD: Nhóm xem thông tin mạng Movi"/>
+        <label class="lbl">Mô tả (tuỳ chọn)</label>
+        <input class="inp" id="gm-desc" placeholder="VD: Nhân viên văn phòng Movi"/>
+      </div>
+      <div class="form-row">
+        <label class="lbl">Role của nhóm</label>
+        <select class="inp" id="gm-role">
+          <option value="user">👤 user</option>
+          <option value="admin">👑 admin (toàn quyền)</option>
+        </select>
+        <div class="form-help">Nếu chọn admin, tất cả thành viên nhóm này sẽ có toàn quyền admin</div>
       </div>
     </div>
     <div class="err-msg" id="grp-modal-err"></div>
@@ -607,6 +733,27 @@ select.inp{cursor:pointer}
   </div>
 </div>
 
+<!-- Create User Group Modal -->
+<div class="modal-overlay hidden" id="ug-modal" onclick="if(event.target.id==='ug-modal')closeModal('ug-modal')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
+    <div class="modal-title">🗂 Tạo User Group</div>
+    <div class="form-row">
+      <label class="lbl">Tên nhóm</label>
+      <input class="inp" id="ug-modal-name" placeholder="VD: IT Team, Sales Team..." autocomplete="off"/>
+      <div class="form-help">Tên để nhận diện nhóm người dùng này</div>
+    </div>
+    <div class="form-row">
+      <label class="lbl">Mô tả (tuỳ chọn)</label>
+      <input class="inp" id="ug-modal-desc" placeholder="VD: Nhóm kỹ thuật IT nội bộ"/>
+    </div>
+    <div class="err-msg" id="ug-modal-err"></div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal('ug-modal')">Hủy</button>
+      <button class="btn btn-primary" onclick="saveNewUserGroup()">Tạo nhóm</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -617,6 +764,21 @@ function _readUserCookie() {
   try { var m=document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/); return m?JSON.parse(decodeURIComponent(m[1])):null; } catch(e){return null;}
 }
 var __USER__ = window.__USER__ || _readUserCookie() || { username:'?', role:'user', isAdmin:false };
+
+/* Human-readable names for all service IDs — must be declared BEFORE initUI() runs */
+var DELEGATE_SVC_LABELS = {
+  'meraki':'Meraki Network','fortigate-movi':'FortiGate Movi','camera-movi':'Camera Movi',
+  'n8n-movi':'n8n Movi','topology':'Movi Map Network','vmware01-movi':'VMware01 Movi',
+  'vmware02-movi':'VMware02 Movi','tool-movi':'Tool Movi',
+  'tool-movi-create-user':'Tool: Tạo User','tool-movi-block-user':'Tool: Block User',
+  'tool-movi-delete-user':'Tool: Xóa User','tool-movi-asset-search':'Tool: Tra Cứu Tài Sản',
+  'ssh-movi':'SSH Movi',
+  'esxi':'VMware ESXi','n8n':'n8n Automation','casaos':'CasaOS',
+  '9router':'9Router','fortigate':'FortiGate','asus':'ASUS Router',
+  'ssh':'SSH Terminal','uptime-kuma':'Uptime Kuma',
+};
+var _delegateMode = false;   // true when current user is a delegated manager (not admin)
+var _delegateServices = [];  // services the current delegated user can manage
 
 (function initUI() {
   document.getElementById('user-avatar').textContent = (__USER__.username||'?').charAt(0).toUpperCase();
@@ -636,6 +798,35 @@ var __USER__ = window.__USER__ || _readUserCookie() || { username:'?', role:'use
     if (sub) sub.textContent = 'Quản lý tài khoản cá nhân và xem lịch sử hoạt động';
     var auditDesc = document.getElementById('audit-panel-desc');
     if (auditDesc) auditDesc.textContent = 'Lịch sử hoạt động của tài khoản bạn (30 ngày)';
+
+    // If this user has delegation rights → selectively show Users/UserGroups/Roles tabs
+    var cmp = __USER__.canManagePerms || [];
+    if (cmp.length > 0) {
+      _delegateMode = true; _delegateServices = cmp;
+      // Show Users tab (renamed)
+      var tabU = document.getElementById('tab-btn-users');
+      if (tabU) {
+        tabU.style.display = '';
+        tabU.textContent = '🔑 Quản lý Quyền';
+        tabU.classList.add('active');
+        document.getElementById('tc-users').classList.add('active');
+        document.getElementById('tc-account').classList.remove('active');
+        document.getElementById('tab-btn-account').classList.remove('active');
+      }
+      // Show User Groups tab
+      var tabUG = document.getElementById('tab-btn-usergroups');
+      if (tabUG) { tabUG.style.display = ''; }
+      // Show Role Management tab
+      var tabR = document.getElementById('tab-btn-roles');
+      if (tabR) { tabR.style.display = ''; }
+      // Show a delegate banner in the users panel
+      var ph = document.querySelector('#tc-users .panel-header');
+      if (ph) {
+        var desc = ph.querySelector('.panel-desc');
+        if (desc) desc.textContent = 'Bạn được ủy quyền quản lý cho: ' + cmp.map(function(s){return DELEGATE_SVC_LABELS[s]||s;}).join(', ');
+        // Keep Add User button visible — delegates can create users
+      }
+    }
   }
   // Theme
   var saved=null; try{saved=localStorage.getItem('dh_theme')}catch(e){}
@@ -732,7 +923,34 @@ var SERVICE_MOVI_PAGES = [
     {id:'fortigate-movi.route',      name:'Route Table'},
    ]},
   {id:'camera-movi', name:'Camera Movi', icon:'📷', perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'},
-   hasCameras:true, camClass:'movi-cam-cb'}
+   hasCameras:true, camClass:'movi-cam-cb'},
+  {id:'n8n-movi', name:'n8n Movi Automation', icon:'⚡', perms:['none','read','write'],
+   panels:[
+    {id:'n8n-movi.workflows',  name:'Danh sách Workflows'},
+    {id:'n8n-movi.executions', name:'Execution History'},
+   ]},
+  {id:'vmware01-movi', name:'VMware ESXi 01 (Movi)', icon:'🖥', perms:['none','read','write'],
+   panels:[
+    {id:'vmware01-movi.vms',        name:'Danh sách Virtual Machines'},
+    {id:'vmware01-movi.datastores', name:'Datastores'},
+    {id:'vmware01-movi.hosts',      name:'Host System Info'},
+   ]},
+  {id:'vmware02-movi', name:'VMware ESXi 02 (Movi)', icon:'🖥', perms:['none','read','write'],
+   panels:[
+    {id:'vmware02-movi.vms',        name:'Danh sách Virtual Machines'},
+    {id:'vmware02-movi.datastores', name:'Datastores'},
+    {id:'vmware02-movi.hosts',      name:'Host System Info'},
+   ]},
+  {id:'ssh-movi', name:'Termix Movi', icon:'⌨', perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'}},
+  {id:'tool-movi', name:'Tool Movi — Quản lý tài khoản & tài sản', icon:'🔧',
+   type:'tool-group',
+   perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'},
+   tools:[
+     {id:'tool-movi-create-user',  name:'Tạo User Movi',   icon:'👤'},
+     {id:'tool-movi-block-user',   name:'Block User Movi', icon:'🚫'},
+     {id:'tool-movi-delete-user',  name:'Xóa User Movi',   icon:'🗑️'},
+     {id:'tool-movi-asset-search', name:'Tra Cứu Tài Sản', icon:'🔍'},
+   ]},
 ];
 
 var PERM_LABELS = {'none':'Không truy cập','read':'Chỉ xem','write':'Toàn quyền'};
@@ -742,10 +960,13 @@ var PERM_LABELS = {'none':'Không truy cập','read':'Chỉ xem','write':'Toàn 
    ═══════════════════════════════════════════════════════════ */
 var allUsers = [];
 var allGroups = [];
+var allUserGroups = [];   // User Groups (gom users)
 var allCameras = [];      // Camera Home
 var allCamerasMovi = [];  // Camera Movi (16 camera riêng biệt)
 var allAuditLog = [];
+/* _delegateMode, _delegateServices, DELEGATE_SVC_LABELS declared before initUI() above */
 var currentGroupId = null;
+var currentUserGroupId = null;
 var editingUsername = null;
 var currentUserPermUsername = null;
 
@@ -755,6 +976,7 @@ var currentUserPermUsername = null;
 function loadSettings() {
   loadUsers();
   loadGroups();
+  loadUserGroups();
   loadCameras();
   loadSysConfig();
   loadAuditLog();
@@ -769,6 +991,7 @@ function loadUsers() {
     .then(function(r){return r.json();})
     .then(function(d){
       allUsers = d.users || [];
+      if (d.delegateMode) { _delegateMode = true; _delegateServices = d.canManagePerms || []; }
       renderUsers();
     })
     .catch(function(){toast('Lỗi tải user list','err');});
@@ -780,12 +1003,36 @@ function renderUsers() {
     tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Chưa có user nào</td></tr>';
     return;
   }
+  // ── Delegated user mode: simplified table ──
+  if (_delegateMode) {
+    tbody.innerHTML = allUsers.map(function(u){
+      var roleChip = u.role==='admin'
+        ? '<span class="badge badge-admin">Admin</span>'
+        : '<span class="badge badge-user">User</span>';
+      var permSummary = _delegateServices.map(function(s){
+        var v = (u.permissions||{})[s] || 'none';
+        var color = v==='write'?'var(--ok)':v==='read'?'var(--accent)':'var(--muted)';
+        return '<span style="font-size:10px;padding:1px 6px;border-radius:10px;border:1px solid '+color+';color:'+color+'">'
+          +(DELEGATE_SVC_LABELS[s]||s)+': '+v+'</span>';
+      }).join(' ');
+      return '<tr>'
+        +'<td><div class="user-avatar" style="width:32px;height:32px;font-size:13px;display:grid;place-items:center">'+esc((u.username||'?').charAt(0).toUpperCase())+'</div></td>'
+        +'<td><span style="font-weight:600">'+esc(u.username)+'</span></td>'
+        +'<td>'+roleChip+'</td>'
+        +'<td colspan="2"><div style="display:flex;flex-wrap:wrap;gap:4px">'+permSummary+'</div></td>'
+        +'<td style="text-align:right"><button class="btn btn-outline btn-sm" onclick="openUserPerms(\''+esc(u.username)+'\')">🔑 Quyền</button></td>'
+      +'</tr>';
+    }).join('');
+    return;
+  }
+
   tbody.innerHTML = allUsers.map(function(u){
-    var groups = (u.groups||[]).map(function(g){return '<span class="chip chip-accent">'+esc(g)+'</span>';}).join('');
+    var groups = (u.groups||[]).map(function(g){return '<span class="chip chip-accent">📋 '+esc(g)+'</span>';}).join('');
+    var ugChips = (u.userGroups||[]).map(function(g){return '<span class="chip" style="border-color:rgba(20,184,166,.3);color:#2dd4bf;background:rgba(20,184,166,.08)">🗂 '+esc(g)+'</span>';}).join('');
+    var allGroupChips = ugChips + groups;
     var roleChip = u.role==='admin'
       ? '<span class="badge badge-admin">Admin</span>'
       : '<span class="badge badge-user">User</span>';
-    var ts = u.created ? new Date(u.created).toLocaleDateString('vi-VN') : '—';
     // Admin account: cannot be edited or deleted — show lock badge instead of action buttons
     var isRootAdmin = (u.username === 'admin');
     var actionCell = isRootAdmin
@@ -799,8 +1046,7 @@ function renderUsers() {
       +'<td><div class="user-avatar" style="width:32px;height:32px;font-size:13px;display:grid;place-items:center">'+esc((u.username||'?').charAt(0).toUpperCase())+'</div></td>'
       +'<td><span style="font-weight:600">'+esc(u.username)+'</span>'+(isRootAdmin?'<span class="chip chip-accent" style="margin-left:6px;font-size:10px">Super Admin</span>':'')+'</td>'
       +'<td>'+roleChip+'</td>'
-      +'<td><div style="display:flex;flex-wrap:wrap;gap:4px">'+(groups||'<span style="color:var(--muted);font-size:12px">—</span>')+'</div></td>'
-      +'<td style="color:var(--muted);font-size:12px">'+ts+'</td>'
+      +'<td><div style="display:flex;flex-wrap:wrap;gap:4px">'+(allGroupChips||'<span style="color:var(--muted);font-size:12px">—</span>')+'</div></td>'
       +actionCell
     +'</tr>';
   }).join('');
@@ -816,7 +1062,17 @@ function openAddUser() {
   document.getElementById('um-pw-label').textContent = 'Mật khẩu';
   document.getElementById('um-role').value = 'user';
   document.getElementById('user-modal-err').classList.remove('show');
-  renderGroupCheckboxes('um-groups-list', []);
+  // Delegate mode: hide role selector and groups (server enforces role='user', no groups)
+  var roleRow = document.getElementById('um-role').closest('.form-row');
+  var groupsRow = document.getElementById('um-groups-row');
+  if (_delegateMode) {
+    if (roleRow) roleRow.style.display = 'none';
+    if (groupsRow) groupsRow.style.display = 'none';
+  } else {
+    if (roleRow) roleRow.style.display = '';
+    if (groupsRow) groupsRow.style.display = '';
+    renderGroupCheckboxes('um-groups-list', []);
+  }
   openModal('user-modal');
   document.getElementById('um-username').focus();
 }
@@ -892,9 +1148,12 @@ function saveUser() {
       errEl.textContent='Lỗi: '+e.message; errEl.classList.add('show');
     });
   } else {
+    // In delegate mode: don't send role/groups (server enforces role='user', no groups)
+    var createBody = {username: username, password: password};
+    if (!_delegateMode) { createBody.role = role; createBody.groups = groups; }
     fetch('/api/admin/users',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({username,password,role,groups})
+      body:JSON.stringify(createBody)
     }).then(function(r){return r.json();}).then(function(d){
       btn.disabled=false; btn.textContent='Tạo user';
       if(d.error){errEl.textContent=d.error;errEl.classList.add('show');return;}
@@ -926,26 +1185,95 @@ function confirmDeleteUser(username) {
 /* ── Individual user permission override ── */
 function openUserPerms(username) {
   currentUserPermUsername = username;
-  document.getElementById('user-perm-title').textContent = '🔑 Quyền riêng của: ' + username;
+  var isAdmin = __USER__.isAdmin;
+  var title = _delegateMode
+    ? '🔑 Chỉnh quyền ' + _delegateServices.map(function(s){return DELEGATE_SVC_LABELS[s]||s;}).join(', ') + ' cho: ' + username
+    : '🔑 Quyền riêng của: ' + username;
+  document.getElementById('user-perm-title').textContent = title;
   document.getElementById('user-perm-panel').style.display = '';
   document.getElementById('user-perm-editor').innerHTML = '<div style="padding:1rem 0;color:var(--muted);font-size:13px">⏳ Đang tải quyền...</div>';
+  // Hide/show delegate section based on role
+  document.getElementById('user-perm-delegate').style.display = isAdmin ? '' : 'none';
   document.getElementById('user-perm-panel').scrollIntoView({behavior:'smooth',block:'start'});
   // Always fetch fresh data from server to show current saved permissions
   fetch('/api/admin/users', {cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
       allUsers = d.users || [];
+      if (d.delegateMode) { _delegateMode = true; _delegateServices = d.canManagePerms || []; }
       renderUsers();
       var u = allUsers.find(function(x){return x.username===username;});
       if (!u) {
         document.getElementById('user-perm-editor').innerHTML = '<div class="empty-state">Không tìm thấy user</div>';
         return;
       }
-      renderPermEditor('user-perm-editor', u.permissions||{}, u.panels||{}, u.cameras||[], 'usr');
+      if (_delegateMode) {
+        // Delegated user: only show the services they can manage
+        _renderDelegatePermEditor(u);
+      } else {
+        renderPermEditor('user-perm-editor', u.permissions||{}, u.panels||{}, u.cameras||[], 'usr');
+        // Admin: also render delegation section
+        if (isAdmin) _renderDelegateSvcSection(u);
+      }
     })
     .catch(function(e){
       document.getElementById('user-perm-editor').innerHTML = '<div class="empty-state">Lỗi tải dữ liệu: '+esc(e.message)+'</div>';
     });
+}
+
+/* Render a restricted permission editor showing only the delegated services */
+function _renderDelegatePermEditor(u) {
+  var el = document.getElementById('user-perm-editor');
+  el.innerHTML = '';
+  var perms = u.permissions || {};
+  var wrapper = document.createElement('div');
+  wrapper.style.cssText = 'display:flex;flex-direction:column;gap:8px';
+  _delegateServices.forEach(function(svc) {
+    var curPerm = perms[svc] || 'none';
+    var row = document.createElement('div');
+    row.className = 'perm-row';
+    row.id = 'usr-row-' + svc;
+    var svcName = DELEGATE_SVC_LABELS[svc] || svc;
+    var radios = ['none','read','write'].map(function(p){
+      var lbl = PERM_LABELS[p] || p;
+      var chk = (curPerm===p) ? ' checked' : '';
+      return '<label class="perm-radio-label"><input type="radio" name="usr-perm-'+svc+'" value="'+p+'"'+chk+'>'+lbl+'</label>';
+    }).join('');
+    row.innerHTML = '<span class="perm-row-icon">🔑</span><span class="perm-row-name">'+esc(svcName)+'</span><div class="perm-radios">'+radios+'</div>';
+    wrapper.appendChild(row);
+  });
+  el.appendChild(wrapper);
+}
+
+/* Render the delegation section (admin view only): checkboxes for which services user can manage */
+function _renderDelegateSvcSection(u) {
+  var el = document.getElementById('user-perm-delegate-list');
+  if (!el) return;
+  var current = u.canManagePerms || [];
+  var allSvcs = Object.keys(DELEGATE_SVC_LABELS);
+  el.innerHTML = allSvcs.map(function(svc){
+    var checked = current.indexOf(svc) >= 0;
+    return '<label class="cam-check-label" style="min-width:180px">'
+      +'<input type="checkbox" class="delegate-svc-cb" value="'+esc(svc)+'"'+(checked?' checked':'')+'>'
+      +esc(DELEGATE_SVC_LABELS[svc]||svc)
+    +'</label>';
+  }).join('');
+}
+
+/* Save canManagePerms for current user (admin only) */
+function saveManagePerms() {
+  if (!currentUserPermUsername) return;
+  var checkboxes = document.querySelectorAll('.delegate-svc-cb:checked');
+  var canManagePerms = Array.from(checkboxes).map(function(cb){return cb.value;});
+  fetch('/api/admin/users/'+encodeURIComponent(currentUserPermUsername)+'/manage-perms', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({canManagePerms: canManagePerms})
+  }).then(function(r){return r.json();}).then(function(d){
+    if (d.error) { toast('Lỗi: '+d.error, 'err'); return; }
+    toast('✓ Đã lưu ủy quyền cho ' + currentUserPermUsername, 'ok');
+    loadUsers();
+  }).catch(function(e){ toast('Lỗi: '+e.message,'err'); });
 }
 
 function closeUserPermPanel() {
@@ -956,9 +1284,35 @@ function closeUserPermPanel() {
 function saveUserPerms() {
   if (!currentUserPermUsername) return;
   var username = currentUserPermUsername;
-  var result = collectPermissions('usr');
   var saveBtn = document.querySelector('#user-perm-panel .btn-primary');
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Đang lưu...'; }
+
+  if (_delegateMode) {
+    // Delegated user mode: only send the services in _delegateServices
+    var delegatePerms = {};
+    _delegateServices.forEach(function(svc){
+      var radios = document.querySelectorAll('input[name="usr-perm-'+svc+'"]');
+      for (var i=0; i<radios.length; i++) {
+        if (radios[i].checked) { delegatePerms[svc] = radios[i].value; break; }
+      }
+    });
+    fetch('/api/admin/users/'+encodeURIComponent(username)+'/permissions', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({permissions: delegatePerms})
+    }).then(function(r){return r.json();}).then(function(d){
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Lưu quyền'; }
+      if (d.error) { toast('Lỗi: '+d.error,'err'); return; }
+      toast('✓ Đã lưu quyền cho ' + username, 'ok');
+      var u = allUsers.find(function(x){return x.username===username;});
+      if (u) { Object.assign(u.permissions, delegatePerms); renderUsers(); }
+    }).catch(function(e){
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Lưu quyền'; }
+      toast('Lỗi: '+e.message,'err');
+    });
+    return;
+  }
+
+  var result = collectPermissions('usr');
 
   // ONE atomic call: permissions + panels + cameras saved together → no KV race condition
   fetch('/api/admin/users/'+encodeURIComponent(username)+'/panels', {
@@ -995,16 +1349,34 @@ function loadSysConfig() {
   fetch('/api/system-config',{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
+      // Status display cards
       document.getElementById('cfg-session-disp').innerHTML = d.sessionTtlHours+' <span class="cfg-unit">giờ</span>';
       document.getElementById('cfg-idle-disp').innerHTML = d.idleTimeoutMin+' <span class="cfg-unit">phút</span>';
       document.getElementById('cfg-maxusers-disp').textContent = d.maxUsers;
       document.getElementById('cfg-audit-disp').innerHTML = d.auditRetentionDays+' <span class="cfg-unit">ngày</span>';
+      // Inputs
       document.getElementById('cfg-session').value = d.sessionTtlHours;
       document.getElementById('cfg-idle').value = d.idleTimeoutMin;
       document.getElementById('cfg-maxusers').value = d.maxUsers;
       document.getElementById('cfg-audit-ret').value = d.auditRetentionDays;
       document.getElementById('cfg-default-role').value = d.defaultRole || 'user';
       document.getElementById('cfg-banner').value = d.loginBannerMsg || '';
+      document.getElementById('cfg-dashboard-title').value = d.dashboardTitle || '';
+      document.getElementById('cfg-pw-minlen').value = d.pwMinLength ?? 6;
+      document.getElementById('cfg-max-attempts').value = d.maxLoginAttempts ?? 8;
+      // Maintenance mode
+      var mOn = !!d.maintenanceMode;
+      var cb = document.getElementById('cfg-maintenance');
+      if (cb) cb.checked = mOn;
+      var track = document.getElementById('maint-track');
+      if (track) { track.classList.toggle('warn-on', mOn); track.classList.remove('on'); }
+      var st = document.getElementById('maint-status-text');
+      if (st) st.textContent = mOn ? '🔴 Đang bật' : '⚪ Đang tắt';
+      var msgRow = document.getElementById('maint-msg-row');
+      if (msgRow) msgRow.style.display = mOn ? '' : 'none';
+      var mi = document.getElementById('cfg-maint-msg');
+      if (mi) mi.value = d.maintenanceMsg || '';
+      // Runtime info
       var ri = document.getElementById('cfg-runtime-info');
       ri.innerHTML = d.updatedAt
         ? '📝 Cập nhật lần cuối bởi <strong>'+esc(d.updatedBy||'?')+'</strong> lúc '+new Date(d.updatedAt).toLocaleString('vi-VN')
@@ -1013,14 +1385,46 @@ function loadSysConfig() {
     .catch(function(){document.getElementById('cfg-runtime-info').textContent='Lỗi tải config';});
 }
 
+function toggleMaintenance(on) {
+  var track = document.getElementById('maint-track');
+  if (track) { track.classList.toggle('warn-on', on); track.classList.remove('on'); }
+  var st = document.getElementById('maint-status-text');
+  if (st) st.textContent = on ? '🔴 Đang bật' : '⚪ Đang tắt';
+  var msgRow = document.getElementById('maint-msg-row');
+  if (msgRow) msgRow.style.display = on ? '' : 'none';
+  fetch('/api/system-config',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({maintenanceMode:on})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error){toast('Lỗi: '+d.error,'err');return;}
+      toast(on ? '🚧 Đã bật Maintenance Mode' : '✓ Đã tắt Maintenance Mode', on ? 'warn' : 'ok');
+    })
+    .catch(function(e){toast('Lỗi: '+e.message,'err');});
+}
+
+function saveMaintMsg() {
+  var msg = (document.getElementById('cfg-maint-msg').value || '').trim();
+  fetch('/api/system-config',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({maintenanceMsg:msg})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error){toast('Lỗi: '+d.error,'err');return;}
+      toast('✓ Đã lưu thông báo bảo trì','ok');
+    })
+    .catch(function(e){toast('Lỗi: '+e.message,'err');});
+}
+
 function saveSysConfig() {
   var body = {
-    sessionTtlHours: Number(document.getElementById('cfg-session').value),
-    idleTimeoutMin:  Number(document.getElementById('cfg-idle').value),
-    maxUsers:        Number(document.getElementById('cfg-maxusers').value),
-    auditRetentionDays: Number(document.getElementById('cfg-audit-ret').value),
-    defaultRole:     document.getElementById('cfg-default-role').value,
-    loginBannerMsg:  document.getElementById('cfg-banner').value.trim(),
+    sessionTtlHours:   Number(document.getElementById('cfg-session').value),
+    idleTimeoutMin:    Number(document.getElementById('cfg-idle').value),
+    maxUsers:          Number(document.getElementById('cfg-maxusers').value),
+    auditRetentionDays:Number(document.getElementById('cfg-audit-ret').value),
+    defaultRole:       document.getElementById('cfg-default-role').value,
+    loginBannerMsg:    document.getElementById('cfg-banner').value.trim(),
+    dashboardTitle:    document.getElementById('cfg-dashboard-title').value.trim(),
+    pwMinLength:       Number(document.getElementById('cfg-pw-minlen').value) || 6,
+    maxLoginAttempts:  Number(document.getElementById('cfg-max-attempts').value) || 8,
   };
   fetch('/api/system-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json();})
@@ -1042,7 +1446,8 @@ function loadAuditLog() {
     .then(function(r){return r.json();})
     .then(function(d){
       _auditRaw = d.log || [];
-      document.getElementById('audit-total-info').textContent = _auditRaw.length + ' bản ghi (30 ngày)';
+      var days = d.cutoffDays || 30;
+      document.getElementById('audit-total-info').textContent = _auditRaw.length + ' bản ghi (' + days + ' ngày)';
       renderAuditLog(_auditRaw);
     })
     .catch(function(){document.getElementById('audit-list').innerHTML='<div class="empty-state">Lỗi tải audit log</div>';});
@@ -1077,7 +1482,8 @@ function renderAuditLog(logs) {
 }
 
 function purgeAuditLog() {
-  if (!confirm('Xác nhận xóa tất cả audit log cũ hơn 30 ngày?\n\nHành động này không thể hoàn tác.')) return;
+  var days = (document.getElementById('audit-total-info').textContent.match(/\((\d+) ngày\)/) || [])[1] || 30;
+  if (!confirm('Xác nhận xóa tất cả audit log cũ hơn ' + days + ' ngày?\n\nHành động này không thể hoàn tác.')) return;
   fetch('/api/audit-log/purge',{method:'POST'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -1122,12 +1528,19 @@ function renderGroupSidebar() {
     var sel = g.id === currentGroupId ? ' selected' : '';
     var pageCount = Object.keys(g.permissions||{}).filter(function(k){return g.permissions[k]&&g.permissions[k]!=='none';}).length;
     var userCount = allUsers.filter(function(u){ return (u.groups||[]).indexOf(g.id) >= 0; }).length;
+    var rolePill = g.role === 'admin'
+      ? '<span style="font-size:10px;padding:1px 7px;border-radius:10px;font-weight:700;background:color-mix(in oklch,var(--bad) 15%,transparent);color:var(--bad);border:1px solid color-mix(in oklch,var(--bad) 25%,transparent)">👑 admin</span>'
+      : g.role === 'user'
+        ? '<span style="font-size:10px;padding:1px 7px;border-radius:10px;font-weight:700;background:color-mix(in oklch,var(--ok) 12%,transparent);color:var(--ok);border:1px solid color-mix(in oklch,var(--ok) 22%,transparent)">👤 user</span>'
+        : '';
     return '<div class="group-item'+sel+'" onclick="selectGroup(\''+esc(g.id)+'\')">'
-      +'<div class="group-item-name">'+esc(g.name)+'</div>'
+      +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+        +'<span class="group-item-name">'+esc(g.name)+'</span>'+rolePill
+      +'</div>'
       +(g.description?'<div class="group-item-desc">'+esc(g.description)+'</div>':'')
       +'<div class="group-item-meta">'
         +'<span>📄 '+pageCount+' trang được cấp</span>'
-        +'<span>👤 '+userCount+' user</span>'
+        +'<span>👥 '+userCount+' thành viên</span>'
       +'</div>'
     +'</div>';
   }).join('');
@@ -1139,7 +1552,14 @@ function renderGroupSidebar() {
 
 function updateGroupDelBtn() {
   var btn = document.getElementById('grp-del-btn');
-  if (btn) btn.style.display = currentGroupId ? '' : 'none';
+  // In delegate mode: hide delete button entirely (only admin can delete groups)
+  if (btn) btn.style.display = (!_delegateMode && currentGroupId) ? '' : 'none';
+}
+
+/* Toggle permission editor visibility when role radio changes */
+function onGroupRoleChange(val) {
+  var ed = document.getElementById('grp-perm-editor');
+  if (ed) ed.style.display = (val === 'admin') ? 'none' : '';
 }
 
 function selectGroup(id) {
@@ -1160,23 +1580,155 @@ function renderGroupEditor(group) {
   var el = document.getElementById('group-editor');
   el.innerHTML = '';
 
-  // Title
+  // ── Title + Role badge ──
+  var roleColor = group.role === 'admin' ? 'var(--bad)' : group.role === 'user' ? 'var(--ok)' : 'var(--muted)';
+  var roleBadge = group.role
+    ? '<span style="display:inline-block;font-size:11px;padding:2px 9px;border-radius:12px;font-weight:700;margin-left:8px;background:color-mix(in oklch,'+roleColor+' 15%,transparent);color:'+roleColor+';border:1px solid color-mix(in oklch,'+roleColor+' 30%,transparent)">role: '+esc(group.role)+'</span>'
+    : '<span style="display:inline-block;font-size:11px;padding:2px 9px;border-radius:12px;font-weight:600;margin-left:8px;background:var(--surface-2);color:var(--muted);border:1px solid var(--border)">no role</span>';
   var title = document.createElement('div');
-  title.innerHTML = '<div class="editor-title">🔐 Quyền nhóm: <span style="color:var(--accent)">'+esc(group.name)+'</span></div>'
-    +(group.description?'<div style="font-size:12px;color:var(--muted);margin-top:2px">'+esc(group.description)+'</div>':'');
+  title.innerHTML = '<div class="editor-title">🔐 <span style="color:var(--accent)">'+esc(group.name)+'</span>'+roleBadge+'</div>'
+    +(group.description?'<div style="font-size:12px;color:var(--muted);margin-top:4px">'+esc(group.description)+'</div>':'');
   el.appendChild(title);
 
-  // Render permission editor
+  // ── Role Assignment (top-level, prominent) ──
+  var roleSection = document.createElement('div');
+  roleSection.style.cssText = 'margin-top:14px;padding:14px 16px;border-radius:10px;background:color-mix(in oklch,var(--accent) 5%,transparent);border:1px solid color-mix(in oklch,var(--accent) 18%,transparent)';
+  // Default to 'user' if group.role is null/undefined (no "no role" option anymore)
+  var curRole = group.role || 'user';
+  // In delegate mode: if group currently has admin role, show a warning but don't allow changing to admin
+  var delegateModeAdminNote = (_delegateMode && group.role === 'admin')
+    ? '<div style="font-size:11px;color:var(--bad);margin-top:6px;padding:6px 10px;border-radius:6px;background:color-mix(in oklch,var(--bad) 8%,transparent);border:1px solid color-mix(in oklch,var(--bad) 20%,transparent)">⚠️ Nhóm này hiện có role admin. Bạn không thể gán role admin, nhưng có thể chuyển về user.</div>'
+    : '';
+  roleSection.innerHTML = ''
+    +'<div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">🎭 Role của nhóm</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+      +'<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;padding:6px 14px;border-radius:8px;border:1px solid color-mix(in oklch,var(--ok) 30%,transparent);background:color-mix(in oklch,var(--ok) 6%,transparent);color:var(--ok)">'
+        +'<input type="radio" name="grp-role" value="user" '+(curRole==='user'?'checked':'')+' onchange="onGroupRoleChange(this.value)"/> 👤 user</label>'
+      +(_delegateMode ? '' :
+        '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;padding:6px 14px;border-radius:8px;border:1px solid color-mix(in oklch,var(--bad) 30%,transparent);background:color-mix(in oklch,var(--bad) 6%,transparent);color:var(--bad)">'
+          +'<input type="radio" name="grp-role" value="admin" '+(curRole==='admin'?'checked':'')+' onchange="onGroupRoleChange(this.value)"/> 👑 admin (toàn quyền)</label>'
+      )
+    +'</div>'
+    +(_delegateMode
+      ? '<div style="font-size:11px;color:var(--muted);margin-top:7px">Bạn có thể gán role <strong>user</strong>. Gán role <strong>admin</strong> yêu cầu quyền Admin hệ thống.</div>'
+      : '<div style="font-size:11px;color:var(--muted);margin-top:7px">Khi nhóm có role <strong>admin</strong> → tất cả thành viên có toàn quyền giống Admin, kể cả truy cập Settings. Mọi permission dưới đây sẽ bị ẩn vì không cần thiết.</div>'
+    )
+    +delegateModeAdminNote;
+  el.appendChild(roleSection);
+
+  // ── Permission editor (ẩn khi role = admin vì admin có full quyền rồi) ──
   var editorDiv = document.createElement('div');
   editorDiv.id = 'grp-perm-editor';
+  editorDiv.style.marginTop = '14px';
+  // Hide immediately if admin role is selected
+  if (curRole === 'admin') editorDiv.style.display = 'none';
   el.appendChild(editorDiv);
   renderPermEditor('grp-perm-editor', group.permissions||{}, group.panels||{}, group.cameras||[], 'grp');
+  // In delegate mode: hide permission rows that are not in managed services
+  if (_delegateMode) {
+    editorDiv.querySelectorAll('.perm-row').forEach(function(row) {
+      var svcId = row.id.replace(/^grp-row-/, '');
+      if (_delegateServices.indexOf(svcId) < 0) row.style.display = 'none';
+    });
+    // Hide entire service sections if all their rows are hidden
+    editorDiv.querySelectorAll('.svc-section').forEach(function(sec) {
+      var visibleRows = Array.prototype.slice.call(sec.querySelectorAll('.perm-row')).filter(function(r){return r.style.display!=='none';});
+      if (!visibleRows.length) sec.style.display = 'none';
+    });
+    // Add a delegate mode notice
+    var note = document.createElement('div');
+    note.style.cssText = 'font-size:11px;color:var(--muted);padding:8px 12px;border-radius:6px;background:color-mix(in oklch,var(--accent) 5%,transparent);border:1px solid color-mix(in oklch,var(--accent) 12%,transparent);margin-bottom:10px';
+    note.textContent = '🔑 Chỉ hiển thị các dịch vụ bạn được ủy quyền quản lý.';
+    editorDiv.insertBefore(note, editorDiv.firstChild);
+  }
 
-  // Save button
+  // ── Save button ──
   var saveRow = document.createElement('div');
   saveRow.style.cssText = 'display:flex;gap:8px;padding-top:12px;border-top:1px solid var(--border-soft)';
-  saveRow.innerHTML = '<button class="btn btn-primary" onclick="saveGroupPerms()">💾 Lưu quyền nhóm</button>';
+  saveRow.innerHTML = '<button class="btn btn-primary" onclick="saveGroupPerms()">💾 Lưu nhóm</button>';
   el.appendChild(saveRow);
+
+  // ── Group Members Section ──
+  var membersSection = document.createElement('div');
+  membersSection.style.cssText = 'margin-top:20px;padding-top:18px;border-top:2px solid var(--border)';
+  membersSection.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:12px">👥 Thành viên nhóm: <span style="color:var(--accent)">'+esc(group.name)+'</span></div>';
+
+  // Member list
+  var memberListDiv = document.createElement('div');
+  memberListDiv.id = 'grp-member-list';
+  renderGroupMemberList(group.id, memberListDiv);
+  membersSection.appendChild(memberListDiv);
+
+  // Add member control
+  var addRow = document.createElement('div');
+  addRow.style.cssText = 'display:flex;gap:8px;margin-top:10px;align-items:center';
+  var nonMembers = allUsers.filter(function(u){
+    return u.role!=='admin' && (u.groups||[]).indexOf(group.id)<0;
+  });
+  if (nonMembers.length) {
+    addRow.innerHTML = '<select class="inp" id="grp-add-select" style="flex:1;font-size:12px;padding:6px 8px">'
+      +'<option value="">— Chọn user để thêm —</option>'
+      +nonMembers.map(function(u){return '<option value="'+esc(u.username)+'">'+esc(u.username)+'</option>';}).join('')
+      +'</select>'
+      +'<button class="btn btn-primary btn-sm" onclick="addUserToGroup(\''+esc(group.id)+'\')">+ Thêm</button>';
+  } else {
+    addRow.innerHTML = '<span style="font-size:12px;color:var(--muted)">Tất cả users đã trong nhóm này</span>';
+  }
+  membersSection.appendChild(addRow);
+  el.appendChild(membersSection);
+}
+
+function renderGroupMemberList(groupId, container) {
+  var members = allUsers.filter(function(u){ return (u.groups||[]).indexOf(groupId)>=0; });
+  if (!members.length) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">Chưa có thành viên nào</div>';
+    return;
+  }
+  container.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px">'
+    +members.map(function(u){
+      return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 10px;background:color-mix(in oklch,var(--accent) 10%,transparent);border:1px solid color-mix(in oklch,var(--accent) 25%,transparent);border-radius:20px;color:var(--text)">'
+        +'👤 '+esc(u.username)
+        +'<button onclick="removeUserFromGroup(\''+esc(u.username)+'\',\''+esc(groupId)+'\')" title="Xóa khỏi nhóm" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;line-height:1;padding:0 0 0 2px">×</button>'
+      +'</span>';
+    }).join('')
+    +'</div>';
+}
+
+function addUserToGroup(groupId) {
+  var sel = document.getElementById('grp-add-select');
+  if (!sel || !sel.value) return;
+  var username = sel.value;
+  var u = allUsers.find(function(x){return x.username===username;});
+  if (!u) return;
+  var newGroups = (u.groups||[]).concat([groupId]).filter(function(v,i,a){return a.indexOf(v)===i;});
+  fetch('/api/admin/users/'+encodeURIComponent(username)+'/groups',{
+    method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({groups:newGroups})
+  }).then(function(r){return r.json();}).then(function(d){
+    if(d.error){toast('Lỗi: '+d.error,'err');return;}
+    // Update local state
+    u.groups = newGroups;
+    toast('Đã thêm '+username+' vào nhóm','ok');
+    // Re-render editor
+    var group = allGroups.find(function(g){return g.id===groupId;});
+    if(group) renderGroupEditor(group);
+  }).catch(function(e){toast('Lỗi: '+e.message,'err');});
+}
+
+function removeUserFromGroup(username, groupId) {
+  var u = allUsers.find(function(x){return x.username===username;});
+  if (!u) return;
+  var newGroups = (u.groups||[]).filter(function(g){return g!==groupId;});
+  fetch('/api/admin/users/'+encodeURIComponent(username)+'/groups',{
+    method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({groups:newGroups})
+  }).then(function(r){return r.json();}).then(function(d){
+    if(d.error){toast('Lỗi: '+d.error,'err');return;}
+    u.groups = newGroups;
+    toast('Đã xóa '+username+' khỏi nhóm','ok');
+    var group = allGroups.find(function(g){return g.id===groupId;});
+    if(group) renderGroupEditor(group);
+  }).catch(function(e){toast('Lỗi: '+e.message,'err');});
 }
 
 /* ── Generic permission editor renderer ── */
@@ -1214,9 +1766,22 @@ function buildServiceSection(title, pages, permissions, panels, cameras, pfx, se
   body.className = 'svc-section-body';
 
   pages.forEach(function(page) {
-    var perm = (permissions[page.id] || 'none');
+    // ── Group header (non-permission divider) ──
+    if (page.type === 'group-header') {
+      var ghRow = document.createElement('div');
+      ghRow.className = 'perm-group-header';
+      ghRow.innerHTML = '<span>'+page.icon+'</span><span>'+esc(page.name)+'</span>';
+      body.appendChild(ghRow);
+      return;
+    }
+
+    // For tool-group: parent perm is computed from sub-tools (any tool = write → parent = write)
+    var perm = page.tools
+      ? (page.tools.some(function(t){return (permissions[t.id]||'none')!=='none';}) ? 'write' : 'none')
+      : (permissions[page.id] || 'none');
+
     var permRow = document.createElement('div');
-    permRow.className = 'perm-row';
+    permRow.className = 'perm-row' + (page.indent ? ' perm-indented' : '');
     permRow.id = pfx+'-row-'+page.id;
 
     var icon = '<span class="perm-row-icon">'+page.icon+'</span>';
@@ -1291,6 +1856,25 @@ function buildServiceSection(title, pages, permissions, panels, cameras, pfx, se
 
       body.appendChild(camSec);
     }
+
+    // ── Tool group sub-section ──
+    if (page.tools) {
+      var toolSec = document.createElement('div');
+      toolSec.className = 'tool-group-sec';
+      toolSec.id = pfx+'-tools-'+page.id;
+      toolSec.style.display = (perm !== 'none') ? '' : 'none';
+
+      page.tools.forEach(function(tool) {
+        var isEnabled = (permissions[tool.id] || 'none') !== 'none';
+        var lbl = document.createElement('label');
+        lbl.className = 'tool-check-label';
+        lbl.innerHTML = '<input type="checkbox" id="'+pfx+'-tool-'+tool.id+'"'+(isEnabled?' checked':'')+'>'
+          +'<span>'+tool.icon+' '+esc(tool.name)+'</span>';
+        toolSec.appendChild(lbl);
+      });
+
+      body.appendChild(toolSec);
+    }
   });
 
   section.appendChild(body);
@@ -1300,6 +1884,18 @@ function buildServiceSection(title, pages, permissions, panels, cameras, pfx, se
 function onPermChange(pfx, pageId) {
   var radio = document.querySelector('input[name="'+pfx+'-perm-'+pageId+'"]:checked');
   var perm = radio ? radio.value : 'none';
+
+  // ── Tool-group: toggle sub-tools; clear all when parent = none ──
+  var toolSec = document.getElementById(pfx+'-tools-'+pageId);
+  if (toolSec) {
+    toolSec.style.display = (perm !== 'none') ? '' : 'none';
+    if (perm === 'none') {
+      // Uncheck all sub-tool checkboxes
+      toolSec.querySelectorAll('input[type="checkbox"]').forEach(function(cb){ cb.checked = false; });
+    }
+    return; // tool-groups have no panels/cameras
+  }
+
   // Show/hide panels section
   var panelSec = document.getElementById(pfx+'-panels-'+pageId);
   if (panelSec) panelSec.style.display = (perm !== 'none') ? '' : 'none';
@@ -1352,6 +1948,15 @@ function collectPermissions(pfx) {
 
   // Service Movi
   SERVICE_MOVI_PAGES.forEach(function(page){
+    if (page.type === 'group-header') return; // skip visual-only dividers
+    // Tool-group: collect each sub-tool individually; skip virtual parent key
+    if (page.type === 'tool-group' && page.tools) {
+      page.tools.forEach(function(tool) {
+        var cb = document.getElementById(pfx+'-tool-'+tool.id);
+        permissions[tool.id] = (cb && cb.checked) ? 'write' : 'none';
+      });
+      return;
+    }
     var radio = document.querySelector('input[name="'+pfx+'-perm-'+page.id+'"]:checked');
     permissions[page.id] = radio ? radio.value : 'none';
     // Sub-panels (Meraki, Topology, FortiGate Movi…)
@@ -1375,42 +1980,72 @@ function collectPermissions(pfx) {
   return {permissions: permissions, panels: panels, cameras: cameras};
 }
 
-/* ── Save group permissions ── */
+/* ── Save group permissions + role ── */
 function saveGroupPerms() {
   if (!currentGroupId) return;
   var gid = currentGroupId;
   var result = collectPermissions('grp');
   var saveBtn = document.querySelector('#group-editor .btn-primary');
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Đang lưu...'; }
+
+  var payload;
+  if (_delegateMode) {
+    // Only send permissions for managed services; don't allow setting admin role
+    var filteredPerms = {};
+    _delegateServices.forEach(function(svc) {
+      if (result.permissions[svc] !== undefined) filteredPerms[svc] = result.permissions[svc];
+    });
+    var roleRadioD = document.querySelector('input[name="grp-role"]:checked');
+    var groupRoleD = roleRadioD ? roleRadioD.value : null;
+    // Safety: never send 'admin' from delegate mode (though the radio is hidden)
+    if (groupRoleD === 'admin') groupRoleD = null;
+    payload = { role: groupRoleD || null, permissions: filteredPerms };
+  } else {
+    // Read role radio
+    var roleRadio = document.querySelector('input[name="grp-role"]:checked');
+    var groupRole = roleRadio ? roleRadio.value : null;  // '' → null (no role)
+    payload = {
+      role:        groupRole || null,
+      permissions: result.permissions,
+      panels:      result.panels,
+      cameras:     result.cameras
+    };
+  }
+
   fetch('/api/policy/groups/'+encodeURIComponent(gid),{
     method:'PUT', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({permissions: result.permissions, panels: result.panels, cameras: result.cameras})
+    body: JSON.stringify(payload)
   }).then(function(r){return r.json();}).then(function(d){
-    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Lưu quyền nhóm'; }
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Lưu nhóm'; }
     if (d.error) { toast('Lỗi: '+d.error,'err'); return; }
-    toast('✓ Đã lưu quyền nhóm '+gid,'ok');
-    // Update local cache immediately — no KV lag
+    var savedRole = payload.role;
+    toast('✓ Đã lưu nhóm '+gid+(savedRole?' (role: '+savedRole+')':''),'ok');
+    // Update local cache immediately
     var g = allGroups.find(function(x){return x.id===gid;});
     if (g) {
-      g.permissions = result.permissions;
-      g.panels      = result.panels;
-      g.cameras     = result.cameras;
+      g.role = payload.role;
+      if (!_delegateMode) { g.permissions = result.permissions; g.panels = result.panels; g.cameras = result.cameras; }
+      else { Object.assign(g.permissions || {}, payload.permissions); }
     }
     renderGroupSidebar();
-    // Re-render the editor with confirmed saved data
-    renderPermEditor('grp-perm-editor', result.permissions, result.panels, result.cameras, 'grp');
+    // Re-render editor to reflect saved state
+    if (g) renderGroupEditor(g);
   }).catch(function(e){
-    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Lưu quyền nhóm'; }
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Lưu nhóm'; }
     toast('Lỗi: '+e.message,'err');
   });
 }
 
 /* ── Create/Delete Group ── */
 function openCreateGroup() {
-  document.getElementById('grp-modal-title').textContent = '+ Tạo Policy Group Mới';
+  document.getElementById('grp-modal-title').textContent = '+ Tạo Group Mới';
   document.getElementById('gm-name').value = '';
   document.getElementById('gm-desc').value = '';
+  document.getElementById('gm-role').value = 'user';
   document.getElementById('grp-modal-err').classList.remove('show');
+  // In delegate mode: hide admin role option
+  var adminOpt = document.querySelector('#gm-role option[value="admin"]');
+  if (adminOpt) adminOpt.style.display = _delegateMode ? 'none' : '';
   openModal('grp-modal');
   document.getElementById('gm-name').focus();
 }
@@ -1419,14 +2054,15 @@ function saveGroup() {
   var errEl = document.getElementById('grp-modal-err');
   var name = document.getElementById('gm-name').value.trim();
   var desc = document.getElementById('gm-desc').value.trim();
+  var role = document.getElementById('gm-role').value || null;
   if (!name) { errEl.textContent='Tên nhóm không được để trống'; errEl.classList.add('show'); return; }
   fetch('/api/policy/groups',{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({name,description:desc})
+    body:JSON.stringify({name: name, description: desc, role: role})
   }).then(function(r){return r.json();}).then(function(d){
     if(d.error){errEl.textContent=d.error;errEl.classList.add('show');return;}
     closeModal('grp-modal');
-    toast('✓ Đã tạo nhóm '+name,'ok');
+    toast('✓ Đã tạo nhóm "'+name+'"'+(role?' với role '+role:''),'ok');
     loadGroups();
   }).catch(function(e){errEl.textContent='Lỗi: '+e.message;errEl.classList.add('show');});
 }
@@ -1462,48 +2098,70 @@ function changeMyPassword() {
   if (!pw) { errEl.textContent='Mật khẩu không được để trống'; errEl.classList.add('show'); return; }
   if (pw.length < 6) { errEl.textContent='Mật khẩu phải có ít nhất 6 ký tự'; errEl.classList.add('show'); return; }
   if (pw !== pw2) { errEl.textContent='Mật khẩu xác nhận không khớp'; errEl.classList.add('show'); return; }
+  var payload = { password: pw };
+  if (_mfaEnabled) {
+    var mfaCode = (document.getElementById('acc-mfa-code').value || '').trim();
+    if (!mfaCode) { errEl.textContent='Vui lòng nhập mã MFA để xác nhận'; errEl.classList.add('show'); return; }
+    if (!/^\d{6}$/.test(mfaCode)) { errEl.textContent='Mã MFA phải có đúng 6 chữ số'; errEl.classList.add('show'); return; }
+    payload.mfaCode = mfaCode;
+  }
   fetch('/api/admin/users/'+encodeURIComponent(__USER__.username), {
     method:'PUT', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({password: pw})
+    body: JSON.stringify(payload)
   }).then(function(r){return r.json();}).then(function(d){
-    if (d.error) { errEl.textContent='Lỗi: '+d.error; errEl.classList.add('show'); return; }
+    if (d.error) { errEl.textContent=d.error; errEl.classList.add('show'); return; }
     document.getElementById('acc-pw').value='';
     document.getElementById('acc-pw2').value='';
+    if (_mfaEnabled) document.getElementById('acc-mfa-code').value='';
     toast('✓ Đã đổi mật khẩu thành công','ok');
   }).catch(function(e){ errEl.textContent='Lỗi: '+e.message; errEl.classList.add('show'); });
 }
 
 /* ── MFA Management ── */
 var _mfaSecret = null;
+var _mfaIsReset = false; // true = đổi mã, false = thiết lập lần đầu
+var _mfaEnabled = false; // tracks whether current user has MFA on
 
 function loadMfaStatus() {
   fetch('/api/auth/mfa/status')
     .then(function(r){ return r.json(); })
     .then(function(d) {
       var on = d.enabled;
+      _mfaEnabled = !!on;
       var badge = document.getElementById('mfa-status-badge');
       if (!badge) return;
       badge.innerHTML = on
         ? '<span class="chip chip-ok" style="font-size:12px;padding:3px 12px">✓ Đang bật</span>'
-        : '<span class="chip" style="font-size:12px;padding:3px 12px">✗ Chưa bật</span>';
+        : '<span class="chip chip-err" style="font-size:12px;padding:3px 12px">✗ Chưa thiết lập</span>';
       var desc = document.getElementById('mfa-desc');
       if (desc) desc.textContent = on
-        ? 'Tài khoản đang được bảo vệ bởi xác thực hai bước (Microsoft/Google Authenticator).'
-        : 'Bật MFA để tăng bảo mật. Mỗi lần đăng nhập sẽ cần thêm mã 6 chữ số từ Authenticator.';
-      var btnEn = document.getElementById('btn-enable-mfa');
-      var btnDis = document.getElementById('btn-disable-mfa');
-      if (btnEn) btnEn.style.display  = on ? 'none' : '';
-      if (btnDis) btnDis.style.display = on ? '' : 'none';
+        ? 'Tài khoản đang được bảo vệ bởi xác thực hai bước (Microsoft/Google Authenticator). Để thay đổi thiết bị Authenticator, nhấn "Đổi mã MFA".'
+        : '⚠️ Tài khoản chưa thiết lập MFA. Vui lòng thiết lập ngay.';
+      var btnEn  = document.getElementById('btn-enable-mfa');
+      var btnRst = document.getElementById('btn-reset-mfa');
+      if (btnEn)  btnEn.style.display  = on ? 'none' : '';
+      if (btnRst) btnRst.style.display = on ? ''     : 'none';
+      // Show MFA confirmation field in change-password form when MFA is enabled
+      var mfaRow = document.getElementById('acc-mfa-row');
+      if (mfaRow) mfaRow.style.display = on ? '' : 'none';
     })
     .catch(function(){});
 }
 
-function startMfaSetup() {
+function startMfaSetup(isReset) {
+  _mfaIsReset = !!isReset;
   fetch('/api/auth/mfa/setup', { method: 'POST' })
     .then(function(r){ return r.json(); })
     .then(function(d) {
       _mfaSecret = d.secret;
       var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=0&data=' + encodeURIComponent(d.otpauth);
+      // Update modal title based on action
+      var s1title = document.querySelector('#mfa-s1 .modal-title');
+      if (s1title) s1title.textContent = isReset ? '🔄 Đổi mã MFA — Bước 1/2' : '📱 Thiết lập MFA — Bước 1/2';
+      var s2title = document.querySelector('#mfa-s2 .modal-title');
+      if (s2title) s2title.textContent = isReset ? '🔄 Đổi mã MFA — Bước 2/2' : '📱 Thiết lập MFA — Bước 2/2';
+      var confirmBtn = document.querySelector('#mfa-s2 .btn-primary');
+      if (confirmBtn) confirmBtn.textContent = isReset ? '✓ Xác nhận đổi mã' : '✓ Bật MFA';
       document.getElementById('mfa-qr-img').src = qrUrl;
       document.getElementById('mfa-secret-box').textContent = d.secret;
       document.getElementById('mfa-secret-box').onclick = function() {
@@ -1545,7 +2203,7 @@ function confirmEnableMfa() {
   }).then(function(r){ return r.json(); }).then(function(d) {
     if (d.success) {
       closeModal('mfa-setup-modal');
-      toast('✓ MFA đã được bật thành công!', 'ok');
+      toast(_mfaIsReset ? '✓ Đổi mã MFA thành công! Dùng mã mới từ lần đăng nhập tới.' : '✓ MFA đã được bật thành công!', 'ok');
       loadMfaStatus();
     } else {
       err.textContent = d.error || 'Mã OTP không đúng';
@@ -1556,35 +2214,239 @@ function confirmEnableMfa() {
   }).catch(function(e){ err.textContent='Lỗi: '+e.message; err.classList.add('show'); });
 }
 
-function openDisableMfa() {
-  document.getElementById('mfa-disable-code').value = '';
-  document.getElementById('mfa-disable-err').textContent = '';
-  document.getElementById('mfa-disable-err').classList.remove('show');
-  openModal('mfa-disable-modal');
-  setTimeout(function(){ document.getElementById('mfa-disable-code').focus(); }, 60);
+// MFA disable is not allowed — function removed
+
+/* ══════════════════════════════════════════
+   TAB: USER GROUPS
+   ══════════════════════════════════════════ */
+function loadUserGroups() {
+  fetch('/api/admin/user-groups', {cache:'no-store'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      allUserGroups = d.groups || [];
+      renderUserGroupSidebar();
+    })
+    .catch(function(){toast('Lỗi tải User Groups','err');});
 }
 
-function confirmDisableMfa() {
-  var code = document.getElementById('mfa-disable-code').value.trim();
-  var err  = document.getElementById('mfa-disable-err');
-  if (!/^\d{6}$/.test(code)) { err.textContent='Mã OTP phải có đúng 6 chữ số'; err.classList.add('show'); return; }
-  err.classList.remove('show');
-  fetch('/api/auth/mfa/disable', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code: code })
-  }).then(function(r){ return r.json(); }).then(function(d) {
-    if (d.success) {
-      closeModal('mfa-disable-modal');
-      toast('MFA đã được tắt', 'ok');
-      loadMfaStatus();
-    } else {
-      err.textContent = d.error || 'Mã OTP không đúng';
-      err.classList.add('show');
-      document.getElementById('mfa-disable-code').value = '';
-      document.getElementById('mfa-disable-code').focus();
-    }
-  }).catch(function(e){ err.textContent='Lỗi: '+e.message; err.classList.add('show'); });
+function renderUserGroupSidebar() {
+  var el = document.getElementById('ug-sidebar');
+  if (!el) return;
+  if (!allUserGroups.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:2rem 1rem;text-align:center">Chưa có User Group nào.<br><span style="font-size:11px">Nhấn "+ Tạo nhóm" để bắt đầu.</span></div>';
+    return;
+  }
+  el.innerHTML = allUserGroups.map(function(ug){
+    var sel = ug.id === currentUserGroupId ? ' selected' : '';
+    var memberCount = (ug.members||[]).length;
+    var roleGroupCount = (ug.roleGroups||[]).length;
+    return '<div class="group-item'+sel+'" onclick="selectUserGroup(\''+esc(ug.id)+'\')">'
+      +'<div class="group-item-name">🗂 '+esc(ug.name)+'</div>'
+      +(ug.description?'<div class="group-item-desc">'+esc(ug.description)+'</div>':'')
+      +'<div class="group-item-meta">'
+        +'<span>👥 '+memberCount+' thành viên</span>'
+        +'<span>🔐 '+roleGroupCount+' role group</span>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+}
+
+function selectUserGroup(id) {
+  currentUserGroupId = id;
+  renderUserGroupSidebar();
+  var ug = allUserGroups.find(function(g){return g.id===id;});
+  if (!ug) return;
+  renderUserGroupEditor(ug);
+}
+
+function renderUserGroupEditor(ug) {
+  var el = document.getElementById('ug-editor');
+  if (!el) return;
+  el.innerHTML = '';
+
+  // ── Title ──
+  var header = document.createElement('div');
+  header.innerHTML = '<div class="editor-title">🗂 <span style="color:var(--accent)">'+esc(ug.name)+'</span></div>'
+    +(ug.description?'<div style="font-size:12px;color:var(--muted);margin-top:4px">'+esc(ug.description)+'</div>':'');
+  el.appendChild(header);
+
+  // ── Members Section ──
+  var membersSec = document.createElement('div');
+  membersSec.style.cssText = 'margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft)';
+  membersSec.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:10px">👥 Thành viên nhóm</div>';
+
+  var memberListDiv = document.createElement('div');
+  memberListDiv.id = 'ug-member-list';
+  _renderUGMemberList(ug, memberListDiv);
+  membersSec.appendChild(memberListDiv);
+
+  // Add member control
+  var nonMembers = allUsers.filter(function(u){
+    return (ug.members||[]).indexOf(u.username) < 0;
+  });
+  var addMemberRow = document.createElement('div');
+  addMemberRow.style.cssText = 'display:flex;gap:8px;margin-top:10px;align-items:center';
+  if (nonMembers.length) {
+    addMemberRow.innerHTML = '<select class="inp" id="ug-add-select" style="flex:1;font-size:12px;padding:6px 8px">'
+      +'<option value="">— Chọn user để thêm —</option>'
+      +nonMembers.map(function(u){return '<option value="'+esc(u.username)+'">'+esc(u.username)+'</option>';}).join('')
+      +'</select>'
+      +'<button class="btn btn-primary btn-sm" onclick="ugAddMember(\''+esc(ug.id)+'\')">+ Thêm</button>';
+  } else {
+    addMemberRow.innerHTML = '<span style="font-size:12px;color:var(--muted)">Tất cả users đã là thành viên</span>';
+  }
+  membersSec.appendChild(addMemberRow);
+  el.appendChild(membersSec);
+
+  // ── Role Groups Assignment Section ──
+  var roleGroupsSec = document.createElement('div');
+  roleGroupsSec.style.cssText = 'margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft)';
+  roleGroupsSec.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:4px">🔐 Gán Role Management Groups</div>'
+    +'<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Thành viên nhóm này sẽ tự động nhận quyền từ các Role Group được chọn bên dưới.</div>';
+
+  if (!allGroups.length) {
+    roleGroupsSec.innerHTML += '<div style="font-size:12px;color:var(--muted);padding:8px 0">Chưa có Policy Group nào. Vào tab <strong>Role Management</strong> để tạo.</div>';
+  } else {
+    var rgGrid = document.createElement('div');
+    rgGrid.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
+    allGroups.forEach(function(g){
+      var checked = (ug.roleGroups||[]).indexOf(g.id) >= 0;
+      var lbl = document.createElement('label');
+      lbl.className = 'cam-check-label';
+      if (checked) lbl.style.cssText = 'border-color:color-mix(in oklch,var(--accent) 40%,transparent);background:color-mix(in oklch,var(--accent) 10%,transparent);color:var(--accent)';
+      lbl.innerHTML = '<input type="checkbox" class="ug-rg-cb" value="'+esc(g.id)+'"'+(checked?' checked':'')+'>'
+        +'🔐 '+esc(g.name)
+        +(g.role?'<span style="font-size:10px;opacity:.75;margin-left:3px">('+esc(g.role)+')</span>':'');
+      rgGrid.appendChild(lbl);
+    });
+    roleGroupsSec.appendChild(rgGrid);
+  }
+  el.appendChild(roleGroupsSec);
+
+  // ── Save & Delete buttons ──
+  var saveRow = document.createElement('div');
+  saveRow.style.cssText = 'display:flex;gap:8px;padding-top:16px;border-top:1px solid var(--border-soft);margin-top:16px';
+  saveRow.innerHTML = '<button class="btn btn-primary" onclick="saveUserGroup(\''+esc(ug.id)+'\')">💾 Lưu User Group</button>'
+    +'<button class="btn btn-danger btn-sm" onclick="confirmDeleteUserGroup(\''+esc(ug.id)+'\')">🗑 Xóa nhóm</button>';
+  el.appendChild(saveRow);
+}
+
+function _renderUGMemberList(ug, container) {
+  var members = ug.members || [];
+  if (!members.length) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">Chưa có thành viên nào</div>';
+    return;
+  }
+  container.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px">'
+    +members.map(function(username){
+      return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 10px;'
+        +'background:color-mix(in oklch,var(--ok) 10%,transparent);border:1px solid color-mix(in oklch,var(--ok) 25%,transparent);'
+        +'border-radius:20px;color:var(--text)">'
+        +'👤 '+esc(username)
+        +'<button onclick="ugRemoveMember(\''+esc(ug.id)+'\',\''+esc(username)+'\')" title="Xóa khỏi nhóm" '
+        +'style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;line-height:1;padding:0 0 0 2px">×</button>'
+      +'</span>';
+    }).join('')
+    +'</div>';
+}
+
+function ugAddMember(ugid) {
+  var sel = document.getElementById('ug-add-select');
+  if (!sel || !sel.value) return;
+  var username = sel.value;
+  var ug = allUserGroups.find(function(g){return g.id===ugid;});
+  if (!ug) return;
+  var newMembers = (ug.members||[]).concat([username]).filter(function(v,i,a){return a.indexOf(v)===i;});
+  _saveUGData(ugid, newMembers, ug.roleGroups||[], function(){
+    ug.members = newMembers;
+    toast('Đã thêm '+username+' vào nhóm','ok');
+    renderUserGroupSidebar();
+    renderUserGroupEditor(ug);
+  });
+}
+
+function ugRemoveMember(ugid, username) {
+  var ug = allUserGroups.find(function(g){return g.id===ugid;});
+  if (!ug) return;
+  var newMembers = (ug.members||[]).filter(function(m){return m!==username;});
+  _saveUGData(ugid, newMembers, ug.roleGroups||[], function(){
+    ug.members = newMembers;
+    toast('Đã xóa '+username+' khỏi nhóm','ok');
+    renderUserGroupSidebar();
+    renderUserGroupEditor(ug);
+  });
+}
+
+function saveUserGroup(ugid) {
+  var ug = allUserGroups.find(function(g){return g.id===ugid;});
+  if (!ug) return;
+  var roleGroups = Array.from(document.querySelectorAll('.ug-rg-cb:checked')).map(function(cb){return cb.value;});
+  _saveUGData(ugid, ug.members||[], roleGroups, function(){
+    ug.roleGroups = roleGroups;
+    toast('✓ Đã lưu User Group "'+ug.name+'"','ok');
+    renderUserGroupSidebar();
+    renderUserGroupEditor(ug);
+  });
+}
+
+function _saveUGData(ugid, members, roleGroups, onSuccess) {
+  fetch('/api/admin/user-groups/'+encodeURIComponent(ugid), {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({members: members, roleGroups: roleGroups})
+  }).then(function(r){return r.json();}).then(function(d){
+    if (d.error){toast('Lỗi: '+d.error,'err');return;}
+    if (onSuccess) onSuccess();
+  }).catch(function(e){toast('Lỗi: '+e.message,'err');});
+}
+
+function openCreateUserGroup() {
+  document.getElementById('ug-modal-name').value = '';
+  document.getElementById('ug-modal-desc').value = '';
+  document.getElementById('ug-modal-err').classList.remove('show');
+  openModal('ug-modal');
+  setTimeout(function(){document.getElementById('ug-modal-name').focus();},60);
+}
+
+function saveNewUserGroup() {
+  var errEl = document.getElementById('ug-modal-err');
+  errEl.classList.remove('show');
+  var name = document.getElementById('ug-modal-name').value.trim();
+  var desc = document.getElementById('ug-modal-desc').value.trim();
+  if (!name) { errEl.textContent='Tên nhóm không được để trống'; errEl.classList.add('show'); return; }
+  fetch('/api/admin/user-groups', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name: name, description: desc})
+  }).then(function(r){return r.json();}).then(function(d){
+    if (d.error){errEl.textContent=d.error;errEl.classList.add('show');return;}
+    closeModal('ug-modal');
+    toast('✓ Đã tạo User Group "'+name+'"','ok');
+    loadUserGroups();
+  }).catch(function(e){errEl.textContent='Lỗi: '+e.message;errEl.classList.add('show');});
+}
+
+function confirmDeleteUserGroup(ugid) {
+  var ug = allUserGroups.find(function(g){return g.id===ugid;});
+  if (!ug) return;
+  document.getElementById('confirm-title').textContent = 'Xóa User Group';
+  document.getElementById('confirm-body').innerHTML = 'Bạn có chắc muốn xóa nhóm <strong>'+esc(ug.name)+'</strong>?<br>'
+    +'<span style="font-size:12px;color:var(--muted)">Thành viên sẽ không còn nhận quyền từ nhóm này nữa.</span>';
+  document.getElementById('confirm-ok-btn').onclick = function(){
+    fetch('/api/admin/user-groups/'+encodeURIComponent(ugid), {method:'DELETE'})
+      .then(function(r){return r.json();}).then(function(d){
+        closeModal('confirm-modal');
+        if (d.error){toast('Lỗi: '+d.error,'err');return;}
+        toast('✓ Đã xóa User Group "'+ug.name+'"','ok');
+        currentUserGroupId = null;
+        var edEl = document.getElementById('ug-editor');
+        if (edEl) edEl.innerHTML = '<div class="empty-state" style="padding:4rem 2rem">'
+          +'<div style="font-size:2.5rem;margin-bottom:10px">🗂</div>'
+          +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">Chọn User Group để chỉnh sửa</div>'
+          +'<div style="font-size:12px;color:var(--muted)">Chọn một nhóm ở bên trái để quản lý thành viên và gán Role Group</div>'
+        +'</div>';
+        loadUserGroups();
+      });
+  };
+  openModal('confirm-modal');
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1599,20 +2461,30 @@ window.addEventListener('DOMContentLoaded', function(){
   if (__USER__.isAdmin) {
     // Admin: load everything
     loadSettings();
+  } else if ((__USER__.canManagePerms||[]).length > 0) {
+    // Delegated manager: load users, policy groups, user groups + personal account data
+    loadUsers();
+    loadGroups();
+    loadUserGroups();
+    loadMfaStatus();
+    loadAuditLog();
   } else {
     // Non-admin: only load what they can see (Account tab + Audit Log)
     loadMfaStatus();
     loadAuditLog();
   }
-  // Auto-submit OTP when 6 digits entered
-  ['mfa-setup-code','mfa-disable-code'].forEach(function(id){
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('input', function(){ this.value = this.value.replace(/\D/g,''); });
-    el.addEventListener('keydown', function(e){
-      if (e.key==='Enter'){ if(id==='mfa-setup-code') confirmEnableMfa(); else confirmDisableMfa(); }
-    });
-  });
+  // Auto-filter numeric input — MFA setup code
+  var _mfaSetupEl = document.getElementById('mfa-setup-code');
+  if (_mfaSetupEl) {
+    _mfaSetupEl.addEventListener('input', function(){ this.value = this.value.replace(/\D/g,''); });
+    _mfaSetupEl.addEventListener('keydown', function(e){ if (e.key==='Enter') confirmEnableMfa(); });
+  }
+  // Auto-filter numeric input — MFA confirm field in change-password form
+  var _accMfaEl = document.getElementById('acc-mfa-code');
+  if (_accMfaEl) {
+    _accMfaEl.addEventListener('input', function(){ this.value = this.value.replace(/\D/g,''); });
+    _accMfaEl.addEventListener('keydown', function(e){ if (e.key==='Enter') changeMyPassword(); });
+  }
 });
 </script>
 </body>

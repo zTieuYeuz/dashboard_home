@@ -59,7 +59,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </form>
   </div>
 
-  <!-- ── Step 2: MFA / OTP ── -->
+  <!-- ── Step 2: MFA / OTP (existing users) ── -->
   <div id="step-mfa" style="display:none">
     <div class="mfa-icon">🔐</div>
     <div class="title">Xác thực hai bước</div>
@@ -74,20 +74,76 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="err" id="mfaErr"></div>
     <div class="mfa-hint">Mã hết hạn sau 30 giây. Nếu sai, hãy đợi mã mới.</div>
   </div>
+
+  <!-- ── Step 3: First-login — Đổi mật khẩu ── -->
+  <div id="step-change-pw" style="display:none">
+    <div class="mfa-icon">🔑</div>
+    <div class="title">Đổi mật khẩu</div>
+    <div class="sub">Lần đầu đăng nhập — vui lòng đặt mật khẩu mới. Không thể bỏ qua bước này.</div>
+    <div style="margin:1rem 0;padding:10px 14px;border-radius:10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);font-size:12px;color:#fbbf24;line-height:1.6">
+      ⚠️ Mật khẩu mới phải có ít nhất <strong>8 ký tự</strong>.
+    </div>
+    <div class="form-group">
+      <label class="label">Mật khẩu mới</label>
+      <input class="input" id="new-pw" type="password" placeholder="Tối thiểu 8 ký tự" autocomplete="new-password"/>
+    </div>
+    <div class="form-group">
+      <label class="label">Xác nhận mật khẩu</label>
+      <input class="input" id="confirm-pw" type="password" placeholder="Nhập lại mật khẩu mới" autocomplete="new-password"/>
+    </div>
+    <button class="btn" id="changePwBtn" onclick="doChangePassword()">Đặt mật khẩu →</button>
+    <div class="err" id="changePwErr"></div>
+  </div>
+
+  <!-- ── Step 4: First-login — Thiết lập MFA ── -->
+  <div id="step-setup-mfa" style="display:none">
+    <div id="setup-mfa-s1">
+      <div class="mfa-icon">📱</div>
+      <div class="title">Thiết lập MFA</div>
+      <div class="sub">MFA là bắt buộc. Quét mã QR bằng Microsoft Authenticator hoặc Google Authenticator.</div>
+      <div style="display:flex;justify-content:center;margin:1.25rem 0">
+        <img id="setup-mfa-qr" src="" width="160" height="160" style="border-radius:10px;background:#fff;padding:6px"/>
+      </div>
+      <div style="font-size:11px;color:#71717a;margin-bottom:4px;text-align:center;text-transform:uppercase;letter-spacing:.05em">Hoặc nhập thủ công</div>
+      <div id="setup-mfa-secret" style="font-family:monospace;font-size:13px;background:#09090b;padding:9px 12px;border-radius:8px;border:1px solid #27272a;letter-spacing:3px;word-break:break-all;text-align:center;cursor:pointer;user-select:all;margin-bottom:1.25rem" onclick="copyMfaSecret()" title="Click để copy"></div>
+      <button class="btn" onclick="goSetupMfaStep2()">Tiếp theo → Nhập mã OTP</button>
+    </div>
+    <div id="setup-mfa-s2" style="display:none">
+      <div class="mfa-icon">🔢</div>
+      <div class="title">Xác nhận OTP</div>
+      <div class="sub">Nhập mã 6 chữ số từ app Authenticator để hoàn tất thiết lập.</div>
+      <div class="form-group" style="margin-top:1.5rem">
+        <label class="label" style="text-align:center;display:block">Mã OTP</label>
+        <input class="input input-otp" id="setup-mfa-code" type="text" inputmode="numeric"
+               maxlength="6" placeholder="000000" autocomplete="one-time-code"/>
+      </div>
+      <button class="btn" id="setupMfaBtn" onclick="doSetupMfaComplete()">✓ Hoàn tất thiết lập →</button>
+      <button class="btn-ghost" onclick="goSetupMfaStep1()">← Xem lại QR</button>
+      <div class="err" id="setupMfaErr"></div>
+      <div class="mfa-hint">Mã hết hạn sau 30 giây. Nếu sai, hãy đợi mã mới.</div>
+    </div>
+  </div>
+
 </div>
 
 <script>
-var _tempToken = null;
+var _tempToken  = null;
+var _setupToken = null;
 
 // Show idle-logout notice if redirected from auto-logout
 (function() {
   if (new URLSearchParams(window.location.search).get('reason') === 'idle') {
     document.getElementById('idle-notice').style.display = 'block';
     document.getElementById('login-sub').style.display = 'none';
-    // Clean up URL without reload
     history.replaceState(null, '', '/login.html');
   }
 })();
+
+function _showStep(id) {
+  ['step-login','step-mfa','step-change-pw','step-setup-mfa'].forEach(function(s){
+    document.getElementById(s).style.display = s === id ? '' : 'none';
+  });
+}
 
 async function doLogin(e) {
   e.preventDefault();
@@ -106,11 +162,19 @@ async function doLogin(e) {
       })
     });
     const data = await res.json();
-    if (res.ok && data.mfaRequired) {
-      // Switch to MFA step
+    if (res.ok && data.setupRequired) {
+      // First-login: must change password and/or setup MFA
+      _setupToken = data.setupToken;
+      if (data.step === 'changePassword') {
+        _showStep('step-change-pw');
+        setTimeout(function(){ document.getElementById('new-pw').focus(); }, 80);
+      } else {
+        _showStep('step-setup-mfa');
+        doSetupMfaInit();
+      }
+    } else if (res.ok && data.mfaRequired) {
       _tempToken = data.tempToken;
-      document.getElementById('step-login').style.display = 'none';
-      document.getElementById('step-mfa').style.display = '';
+      _showStep('step-mfa');
       document.getElementById('mfa-code').value = '';
       document.getElementById('mfaErr').classList.remove('show');
       setTimeout(function(){ document.getElementById('mfa-code').focus(); }, 80);
@@ -129,18 +193,126 @@ async function doLogin(e) {
   }
 }
 
+/* ── Step 3: Đổi mật khẩu lần đầu ── */
+async function doChangePassword() {
+  var newPw    = document.getElementById('new-pw').value;
+  var confirmPw = document.getElementById('confirm-pw').value;
+  var err      = document.getElementById('changePwErr');
+  var btn      = document.getElementById('changePwBtn');
+  err.classList.remove('show');
+  if (newPw.length < 8) { err.textContent = 'Mật khẩu tối thiểu 8 ký tự'; err.classList.add('show'); return; }
+  if (newPw !== confirmPw) { err.textContent = 'Mật khẩu xác nhận không khớp'; err.classList.add('show'); return; }
+  btn.disabled = true; btn.textContent = 'Đang lưu...';
+  try {
+    var res = await fetch('/api/auth/setup/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ setupToken: _setupToken, newPassword: newPw })
+    });
+    var data = await res.json();
+    if (res.ok && data.success && data.step === 'setupMfa') {
+      _showStep('step-setup-mfa');
+      doSetupMfaInit();
+    } else if (res.ok && data.success) {
+      window.location.href = '/';
+    } else if (res.status === 401) {
+      err.textContent = data.error || 'Phiên hết hạn. Vui lòng đăng nhập lại.';
+      err.classList.add('show');
+      setTimeout(backToLogin, 2500);
+    } else {
+      err.textContent = data.error || 'Lỗi đổi mật khẩu';
+      err.classList.add('show');
+    }
+  } catch(ex) {
+    err.textContent = 'Lỗi kết nối: ' + ex.message;
+    err.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Đặt mật khẩu →';
+  }
+}
+
+/* ── Step 4: Thiết lập MFA lần đầu ── */
+async function doSetupMfaInit() {
+  try {
+    var res = await fetch('/api/auth/setup/mfa-init', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ setupToken: _setupToken })
+    });
+    var data = await res.json();
+    if (!res.ok) {
+      if (res.status === 401) { setTimeout(backToLogin, 1500); return; }
+      return;
+    }
+    var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=0&data=' + encodeURIComponent(data.otpauth);
+    document.getElementById('setup-mfa-qr').src = qrUrl;
+    document.getElementById('setup-mfa-secret').textContent = data.secret;
+    document.getElementById('setup-mfa-s1').style.display = '';
+    document.getElementById('setup-mfa-s2').style.display = 'none';
+    document.getElementById('setupMfaErr').classList.remove('show');
+  } catch(ex) {}
+}
+
+function copyMfaSecret() {
+  var s = document.getElementById('setup-mfa-secret').textContent;
+  navigator.clipboard.writeText(s).catch(function(){});
+}
+
+function goSetupMfaStep2() {
+  document.getElementById('setup-mfa-s1').style.display = 'none';
+  document.getElementById('setup-mfa-s2').style.display = '';
+  document.getElementById('setup-mfa-code').value = '';
+  document.getElementById('setupMfaErr').classList.remove('show');
+  setTimeout(function(){ document.getElementById('setup-mfa-code').focus(); }, 60);
+}
+
+function goSetupMfaStep1() {
+  document.getElementById('setup-mfa-s2').style.display = 'none';
+  document.getElementById('setup-mfa-s1').style.display = '';
+}
+
+async function doSetupMfaComplete() {
+  var code = document.getElementById('setup-mfa-code').value.trim();
+  var err  = document.getElementById('setupMfaErr');
+  var btn  = document.getElementById('setupMfaBtn');
+  if (!/^\d{6}$/.test(code)) { err.textContent = 'Mã OTP phải có đúng 6 chữ số'; err.classList.add('show'); return; }
+  err.classList.remove('show');
+  btn.disabled = true; btn.textContent = 'Đang xác nhận...';
+  try {
+    var res = await fetch('/api/auth/setup/mfa-complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ setupToken: _setupToken, code: code })
+    });
+    var data = await res.json();
+    if (res.ok && data.success) {
+      window.location.href = '/';
+    } else if (res.status === 401) {
+      err.textContent = data.error || 'Phiên hết hạn. Vui lòng đăng nhập lại.';
+      err.classList.add('show');
+      setTimeout(backToLogin, 2500);
+    } else {
+      err.textContent = data.error || 'Mã OTP không đúng';
+      err.classList.add('show');
+      document.getElementById('setup-mfa-code').value = '';
+      document.getElementById('setup-mfa-code').focus();
+    }
+  } catch(ex) {
+    err.textContent = 'Lỗi kết nối: ' + ex.message;
+    err.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = '✓ Hoàn tất thiết lập →';
+  }
+}
+
+/* ── Existing MFA verify ── */
 async function doMfaVerify() {
   var code = document.getElementById('mfa-code').value.trim();
   var err  = document.getElementById('mfaErr');
   var btn  = document.getElementById('mfaBtn');
-  if (code.length !== 6 || !/^\d{6}$/.test(code)) {
-    err.textContent = 'Mã OTP phải có đúng 6 chữ số';
-    err.classList.add('show');
-    return;
-  }
+  if (!/^\d{6}$/.test(code)) { err.textContent = 'Mã OTP phải có đúng 6 chữ số'; err.classList.add('show'); return; }
   err.classList.remove('show');
-  btn.disabled = true;
-  btn.textContent = 'Đang xác thực...';
+  btn.disabled = true; btn.textContent = 'Đang xác thực...';
   try {
     var res = await fetch('/api/auth/mfa/verify', {
       method: 'POST',
@@ -151,7 +323,6 @@ async function doMfaVerify() {
     if (res.ok && data.success) {
       window.location.href = '/';
     } else if (res.status === 401) {
-      // Session expired — force back to login
       err.textContent = data.error || 'Phiên hết hạn. Vui lòng đăng nhập lại.';
       err.classList.add('show');
       setTimeout(backToLogin, 2500);
@@ -165,31 +336,42 @@ async function doMfaVerify() {
     err.textContent = 'Lỗi kết nối: ' + ex.message;
     err.classList.add('show');
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Xác nhận →';
+    btn.disabled = false; btn.textContent = 'Xác nhận →';
   }
 }
 
-// Allow Enter key in OTP input
-document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('mfa-code').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') doMfaVerify();
-  });
-  // Auto-submit when 6 digits entered
-  document.getElementById('mfa-code').addEventListener('input', function() {
-    var v = this.value.replace(/\D/g, '');
-    this.value = v;
-    if (v.length === 6) doMfaVerify();
-  });
-});
-
 function backToLogin() {
-  _tempToken = null;
-  document.getElementById('step-mfa').style.display = 'none';
-  document.getElementById('step-login').style.display = '';
-  document.getElementById('mfaErr').classList.remove('show');
+  _tempToken = null; _setupToken = null;
+  _showStep('step-login');
+  document.getElementById('errMsg').classList.remove('show');
   document.getElementById('mfa-code').value = '';
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Auto-submit OTP inputs when 6 digits entered
+  ['mfa-code','setup-mfa-code'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', function() {
+      this.value = this.value.replace(/\D/g,'');
+      if (this.value.length === 6) {
+        if (id === 'mfa-code') doMfaVerify();
+        else doSetupMfaComplete();
+      }
+    });
+    el.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        if (id === 'mfa-code') doMfaVerify();
+        else doSetupMfaComplete();
+      }
+    });
+  });
+  // Enter on change-password fields
+  ['new-pw','confirm-pw'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('keydown', function(e){ if (e.key === 'Enter') doChangePassword(); });
+  });
+});
 </script>
 </body>
 </html>

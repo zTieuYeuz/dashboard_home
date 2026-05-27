@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Termix Movi</title>
+<style>
+:root,[data-theme="dark"]{
+  --bg:oklch(0.18 0.012 250);--surface:oklch(0.22 0.012 250);--surface-2:oklch(0.26 0.012 250);
+  --card:oklch(0.21 0.012 250);--border:oklch(0.31 0.012 250);--border-soft:oklch(0.27 0.012 250);
+  --text:oklch(0.96 0.005 250);--text-2:oklch(0.86 0.008 250);--muted:oklch(0.62 0.012 250);
+  --accent:oklch(0.72 0.18 290);--ok:oklch(0.74 0.16 155);--bad:oklch(0.68 0.20 25);--warn:oklch(0.78 0.16 70);
+  --violet:oklch(0.68 0.20 310);
+  --font-sans:'IBM Plex Sans',system-ui,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  --radius:12px;--radius-sm:8px;
+}
+[data-theme="light"]{
+  --bg:oklch(0.985 0.003 250);--surface:oklch(1 0 0);--surface-2:oklch(0.965 0.005 250);
+  --card:oklch(1 0 0);--border:oklch(0.91 0.008 250);--border-soft:oklch(0.94 0.008 250);
+  --text:oklch(0.22 0.015 250);--text-2:oklch(0.36 0.015 250);--muted:oklch(0.55 0.012 250);
+  --accent:oklch(0.55 0.18 290);--ok:oklch(0.52 0.15 155);--bad:oklch(0.55 0.20 25);--warn:oklch(0.62 0.16 70);
+  --violet:oklch(0.52 0.18 310);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:var(--font-sans);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+a{color:inherit;text-decoration:none}
+
+/* ── Topbar ── */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:48px;background:var(--surface);border-bottom:1px solid var(--border);z-index:10;flex-shrink:0;gap:12px}
+.topbar-left{display:flex;align-items:center;gap:16px;min-width:0}
+.topbar-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.brand-mark{width:28px;height:28px;display:grid;place-items:center;background:var(--violet);color:#fff;border-radius:var(--radius-sm)}
+.brand-name{font-weight:600;font-size:13px}
+.brand-sub{font-size:11px;color:var(--muted)}
+.topnav{display:flex;gap:2px}
+.topnav-item{font-size:12px;font-weight:500;color:var(--muted);padding:5px 10px;border-radius:var(--radius-sm);transition:all .12s;white-space:nowrap}
+.topnav-item:hover{color:var(--text);background:var(--surface-2)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;font-size:12px;font-weight:600;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);transition:all .12s;cursor:pointer;white-space:nowrap}
+.btn:hover{color:var(--text);border-color:var(--muted)}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.ghost:hover{background:var(--surface-2);border-color:var(--border)}
+.btn.accent{background:var(--violet);color:#fff;border-color:transparent}
+.btn.accent:hover{opacity:.88}
+.btn.danger{background:color-mix(in oklch,var(--bad) 12%,transparent);color:var(--bad);border-color:color-mix(in oklch,var(--bad) 25%,transparent)}
+.btn.danger:hover{background:var(--bad);color:#fff}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
+.status-dot.ok{background:var(--ok);box-shadow:0 0 0 2px color-mix(in oklch,var(--ok) 25%,transparent)}
+.status-dot.bad{background:var(--bad)}
+.status-dot.loading{background:var(--warn);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+.status-text{font-size:11px;color:var(--muted)}
+.theme-toggle{width:30px;height:30px;display:grid;place-items:center;padding:0}
+
+/* ── Main area ── */
+.main{flex:1;position:relative;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Connect overlay ── */
+.connect-overlay{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:var(--bg);z-index:20;gap:20px;padding:2rem;text-align:center;transition:opacity .3s
+}
+.connect-overlay.hidden{opacity:0;pointer-events:none}
+.connect-card{
+  background:var(--card);border:1px solid var(--border);border-radius:16px;padding:2.5rem 2.5rem;
+  max-width:480px;width:100%;display:flex;flex-direction:column;align-items:center;gap:18px
+}
+.connect-icon{font-size:48px;line-height:1;margin-bottom:4px}
+.connect-title{font-size:20px;font-weight:700;letter-spacing:-.02em}
+.connect-desc{font-size:13px;color:var(--muted);line-height:1.6;max-width:380px}
+.connect-btn{
+  width:100%;padding:11px 20px;font-size:14px;font-weight:700;border-radius:10px;
+  border:none;background:var(--violet);color:#fff;cursor:pointer;transition:all .15s;
+  font-family:var(--font-sans);display:flex;align-items:center;justify-content:center;gap:8px
+}
+.connect-btn:hover:not(:disabled){opacity:.88;transform:translateY(-1px)}
+.connect-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.security-badges{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid var(--border-soft);color:var(--muted);background:var(--surface-2)}
+.badge.ok{color:var(--ok);border-color:color-mix(in oklch,var(--ok) 25%,transparent);background:color-mix(in oklch,var(--ok) 8%,transparent)}
+.err-msg{font-size:12px;color:var(--bad);background:color-mix(in oklch,var(--bad) 10%,transparent);border:1px solid color-mix(in oklch,var(--bad) 25%,transparent);border-radius:8px;padding:8px 14px;width:100%;display:none;text-align:left}
+.err-msg.show{display:block}
+
+/* ── Terminal iframe ── */
+.terminal-wrap{flex:1;position:relative;display:none;flex-direction:column;overflow:hidden}
+.terminal-wrap.active{display:flex}
+iframe{width:100%;flex:1;border:none;display:block;background:#000}
+
+/* ── Loading bar ── */
+.load-bar{height:3px;background:var(--violet);width:0%;transition:width .4s;position:absolute;top:0;left:0;right:0;z-index:5;border-radius:0 3px 3px 0}
+
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      </div>
+      <div><div class="brand-name">Termix Movi</div><div class="brand-sub">Termix · Token Auth · CF Access</div></div>
+    </div>
+    <nav class="topnav">
+      <a class="topnav-item" href="/">Overview</a>
+      <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
+      <a class="topnav-item" id="settings-link" href="/settings.html" style="display:none">⚙ Settings</a>
+    </nav>
+  </div>
+  <div class="topbar-right">
+    <div class="status-dot" id="conn-dot"></div>
+    <span class="status-text" id="conn-label">Chưa kết nối</span>
+    <span style="color:var(--border);margin:0 4px">|</span>
+    <button class="btn ghost" id="btn-popout" onclick="popOut()" style="display:none">⛶ Pop out</button>
+    <button class="btn danger" id="btn-disconnect" onclick="disconnect()" style="display:none">✕ Ngắt kết nối</button>
+    <button class="btn ghost theme-toggle" id="themeToggle" title="Toggle theme">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="main" id="main">
+  <!-- Loading bar -->
+  <div class="load-bar" id="load-bar"></div>
+
+  <!-- Connect overlay -->
+  <div class="connect-overlay" id="connect-overlay">
+    <div class="connect-card">
+      <div class="connect-icon">⌨️</div>
+      <div class="connect-title">Termix Movi</div>
+      <div class="connect-desc">
+        Kết nối bảo mật tới Movi server qua Termix.<br>
+        Kết nối được bảo vệ bởi <strong>CF Service Token</strong> — chỉ Worker mới có quyền truy cập.
+      </div>
+      <div class="security-badges">
+        <span class="badge ok">☁ CF Service Token</span>
+        <span class="badge ok">🔒 Worker Proxy</span>
+        <span class="badge ok">📋 Audit log</span>
+        <span class="badge ok">✅ Session auth</span>
+      </div>
+      <div class="err-msg" id="err-msg"></div>
+      <button class="connect-btn" id="connect-btn" onclick="connect()">
+        <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><polyline points="8 6 12 10 8 14"/></svg>
+        Kết nối Terminal
+      </button>
+    </div>
+  </div>
+
+  <!-- Terminal -->
+  <div class="terminal-wrap" id="terminal-wrap">
+    <iframe
+      id="termix-frame"
+      allow="clipboard-read; clipboard-write"
+      sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
+      title="Termix Movi"
+    ></iframe>
+  </div>
+</div>
+
+<script>
+/* ── State ── */
+var _termixUrl = null;
+var _popupRef  = null;
+
+/* ── Theme ── */
+(function initTheme(){
+  var saved = null;
+  try { saved = localStorage.getItem('dh_theme'); } catch(e) {}
+  if (saved === 'light') document.documentElement.dataset.theme = 'light';
+  document.getElementById('themeToggle').addEventListener('click', function(){
+    var next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('dh_theme', next); } catch(e) {}
+  });
+})();
+
+/* ── Connect — load proxy iframe directly (Worker handles CF Service Token auth) ── */
+function connect() {
+  var btn = document.getElementById('connect-btn');
+  var err = document.getElementById('err-msg');
+  err.classList.remove('show');
+  btn.disabled = true;
+  btn.innerHTML = '<span style="animation:pulse 1s infinite;display:inline-block;width:8px;height:8px;border-radius:50%;background:#fff;margin-right:6px"></span> Đang kết nối...';
+  setConnStatus('loading', 'Đang kết nối...');
+  setLoadBar(40);
+
+  var frame   = document.getElementById('termix-frame');
+  var overlay = document.getElementById('connect-overlay');
+  var wrap    = document.getElementById('terminal-wrap');
+
+  _termixUrl = '/proxy/termix-movi/';
+  frame.src  = _termixUrl;
+
+  frame.onload = function() {
+    // Detect post-login navigation drift (e.g. Termix does window.location.href='/')
+    try {
+      var fp = frame.contentWindow.location.pathname;
+      if (_termixUrl && fp && !fp.startsWith('/proxy/termix-movi')) {
+        frame.contentWindow.location.replace('/proxy/termix-movi' + fp + frame.contentWindow.location.search);
+        return;
+      }
+    } catch(e) {}
+    setLoadBar(100);
+    setTimeout(function(){ setLoadBar(0); }, 600);
+    setConnStatus('ok', 'Đã kết nối');
+  };
+
+  // Catch proxy auth errors by checking frame content after load
+  frame.onerror = function() {
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><polyline points="8 6 12 10 8 14"/></svg> Kết nối lại';
+    err.textContent = 'Lỗi kết nối — kiểm tra quyền truy cập.';
+    err.classList.add('show');
+    setConnStatus('bad', 'Lỗi kết nối');
+    setLoadBar(0);
+    _termixUrl = null;
+  };
+
+  // Show terminal, hide overlay
+  overlay.classList.add('hidden');
+  setTimeout(function(){
+    overlay.style.display = 'none';
+    wrap.classList.add('active');
+  }, 300);
+
+  document.getElementById('btn-disconnect').style.display = '';
+  document.getElementById('btn-popout').style.display = '';
+}
+
+function disconnect() {
+  var frame   = document.getElementById('termix-frame');
+  var overlay = document.getElementById('connect-overlay');
+  var wrap    = document.getElementById('terminal-wrap');
+
+  try { frame.src = 'about:blank'; } catch(e) {}
+  frame.onload = null;
+  _termixUrl = null;
+
+  wrap.classList.remove('active');
+  overlay.style.display = '';
+  setTimeout(function(){ overlay.classList.remove('hidden'); }, 20);
+
+  var btn = document.getElementById('connect-btn');
+  btn.disabled = false;
+  btn.innerHTML = '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><polyline points="8 6 12 10 8 14"/></svg> Kết nối lại';
+
+  document.getElementById('btn-disconnect').style.display = 'none';
+  document.getElementById('btn-popout').style.display = 'none';
+  setConnStatus('', 'Chưa kết nối');
+  document.getElementById('err-msg').classList.remove('show');
+}
+
+function popOut() {
+  if (_popupRef && !_popupRef.closed) { _popupRef.focus(); return; }
+  // Open proxy URL in new window — same dashboard session cookie will be sent
+  _popupRef = window.open('/proxy/termix-movi/', 'termix-movi-popup',
+    'width=1200,height=800,menubar=no,toolbar=no,location=no,status=no');
+}
+
+/* ── UI helpers ── */
+function setConnStatus(state, label) {
+  var dot = document.getElementById('conn-dot');
+  dot.className = 'status-dot' + (state ? ' ' + state : '');
+  document.getElementById('conn-label').textContent = label;
+}
+function setLoadBar(pct) {
+  document.getElementById('load-bar').style.width = pct + '%';
+}
+/* ── Ctrl+Shift+T = pop out ── */
+document.addEventListener('keydown', function(e) {
+  if (e.ctrlKey && e.shiftKey && e.key === 'T') popOut();
+});
+</script>
+</body>
+</html>

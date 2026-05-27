@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════ */
 const SESSION_COOKIE    = 'dh_session';
 const SESSION_TTL       = 60 * 60 * 8;      // default fallback only — runtime reads from KV system_config
-const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi'];
+const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','ssh-movi'];
 
 /* Idle-timer script injected into every authenticated HTML page.
    T = idle timeout ms, W = warning threshold ms (must be < T) */
@@ -198,6 +198,20 @@ async function handleLogin(request, env) {
   await rlClear(env, `ip:${ip}`);
   await rlClear(env, `u:${ip}:${username}`);
 
+  // First-login setup: force password change + MFA setup before creating session
+  if (user.mustChangePassword || user.mustSetupMfa) {
+    const setupToken = crypto.randomUUID();
+    await env.DASHBOARD_KV.put(`setup_temp:${setupToken}`, JSON.stringify({
+      username,
+      mustChangePassword: !!user.mustChangePassword,
+      mustSetupMfa: !!user.mustSetupMfa,
+      expires: Date.now() + 600_000, // 10 minutes
+    }), { expirationTtl: 600 });
+    await logActivity(env, { action: 'login_setup_required', username, ip, success: true,
+      detail: user.mustChangePassword ? 'Must change password + setup MFA' : 'Must setup MFA' });
+    return json({ setupRequired: true, setupToken, step: user.mustChangePassword ? 'changePassword' : 'setupMfa' });
+  }
+
   // If MFA is enabled for this user, don't create session yet — return temp token
   if (user.mfaEnabled && user.mfaSecret) {
     const tempToken = crypto.randomUUID();
@@ -211,8 +225,10 @@ async function handleLogin(request, env) {
   const loginCfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(()=>({})) || {};
   const sessionTtl = Math.max(1, loginCfg.sessionTtlHours ?? 8) * 3600;
   const token = crypto.randomUUID();
+  const canManagePerms = (user.canManagePerms || []).filter(s => ALL_SERVICES.includes(s));
   await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
     username, role: user.role, permissions: user.permissions || {},
+    canManagePerms,
     expires: Date.now() + sessionTtl * 1000
   }), { expirationTtl: sessionTtl });
 
@@ -220,7 +236,8 @@ async function handleLogin(request, env) {
   const userInfo = encodeURIComponent(JSON.stringify({
     username, role: user.role,
     permissions: user.permissions || {},
-    isAdmin: user.role === 'admin'
+    isAdmin: user.role === 'admin',
+    canManagePerms,
   }));
   const h = new Headers({ 'Content-Type': 'application/json' });
   h.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
@@ -275,26 +292,65 @@ async function handleLogout(request, env) {
 
 async function handleListUsers(request, env) {
   const session = await getSession(request, env);
-  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+
   const list = await env.DASHBOARD_KV.get('userlist', 'json') || ['admin'];
+
+  if (await isAdminUser(env, session)) {
+    // Full admin list
+    const users = [];
+    for (const u of list) {
+      const d = await env.DASHBOARD_KV.get(`user:${u}`, 'json');
+      if (d) users.push({
+        username:      u,
+        role:          d.role,
+        permissions:   d.permissions || {},
+        panels:        d.panels || {},
+        cameras:       d.cameras || [],
+        groups:        d.groups || [],
+        userGroups:    d.userGroups || [],
+        canManagePerms: d.canManagePerms || [],
+      });
+    }
+    return json({ users });
+  }
+
+  // Non-admin: check if they have delegation rights
+  const callerUser = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
+  const canManage = (callerUser && Array.isArray(callerUser.canManagePerms)) ? callerUser.canManagePerms.filter(s => ALL_SERVICES.includes(s)) : [];
+  if (!canManage.length) return json({ error: 'Admin required' }, 403);
+
+  // Return filtered list: basic info + only the managed service permissions
   const users = [];
   for (const u of list) {
+    if (u === session.username) continue; // skip self
     const d = await env.DASHBOARD_KV.get(`user:${u}`, 'json');
-    if (d) users.push({
-      username: u, role: d.role,
-      permissions: d.permissions || {},
-      panels: d.panels || {},
-      cameras: d.cameras || [],
-      groups: d.groups || []
+    if (!d) continue;
+    const filteredPerms = {};
+    for (const svc of canManage) filteredPerms[svc] = (d.permissions || {})[svc] || 'none';
+    users.push({
+      username:    u,
+      role:        d.role,
+      permissions: filteredPerms,
+      panels:      {},
+      cameras:     [],
+      groups:      [],
+      userGroups:  [],
     });
   }
-  return json({ users });
+  return json({ users, delegateMode: true, canManagePerms: canManage });
 }
 
 async function handleCreateUser(request, env) {
   try {
     const session = await getSession(request, env);
-    if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+    if (!session) return json({ error: 'Unauthorized' }, 401);
+    const isAdmin = await isAdminUser(env, session);
+    if (!isAdmin) {
+      // Allow delegated managers to create users
+      const delegateSvcs = await getSessionDelegateServices(env, session);
+      if (!delegateSvcs.length) return json({ error: 'Admin required' }, 403);
+    }
     if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
     let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
     const { username, password } = body || {};
@@ -310,14 +366,21 @@ async function handleCreateUser(request, env) {
     const list = curList || ['admin'];
     const maxUsers = Math.max(1, (createCfg || {}).maxUsers ?? 50);
     if (list.length >= maxUsers) return json({ error: `Đã đạt giới hạn tối đa ${maxUsers} người dùng. Không thể tạo thêm user mới.` }, 400);
+    const pwMinLen = Math.max(4, (createCfg || {}).pwMinLength ?? 6);
+    if (password.length < pwMinLen) return json({ error: `Mật khẩu tối thiểu ${pwMinLen} ký tự` }, 400);
     const hashed = await hashPw(password);
-    const allowedRoles = ['user', 'admin'];
+    // Delegated managers can only create 'user' role, not admin
+    const allowedRoles = isAdmin ? ['user', 'admin'] : ['user'];
     const role = allowedRoles.includes(body?.role) ? body.role : 'user';
-    const groups = Array.isArray(body?.groups) ? body.groups : [];
+    // Delegated managers cannot assign policy groups
+    const groups = isAdmin ? (Array.isArray(body?.groups) ? body.groups : []) : [];
     await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify({
-      password: hashed, role, groups, permissions: {}, panels: {}, cameras: [], created: Date.now()
+      password: hashed, role, groups, userGroups: [], permissions: {}, panels: {}, cameras: [], created: Date.now(),
+      mustChangePassword: true,  // Force password change on first login
+      mustSetupMfa: true,        // Force MFA setup on first login
     }));
     if (!list.includes(username)) { list.push(username); await env.DASHBOARD_KV.put('userlist', JSON.stringify(list)); }
+    if (!isAdmin) await logActivity(env, { action: 'delegate-create-user', username: session.username, success: true, detail: `Created user: ${username}` });
     return json({ success: true, username });
   } catch (e) {
     return json({ error: 'Lỗi tạo user: ' + e.message }, 500);
@@ -326,19 +389,57 @@ async function handleCreateUser(request, env) {
 
 async function handleUpdatePermissions(request, env, username) {
   const session = await getSession(request, env);
-  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (username === 'admin') return json({ error: 'Không thể sửa quyền admin' }, 400);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+
+  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+
+  if (await isAdminUser(env, session)) {
+    // Admin: full control over all permissions
+    user.permissions = sanitizePermissions(body.permissions || {});
+    await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+    return json({ success: true, username, permissions: user.permissions });
+  }
+
+  // Non-admin: check delegation rights
+  if (username === session.username) return json({ error: 'Không thể tự xét quyền cho bản thân qua tính năng này' }, 400);
+  const callerUser = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
+  const canManage = (callerUser && Array.isArray(callerUser.canManagePerms)) ? callerUser.canManagePerms.filter(s => ALL_SERVICES.includes(s)) : [];
+  if (!canManage.length) return json({ error: 'Không có quyền thay đổi permissions của người khác' }, 403);
+
+  // Apply changes only for services they're allowed to manage
+  const newPerms = sanitizePermissions(body.permissions || {});
+  user.permissions = user.permissions || {};
+  for (const svc of canManage) {
+    if (newPerms[svc] !== undefined) user.permissions[svc] = newPerms[svc];
+  }
+  await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  await logActivity(env, { action: 'delegate-update-perm', username: session.username, success: true, detail: `Updated perms for ${username} (managed services: ${canManage.join(', ')})` });
+  return json({ success: true, username, permissions: user.permissions });
+}
+
+/* ── Delegation: Admin sets which services a user can manage permissions for ── */
+async function handleSetManagePerms(request, env, username) {
+  const session = await getSession(request, env);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
   if (username === 'admin') return json({ error: 'Không thể sửa quyền admin' }, 400);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
   if (!user) return json({ error: 'User not found' }, 404);
-  user.permissions = body.permissions || {};
+  const canManagePerms = Array.isArray(body.canManagePerms)
+    ? body.canManagePerms.filter(s => ALL_SERVICES.includes(s))
+    : [];
+  user.canManagePerms = canManagePerms;
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
-  return json({ success: true, username, permissions: user.permissions });
+  await logActivity(env, { action: 'delegate-set-manage-perms', username: session.username, success: true, detail: `canManagePerms for ${username}: [${canManagePerms.join(', ')}]` });
+  return json({ success: true, username, canManagePerms });
 }
 
 async function handleDeleteUser(request, env, username) {
   const session = await getSession(request, env);
-  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
   if (username === 'admin') return json({ error: 'Không thể xoá admin' }, 400);
   await invalidateUserSessions(env, username);   // xóa session trước khi xóa user
   await env.DASHBOARD_KV.delete(`user:${username}`);
@@ -351,11 +452,20 @@ async function handleDeleteUser(request, env, username) {
 async function handleChangePw(request, env, username) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Not authenticated' }, 401);
-  if (session.role !== 'admin' && session.username !== username) return json({ error: 'Forbidden' }, 403);
+  if (!(await isAdminUser(env, session)) && session.username !== username) return json({ error: 'Forbidden' }, 403);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  if (!body?.password || body.password.length < 8) return json({ error: 'Password quá ngắn (tối thiểu 8 ký tự)' }, 400);
+  const pwCfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(()=>({})) || {};
+  const pwMin = Math.max(4, pwCfg.pwMinLength ?? 6);
+  if (!body?.password || body.password.length < pwMin) return json({ error: `Password quá ngắn (tối thiểu ${pwMin} ký tự)` }, 400);
   const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
   if (!user) return json({ error: 'User not found' }, 404);
+  // ── MFA verification: required when user changes their OWN password and MFA is enabled ──
+  const isSelfChange = session.username === username;
+  if (isSelfChange && user.mfaSecret) {
+    const mfaCode = String(body.mfaCode || '').trim();
+    if (!mfaCode) return json({ error: 'Vui lòng nhập mã MFA để xác nhận đổi mật khẩu' }, 400);
+    if (!(await verifyTotp(user.mfaSecret, mfaCode))) return json({ error: 'Mã MFA không đúng. Vui lòng kiểm tra lại.' }, 400);
+  }
   user.password = await hashPw(body.password);
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
   // Invalidate all existing sessions so old sessions can't reuse stale auth
@@ -368,33 +478,88 @@ async function handleChangePw(request, env, username) {
    Policy Groups & Granular Permissions
    ═══════════════════════════════════════════════ */
 
+/* ── Helper: merge one policy_group object into eff ── */
+function _mergePolicyGroup(g, eff) {
+  if (!g) return;
+  if (g.role === 'admin' && eff.role !== 'admin') eff.role = 'admin';
+  for (const [k, v] of Object.entries(g.permissions || {})) {
+    const cur = eff.permissions[k];
+    if (!cur || cur === 'none') eff.permissions[k] = v;
+    else if (cur === 'read' && v === 'write') eff.permissions[k] = 'write';
+  }
+  for (const [k, v] of Object.entries(g.panels || {})) {
+    if (!v) continue;
+    const cur = eff.panels[k];
+    if (!cur) { eff.panels[k] = v; }
+    else if ((v === 'write' || v === true) && cur !== 'write' && cur !== true) { eff.panels[k] = v; }
+  }
+  for (const c of (g.cameras || [])) { if (!eff.cameras.includes(c)) eff.cameras.push(c); }
+}
+
+/**
+ * Get canManagePerms for a session — always reads from live user KV.
+ * We intentionally bypass the session cache because:
+ *  1. Old sessions (pre-feature) have canManagePerms=undefined
+ *  2. Sessions created before admin SET delegation have canManagePerms=[]
+ *  3. Admin may revoke/change delegation → session would be stale
+ * Live KV read ensures real-time accuracy for all these cases.
+ */
+async function getSessionDelegateServices(env, session) {
+  const user = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
+  if (!user || !Array.isArray(user.canManagePerms)) return [];
+  return user.canManagePerms.filter(s => ALL_SERVICES.includes(s));
+}
+
+/**
+ * Returns true if the session represents an admin — either by account role (fast, no KV)
+ * or via a policy group with role='admin' (requires computeEffectivePermissions).
+ * Use this everywhere instead of session.role === 'admin' so group-based admins work.
+ */
+async function isAdminUser(env, session) {
+  if (!session) return false;
+  if (session.role === 'admin') return true;  // fast path — no KV needed
+  const eff = await computeEffectivePermissions(env, session.username);
+  return !!(eff && eff.role === 'admin');
+}
+
 async function computeEffectivePermissions(env, username) {
   const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
   if (!user) return null;
   const eff = {
-    role: user.role || 'user',                     // always fresh from KV
+    role: user.role || 'user',
     permissions: { ...(user.permissions || {}) },
-    panels: { ...(user.panels || {}) },
-    cameras: [...(user.cameras || [])],
-    groups: [...(user.groups || [])]
+    panels:      { ...(user.panels || {}) },
+    cameras:     [...(user.cameras || [])],
+    groups:      [...(user.groups || [])],
+    userGroups:  [...(user.userGroups || [])],
+    canManagePerms: Array.isArray(user.canManagePerms)
+      ? user.canManagePerms.filter(s => ALL_SERVICES.includes(s))
+      : [],
   };
+
+  // Track processed policy groups to avoid double-applying
+  const processed = new Set();
+
+  // 1. Direct policy group assignments (user.groups)
   for (const gid of eff.groups) {
+    if (processed.has(gid)) continue;
+    processed.add(gid);
     const g = await env.DASHBOARD_KV.get(`policy_group:${gid}`, 'json');
-    if (!g) continue;
-    for (const [k, v] of Object.entries(g.permissions || {})) {
-      const cur = eff.permissions[k];
-      if (!cur || cur === 'none') eff.permissions[k] = v;
-      else if (cur === 'read' && v === 'write') eff.permissions[k] = 'write';
-    }
-    for (const [k, v] of Object.entries(g.panels || {})) {
-      if (!v) continue;
-      const cur = eff.panels[k];
-      // Upgrade: false → 'read' → 'write' → true (legacy true = write-equiv)
-      if (!cur) { eff.panels[k] = v; }
-      else if ((v === 'write' || v === true) && cur !== 'write' && cur !== true) { eff.panels[k] = v; }
-    }
-    for (const c of (g.cameras || [])) { if (!eff.cameras.includes(c)) eff.cameras.push(c); }
+    _mergePolicyGroup(g, eff);
   }
+
+  // 2. User Groups → assigned Role Management Groups
+  for (const ugid of eff.userGroups) {
+    const ug = await env.DASHBOARD_KV.get(`user_group:${ugid}`, 'json');
+    if (!ug) continue;
+    for (const pgid of (ug.roleGroups || [])) {
+      if (processed.has(pgid)) continue;
+      processed.add(pgid);
+      const g = await env.DASHBOARD_KV.get(`policy_group:${pgid}`, 'json');
+      _mergePolicyGroup(g, eff);
+    }
+  }
+
   return eff;
 }
 
@@ -410,6 +575,19 @@ async function hasPerm(env, session, permKey) {
   if (!eff) return false;
   if (eff.role === 'admin') return true;  // catches users promoted since last login
   return (eff.permissions[permKey] || 'none') !== 'none';
+}
+
+/**
+ * Write-level permission gate: returns true only if the user has 'write' (or is admin).
+ * Used for destructive/mutating actions like block/unblock clients.
+ */
+async function hasWritePerm(env, session, permKey) {
+  if (!session) return false;
+  if (session.role === 'admin') return true;
+  const eff = await computeEffectivePermissions(env, session.username);
+  if (!eff) return false;
+  if (eff.role === 'admin') return true;
+  return (eff.permissions[permKey] || 'none') === 'write';
 }
 
 /** Whitelist permission keys/values để chặn XSS qua group names/permission keys */
@@ -445,7 +623,12 @@ function sanitizeName(s, maxLen = 64) {
 
 async function handleListGroups(request, env) {
   const session = await getSession(request, env);
-  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  // Allow admin (incl. group-admin) OR delegated managers (users with canManagePerms)
+  if (!(await isAdminUser(env, session))) {
+    const delegateSvcs = await getSessionDelegateServices(env, session);
+    if (!delegateSvcs.length) return json({ error: 'Admin required' }, 403);
+  }
   const ids = await env.DASHBOARD_KV.get('policy_groups', 'json') || [];
   const groups = [];
   for (const id of ids) {
@@ -457,45 +640,76 @@ async function handleListGroups(request, env) {
 
 async function handleCreateGroup(request, env) {
   const session = await getSession(request, env);
-  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  const isAdmin = await isAdminUser(env, session);
+  const delegateSvcs = isAdmin ? null : await getSessionDelegateServices(env, session);
+  if (!isAdmin && (!delegateSvcs || !delegateSvcs.length)) return json({ error: 'Admin required' }, 403);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const name = sanitizeName(String(body?.name || ''));
   if (!name || name.length > 64) return json({ error: 'Tên group không hợp lệ' }, 400);
   const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || ('g-' + Date.now());
   if (await env.DASHBOARD_KV.get(`policy_group:${id}`)) return json({ error: 'Group đã tồn tại' }, 409);
+  // Delegated users cannot create admin-role groups
+  const allowedGroupRoles = isAdmin ? ['user', 'admin'] : ['user'];
+  const rawPerms = sanitizePermissions(body?.permissions);
+  // Delegated users: permissions limited to their managed services
+  const permissions = isAdmin ? rawPerms
+    : Object.fromEntries(Object.entries(rawPerms).filter(([k]) => delegateSvcs.includes(k)));
   const group = {
     id, name,
     description: sanitizeName(String(body?.description || ''), 256),
-    permissions: sanitizePermissions(body?.permissions),
-    panels:      sanitizePanels(body?.panels),
-    cameras:     sanitizeCameraIds(body?.cameras),
-    created: Date.now()
+    role:        allowedGroupRoles.includes(body?.role) ? body.role : null,
+    permissions,
+    panels:      isAdmin ? sanitizePanels(body?.panels) : {},
+    cameras:     isAdmin ? sanitizeCameraIds(body?.cameras) : [],
+    created: Date.now(),
+    createdBy: session.username,
   };
   await env.DASHBOARD_KV.put(`policy_group:${id}`, JSON.stringify(group));
   const ids = await env.DASHBOARD_KV.get('policy_groups', 'json') || [];
   if (!ids.includes(id)) { ids.push(id); await env.DASHBOARD_KV.put('policy_groups', JSON.stringify(ids)); }
+  if (!isAdmin) await logActivity(env, { action: 'delegate-create-policygroup', username: session.username, success: true, detail: `Created group: ${name}` });
   return json({ success: true, group });
 }
 
 async function handleUpdateGroup(request, env, groupId) {
   const session = await getSession(request, env);
-  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const isAdmin = await isAdminUser(env, session);
+  const delegateSvcs = isAdmin ? null : await getSessionDelegateServices(env, session);
+  if (!isAdmin && (!delegateSvcs || !delegateSvcs.length)) return json({ error: 'Admin required' }, 403);
   const group = await env.DASHBOARD_KV.get(`policy_group:${groupId}`, 'json');
   if (!group) return json({ error: 'Group not found' }, 404);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  if (body.name !== undefined) group.name = sanitizeName(String(body.name));
-  if (body.description !== undefined) group.description = sanitizeName(String(body.description), 256);
-  if (body.permissions !== undefined) group.permissions = sanitizePermissions(body.permissions);
-  if (body.panels !== undefined) group.panels = sanitizePanels(body.panels);
-  if (body.cameras !== undefined) group.cameras = sanitizeCameraIds(body.cameras);
+  if (isAdmin) {
+    if (body.name        !== undefined) group.name        = sanitizeName(String(body.name));
+    if (body.description !== undefined) group.description = sanitizeName(String(body.description), 256);
+    if (body.role        !== undefined) group.role        = ['user', 'admin'].includes(body.role) ? body.role : null;
+    if (body.permissions !== undefined) group.permissions = sanitizePermissions(body.permissions);
+    if (body.panels      !== undefined) group.panels      = sanitizePanels(body.panels);
+    if (body.cameras     !== undefined) group.cameras     = sanitizeCameraIds(body.cameras);
+  } else {
+    // Delegated user: can update name/description; permissions limited to managed services; cannot set admin role
+    if (body.name        !== undefined) group.name        = sanitizeName(String(body.name));
+    if (body.description !== undefined) group.description = sanitizeName(String(body.description), 256);
+    if (body.role !== undefined) group.role = (body.role === 'user') ? 'user' : (body.role === '' || body.role === null) ? null : group.role; // never allow 'admin'
+    if (body.permissions !== undefined) {
+      const newPerms = sanitizePermissions(body.permissions);
+      group.permissions = group.permissions || {};
+      for (const svc of delegateSvcs) {
+        if (newPerms[svc] !== undefined) group.permissions[svc] = newPerms[svc];
+      }
+    }
+    await logActivity(env, { action: 'delegate-update-policygroup', username: session.username, success: true, detail: `Updated group: ${group.name} (services: ${delegateSvcs.join(',')})` });
+  }
   await env.DASHBOARD_KV.put(`policy_group:${groupId}`, JSON.stringify(group));
   return json({ success: true, group });
 }
 
 async function handleDeleteGroup(request, env, groupId) {
   const session = await getSession(request, env);
-  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
   await env.DASHBOARD_KV.delete(`policy_group:${groupId}`);
   const ids = (await env.DASHBOARD_KV.get('policy_groups', 'json') || []).filter(id => id !== groupId);
   await env.DASHBOARD_KV.put('policy_groups', JSON.stringify(ids));
@@ -510,9 +724,131 @@ async function handleDeleteGroup(request, env, groupId) {
   return json({ success: true });
 }
 
+/* ═══════════════════════════════════════════════
+   User Groups (gom users → gán Role Management Groups)
+   KV:  user_groups          → string[]  (list of IDs)
+        user_group:{id}      → { id, name, description, members[], roleGroups[], created }
+   ═══════════════════════════════════════════════ */
+
+async function handleListUserGroups(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (!(await isAdminUser(env, session))) {
+    const delegateSvcs = await getSessionDelegateServices(env, session);
+    if (!delegateSvcs.length) return json({ error: 'Admin required' }, 403);
+  }
+  const ids = await env.DASHBOARD_KV.get('user_groups', 'json') || [];
+  const groups = [];
+  for (const id of ids) {
+    const g = await env.DASHBOARD_KV.get(`user_group:${id}`, 'json');
+    if (g) groups.push(g);
+  }
+  return json({ groups });
+}
+
+async function handleCreateUserGroup(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (!(await isAdminUser(env, session))) {
+    const delegateSvcs = await getSessionDelegateServices(env, session);
+    if (!delegateSvcs.length) return json({ error: 'Admin required' }, 403);
+  }
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const name = sanitizeName(String(body?.name || ''));
+  if (!name || name.length < 1) return json({ error: 'Tên User Group không hợp lệ' }, 400);
+  // Unique ID: prefix ug- + slug + timestamp
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'grp';
+  const id = `ug-${slug}-${Date.now().toString(36)}`;
+  const group = {
+    id, name,
+    description: sanitizeName(String(body?.description || ''), 256),
+    members:    [],
+    roleGroups: [],
+    created: Date.now(),
+  };
+  await env.DASHBOARD_KV.put(`user_group:${id}`, JSON.stringify(group));
+  const ids = await env.DASHBOARD_KV.get('user_groups', 'json') || [];
+  if (!ids.includes(id)) { ids.push(id); await env.DASHBOARD_KV.put('user_groups', JSON.stringify(ids)); }
+  await logActivity(env, { action: 'user-group-create', username: session.username,
+    ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Created: ${name}` });
+  return json({ success: true, group });
+}
+
+async function handleUpdateUserGroup(request, env, groupId) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (!(await isAdminUser(env, session))) {
+    const delegateSvcs = await getSessionDelegateServices(env, session);
+    if (!delegateSvcs.length) return json({ error: 'Admin required' }, 403);
+  }
+  const group = await env.DASHBOARD_KV.get(`user_group:${groupId}`, 'json');
+  if (!group) return json({ error: 'User Group not found' }, 404);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+
+  const prevMembers = [...(group.members || [])];
+
+  if (body.name        !== undefined) group.name        = sanitizeName(String(body.name));
+  if (body.description !== undefined) group.description = sanitizeName(String(body.description), 256);
+  if (body.roleGroups  !== undefined) group.roleGroups  = Array.isArray(body.roleGroups)
+    ? body.roleGroups.filter(s => typeof s === 'string' && s.length < 128).slice(0, 50)
+    : group.roleGroups;
+  if (body.members !== undefined) {
+    group.members = Array.isArray(body.members)
+      ? body.members.filter(s => typeof s === 'string' && s.length < 128).slice(0, 500)
+      : group.members;
+  }
+
+  await env.DASHBOARD_KV.put(`user_group:${groupId}`, JSON.stringify(group));
+
+  // Sync userGroups[] on user objects (add/remove references)
+  const newMembers = group.members;
+  const added   = newMembers.filter(u => !prevMembers.includes(u));
+  const removed = prevMembers.filter(u => !newMembers.includes(u));
+  for (const uname of added) {
+    const u = await env.DASHBOARD_KV.get(`user:${uname}`, 'json');
+    if (u) {
+      u.userGroups = [...new Set([...(u.userGroups || []), groupId])];
+      await env.DASHBOARD_KV.put(`user:${uname}`, JSON.stringify(u));
+    }
+  }
+  for (const uname of removed) {
+    const u = await env.DASHBOARD_KV.get(`user:${uname}`, 'json');
+    if (u) {
+      u.userGroups = (u.userGroups || []).filter(g => g !== groupId);
+      await env.DASHBOARD_KV.put(`user:${uname}`, JSON.stringify(u));
+    }
+  }
+
+  await logActivity(env, { action: 'user-group-update', username: session.username,
+    ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Updated: ${group.name}` });
+  return json({ success: true, group });
+}
+
+async function handleDeleteUserGroup(request, env, groupId) {
+  const session = await getSession(request, env);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  const group = await env.DASHBOARD_KV.get(`user_group:${groupId}`, 'json');
+  if (!group) return json({ error: 'User Group not found' }, 404);
+  // Remove userGroups ref from all member users
+  for (const uname of (group.members || [])) {
+    const u = await env.DASHBOARD_KV.get(`user:${uname}`, 'json');
+    if (u) {
+      u.userGroups = (u.userGroups || []).filter(g => g !== groupId);
+      await env.DASHBOARD_KV.put(`user:${uname}`, JSON.stringify(u));
+    }
+  }
+  await env.DASHBOARD_KV.delete(`user_group:${groupId}`);
+  const ids = (await env.DASHBOARD_KV.get('user_groups', 'json') || []).filter(id => id !== groupId);
+  await env.DASHBOARD_KV.put('user_groups', JSON.stringify(ids));
+  await logActivity(env, { action: 'user-group-delete', username: session.username,
+    ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Deleted: ${group.name}` });
+  return json({ success: true });
+}
+
 async function handleUpdateUserGroups(request, env, username) {
   const session = await getSession(request, env);
-  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
   if (username === 'admin') return json({ error: 'Không thể sửa admin' }, 400);
   const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
   if (!user) return json({ error: 'User not found' }, 404);
@@ -539,7 +875,7 @@ async function handleUpdateUserGroups(request, env, username) {
 
 async function handleUpdateUserPanels(request, env, username) {
   const session = await getSession(request, env);
-  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
   if (username === 'admin') return json({ error: 'Không thể sửa admin' }, 400);
   const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
   if (!user) return json({ error: 'User not found' }, 404);
@@ -592,7 +928,7 @@ async function handleMoviCameraList(request, env) {
     return json({ cameras: list });
   }
   if (request.method === 'PUT') {
-    if (session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+    if (!(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
     let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
     const cameras = Array.isArray(body.cameras) ? body.cameras : [];
     await env.DASHBOARD_KV.put('camera_list_movi', JSON.stringify(cameras));
@@ -614,7 +950,7 @@ async function handleCameraList(request, env) {
     return json({ cameras: list });
   }
   if (request.method === 'PUT') {
-    if (session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+    if (!(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
     let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
     const cameras = Array.isArray(body.cameras) ? body.cameras : [];
     await env.DASHBOARD_KV.put('camera_list', JSON.stringify(cameras));
@@ -705,20 +1041,8 @@ async function handleMfaEnable(request, env) {
 }
 
 async function handleMfaDisable(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Not authenticated' }, 401);
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  const { code } = body || {};
-  if (!code) return json({ error: 'Vui lòng nhập mã OTP để xác nhận' }, 400);
-  const user = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
-  if (!user) return json({ error: 'User not found' }, 404);
-  if (!user.mfaEnabled) return json({ error: 'MFA chưa được bật' }, 400);
-  if (!(await verifyTotp(user.mfaSecret, code))) return json({ error: 'Mã OTP không đúng' }, 400);
-  user.mfaEnabled = false;
-  user.mfaSecret  = null;
-  await env.DASHBOARD_KV.put(`user:${session.username}`, JSON.stringify(user));
-  return json({ success: true });
+  // MFA is mandatory on this system — disabling is not allowed for anyone
+  return json({ error: 'MFA là bắt buộc trên hệ thống này và không thể tắt. Bạn chỉ có thể đổi mã MFA (reset secret).' }, 403);
 }
 
 async function handleMfaStatus(request, env) {
@@ -774,24 +1098,114 @@ async function handleMfaVerify(request, env) {
   return new Response(JSON.stringify({ success: true, role: user.role }), { status: 200, headers: h });
 }
 
+/* ── Setup Flow Handlers (first-login: change password + MFA setup) ── */
+
+async function _createSessionAfterSetup(username, user, env) {
+  const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
+  const sessionTtl = Math.max(1, cfg.sessionTtlHours ?? 8) * 3600;
+  const token = crypto.randomUUID();
+  await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
+    username, role: user.role, permissions: user.permissions || {},
+    expires: Date.now() + sessionTtl * 1000,
+  }), { expirationTtl: sessionTtl });
+  const userInfo = encodeURIComponent(JSON.stringify({
+    username, role: user.role, permissions: user.permissions || {}, isAdmin: user.role === 'admin',
+  }));
+  const h = new Headers({ 'Content-Type': 'application/json' });
+  h.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
+  h.append('Set-Cookie', `dh_user=${userInfo}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
+  return new Response(JSON.stringify({ success: true, role: user.role }), { status: 200, headers: h });
+}
+
+async function _getSetupTemp(env, setupToken) {
+  if (!setupToken) return null;
+  const temp = await env.DASHBOARD_KV.get(`setup_temp:${setupToken}`, 'json');
+  if (!temp || Date.now() > temp.expires) {
+    if (temp) await env.DASHBOARD_KV.delete(`setup_temp:${setupToken}`).catch(() => {});
+    return null;
+  }
+  return temp;
+}
+
+async function handleSetupChangePassword(request, env) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { setupToken, newPassword } = body || {};
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  if (!setupToken || !newPassword) return json({ error: 'Thiếu thông tin' }, 400);
+  const temp = await _getSetupTemp(env, setupToken);
+  if (!temp) return json({ error: 'Phiên thiết lập đã hết hạn. Vui lòng đăng nhập lại.' }, 401);
+  if (!temp.mustChangePassword) return json({ error: 'Không cần đổi mật khẩu' }, 400);
+  if (newPassword.length < 8) return json({ error: 'Mật khẩu tối thiểu 8 ký tự' }, 400);
+  const user = await env.DASHBOARD_KV.get(`user:${temp.username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+  user.password = await hashPw(newPassword);
+  user.mustChangePassword = false;
+  await env.DASHBOARD_KV.put(`user:${temp.username}`, JSON.stringify(user));
+  // Refresh token state
+  const updatedTemp = { ...temp, mustChangePassword: false };
+  await env.DASHBOARD_KV.put(`setup_temp:${setupToken}`, JSON.stringify(updatedTemp), { expirationTtl: 600 });
+  await logActivity(env, { action: 'setup_password_changed', username: temp.username, ip, success: true });
+  if (temp.mustSetupMfa) return json({ success: true, step: 'setupMfa', setupToken });
+  return await _createSessionAfterSetup(temp.username, user, env);
+}
+
+async function handleSetupMfaInit(request, env) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { setupToken } = body || {};
+  const temp = await _getSetupTemp(env, setupToken);
+  if (!temp) return json({ error: 'Phiên thiết lập đã hết hạn. Vui lòng đăng nhập lại.' }, 401);
+  const raw = crypto.getRandomValues(new Uint8Array(20));
+  const secret = b32Encode(raw);
+  const label   = encodeURIComponent(`HomeLab:${temp.username}`);
+  const issuer  = encodeURIComponent('HomeLab Dashboard');
+  const otpauth = `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
+  await env.DASHBOARD_KV.put(`setup_mfa_secret:${setupToken}`, secret, { expirationTtl: 600 });
+  return json({ secret, otpauth });
+}
+
+async function handleSetupMfaComplete(request, env) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { setupToken, code } = body || {};
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  if (!setupToken || !code) return json({ error: 'Thiếu thông tin' }, 400);
+  const temp = await _getSetupTemp(env, setupToken);
+  if (!temp) return json({ error: 'Phiên thiết lập đã hết hạn. Vui lòng đăng nhập lại.' }, 401);
+  const secret = await env.DASHBOARD_KV.get(`setup_mfa_secret:${setupToken}`);
+  if (!secret) return json({ error: 'Chưa khởi tạo MFA hoặc phiên đã hết hạn. Vui lòng thử lại.' }, 400);
+  if (!(await verifyTotp(secret, code))) return json({ error: 'Mã OTP không đúng. Kiểm tra đồng hồ thiết bị.' }, 400);
+  const user = await env.DASHBOARD_KV.get(`user:${temp.username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+  user.mfaEnabled  = true;
+  user.mfaSecret   = secret;
+  user.mustSetupMfa = false;
+  await env.DASHBOARD_KV.put(`user:${temp.username}`, JSON.stringify(user));
+  await env.DASHBOARD_KV.delete(`setup_temp:${setupToken}`).catch(() => {});
+  await env.DASHBOARD_KV.delete(`setup_mfa_secret:${setupToken}`).catch(() => {});
+  await logActivity(env, { action: 'setup_mfa_complete', username: temp.username, ip, success: true });
+  return await _createSessionAfterSetup(temp.username, user, env);
+}
+
 /* Shared "Wayfinding" quick-switcher — injected into every authenticated page.
    Lets users jump tool→tool and search without bouncing through the homepage.
    Self-contained, namespaced (wf-), never touches page/map code. */
 const WAYFIND_NAV = `<style>
-#wf-fab{position:fixed;right:22px;bottom:22px;z-index:2147483000;display:flex;align-items:center;gap:9px;
- font:700 13px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#eaf0fb;
- background:linear-gradient(180deg,#1c2c52,#142037);border:1.5px solid #5b8cff;border-radius:13px;
- padding:12px 17px;cursor:pointer;box-shadow:0 8px 26px rgba(20,40,90,.55),0 0 0 4px rgba(91,140,255,.08);
+#wf-fab{position:fixed;right:16px;bottom:16px;z-index:2147483000;
+ width:34px;height:34px;border-radius:50%;
+ display:flex;align-items:center;justify-content:center;
+ background:linear-gradient(180deg,#1c2c52,#142037);
+ border:1.5px solid rgba(91,140,255,.7);
+ cursor:pointer;box-shadow:0 4px 16px rgba(20,40,90,.5),0 0 0 3px rgba(91,140,255,.07);
  transition:all .15s;user-select:none}
-#wf-fab:hover{border-color:#8fb3ff;transform:translateY(-2px);box-shadow:0 12px 32px rgba(30,60,130,.65)}
+#wf-fab:hover{border-color:#8fb3ff;box-shadow:0 6px 20px rgba(30,60,130,.6)}
 #wf-fab .wf-dot{width:8px;height:8px;border-radius:50%;background:#5b8cff;box-shadow:0 0 9px #5b8cff}
-#wf-fab .wf-k{font-family:JetBrains Mono,ui-monospace,monospace;font-size:11px;color:#bcd0ff;
- border:1px solid #5b8cff;border-radius:6px;padding:3px 8px;background:rgba(91,140,255,.16)}
-@keyframes wfpulse{0%{box-shadow:0 8px 26px rgba(20,40,90,.55),0 0 0 0 rgba(91,140,255,.45)}
- 70%{box-shadow:0 8px 26px rgba(20,40,90,.55),0 0 0 16px rgba(91,140,255,0)}
- 100%{box-shadow:0 8px 26px rgba(20,40,90,.55),0 0 0 0 rgba(91,140,255,0)}}
+@keyframes wfpulse{0%{box-shadow:0 4px 16px rgba(20,40,90,.5),0 0 0 0 rgba(91,140,255,.45)}
+ 70%{box-shadow:0 4px 16px rgba(20,40,90,.5),0 0 0 12px rgba(91,140,255,0)}
+ 100%{box-shadow:0 4px 16px rgba(20,40,90,.5),0 0 0 0 rgba(91,140,255,0)}}
 #wf-fab.wf-pulse{animation:wfpulse 1.8s ease-out 3}
-#wf-hint{position:fixed;right:22px;bottom:78px;z-index:2147483000;max-width:280px;
+#wf-hint{position:fixed;right:60px;bottom:10px;z-index:2147483000;max-width:260px;
  background:#0c1018;border:1px solid #5b8cff;border-radius:11px;padding:12px 14px;display:none;
  font:13px/1.5 -apple-system,'Segoe UI',sans-serif;color:#cdd6e6;box-shadow:0 10px 30px rgba(0,0,0,.6)}
 #wf-hint.on{display:block}
@@ -820,13 +1234,11 @@ const WAYFIND_NAV = `<style>
 #wf-foot{display:flex;gap:18px;padding:10px 18px;border-top:1px solid #1d2740;
  font:11px JetBrains Mono,monospace;color:#46587a}
 #wf-foot b{color:#7c8baa;font-weight:600}
-@media(max-width:520px){#wf-fab .wf-lbl{display:none}}
 </style>
-</style>
-<div id="wf-fab" title="Chuyển nhanh giữa các trang (phím tắt: / )" onclick="window.__wfOpen&&window.__wfOpen()">
- <span class="wf-dot"></span><span>Chuyển trang nhanh</span><span class="wf-k">/</span></div>
+<div id="wf-fab" title="Chuyển trang nhanh (phím tắt: /)" onclick="window.__wfOpen&&window.__wfOpen()">
+ <span class="wf-dot"></span></div>
 <div id="wf-hint"><span class="wf-x" title="Đóng" onclick="document.getElementById('wf-hint').classList.remove('on')">&#x2715;</span>
- &#x1F449; Bấm nút xanh này (hoặc phím <b>/</b>) để nhảy thẳng giữa các trang — Meraki, FortiGate, ESXi, MOVI… mà không cần quay về trang chủ.</div>
+ &#x1F449; Bấm nút này (hoặc phím <b>/</b>) để nhảy thẳng giữa các trang — Meraki, FortiGate, ESXi, MOVI…</div>
 <div id="wf-ov"><div id="wf-panel">
  <input id="wf-search" placeholder="Tìm dịch vụ… (gõ để lọc, &#x2191;&#x2193; chọn, Enter mở)" autocomplete="off">
  <div id="wf-list"></div>
@@ -921,20 +1333,6 @@ const DATA_REFRESH = `<style>
 #wf-bar.on{opacity:1;animation:wfbar 1.1s ease-in-out infinite}
 #wf-bar.done{animation:none;width:100%!important;transition:width .25s ease-out}
 @keyframes wfbar{0%{width:8%}50%{width:72%}100%{width:92%}}
-#wf-rfab{position:fixed;right:22px;bottom:74px;z-index:2147483000;display:none;align-items:center;gap:9px;
- font:700 13px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#cfe0d6;
- background:linear-gradient(180deg,#143526,#0f261c);border:1.5px solid #2c8a5c;border-radius:13px;
- padding:12px 16px;cursor:pointer;box-shadow:0 8px 24px rgba(10,50,30,.5);transition:all .15s;user-select:none}
-#wf-rfab:hover{border-color:#34d399;transform:translateY(-2px)}
-#wf-rfab.busy{opacity:.65;cursor:progress}
-#wf-rfab .wf-rk{font-family:JetBrains Mono,ui-monospace,monospace;font-size:11px;color:#7fe3b4;
- border:1px solid #2c8a5c;border-radius:6px;padding:3px 8px;background:rgba(52,211,153,.14)}
-#wf-rspin{width:13px;height:13px;border:2px solid rgba(127,227,180,.3);border-top-color:#34d399;
- border-radius:50%;display:none}
-#wf-rfab.busy #wf-rspin{display:inline-block;animation:wfspin .7s linear infinite}
-#wf-rfab.busy .wf-rdot{display:none}
-.wf-rdot{width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 9px #34d399}
-@keyframes wfspin{to{transform:rotate(360deg)}}
 #wf-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
  z-index:2147483600;display:none;opacity:0;transition:all .25s;
  font:600 13px/1.4 -apple-system,'Segoe UI',sans-serif;color:#dfe8f5;
@@ -946,8 +1344,6 @@ const DATA_REFRESH = `<style>
 </style>
 <div id="wf-bar"></div>
 <div id="wf-toast"></div>
-<div id="wf-rfab" title="Tải lại dữ liệu của trang này (phím tắt: r)" onclick="window.__wfData&&window.__wfData()">
- <span class="wf-rdot"></span><span id="wf-rspin"></span><span>Tải lại dữ liệu</span><span class="wf-rk">r</span></div>
 <script>(function(){
  if(window.__wfData)return;
  if(location.pathname==='/login.html')return;
@@ -960,16 +1356,16 @@ const DATA_REFRESH = `<style>
   '/service-movi/vmware01-movi.html':['loadData'],
   '/service-movi/vmware02-movi.html':['loadData'],
   '/service-movi/tool-movi.html':[],
+  '/service-movi/ssh-movi.html':[],
   '/service-home/fortigate.html':['load'],'/service-home/esxi.html':['loadData'],'/service-home/casaos.html':['loadData'],
   '/service-home/asus.html':['load'],'/service-home/9router.html':['loadData'],'/service-home/n8n.html':['loadData'],
   '/service-home/hikvision.html':['loadState'],'/service-home/ssh.html':['loadData'],
   '/bookmarks.html':['loadData'],'/settings.html':['loadSettings']};
  var path=location.pathname.replace(/\\/index\\.html$/,'/');
  var fns=MAP[path]||MAP[location.pathname];
- var rfab=document.getElementById('wf-rfab'),bar=document.getElementById('wf-bar'),
+ var bar=document.getElementById('wf-bar'),
      toast=document.getElementById('wf-toast');
- if(!fns||!rfab)return;
- rfab.style.display='flex';
+ if(!fns||!bar)return;
  var busy=false,tHide=null;
  function say(msg,cls,ms){
   clearTimeout(tHide); toast.className=''; toast.textContent=msg;
@@ -980,7 +1376,7 @@ const DATA_REFRESH = `<style>
  function barDone(){bar.classList.remove('on');bar.classList.add('done');
   setTimeout(function(){bar.classList.remove('done');bar.style.width='';},420);}
  function run(){
-  if(busy)return; busy=true; rfab.classList.add('busy');
+  if(busy)return; busy=true;
   barStart(); say('\\u27F3 Đang tải lại dữ liệu…','',0);
   var t0=Date.now(), ps=[], called=0;
   fns.forEach(function(fn){
@@ -989,7 +1385,7 @@ const DATA_REFRESH = `<style>
   function finish(ok){
    var wait=Math.max(0,900-(Date.now()-t0));
    setTimeout(function(){
-    busy=false; rfab.classList.remove('busy'); barDone();
+    busy=false; barDone();
     if(ok){var n=new Date();
      say('\\u2713 Dữ liệu đã cập nhật · '+n.toLocaleTimeString('vi-VN',{hour12:false}),'ok',2800);}
     else say('\\u26A0 Tải lại thất bại — thử lại sau','err',3400);
@@ -1004,12 +1400,6 @@ const DATA_REFRESH = `<style>
   }); else finish(true);
  }
  window.__wfData=run;
- document.addEventListener('keydown',function(e){
-  var t=e.target,tg=(t&&t.tagName||'').toLowerCase(),
-      typing=tg==='input'||tg==='textarea'||(t&&t.isContentEditable);
-  var ovOpen=(document.getElementById('wf-ov')||{}).classList&&document.getElementById('wf-ov').classList.contains('on');
-  if(e.key==='r'&&!typing&&!ovOpen&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();run();}
- });
 })();</script>`;
 
 /* Per-panel reload — small ⟳ button inside each panel header that reloads
@@ -1076,19 +1466,27 @@ async function injectUser(request, env) {
   const url = new URL(request.url);
   const isLoginPage = url.pathname === '/login.html';
 
-  // Login page: redirect if already logged in; otherwise serve with optional banner
+  // Login page: redirect if already logged in; otherwise serve with optional banner + inject idle time
   if (isLoginPage) {
     if (session) return Response.redirect(new URL('/', request.url).toString(), 302);
     const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(()=>({})) || {};
     const bannerMsg = (cfg.loginBannerMsg || '').trim();
-    const cleanReq = new Request(request.url, { method: 'GET', headers: { 'Accept': 'text/html' } });
-    const loginRes = await env.ASSETS.fetch(cleanReq);
-    if (!bannerMsg) return loginRes;
-    const loginHtml = await loginRes.text();
-    const safe = bannerMsg.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const bannerHtml = `<div style="margin-bottom:1.25rem;padding:10px 14px;border-radius:10px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);font-size:13px;color:#93c5fd;text-align:center;line-height:1.5">${safe}</div>`;
-    const patched = loginHtml.replace('<div class="card">', '<div class="card">'+bannerHtml);
-    return new Response(patched, { headers: { 'content-type':'text/html;charset=utf-8','cache-control':'no-store' } });
+    const idleMin   = Math.max(5, cfg.idleTimeoutMin ?? 30);
+    const cleanReq  = new Request(request.url, { method: 'GET', headers: { 'Accept': 'text/html' } });
+    const loginRes  = await env.ASSETS.fetch(cleanReq);
+    if (!bannerMsg && idleMin === 30) return loginRes;   // nothing to patch, avoid text() overhead
+    let loginHtml = await loginRes.text();
+    // Patch idle notice text with actual configured idle timeout
+    loginHtml = loginHtml.replace(
+      /không có hoạt động trong <strong>\d+ phút<\/strong>/,
+      `không có hoạt động trong <strong>${idleMin} phút</strong>`
+    );
+    if (bannerMsg) {
+      const safe = bannerMsg.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const bannerHtml = `<div style="margin-bottom:1.25rem;padding:10px 14px;border-radius:10px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);font-size:13px;color:#93c5fd;text-align:center;line-height:1.5">${safe}</div>`;
+      loginHtml = loginHtml.replace('<div class="card">', '<div class="card">'+bannerHtml);
+    }
+    return new Response(loginHtml, { headers: { 'content-type':'text/html;charset=utf-8','cache-control':'no-store' } });
   }
 
   // All other HTML: require auth
@@ -1109,9 +1507,27 @@ async function injectUser(request, env) {
   if (computed) effPerms = computed;
   const isAdmin = effPerms.role === 'admin';
   const sysCfg  = (await sysCfgPromise) || {};
+
+  // Maintenance mode: block non-admin users, show maintenance page
+  if (!isAdmin && sysCfg.maintenanceMode) {
+    const msg = (sysCfg.maintenanceMsg || 'Hệ thống đang bảo trì. Vui lòng quay lại sau.').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const maintHtml = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bảo trì hệ thống</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.box{text-align:center;padding:3rem 2rem;max-width:480px}
+.icon{font-size:4rem;margin-bottom:1.5rem}
+h1{font-size:1.5rem;font-weight:700;margin-bottom:.75rem;color:#f8fafc}
+p{font-size:1rem;color:#94a3b8;line-height:1.6;margin-bottom:2rem}
+a{display:inline-block;padding:.65rem 1.5rem;background:#6366f1;color:#fff;border-radius:.5rem;text-decoration:none;font-weight:600;font-size:.9rem}
+a:hover{background:#4f46e5}</style></head>
+<body><div class="box"><div class="icon">🚧</div><h1>Hệ thống đang bảo trì</h1><p>${msg}</p>
+<a href="/login.html">Đăng xuất</a></div></body></html>`;
+    return new Response(maintHtml, { status: 503, headers: { 'content-type':'text/html;charset=utf-8','cache-control':'no-store','retry-after':'3600' } });
+  }
+
   const idleMin = Math.max(5, sysCfg.idleTimeoutMin ?? 30);
   const idleMs  = idleMin * 60 * 1000;
   const warnMs  = Math.max(60_000, idleMs - 5 * 60 * 1000);
+  const dashTitle = (sysCfg.dashboardTitle || '').trim();
   const userScript = `<script>window.__USER__=${JSON.stringify({
     username: session.username,
     role: session.role,
@@ -1119,20 +1535,25 @@ async function injectUser(request, env) {
     panels: isAdmin ? {} : effPerms.panels,
     cameras: isAdmin ? [] : effPerms.cameras,
     groups: isAdmin ? [] : effPerms.groups,
-    isAdmin
+    isAdmin,
+    canManagePerms: isAdmin ? [] : (effPerms.canManagePerms || []),
+    dashboardTitle: dashTitle
   })};
-  /* Auto-inject Settings link into any page topnav for all logged-in users */
+  /* Auto-inject Settings link + apply custom dashboard title */
   (function(){
     if(!window.__USER__)return;
     document.addEventListener('DOMContentLoaded',function(){
       var sl=document.getElementById('settings-link');
-      if(sl){sl.style.display='';return;}
-      var nav=document.querySelector('nav.topnav')||document.querySelector('nav.topbar-nav')||document.querySelector('.topnav');
-      if(!nav)return;
-      var a=document.createElement('a');
-      a.id='settings-link';
-      a.className='topnav-item';a.href='/settings.html';a.textContent='⚙ Settings';
-      nav.appendChild(a);
+      if(sl){sl.style.display='';} else {
+        var nav=document.querySelector('nav.topnav')||document.querySelector('nav.topbar-nav')||document.querySelector('.topnav');
+        if(nav){var a=document.createElement('a');a.id='settings-link';a.className='topnav-item';a.href='/settings.html';a.textContent='⚙ Settings';nav.appendChild(a);}
+      }
+      var dt=window.__USER__.dashboardTitle;
+      if(dt){
+        document.title=document.title.replace(/Home Lab/g,dt);
+        var bn=document.querySelector('.brand-name');
+        if(bn&&bn.textContent.trim()==='Home Lab')bn.textContent=dt;
+      }
     });
   })();
   </script>` + makeIdleScript(idleMs, warnMs);
@@ -1166,7 +1587,7 @@ async function injectUser(request, env) {
         // Google Fonts files + data URIs
         "font-src 'self' data: https://fonts.gstatic.com; " +
         // Allow camera (go2rtc) and SSH terminal (termix) iframes
-        "frame-src 'self' https://camera.home-server.id.vn https://termix.home-server.id.vn https://cam.movi-finance.com; " +
+        "frame-src 'self' https://camera.home-server.id.vn https://termix.home-server.id.vn https://termix-movi.home-server.id.vn https://cam.movi-finance.com https://termix.movi-finance.com; " +
         "object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
     }
   });
@@ -1469,7 +1890,7 @@ async function handleMoviN8nExecDetail(request, env) {
    Tool Movi — Workflow triggers via n8n webhook
    Secret: MOVI_TOOL_CREATE_USER_WEBHOOK
    ═══════════════════════════════════════════════ */
-async function handleToolMoviCreateUser(request, env, session) {
+async function handleToolMoviCreateUser(request, env, session, ctx) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   const webhookUrl = env.MOVI_TOOL_CREATE_USER_WEBHOOK;
   if (!webhookUrl) return json({ error: 'MOVI_TOOL_CREATE_USER_WEBHOOK not configured. Run: npx wrangler secret put MOVI_TOOL_CREATE_USER_WEBHOOK' }, 500);
@@ -1505,25 +1926,231 @@ async function handleToolMoviCreateUser(request, env, session) {
   let auth;
   try { auth = moviN8nAuth(env); } catch (e) { return json({ error: e.message }, 500); }
 
+  // Cloudflare Workers HTTP: no wall-clock limit while browser stays connected.
+  // Await n8n directly — browser shows spinner, gets result when workflow finishes.
   try {
     const res = await fetch(webhookUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': auth,
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': auth },
       body: JSON.stringify(n8nPayload),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(180000), // 3 min safety cap
     });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      return json({ error: `n8n webhook returned ${res.status}`, detail: txt.slice(0, 300) }, 502);
-    }
-    const result = await res.json().catch(() => ({ received: true }));
+    const txt = await res.text().catch(() => '');
+    let result;
+    try { result = JSON.parse(txt); } catch { result = { raw: txt.slice(0, 1000) }; }
+    if (!res.ok) return json({ error: `n8n returned ${res.status}`, result }, 502);
     return json({ success: true, result });
   } catch (e) {
     return json({ error: `Webhook error: ${e.message}` }, 502);
   }
+}
+
+async function handleToolMoviCallback(request, env, jobId) {
+  // Called by n8n at end of workflow with the result JSON
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  const job = await env.DASHBOARD_KV.get(`tool_job:${jobId}`, 'json');
+  if (!job) return json({ error: 'Job not found' }, 404);
+  let result;
+  try { result = await request.json(); } catch { result = { raw: await request.text().catch(() => '') }; }
+  await env.DASHBOARD_KV.put(`tool_job:${jobId}`, JSON.stringify({
+    ...job, status: 'done', result, completedAt: Date.now()
+  }), { expirationTtl: 7200 });
+  return json({ received: true });
+}
+
+async function handleToolMoviJobStatus(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const url = new URL(request.url);
+  const jobId = url.pathname.split('/').pop();
+  const job = await env.DASHBOARD_KV.get(`tool_job:${jobId}`, 'json');
+  if (!job) return json({ error: 'Job not found' }, 404);
+  return json(job);
+}
+
+/* ── Tool Movi: Block User ── */
+async function handleToolMoviBlockUser(request, env, session) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  const webhookUrl = 'https://n8n.movi-finance.com/webhook/2d880497-0b92-41c7-bbd0-17718032565c';
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const email     = (body.email || '').trim();
+  const startDate = (body.startDate || '').trim();
+  const endDate   = (body.endDate || '').trim();
+  const reason    = (body.reason || '').trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Email không hợp lệ' }, 400);
+  if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return json({ error: 'Ngày bắt đầu không hợp lệ (định dạng: YYYY-MM-DD)' }, 400);
+  if (!endDate   || !/^\d{4}-\d{2}-\d{2}$/.test(endDate))   return json({ error: 'Ngày kết thúc không hợp lệ (định dạng: YYYY-MM-DD)' }, 400);
+  if (endDate < startDate) return json({ error: 'Ngày kết thúc phải sau hoặc bằng ngày bắt đầu' }, 400);
+  if (!reason) return json({ error: 'Lý do block là bắt buộc' }, 400);
+  const payload = [
+    {
+      data: {
+        'Tài khoản user block': email,
+        'Thời gian bắt đầu':   startDate,
+        'thời gian kết thúc':  endDate,
+        'ghi chú lý do ':      reason,
+      }
+    }
+  ];
+  const ip = request.headers.get('CF-Connecting-IP') || '?';
+  try {
+    const resp = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': moviN8nAuth(env) },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(180000),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      return json({ error: `n8n error: HTTP ${resp.status}`, detail: txt.slice(0, 200) }, 502);
+    }
+    const raw = await resp.json().catch(() => ({}));
+    const result = Array.isArray(raw) ? raw : raw;
+    await logActivity(env, { action: 'tool-movi-block-user', username: session.username, ip, success: true, detail: `Blocked ${email} (${startDate} → ${endDate})` });
+    return json({ success: true, result });
+  } catch (e) {
+    await logActivity(env, { action: 'tool-movi-block-user', username: session.username, ip, success: false, detail: `Failed: ${e.message}` });
+    return json({ error: e.name === 'TimeoutError' ? 'n8n timeout sau 3 phút' : `Lỗi kết nối: ${e.message}` }, 502);
+  }
+}
+
+/* ── Tool Movi: Asset Search ── */
+async function handleToolMoviAssetSearch(request, env, session) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  const webhookUrl = 'https://n8n.movi-finance.com/webhook/67f41799-3dd2-4624-8e61-c2b311c99b66';
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const params = {
+    email:     (body.email     || '').trim(),
+    assetTag:  (body.assetTag  || '').trim(),
+    model:     (body.model     || '').trim(),
+    serial:    (body.serial    || '').trim(),
+    location:  (body.location  || '').trim(),
+    status:    (body.status    || '').trim(),
+    assetType: (body.assetType || '').trim(),
+  };
+  if (!Object.values(params).some(v => v))
+    return json({ error: 'Vui lòng nhập ít nhất 1 tiêu chí tìm kiếm' }, 400);
+  try {
+    const resp = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': moviN8nAuth(env) },
+      body: JSON.stringify(params),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      return json({ error: `n8n error: HTTP ${resp.status}`, detail: txt.slice(0, 200) }, 502);
+    }
+    const raw  = await resp.json().catch(() => []);
+    const list = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+    return json({ success: true, list, total: list.length });
+  } catch(e) {
+    return json({ error: e.name === 'TimeoutError' ? 'n8n timeout sau 30 giây' : `Lỗi kết nối: ${e.message}` }, 502);
+  }
+}
+
+/* ── Tool Movi: Delete User List ── */
+async function handleToolMoviDeleteUserList(request, env, session) {
+  if (request.method !== 'GET') return json({ error: 'GET required' }, 405);
+  const webhookUrl = 'https://n8n.movi-finance.com/webhook/a29d95c1-685c-43db-8ef0-04fac654653f';
+  try {
+    const resp = await fetch(webhookUrl, {
+      method: 'GET',
+      headers: { 'Authorization': moviN8nAuth(env) },
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      return json({ error: `n8n error: HTTP ${resp.status}`, detail: txt.slice(0, 200) }, 502);
+    }
+    const raw  = await resp.json().catch(() => []);
+    const list = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+    return json({ success: true, list, total: list.length });
+  } catch(e) {
+    return json({ error: e.name === 'TimeoutError' ? 'n8n timeout sau 30 giây' : `Lỗi kết nối: ${e.message}` }, 502);
+  }
+}
+
+/* ── Tool Movi: Delete User Action ── */
+async function handleToolMoviDeleteUserAction(request, env, session) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  const webhookUrl = 'https://n8n.movi-finance.com/webhook/817adff6-06e0-45d5-be46-897a4f688b0f';
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const email = (body.email || '').trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Email không hợp lệ' }, 400);
+  const ip = request.headers.get('CF-Connecting-IP') || '?';
+  try {
+    const resp = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': moviN8nAuth(env) },
+      body: JSON.stringify({ email, 'Người thực hiện': session.username }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      return json({ error: `n8n error: HTTP ${resp.status}`, detail: txt.slice(0, 200) }, 502);
+    }
+    const raw = await resp.json().catch(() => ({}));
+    const result = Array.isArray(raw) ? raw : raw;
+    await logActivity(env, { action: 'tool-movi-delete-user', username: session.username, ip, success: true, detail: `Deleted ${email}` });
+    return json({ success: true, result });
+  } catch(e) {
+    await logActivity(env, { action: 'tool-movi-delete-user', username: session.username, ip, success: false, detail: `Failed: ${e.message}` });
+    return json({ error: e.name === 'TimeoutError' ? 'TIMEOUT' : `Lỗi kết nối: ${e.message}` }, 502);
+  }
+}
+
+/* ── Tool Movi History (KV-backed) ── */
+async function hasAnyToolMoviPerm(env, session) {
+  if (session.role === 'admin') return true;
+  for (const key of ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search']) {
+    if (await hasPerm(env, session, key)) return true;
+  }
+  return false;
+}
+
+async function handleGetToolMoviHistory(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (!(await hasAnyToolMoviPerm(env, session))) return json({ error: 'Không có quyền truy cập Tool Movi' }, 403);
+  const history = await env.DASHBOARD_KV.get('tool_movi_history', 'json') || [];
+  const eff = session.role !== 'admin' ? await computeEffectivePermissions(env, session.username) : null;
+  const isAdmin = session.role === 'admin' || (eff && eff.role === 'admin');
+  const visible = isAdmin ? history : history.filter(h => h.createdBy === session.username);
+  return json({ history: visible, total: visible.length, isAdmin });
+}
+
+async function handleSaveToolMoviHistory(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (!(await hasAnyToolMoviPerm(env, session))) return json({ error: 'Không có quyền truy cập Tool Movi' }, 403);
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const history = await env.DASHBOARD_KV.get('tool_movi_history', 'json') || [];
+  const entry = {
+    id:          crypto.randomUUID(),
+    tool:        String(body.tool || 'create-user').slice(0, 50),
+    toolLabel:   String(body.toolLabel || '').slice(0, 100),
+    email:       String(body.email || '').slice(0, 200),
+    displayName: String(body.displayName || '').slice(0, 200),
+    createdBy:   session.username,
+    status:      ['done', 'error'].includes(body.status) ? body.status : 'error',
+    result:      body.result || null,
+    error:       body.error ? String(body.error).slice(0, 500) : null,
+    input:       body.input || null,
+    savedAt:     Date.now(),
+  };
+  history.unshift(entry);
+  if (history.length > 1000) history.length = 1000;
+  await env.DASHBOARD_KV.put('tool_movi_history', JSON.stringify(history));
+  return json({ success: true, id: entry.id });
+}
+
+async function handleClearToolMoviHistory(request, env) {
+  const session = await getSession(request, env);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  await env.DASHBOARD_KV.delete('tool_movi_history');
+  return json({ success: true });
 }
 
 async function handle9Router(request, env) {
@@ -1690,10 +2317,15 @@ async function handleSaveBookmarks(request, env) {
 /* ── Activity Log ── */
 async function logActivity(env, { action, username, ip, success, detail }) {
   try {
-    const log = await env.DASHBOARD_KV.get('activity_log', 'json') || [];
+    const [log, cfg] = await Promise.all([
+      env.DASHBOARD_KV.get('activity_log', 'json').then(v => v || []),
+      env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})).then(v => v || {}),
+    ]);
+    const retDays = Math.max(7, cfg.auditRetentionDays ?? 30);
+    const cutoff  = Date.now() - retDays * 24 * 60 * 60 * 1000;
     log.unshift({ ts: Date.now(), action, username: username||'?', ip: ip||'?', success: !!success, detail: detail||'' });
-    if (log.length > 200) log.length = 200;
-    await env.DASHBOARD_KV.put('activity_log', JSON.stringify(log), { expirationTtl: 60*60*24*30 });
+    const trimmed = log.filter(l => l.ts >= cutoff).slice(0, 500);
+    await env.DASHBOARD_KV.put('activity_log', JSON.stringify(trimmed), { expirationTtl: retDays * 24 * 60 * 60 });
   } catch(e) { /* non-critical */ }
 }
 
@@ -1782,11 +2414,11 @@ async function handleMerakiClients(request, env) {
   }
 }
 
-/* ── Meraki Client Policy: block / unblock — ADMIN ONLY ── */
+/* ── Meraki Client Policy: block / unblock — meraki:write required ── */
 async function handleMerakiClientPolicy(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (!(await hasWritePerm(env, session, 'meraki'))) return json({ error: 'Cần quyền meraki:write để thực hiện thao tác này' }, 403);
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
   let body;
@@ -1845,11 +2477,11 @@ async function handleMerakiClientPolicy(request, env) {
   }
 }
 
-/* ── Meraki Blocked Clients list (GET) — admin only ── */
+/* ── Meraki Blocked Clients list (GET) — meraki:write required ── */
 async function handleMerakiBlockedClients(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (!(await hasWritePerm(env, session, 'meraki'))) return json({ error: 'Cần quyền meraki:write để xem danh sách chặn' }, 403);
   const list = await env.DASHBOARD_KV.get('meraki_blocked_clients', 'json') || [];
   return json({ blocked: list });
 }
@@ -2403,21 +3035,22 @@ async function handleMoviSystem(request, env) {
 async function handleGetActivity(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
-  const log = await env.DASHBOARD_KV.get('activity_log', 'json') || [];
-  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 days
-  const byTime = log.filter(l => l.ts >= cutoff);
-  // Admin sees all entries; regular users see only their own activity
-  const eff = session.role !== 'admin' ? await computeEffectivePermissions(env, session.username) : null;
+  const [log, cfg, eff] = await Promise.all([
+    env.DASHBOARD_KV.get('activity_log', 'json').then(v => v || []),
+    env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})).then(v => v || {}),
+    session.role !== 'admin' ? computeEffectivePermissions(env, session.username) : Promise.resolve(null),
+  ]);
+  const retDays = Math.max(7, cfg.auditRetentionDays ?? 30);
+  const cutoff  = Date.now() - retDays * 24 * 60 * 60 * 1000;
+  const byTime  = log.filter(l => l.ts >= cutoff);
   const isAdmin = session.role === 'admin' || (eff && eff.role === 'admin');
-  const filtered = isAdmin
-    ? byTime
-    : byTime.filter(l => l.username === session.username);
-  return json({ log: filtered.slice(0, 500), total: filtered.length, cutoffDays: 30, isAdmin });
+  const filtered = isAdmin ? byTime : byTime.filter(l => l.username === session.username);
+  return json({ log: filtered.slice(0, 500), total: filtered.length, cutoffDays: retDays, isAdmin });
 }
 
 async function handlePurgeAuditLog(request, env) {
   const session = await getSession(request, env);
-  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
   const purgeCfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(()=>({})) || {};
   const retentionDays = Math.max(1, purgeCfg.auditRetentionDays ?? 30);
   const log = await env.DASHBOARD_KV.get('activity_log', 'json') || [];
@@ -2431,15 +3064,20 @@ async function handlePurgeAuditLog(request, env) {
 
 async function handleGetSystemConfig(request, env) {
   const session = await getSession(request, env);
-  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
   const cfg = await env.DASHBOARD_KV.get('system_config', 'json') || {};
   return json({
-    sessionTtlHours: cfg.sessionTtlHours ?? 8,
-    idleTimeoutMin: cfg.idleTimeoutMin ?? 30,
-    maxUsers: cfg.maxUsers ?? 50,
-    defaultRole: cfg.defaultRole ?? 'user',
-    loginBannerMsg: cfg.loginBannerMsg ?? '',
-    auditRetentionDays: cfg.auditRetentionDays ?? 30,
+    sessionTtlHours:   cfg.sessionTtlHours ?? 8,
+    idleTimeoutMin:    cfg.idleTimeoutMin ?? 30,
+    maxUsers:          cfg.maxUsers ?? 50,
+    defaultRole:       cfg.defaultRole ?? 'user',
+    loginBannerMsg:    cfg.loginBannerMsg ?? '',
+    auditRetentionDays:cfg.auditRetentionDays ?? 30,
+    dashboardTitle:    cfg.dashboardTitle ?? '',
+    pwMinLength:       cfg.pwMinLength ?? 6,
+    maxLoginAttempts:  cfg.maxLoginAttempts ?? 8,
+    maintenanceMode:   cfg.maintenanceMode ?? false,
+    maintenanceMsg:    cfg.maintenanceMsg ?? '',
     updatedAt: cfg.updatedAt ?? null,
     updatedBy: cfg.updatedBy ?? null,
   });
@@ -2447,16 +3085,21 @@ async function handleGetSystemConfig(request, env) {
 
 async function handleSaveSystemConfig(request, env) {
   const session = await getSession(request, env);
-  if (!session || session.role !== 'admin') return json({ error: 'Admin required' }, 403);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const cfg = await env.DASHBOARD_KV.get('system_config', 'json') || {};
-  if (body.sessionTtlHours !== undefined) cfg.sessionTtlHours = Math.min(24, Math.max(1, Number(body.sessionTtlHours) || 8));
-  if (body.idleTimeoutMin !== undefined) cfg.idleTimeoutMin = Math.min(120, Math.max(5, Number(body.idleTimeoutMin) || 30));
-  if (body.maxUsers !== undefined) cfg.maxUsers = Math.min(200, Math.max(1, Number(body.maxUsers) || 50));
+  if (body.sessionTtlHours !== undefined)   cfg.sessionTtlHours   = Math.min(24, Math.max(1, Number(body.sessionTtlHours) || 8));
+  if (body.idleTimeoutMin !== undefined)    cfg.idleTimeoutMin    = Math.min(120, Math.max(5, Number(body.idleTimeoutMin) || 30));
+  if (body.maxUsers !== undefined)          cfg.maxUsers          = Math.min(200, Math.max(1, Number(body.maxUsers) || 50));
   if (body.defaultRole !== undefined && ['user', 'admin'].includes(body.defaultRole)) cfg.defaultRole = body.defaultRole;
-  if (body.loginBannerMsg !== undefined) cfg.loginBannerMsg = String(body.loginBannerMsg).slice(0, 200);
-  if (body.auditRetentionDays !== undefined) cfg.auditRetentionDays = Math.min(90, Math.max(7, Number(body.auditRetentionDays) || 30));
+  if (body.loginBannerMsg !== undefined)    cfg.loginBannerMsg    = String(body.loginBannerMsg).slice(0, 200);
+  if (body.auditRetentionDays !== undefined)cfg.auditRetentionDays= Math.min(90, Math.max(7, Number(body.auditRetentionDays) || 30));
+  if (body.dashboardTitle !== undefined)    cfg.dashboardTitle    = String(body.dashboardTitle).slice(0, 60);
+  if (body.pwMinLength !== undefined)       cfg.pwMinLength       = Math.min(32, Math.max(4, Number(body.pwMinLength) || 6));
+  if (body.maxLoginAttempts !== undefined)  cfg.maxLoginAttempts  = Math.min(20, Math.max(3, Number(body.maxLoginAttempts) || 8));
+  if (body.maintenanceMode !== undefined)   cfg.maintenanceMode   = !!body.maintenanceMode;
+  if (body.maintenanceMsg !== undefined)    cfg.maintenanceMsg    = String(body.maintenanceMsg).slice(0, 300);
   cfg.updatedAt = Date.now();
   cfg.updatedBy = session.username;
   await env.DASHBOARD_KV.put('system_config', JSON.stringify(cfg));
@@ -3501,8 +4144,13 @@ async function handleAsus(env) {
   // (some firmware breaks the entire response if get_clientlist() is mixed in)
   const hookVars = [
     'cpu_usage(appobj)', 'memory_usage(appobj)', 'netdev(appobj)',
-    'nvram_get(wan_ipaddr)', 'nvram_get(wan_gateway)', 'nvram_get(wan_dns)',
-    'nvram_get(wan_proto)', 'nvram_get(link_internet)',
+    // wan0_ipaddr = runtime IP on the WAN interface (DHCP/PPPoE live value)
+    // wan_ipaddr  = NVRAM stored value (can be stale after IP change)
+    'nvram_get(wan0_ipaddr)', 'nvram_get(wan_ipaddr)',
+    'nvram_get(wan0_gateway)', 'nvram_get(wan_gateway)',
+    'nvram_get(wan0_dns)',     'nvram_get(wan_dns)',
+    'nvram_get(wan0_proto)',   'nvram_get(wan_proto)',
+    'nvram_get(link_internet)',
     'nvram_get(ddns_enable_x)', 'nvram_get(ddns_hostname_x)',
     'nvram_get(ddns_server_x)', 'nvram_get(ddns_ipaddr)', 'nvram_get(ddns_updated)',
     'nvram_get(wl0_ssid)', 'nvram_get(wl0_channel)', 'nvram_get(wl0_radio)',
@@ -3593,8 +4241,14 @@ async function handleAsus(env) {
   const txBytes = parseInt(wanNet.tx_bytes || 0);
 
   // ── WAN ──
-  const wanIp    = app.wan_ipaddr || '';
-  const wanOnline = app.link_internet === '1' || (wanIp && wanIp !== '0.0.0.0' && wanIp !== '');
+  // Prefer wan0_ipaddr (runtime interface IP) over wan_ipaddr (NVRAM stored value, can be stale)
+  const wanIp     = (app.wan0_ipaddr  && app.wan0_ipaddr  !== '0.0.0.0' ? app.wan0_ipaddr  : null)
+                 || (app.wan_ipaddr   && app.wan_ipaddr   !== '0.0.0.0' ? app.wan_ipaddr   : null)
+                 || '';
+  const wanGw     = app.wan0_gateway  || app.wan_gateway  || '';
+  const wanDns    = app.wan0_dns      || app.wan_dns      || '';
+  const wanProto  = app.wan0_proto    || app.wan_proto    || '';
+  const wanOnline = app.link_internet === '1' || (wanIp !== '');
 
   // ── DDNS ──
   const ddnsEnabled  = app.ddns_enable_x === '1';
@@ -3638,9 +4292,9 @@ async function handleAsus(env) {
     resources: { cpuPct, memPct, memTotalKB: memTotal, memFreeKB: memFree },
     wan: {
       ip:      wanIp,
-      gateway: app.wan_gateway || '',
-      dns:     app.wan_dns     || '',
-      proto:   (app.wan_proto  || '').toUpperCase(),
+      gateway: wanGw,
+      dns:     wanDns,
+      proto:   wanProto.toUpperCase(),
       online:  wanOnline,
       rxBytes, txBytes,
     },
@@ -3801,19 +4455,382 @@ async function handleProxy(request, env) {
   }
 }
 
+/* ═══════════════════════════════════════════════
+   SSH Movi — Secure Terminal Token Flow
+   Bảo vệ bằng short-lived single-use token (KV)
+   Nginx trên Movi server gọi /api/ssh-movi/verify
+   để validate trước khi cho browser qua ttyd
+   ═══════════════════════════════════════════════ */
+
+/**
+ * POST /api/ssh-movi/token
+ * Requires: session + ssh-movi permission
+ * Returns: { token, url, expiresIn }
+ * Token TTL = 10 phút, single-use (bị xoá ngay sau verify)
+ */
+async function handleSshMoviToken(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (!(await hasPerm(env, session, 'ssh-movi'))) return json({ error: 'Không có quyền truy cập SSH Movi' }, 403);
+
+  const termixUrl = env.TERMIX_MOVI_URL;
+  if (!termixUrl) return json({ error: 'TERMIX_MOVI_URL chưa được cấu hình. Chạy: npx wrangler secret put TERMIX_MOVI_URL' }, 502);
+
+  // Generate a cryptographically random single-use token
+  const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+  const ip    = request.headers.get('cf-connecting-ip') || 'unknown';
+  const ttl   = 600; // 10 minutes
+
+  await env.DASHBOARD_KV.put(
+    `ssh_movi_token:${token}`,
+    JSON.stringify({ username: session.username, ip, createdAt: Date.now() }),
+    { expirationTtl: ttl }
+  );
+
+  await logActivity(env, {
+    action: 'ssh-movi-token-issued',
+    username: session.username,
+    ip,
+    success: true,
+    detail: `Token issued for SSH Movi terminal`,
+  });
+
+  // Append token as query param — nginx on Movi server validates via auth_request
+  const iframeUrl = termixUrl.replace(/\/$/, '') + '/?t=' + token;
+  return json({ token, url: iframeUrl, expiresIn: ttl });
+}
+
+/**
+ * GET /api/ssh-movi/verify?t=TOKEN
+ * Called by nginx auth_request on Movi server — NO dashboard session required.
+ * Validates token, deletes it (single-use), returns 200 or 403.
+ * IMPORTANT: This endpoint is intentionally public but token is 64-char random hex
+ * (2× UUID = 128-bit entropy each → brute-force infeasible within 10-min window).
+ */
+async function handleSshMoviVerify(request, env) {
+  // 1. Check session cookie first (subsequent requests)
+  const cookieHeader = request.headers.get('cookie') || '';
+  const sessionMatch = cookieHeader.match(/ts_movi=([a-f0-9]{64})/);
+  if (sessionMatch) {
+    const sessionKey = `ssh_movi_session:${sessionMatch[1]}`;
+    const sessionData = await env.DASHBOARD_KV.get(sessionKey, 'json');
+    if (sessionData) {
+      // Refresh session TTL
+      await env.DASHBOARD_KV.put(sessionKey, JSON.stringify(sessionData), { expirationTtl: 3600 });
+      return new Response('OK', {
+        status: 200,
+        headers: {
+          'X-Session-Cookie': `ts_movi=${sessionMatch[1]}; Path=/; Max-Age=3600; HttpOnly; Secure; SameSite=None`,
+          'Cache-Control': 'no-store',
+        },
+      });
+    }
+  }
+
+  // 2. No valid session — check URL token (initial request)
+  const url   = new URL(request.url);
+  const token = (url.searchParams.get('t') || '').replace(/[^a-f0-9]/gi, '');
+  if (!token || token.length < 32) return new Response('Forbidden', { status: 403 });
+
+  const kvKey = `ssh_movi_token:${token}`;
+  const data  = await env.DASHBOARD_KV.get(kvKey, 'json');
+  if (!data) return new Response('Forbidden', { status: 403 });
+
+  // 3. Token valid — create a session
+  const sessionBytes = new Uint8Array(32);
+  crypto.getRandomValues(sessionBytes);
+  const sessionId = Array.from(sessionBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  await env.DASHBOARD_KV.put(`ssh_movi_session:${sessionId}`, JSON.stringify({ username: data.username }), { expirationTtl: 3600 });
+
+  await logActivity(env, {
+    action: 'ssh-movi-token-verified',
+    username: data.username,
+    ip: request.headers.get('cf-connecting-ip') || data.ip,
+    success: true,
+    detail: `SSH Movi session started`,
+  });
+
+  return new Response('OK', {
+    status: 200,
+    headers: {
+      'X-Session-Cookie': `ts_movi=${sessionId}; Path=/; Max-Age=3600; HttpOnly; Secure; SameSite=None`,
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   Termix Movi — Worker Reverse Proxy
+   Proxies termix-movi.home-server.id.vn qua Worker,
+   thêm CF Service Token headers để bypass CF Access.
+   Yêu cầu: dashboard session + quyền ssh-movi.
+   ═══════════════════════════════════════════════ */
+
+async function handleTermixMoviProxy(request, env) {
+  // Auth check
+  const session = await getSession(request, env);
+  if (!session) return new Response('Chưa đăng nhập — vui lòng đăng nhập lại', { status: 401 });
+  if (!(await hasPerm(env, session, 'ssh-movi')))
+    return new Response('Không có quyền truy cập Termix Movi', { status: 403 });
+
+  const termixOrigin = (env.TERMIX_MOVI_URL || 'https://termix-movi.home-server.id.vn').replace(/\/$/, '');
+  const clientId     = env.TERMIX_MOVI_CF_CLIENT_ID;
+  const clientSecret = env.TERMIX_MOVI_CF_CLIENT_SECRET;
+
+  // Build target URL (strip /proxy/termix-movi prefix)
+  const reqUrl  = new URL(request.url);
+  const subPath = reqUrl.pathname.replace('/proxy/termix-movi', '') || '/';
+  const target  = `${termixOrigin}${subPath}${reqUrl.search}`;
+
+  // Upstream auth headers
+  const upHeaders = new Headers();
+  // CF Service Token (nếu có — bypass CF Access)
+  if (clientId && clientSecret) {
+    upHeaders.set('CF-Access-Client-Id',     clientId);
+    upHeaders.set('CF-Access-Client-Secret', clientSecret);
+  }
+  // Shared secret header — nginx validates này để block direct browser access
+  const moviSecret = env.TERMIX_MOVI_SECRET;
+  if (moviSecret) upHeaders.set('X-Proxy-Token', moviSecret);
+
+  // Forward Termix session cookies, strip dashboard cookies
+  const rawCookie = request.headers.get('cookie') || '';
+  const fwdCookie = rawCookie.split(';')
+    .map(c => c.trim())
+    .filter(c => c && !c.startsWith('dh_session=') && !c.startsWith('ts_movi='))
+    .join('; ');
+  if (fwdCookie) upHeaders.set('Cookie', fwdCookie);
+  // Forward Authorization header — Termix API uses Bearer token auth for protected endpoints
+  const authHeader = request.headers.get('Authorization');
+  if (authHeader) upHeaders.set('Authorization', authHeader);
+
+  // ── WebSocket proxy ──
+  if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+    const wsTarget = target.replace(/^https/, 'wss').replace(/^http(?!s)/, 'ws');
+    upHeaders.set('Upgrade',               'websocket');
+    upHeaders.set('Connection',            'Upgrade');
+    upHeaders.set('Sec-WebSocket-Version', request.headers.get('Sec-WebSocket-Version') || '13');
+    // Set Origin to the Termix origin so Guacamole accepts the connection
+    upHeaders.set('Origin', termixOrigin);
+    // Forward subprotocol (required for Guacamole: 'guacamole')
+    const swp = request.headers.get('Sec-WebSocket-Protocol');
+    if (swp) upHeaders.set('Sec-WebSocket-Protocol', swp);
+
+    let upResp;
+    try {
+      upResp = await fetch(wsTarget, { headers: upHeaders });
+    } catch (wsErr) {
+      return new Response(
+        JSON.stringify({ error: 'WS fetch error', msg: wsErr.message, target: wsTarget }),
+        { status: 502, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    const upstream = upResp.webSocket;
+    if (!upstream) {
+      // Verbose error so user can diagnose in Network tab
+      const upStatus = upResp.status;
+      const upBody   = await upResp.text().catch(() => '(no body)');
+      return new Response(
+        JSON.stringify({ error: 'WS upstream did not upgrade', status: upStatus, body: upBody.slice(0, 800), target: wsTarget }),
+        { status: 502, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { 0: client, 1: server } = new WebSocketPair();
+    server.accept();
+    upstream.accept();
+
+    server.addEventListener('message',   ({ data }) => { try { upstream.send(data); } catch(_) {} });
+    upstream.addEventListener('message', ({ data }) => { try { server.send(data);   } catch(_) {} });
+    server.addEventListener('close',   ({ code, reason }) => { try { upstream.close(code, reason); } catch(_) {} });
+    upstream.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason);   } catch(_) {} });
+
+    // Pass Sec-WebSocket-Protocol back — Guacamole requires server to echo the subprotocol
+    const wsRespHeaders = new Headers();
+    const echoSwp = upResp.headers.get('Sec-WebSocket-Protocol');
+    if (echoSwp) wsRespHeaders.set('Sec-WebSocket-Protocol', echoSwp);
+    else if (swp) wsRespHeaders.set('Sec-WebSocket-Protocol', swp);
+
+    return new Response(null, { status: 101, webSocket: client, headers: wsRespHeaders });
+  }
+
+  // ── HTTP proxy ──
+  if (!['GET', 'HEAD'].includes(request.method)) {
+    const ct = request.headers.get('Content-Type');
+    if (ct) upHeaders.set('Content-Type', ct);
+  }
+  let upstream;
+  try {
+    upstream = await fetch(target, {
+      method:  request.method,
+      headers: upHeaders,
+      body:    ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
+    });
+  } catch (fetchErr) {
+    return new Response(
+      `<html><body style="font:14px system-ui;padding:2rem;background:#1a1a2e;color:#e0e0e0">
+        <h2 style="color:#ff6b6b">⚠ Termix Proxy — Fetch Error</h2>
+        <p><b>Target:</b> <code>${target}</code></p>
+        <p><b>Error:</b> <code>${fetchErr.message}</code></p>
+        <p style="color:#888">Kiểm tra: CF Access Bypass, nginx đang chạy, Termix port 8081</p>
+      </body></html>`,
+      { status: 502, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+    );
+  }
+
+  // Non-2xx: pass through 4xx as-is so Termix frontend can handle auth errors (401, 403, etc.)
+  // Only replace with visible error HTML for 5xx upstream failures
+  if (!upstream.ok) {
+    if (upstream.status < 500) {
+      const upCt4 = upstream.headers.get('Content-Type') || 'application/octet-stream';
+      const rh4   = new Headers({ 'Content-Type': upCt4, 'Cache-Control': 'no-cache' });
+      const setSC4 = typeof upstream.headers.getAll === 'function'
+        ? upstream.headers.getAll('set-cookie')
+        : (upstream.headers.get('set-cookie') ? [upstream.headers.get('set-cookie')] : []);
+      for (const sc of setSC4) rh4.append('Set-Cookie', _rewriteTermixCookie(sc));
+      return new Response(upstream.body, { status: upstream.status, headers: rh4 });
+    }
+    // 5xx: show visible error page for diagnosability
+    const errBody = await upstream.text().catch(() => '(no body)');
+    return new Response(
+      `<html><body style="font:14px system-ui;padding:2rem;background:#1a1a2e;color:#e0e0e0">
+        <h2 style="color:#ff6b6b">⚠ Termix Proxy — Upstream Error</h2>
+        <p><b>Target:</b> <code>${target}</code></p>
+        <p><b>Status:</b> <code>${upstream.status} ${upstream.statusText}</code></p>
+        <p><b>Content-Type:</b> <code>${upstream.headers.get('content-type') || 'none'}</code></p>
+        <pre style="background:#111;padding:1rem;border-radius:8px;overflow:auto;color:#ffa;font-size:12px">${errBody.slice(0,500)}</pre>
+        <p style="color:#888">Nếu 403: X-Proxy-Token không khớp với nginx. Nếu 502/504: Termix chưa chạy.</p>
+      </body></html>`,
+      { status: 502, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+    );
+  }
+
+  // Build response headers
+  const ct  = upstream.headers.get('Content-Type') || 'application/octet-stream';
+  const rh  = new Headers({ 'Content-Type': ct, 'Cache-Control': 'no-cache' });
+  const setSC = typeof upstream.headers.getAll === 'function'
+    ? upstream.headers.getAll('set-cookie')
+    : (upstream.headers.get('set-cookie') ? [upstream.headers.get('set-cookie')] : []);
+  for (const sc of setSC) rh.append('Set-Cookie', _rewriteTermixCookie(sc));
+
+  // HTML — inject JS to rewrite WebSocket/fetch/XHR URLs to proxy path
+  if (ct.includes('text/html')) {
+    let html = await upstream.text();
+    // Patcher must run BEFORE Termix's Vue bundle — inject at very start of <head>
+    // NOTE: NO new RegExp() here — use indexOf/slice only to avoid escaping issues
+    const patch = `<script>
+(function(){
+  var B='/proxy/termix-movi';
+  var O='termix-movi.home-server.id.vn';
+  console.log('[proxy-patcher] loaded B='+B);
+  function rw(u,isWS){
+    if(typeof u!=='string'||!u)return u;
+    // http(s)://termix-movi... -> /proxy/termix-movi/...  (HTTP only, not WS)
+    if(u.indexOf('http')===0&&u.indexOf(O)!==-1){
+      return u.replace('https://'+O,B).replace('http://'+O,B);
+    }
+    // WebSocket absolute URLs: DIRECT to termix-movi (bypass CF Worker — CF Worker cannot proxy WS to CF Tunnel)
+    if(u.indexOf('wss://')===0||u.indexOf('ws://')===0){
+      if(u.indexOf(O)!==-1)return u;
+      var si=u.indexOf('/',u.indexOf('//')+2);
+      var path=si===-1?'/':u.slice(si);
+      return 'wss://'+O+path;
+    }
+    // Root-relative path: WS → direct to termix-movi; HTTP → through proxy
+    if(u.charAt(0)==='/'&&u.slice(0,B.length)!==B&&u.slice(0,2)!=='//'){
+      if(isWS) return 'wss://'+O+u;
+      return B+u;
+    }
+    return u;
+  }
+  var _W=window.WebSocket;
+  window.WebSocket=function(u,p){
+    var r=rw(u,true);
+    // For SSH websocket: append JWT as ?token= so verifyClient can auth
+    if(r.indexOf('/ssh/websocket')!==-1){
+      var jm=document.cookie.match(/(?:^|;\s*)jwt=([^;]+)/);
+      var _tk=jm?jm[1]:(localStorage.getItem('token')||localStorage.getItem('jwt')||localStorage.getItem('authToken')||'');
+      if(_tk)r+=(r.indexOf('?')===-1?'?':'&')+'token='+_tk;
+      else console.warn('[proxy-patcher] SSH WS: no JWT found in cookie or localStorage');
+    }
+    if(r!==u)console.log('[proxy-patcher] WS',u,'->',r);
+    return p!=null?new _W(r,p):new _W(r);
+  };
+  window.WebSocket.prototype=_W.prototype;
+  for(var k in _W)try{window.WebSocket[k]=_W[k];}catch(e){}
+  var _f=window.fetch;
+  window.fetch=function(){
+    var a=[].slice.call(arguments);
+    if(typeof a[0]==='string'){var r=rw(a[0]);if(r!==a[0]){console.log('[proxy-patcher] fetch',a[0],'->',r);a[0]=r;}}
+    return _f.apply(this,a);
+  };
+  var _x=XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open=function(){
+    var a=[].slice.call(arguments);
+    if(typeof a[1]==='string'){var r=rw(a[1]);if(r!==a[1]){console.log('[proxy-patcher] XHR',a[1],'->',r);a[1]=r;}}
+    return _x.apply(this,a);
+  };
+  // Patch location.assign / location.replace (hard navigation)
+  try{
+    var _la=location.assign.bind(location);
+    location.assign=function(u){var r=rw(u);console.log('[proxy-patcher] assign',u,'->',r);return _la(r);};
+    var _lr=location.replace.bind(location);
+    location.replace=function(u){var r=rw(u);console.log('[proxy-patcher] replace',u,'->',r);return _lr(r);};
+  }catch(e){console.warn('[proxy-patcher] location patch failed',e);}
+  // Global error logger to catch post-login failures
+  window.addEventListener('unhandledrejection',function(e){
+    console.error('[proxy-patcher] unhandledRejection',e.reason);
+  });
+  console.log('[proxy-patcher] ready — WS+fetch+XHR+location patched');
+})();
+<\/script>`;
+    // Inject at very FIRST position inside <head> so it runs before any other script
+    if (/<head(\s[^>]*)?>/i.test(html)) {
+      html = html.replace(/<head(\s[^>]*)?>/i, function(m){ return m + patch; });
+    } else {
+      html = patch + html;
+    }
+    rh.set('Content-Type', 'text/html; charset=utf-8');
+    return new Response(html, { status: upstream.status, headers: rh });
+  }
+
+  return new Response(upstream.body, { status: upstream.status, headers: rh });
+}
+
+// Rewrite Set-Cookie from Termix backend: remove Domain, set Path to proxy prefix
+// Also remove HttpOnly so the JWT cookie is readable by JS patcher for direct WS auth
+function _rewriteTermixCookie(sc) {
+  sc = sc.replace(/;\s*Domain=[^;]*/gi, '');
+  sc = sc.replace(/;\s*HttpOnly/gi, '');  // allow JS to read jwt for WebSocket auth
+  if (/;\s*Path=\//i.test(sc)) {
+    sc = sc.replace(/;\s*Path=\//i, '; Path=/proxy/termix-movi/');
+  } else if (!/;\s*Path=/i.test(sc)) {
+    sc += '; Path=/proxy/termix-movi/';
+  }
+  return sc;
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const p   = url.pathname;
     // Global safety net: API paths always return JSON errors, never HTML
     const isApi = p.startsWith('/api/');
     try {
 
+    // ── SSH Movi verify — fully public, must be FIRST before any session middleware ──
+    if (p === '/api/ssh-movi/verify') return handleSshMoviVerify(request, env);
+
     // ── Auth API (public) ──
-    if (p === '/api/auth/login')      return handleLogin(request, env);
-    if (p === '/api/auth/logout')     return handleLogout(request, env);
-    if (p === '/api/auth/refresh')    return handleSessionRefresh(request, env);
-    if (p === '/api/auth/mfa/verify') return handleMfaVerify(request, env);
+    if (p === '/api/auth/login')                   return handleLogin(request, env);
+    if (p === '/api/auth/logout')                  return handleLogout(request, env);
+    if (p === '/api/auth/refresh')                 return handleSessionRefresh(request, env);
+    if (p === '/api/auth/mfa/verify')              return handleMfaVerify(request, env);
+
+    // ── First-login setup flow (no session required — use setupToken) ──
+    if (p === '/api/auth/setup/change-password')   return handleSetupChangePassword(request, env);
+    if (p === '/api/auth/setup/mfa-init')          return handleSetupMfaInit(request, env);
+    if (p === '/api/auth/setup/mfa-complete')      return handleSetupMfaComplete(request, env);
 
     // ── MFA API (require session) ──
     if (p === '/api/auth/mfa/status') return handleMfaStatus(request, env);
@@ -3828,6 +4845,8 @@ export default {
     }
     const userPerm = p.match(/^\/api\/admin\/users\/([^/]+)\/permissions$/);
     if (userPerm) return handleUpdatePermissions(request, env, decodeURIComponent(userPerm[1]));
+    const userManagePerms = p.match(/^\/api\/admin\/users\/([^/]+)\/manage-perms$/);
+    if (userManagePerms) return handleSetManagePerms(request, env, decodeURIComponent(userManagePerms[1]));
     const userGrp = p.match(/^\/api\/admin\/users\/([^/]+)\/groups$/);
     if (userGrp) return handleUpdateUserGroups(request, env, decodeURIComponent(userGrp[1]));
     const userPnl = p.match(/^\/api\/admin\/users\/([^/]+)\/panels$/);
@@ -3847,6 +4866,18 @@ export default {
     if (grpMatch) {
       if (request.method === 'PUT')    return handleUpdateGroup(request, env, grpMatch[1]);
       if (request.method === 'DELETE') return handleDeleteGroup(request, env, grpMatch[1]);
+    }
+
+    // ── User Groups API ──
+    if (p === '/api/admin/user-groups') {
+      if (request.method === 'GET')  return handleListUserGroups(request, env);
+      if (request.method === 'POST') return handleCreateUserGroup(request, env);
+    }
+    const ugMatch = p.match(/^\/api\/admin\/user-groups\/([^/]+)$/);
+    if (ugMatch) {
+      const ugid = decodeURIComponent(ugMatch[1]);
+      if (request.method === 'PUT')    return handleUpdateUserGroup(request, env, ugid);
+      if (request.method === 'DELETE') return handleDeleteUserGroup(request, env, ugid);
     }
 
     // ── Camera list API ──
@@ -3894,6 +4925,11 @@ export default {
     if (p === '/api/movi-sdwan-rules')          return handleMoviSdwanRules(request, env);
     if (p === '/api/camera-token')               return handleCameraToken(request, env);
     if (p.startsWith('/cam-embed/'))             return handleCamEmbed(request, env);
+    // ── Termix Movi proxy ──
+    if (p.startsWith('/proxy/termix-movi'))      return handleTermixMoviProxy(request, env);
+    // ── SSH Movi (legacy token endpoints — kept for compatibility) ──
+    if (p === '/api/ssh-movi/token')  return handleSshMoviToken(request, env);
+    if (p === '/api/ssh-movi/verify') return handleSshMoviVerify(request, env);
     if (p === '/api/movi-interfaces')            return handleMoviInterfaces(request, env);
     if (p === '/api/movi-system')               return handleMoviSystem(request, env);
     if (p === '/api/movi-license')              return handleMoviLicense(request, env);
@@ -3935,8 +4971,44 @@ export default {
     if (p === '/api/tool-movi/create-user') {
       const _s = await getSession(request, env);
       if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'tool-movi'))) return json({ error: 'Không có quyền truy cập Tool Movi' }, 403);
-      return handleToolMoviCreateUser(request, env, _s);
+      if (!(await hasPerm(env, _s, 'tool-movi-create-user'))) return json({ error: 'Không có quyền sử dụng Tạo User Movi' }, 403);
+      return handleToolMoviCreateUser(request, env, _s, ctx);
+    }
+    if (p === '/api/tool-movi/block-user') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'tool-movi-block-user'))) return json({ error: 'Không có quyền sử dụng Block User Movi' }, 403);
+      return handleToolMoviBlockUser(request, env, _s);
+    }
+    if (p === '/api/tool-movi/asset-search') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'tool-movi-asset-search'))) return json({ error: 'Không có quyền sử dụng Tra Cứu Tài Sản' }, 403);
+      return handleToolMoviAssetSearch(request, env, _s);
+    }
+    if (p === '/api/tool-movi/delete-user') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'tool-movi-delete-user'))) return json({ error: 'Không có quyền sử dụng Xóa User Movi' }, 403);
+      return handleToolMoviDeleteUserList(request, env, _s);
+    }
+    if (p === '/api/tool-movi/delete-user-action') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'tool-movi-delete-user'))) return json({ error: 'Không có quyền sử dụng Xóa User Movi' }, 403);
+      return handleToolMoviDeleteUserAction(request, env, _s);
+    }
+    if (p === '/api/tool-movi/history') {
+      if (request.method === 'GET')    return handleGetToolMoviHistory(request, env);
+      if (request.method === 'POST')   return handleSaveToolMoviHistory(request, env);
+      if (request.method === 'DELETE') return handleClearToolMoviHistory(request, env);
+    }
+    if (p.startsWith('/api/tool-movi/job/')) {
+      return handleToolMoviJobStatus(request, env);
+    }
+    if (p.startsWith('/api/tool-movi/callback/')) {
+      const cbJobId = p.replace('/api/tool-movi/callback/', '');
+      return handleToolMoviCallback(request, env, cbJobId);
     }
     if (p === '/api/vmware01-movi') {
       const _s = await getSession(request, env);
