@@ -383,7 +383,9 @@ async function handleCreateUser(request, env) {
     if (!isAdmin) await logActivity(env, { action: 'delegate-create-user', username: session.username, success: true, detail: `Created user: ${username}` });
     return json({ success: true, username });
   } catch (e) {
-    return json({ error: 'Lỗi tạo user: ' + e.message }, 500);
+    // Don't leak internal error details (stack traces, file paths, etc.)
+    console.error('handleCreateUser error:', e);
+    return json({ error: 'Lỗi tạo user. Vui lòng thử lại.' }, 500);
   }
 }
 
@@ -619,6 +621,14 @@ function sanitizeName(s, maxLen = 64) {
   if (typeof s !== 'string') return '';
   // strip HTML tags / control chars
   return s.replace(/<[^>]*>/g, '').replace(/[^\x20-\x7EÀ-ɏ]/g, '').trim().slice(0, maxLen);
+}
+/** Store value as-is if its JSON is within maxBytes; otherwise store truncated string representation. */
+function _truncateJson(v, maxBytes) {
+  try {
+    const s = JSON.stringify(v);
+    if (s.length <= maxBytes) return v;
+    return { _truncated: true, preview: s.slice(0, maxBytes) };
+  } catch (_) { return null; }
 }
 
 async function handleListGroups(request, env) {
@@ -1945,33 +1955,11 @@ async function handleToolMoviCreateUser(request, env, session, ctx) {
   }
 }
 
-async function handleToolMoviCallback(request, env, jobId) {
-  // Called by n8n at end of workflow with the result JSON
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const job = await env.DASHBOARD_KV.get(`tool_job:${jobId}`, 'json');
-  if (!job) return json({ error: 'Job not found' }, 404);
-  let result;
-  try { result = await request.json(); } catch { result = { raw: await request.text().catch(() => '') }; }
-  await env.DASHBOARD_KV.put(`tool_job:${jobId}`, JSON.stringify({
-    ...job, status: 'done', result, completedAt: Date.now()
-  }), { expirationTtl: 7200 });
-  return json({ received: true });
-}
-
-async function handleToolMoviJobStatus(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  const url = new URL(request.url);
-  const jobId = url.pathname.split('/').pop();
-  const job = await env.DASHBOARD_KV.get(`tool_job:${jobId}`, 'json');
-  if (!job) return json({ error: 'Job not found' }, 404);
-  return json(job);
-}
 
 /* ── Tool Movi: Block User ── */
 async function handleToolMoviBlockUser(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = 'https://n8n.movi-finance.com/webhook/2d880497-0b92-41c7-bbd0-17718032565c';
+  const webhookUrl = env.MOVI_WH_BLOCK_USER;
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const email     = (body.email || '').trim();
   const startDate = (body.startDate || '').trim();
@@ -2017,7 +2005,7 @@ async function handleToolMoviBlockUser(request, env, session) {
 /* ── Tool Movi: Asset Search ── */
 async function handleToolMoviAssetSearch(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = 'https://n8n.movi-finance.com/webhook/67f41799-3dd2-4624-8e61-c2b311c99b66';
+  const webhookUrl = env.MOVI_WH_ASSET_SEARCH;
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const params = {
     email:     (body.email     || '').trim(),
@@ -2052,7 +2040,7 @@ async function handleToolMoviAssetSearch(request, env, session) {
 /* ── Tool Movi: Delete User List ── */
 async function handleToolMoviDeleteUserList(request, env, session) {
   if (request.method !== 'GET') return json({ error: 'GET required' }, 405);
-  const webhookUrl = 'https://n8n.movi-finance.com/webhook/a29d95c1-685c-43db-8ef0-04fac654653f';
+  const webhookUrl = env.MOVI_WH_DELETE_USER_LIST;
   try {
     const resp = await fetch(webhookUrl, {
       method: 'GET',
@@ -2074,7 +2062,7 @@ async function handleToolMoviDeleteUserList(request, env, session) {
 /* ── Tool Movi: Delete User Action ── */
 async function handleToolMoviDeleteUserAction(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = 'https://n8n.movi-finance.com/webhook/817adff6-06e0-45d5-be46-897a4f688b0f';
+  const webhookUrl = env.MOVI_WH_DELETE_USER;
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const email = (body.email || '').trim();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Email không hợp lệ' }, 400);
@@ -2114,8 +2102,7 @@ async function handleGetToolMoviHistory(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasAnyToolMoviPerm(env, session))) return json({ error: 'Không có quyền truy cập Tool Movi' }, 403);
   const history = await env.DASHBOARD_KV.get('tool_movi_history', 'json') || [];
-  const eff = session.role !== 'admin' ? await computeEffectivePermissions(env, session.username) : null;
-  const isAdmin = session.role === 'admin' || (eff && eff.role === 'admin');
+  const isAdmin = await isAdminUser(env, session);
   const visible = isAdmin ? history : history.filter(h => h.createdBy === session.username);
   return json({ history: visible, total: visible.length, isAdmin });
 }
@@ -2135,9 +2122,9 @@ async function handleSaveToolMoviHistory(request, env) {
     displayName: String(body.displayName || '').slice(0, 200),
     createdBy:   session.username,
     status:      ['done', 'error'].includes(body.status) ? body.status : 'error',
-    result:      body.result || null,
-    error:       body.error ? String(body.error).slice(0, 500) : null,
-    input:       body.input || null,
+    result:      body.result ? _truncateJson(body.result, 8000)  : null,
+    error:       body.error  ? String(body.error).slice(0, 500)   : null,
+    input:       body.input  ? _truncateJson(body.input, 4000)   : null,
     savedAt:     Date.now(),
   };
   history.unshift(entry);
@@ -2307,7 +2294,10 @@ async function handleSaveBookmarks(request, env) {
   const raw = body.bookmarks;
   // Accept both v2 object { v:2, folders:[...] } and legacy array
   if (!raw) return json({ error: 'Missing bookmarks field' }, 400);
-  await env.DASHBOARD_KV.put(`bookmarks:${session.username}`, JSON.stringify(raw));
+  // Size guard: max 100 KB to prevent KV abuse
+  const serialized = JSON.stringify(raw);
+  if (serialized.length > 100_000) return json({ error: 'Bookmarks quá lớn (giới hạn 100 KB)' }, 413);
+  await env.DASHBOARD_KV.put(`bookmarks:${session.username}`, serialized);
   const count = Array.isArray(raw) ? raw.length
     : (raw.folders ? raw.folders.reduce((s,f) => s + (f.items||[]).length, 0) : 0);
   return json({ success: true, count });
@@ -2335,7 +2325,7 @@ async function handleMerakiDevices(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/c65756f7-f228-4668-8d47-79efd543f234';
+  const N8N_URL  = env.MOVI_WH_MERAKI_DEVICES;
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -2380,7 +2370,7 @@ async function handleMerakiClients(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/8e83df3c-d3ad-48ae-ae1c-11fd5733d147';
+  const N8N_URL  = env.MOVI_WH_MERAKI_CLIENTS;
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -2431,7 +2421,7 @@ async function handleMerakiClientPolicy(request, env) {
     return json({ error: "policy phải là 'Blocked' hoặc 'Normal'" }, 400);
   }
 
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/meraki-client-policy';
+  const N8N_URL  = env.MOVI_WH_MERAKI_CLIENT_POLICY;
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -2492,7 +2482,7 @@ async function handleMerakiDeviceStatus(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/105904c4-2578-4bd7-98c9-bc226bf8f655';
+  const N8N_URL  = env.MOVI_WH_MERAKI_DEV_STATUS;
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -2529,7 +2519,7 @@ async function handleMerakiSwitchPorts(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/35e2fe08-836e-49de-b029-3d6f4f59ff78';
+  const N8N_URL  = env.MOVI_WH_MERAKI_SW_PORTS;
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(50000) });
@@ -2551,7 +2541,7 @@ async function handleMerakiSwitchPortConfigs(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/aa72618f-47a8-44cb-a58b-d77be06ee3d7';
+  const N8N_URL  = env.MOVI_WH_MERAKI_PORT_CFG;
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(50000) });
@@ -2569,7 +2559,7 @@ async function handleMerakiLinkAggregations(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/b1405e23-8260-433b-b295-8218fc22c024';
+  const N8N_URL  = env.MOVI_WH_MERAKI_LINK_AGG;
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -2597,7 +2587,7 @@ async function handleMerakiUplinks(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/3f478f32-1d89-4724-a052-e43da70ed922';
+  const N8N_URL  = env.MOVI_WH_MERAKI_UPLINKS;
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -2623,7 +2613,7 @@ async function handleMerakiL3Routing(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/03771442-1f75-4c8a-9c94-8c601796f79b';
+  const N8N_URL  = env.MOVI_WH_MERAKI_L3;
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -2651,7 +2641,7 @@ async function handleMerakiEvents(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/3019c3e2-5725-40b5-95e4-f4a8d5a3d326';
+  const N8N_URL  = env.MOVI_WH_MERAKI_EVENTS;
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -2671,7 +2661,7 @@ async function handleMoviSdwanRules(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/79b39d3c-debd-4e25-ad1f-21aa7d9b3908';
+  const N8N_URL  = env.MOVI_WH_FG_SDWAN_RULES;
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
@@ -2694,7 +2684,7 @@ async function handleMoviSdwan(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/635ec656-db89-48b5-9d57-66d8b154958b';
+  const N8N_URL  = env.MOVI_WH_FG_SDWAN_MEMBERS;
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
@@ -2857,7 +2847,7 @@ async function handleMoviInterfaces(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/ccd8b0a9-730e-4767-aa29-6f99ba8d9a4b';
+  const N8N_URL  = env.MOVI_WH_FG_INTERFACES;
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -2882,7 +2872,7 @@ async function handleMoviPolicy(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/fed29e7e-aa06-483c-9709-1e7bcaf79c3b';
+  const N8N_URL  = env.MOVI_WH_FG_POLICY;
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
@@ -2898,7 +2888,7 @@ async function handleMoviDhcp(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/ea8d7f9b-903b-4855-abdf-b73aa02ba1e8';
+  const N8N_URL  = env.MOVI_WH_FG_ROUTING;
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
@@ -2914,7 +2904,7 @@ async function handleMoviSslVpn(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/30b5ff6d-0065-4150-8c7f-0d25f2b6bc76';
+  const N8N_URL  = env.MOVI_WH_FG_SSL_VPN;
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -2939,7 +2929,7 @@ async function handleMoviVpn(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/2d3b9660-b99a-4bd3-92ba-165efb23c741';
+  const N8N_URL  = env.MOVI_WH_FG_VPN;
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -2966,7 +2956,7 @@ async function handleMoviLicense(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/8bd446f5-d1d4-4de6-a679-a26fcb0f5f60';
+  const N8N_URL  = env.MOVI_WH_FG_LICENSE;
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -2991,7 +2981,7 @@ async function handleMoviSystem(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = 'https://n8n.movi-finance.com/webhook/52d4503a-66ec-49cc-b4c2-f4605349b17b';
+  const N8N_URL  = env.MOVI_WH_FG_SYSTEM;
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -3121,7 +3111,10 @@ async function handleSaveShortcuts(request, env) {
   if (request.method !== 'PUT') return json({ error: 'PUT required' }, 405);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const list = (Array.isArray(body.shortcuts) ? body.shortcuts : []).slice(0, 24);
-  await env.DASHBOARD_KV.put(`shortcuts:${session.username}`, JSON.stringify(list));
+  // Size guard: max 32 KB
+  const serialized = JSON.stringify(list);
+  if (serialized.length > 32_000) return json({ error: 'Shortcuts quá lớn (giới hạn 32 KB)' }, 413);
+  await env.DASHBOARD_KV.put(`shortcuts:${session.username}`, serialized);
   return json({ success: true, count: list.length });
 }
 
@@ -4927,9 +4920,9 @@ export default {
     if (p.startsWith('/cam-embed/'))             return handleCamEmbed(request, env);
     // ── Termix Movi proxy ──
     if (p.startsWith('/proxy/termix-movi'))      return handleTermixMoviProxy(request, env);
-    // ── SSH Movi (legacy token endpoints — kept for compatibility) ──
+    // ── SSH Movi token endpoint ──
     if (p === '/api/ssh-movi/token')  return handleSshMoviToken(request, env);
-    if (p === '/api/ssh-movi/verify') return handleSshMoviVerify(request, env);
+    // Note: /api/ssh-movi/verify is handled at the top of the router (before session middleware)
     if (p === '/api/movi-interfaces')            return handleMoviInterfaces(request, env);
     if (p === '/api/movi-system')               return handleMoviSystem(request, env);
     if (p === '/api/movi-license')              return handleMoviLicense(request, env);
@@ -5003,13 +4996,7 @@ export default {
       if (request.method === 'POST')   return handleSaveToolMoviHistory(request, env);
       if (request.method === 'DELETE') return handleClearToolMoviHistory(request, env);
     }
-    if (p.startsWith('/api/tool-movi/job/')) {
-      return handleToolMoviJobStatus(request, env);
-    }
-    if (p.startsWith('/api/tool-movi/callback/')) {
-      const cbJobId = p.replace('/api/tool-movi/callback/', '');
-      return handleToolMoviCallback(request, env, cbJobId);
-    }
+
     if (p === '/api/vmware01-movi') {
       const _s = await getSession(request, env);
       if (!_s) return json({ error: 'Unauthorized' }, 401);
@@ -5026,7 +5013,7 @@ export default {
       if (request.method !== 'OPTIONS') {
         const _s = await getSession(request, env);
         if (!_s) return json({ error: 'Unauthorized' }, 401);
-        if (_s.role !== 'admin') return json({ error: 'Admin required' }, 403);
+        if (!(await isAdminUser(env, _s))) return json({ error: 'Admin required' }, 403);
       }
       return handleMoviESXiPower(request, env, '1');
     }
@@ -5034,7 +5021,7 @@ export default {
       if (request.method !== 'OPTIONS') {
         const _s = await getSession(request, env);
         if (!_s) return json({ error: 'Unauthorized' }, 401);
-        if (_s.role !== 'admin') return json({ error: 'Admin required' }, 403);
+        if (!(await isAdminUser(env, _s))) return json({ error: 'Admin required' }, 403);
       }
       return handleMoviESXiPower(request, env, '2');
     }
@@ -5054,7 +5041,7 @@ export default {
       if (request.method !== 'OPTIONS') {
         const _s = await getSession(request, env);
         if (!_s) return json({ error: 'Unauthorized' }, 401);
-        if (_s.role !== 'admin') return json({ error: 'Admin required' }, 403);
+        if (!(await isAdminUser(env, _s))) return json({ error: 'Admin required' }, 403);
       }
       return handleESXiPower(request, env);
     }
@@ -5069,7 +5056,7 @@ export default {
       if (!_s) return json({ error: 'Unauthorized' }, 401);
       if (!(await hasPerm(env, _s, 'fortigate'))) return json({ error: 'Không có quyền truy cập FortiGate' }, 403);
       // debug mode chỉ dành cho admin
-      const _dbg = url.searchParams.has('debug') && _s.role === 'admin';
+      const _dbg = url.searchParams.has('debug') && (await isAdminUser(env, _s));
       return handleFortigate(env, _dbg);
     }
     if (p === '/api/asus') {
@@ -5081,7 +5068,7 @@ export default {
     if (p === '/api/asus/reboot') {
       const _s = await getSession(request, env);
       if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (_s.role !== 'admin') return json({ error: 'Admin required' }, 403);
+      if (!(await isAdminUser(env, _s))) return json({ error: 'Admin required' }, 403);
       return handleAsusReboot(request, env);
     }
     if (p === '/proxy')           return handleProxy(request, env);
