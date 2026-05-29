@@ -1423,8 +1423,15 @@ async function doSubmit() {
     clearInterval(_pollUiTimer); _pollUiTimer = null;
 
     if (!res.ok || data.error) {
+      var errMsg = data.error || 'HTTP ' + res.status + (data.detail ? ' — ' + data.detail : '');
       showStep(2);
-      showReviewError(data.error || 'HTTP ' + res.status + (data.detail ? ' — ' + data.detail : ''));
+      showReviewError(errMsg);
+      _saveHistory({
+        tool: 'create-user', toolLabel: 'Tạo User Movi',
+        status: 'error', error: errMsg,
+        email: _payload.email,
+        input: Object.assign({}, _payload),
+      });
     } else {
       _renderResultUI({status:'done', result:data.result, email:_payload.email});
       _saveHistory({
@@ -1438,6 +1445,12 @@ async function doSubmit() {
     clearInterval(_pollUiTimer); _pollUiTimer = null;
     showStep(2);
     showReviewError('Lỗi kết nối: ' + err.message);
+    _saveHistory({
+      tool: 'create-user', toolLabel: 'Tạo User Movi',
+      status: 'error', error: 'Lỗi kết nối: ' + err.message,
+      email: (_payload && _payload.email) || '',
+      input: _payload ? Object.assign({}, _payload) : null,
+    });
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Xác Nhận Tạo';
@@ -1663,15 +1676,22 @@ async function bu_doSubmit() {
     clearInterval(_bu_pollTimer); _bu_pollTimer = null;
 
     if (!res.ok || data.error) {
+      var buErrMsg = data.error || 'HTTP ' + res.status;
       bu_showStep(2);
       var oldErr = document.getElementById('bu-step-review').querySelector('.result-banner.show');
       if (oldErr) oldErr.remove();
       var errEl = document.createElement('div');
       errEl.className = 'result-banner result-error show';
       errEl.style.marginBottom = '1rem';
-      errEl.innerHTML = '<span>&#9888;</span><div><div style="font-weight:600;margin-bottom:2px">Có lỗi xảy ra</div><div style="font-size:12px;opacity:.85">' + esc(data.error || 'HTTP ' + res.status) + '</div></div>';
+      errEl.innerHTML = '<span>&#9888;</span><div><div style="font-weight:600;margin-bottom:2px">Có lỗi xảy ra</div><div style="font-size:12px;opacity:.85">' + esc(buErrMsg) + '</div></div>';
       var rc = document.getElementById('bu-review-content');
       if (rc) rc.parentNode.insertBefore(errEl, rc);
+      _saveHistory({
+        tool: 'block-user', toolLabel: 'Block User Movi',
+        status: 'error', error: buErrMsg,
+        email: _bu_payload.email,
+        input: Object.assign({}, _bu_payload),
+      });
     } else {
       _bu_renderResult({ status: 'done', result: data.result });
       _saveHistory({
@@ -1692,6 +1712,12 @@ async function bu_doSubmit() {
     errEl2.innerHTML = '<span>&#9888;</span><div><div style="font-weight:600;margin-bottom:2px">Lỗi kết nối</div><div style="font-size:12px;opacity:.85">' + esc(err.message) + '</div></div>';
     var rc2 = document.getElementById('bu-review-content');
     if (rc2) rc2.parentNode.insertBefore(errEl2, rc2);
+    _saveHistory({
+      tool: 'block-user', toolLabel: 'Block User Movi',
+      status: 'error', error: 'Lỗi kết nối: ' + err.message,
+      email: (_bu_payload && _bu_payload.email) || '',
+      input: _bu_payload ? Object.assign({}, _bu_payload) : null,
+    });
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Xác Nhận Block';
@@ -2211,6 +2237,7 @@ async function du_doDelete() {
     if (!res.ok || data.error) {
       // Timeout đặc biệt
       var isTimeout = data.error === 'TIMEOUT';
+      var duErrMsg = isTimeout ? 'Timeout (quá 20 giây)' : (data.error || 'HTTP ' + res.status);
       el.innerHTML =
         '<div class="res-header">'
         + '<div class="res-icon">' + (isTimeout ? '⏱️' : '❌') + '</div>'
@@ -2239,6 +2266,12 @@ async function du_doDelete() {
         var rc = document.getElementById('du-del-review-content');
         if (rc) rc.parentNode.insertBefore(errEl, rc);
       }
+      _saveHistory({
+        tool: 'delete-user', toolLabel: 'Xóa User Movi',
+        status: 'error', error: duErrMsg,
+        email: _du_delEmail,
+        input: { email: _du_delEmail },
+      });
     } else {
       var raw = data.result;
       var d   = Array.isArray(raw) ? (raw[0]||{}) : (raw||{});
@@ -2260,6 +2293,12 @@ async function du_doDelete() {
         + '<span style="font-size:12px;color:var(--text-2);line-height:1.5">Tài khoản có thể restore trong vòng <strong>30 ngày</strong> bằng cách liên hệ Admin.</span>'
         + '</div>'
         + '</div>';
+      _saveHistory({
+        tool: 'delete-user', toolLabel: 'Xóa User Movi',
+        status: 'done', result: data.result,
+        email: _du_delEmail,
+        input: { email: _du_delEmail },
+      });
     }
   } catch(err) {
     clearInterval(_du_delTimer); _du_delTimer = null;
@@ -2267,6 +2306,12 @@ async function du_doDelete() {
       '<div class="res-header"><div class="res-icon">&#10060;</div>'
       + '<div class="res-title" style="color:var(--bad)">Lỗi kết nối</div>'
       + '<div class="res-sub">' + esc(err.message) + '</div></div>';
+    _saveHistory({
+      tool: 'delete-user', toolLabel: 'Xóa User Movi',
+      status: 'error', error: 'Lỗi kết nối: ' + err.message,
+      email: _du_delEmail || '',
+      input: { email: _du_delEmail || '' },
+    });
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg> Xác Nhận Xóa';

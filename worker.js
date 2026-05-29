@@ -1038,12 +1038,23 @@ async function handleMfaEnable(request, env) {
   if (!session) return json({ error: 'Not authenticated' }, 401);
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  const { secret, code } = body || {};
+  const { secret, code, currentCode } = body || {};
   if (!secret || !code) return json({ error: 'Thiếu secret hoặc code' }, 400);
-  if (!(await verifyTotp(secret, code)))
-    return json({ error: 'Mã OTP không đúng. Kiểm tra đồng hồ thiết bị.' }, 400);
+
   const user = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
   if (!user) return json({ error: 'User not found' }, 404);
+
+  // [H1] Security: if MFA already active, require current OTP before allowing
+  // secret rotation. Prevents session-hijack → permanent MFA takeover.
+  if (user.mfaEnabled && user.mfaSecret) {
+    if (!currentCode) return json({ error: 'Cần xác minh mã MFA hiện tại trước khi thay đổi.' }, 400);
+    if (!(await verifyTotp(user.mfaSecret, currentCode)))
+      return json({ error: 'Mã MFA hiện tại không đúng. Vui lòng thử lại.' }, 400);
+  }
+
+  if (!(await verifyTotp(secret, code)))
+    return json({ error: 'Mã OTP mới không đúng. Kiểm tra đồng hồ thiết bị.' }, 400);
+
   user.mfaEnabled = true;
   user.mfaSecret  = secret;
   await env.DASHBOARD_KV.put(`user:${session.username}`, JSON.stringify(user));
@@ -1181,19 +1192,36 @@ async function handleSetupMfaComplete(request, env) {
   const { setupToken, code } = body || {};
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
   if (!setupToken || !code) return json({ error: 'Thiếu thông tin' }, 400);
+
+  // [H2] Rate limit: 6 wrong OTP attempts per setupToken → burn token immediately.
+  // setupToken TTL is 600s, so rate-limit key shares that same window.
+  const rlKey = `setup_mfa_rl:${setupToken}`;
+  if ((await rlGet(env, rlKey)) >= 6) {
+    await env.DASHBOARD_KV.delete(`setup_temp:${setupToken}`).catch(() => {});
+    await env.DASHBOARD_KV.delete(`setup_mfa_secret:${setupToken}`).catch(() => {});
+    await logActivity(env, { action: 'setup_mfa_blocked', ip, success: false, detail: 'Too many OTP attempts' });
+    return json({ error: 'Sai mã quá nhiều lần. Vui lòng đăng nhập lại từ đầu.' }, 429);
+  }
+
   const temp = await _getSetupTemp(env, setupToken);
   if (!temp) return json({ error: 'Phiên thiết lập đã hết hạn. Vui lòng đăng nhập lại.' }, 401);
   const secret = await env.DASHBOARD_KV.get(`setup_mfa_secret:${setupToken}`);
   if (!secret) return json({ error: 'Chưa khởi tạo MFA hoặc phiên đã hết hạn. Vui lòng thử lại.' }, 400);
-  if (!(await verifyTotp(secret, code))) return json({ error: 'Mã OTP không đúng. Kiểm tra đồng hồ thiết bị.' }, 400);
+
+  if (!(await verifyTotp(secret, code))) {
+    await rlBump(env, rlKey, 600);
+    return json({ error: 'Mã OTP không đúng. Kiểm tra đồng hồ thiết bị.' }, 400);
+  }
+
   const user = await env.DASHBOARD_KV.get(`user:${temp.username}`, 'json');
   if (!user) return json({ error: 'User not found' }, 404);
-  user.mfaEnabled  = true;
-  user.mfaSecret   = secret;
+  user.mfaEnabled   = true;
+  user.mfaSecret    = secret;
   user.mustSetupMfa = false;
   await env.DASHBOARD_KV.put(`user:${temp.username}`, JSON.stringify(user));
   await env.DASHBOARD_KV.delete(`setup_temp:${setupToken}`).catch(() => {});
   await env.DASHBOARD_KV.delete(`setup_mfa_secret:${setupToken}`).catch(() => {});
+  await env.DASHBOARD_KV.delete(rlKey).catch(() => {});  // clean up on success
   await logActivity(env, { action: 'setup_mfa_complete', username: temp.username, ip, success: true });
   return await _createSessionAfterSetup(temp.username, user, env);
 }
@@ -1496,7 +1524,14 @@ async function injectUser(request, env) {
       const bannerHtml = `<div style="margin-bottom:1.25rem;padding:10px 14px;border-radius:10px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);font-size:13px;color:#93c5fd;text-align:center;line-height:1.5">${safe}</div>`;
       loginHtml = loginHtml.replace('<div class="card">', '<div class="card">'+bannerHtml);
     }
-    return new Response(loginHtml, { headers: { 'content-type':'text/html;charset=utf-8','cache-control':'no-store' } });
+    return new Response(loginHtml, { headers: {
+      'content-type': 'text/html;charset=utf-8',
+      'cache-control': 'no-store',
+      'x-frame-options': 'DENY',
+      'x-content-type-options': 'nosniff',
+      'referrer-policy': 'strict-origin-when-cross-origin',
+      'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; frame-ancestors 'none'",
+    } });
   }
 
   // All other HTML: require auth
@@ -1584,6 +1619,10 @@ a:hover{background:#4f46e5}</style></head>
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
+      // [M1] HSTS: force HTTPS for 1 year, including subdomains
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+      // [M2] Permissions-Policy: deny browser features not used by this app
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()',
       // App is heavily inline-scripted; 'unsafe-inline' is required to avoid
       // breakage, but external script/object/frame sources are locked down.
       'Content-Security-Policy':
@@ -1592,8 +1631,9 @@ a:hover{background:#4f46e5}</style></head>
         // Google Fonts stylesheet
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
         "img-src 'self' data: https:; " +
-        // Allow same-origin + HTTPS APIs + WebSocket for camera streaming
-        "connect-src 'self' https: wss:; " +
+        // [M4] Whitelist only known domains instead of broad 'https: wss:'
+        // Covers: all homelab subdomains + movi-finance API/WebSocket
+        "connect-src 'self' https://*.home-server.id.vn wss://*.home-server.id.vn https://*.movi-finance.com wss://*.movi-finance.com https://speed.cloudflare.com; " +
         // Google Fonts files + data URIs
         "font-src 'self' data: https://fonts.gstatic.com; " +
         // Allow camera (go2rtc) and SSH terminal (termix) iframes
@@ -2130,7 +2170,7 @@ async function handleSaveToolMoviHistory(request, env) {
   history.unshift(entry);
   if (history.length > 1000) history.length = 1000;
   await env.DASHBOARD_KV.put('tool_movi_history', JSON.stringify(history));
-  return json({ success: true, id: entry.id });
+  return json({ success: true, id: entry.id, total: history.length });
 }
 
 async function handleClearToolMoviHistory(request, env) {
@@ -2702,6 +2742,32 @@ async function handleMoviSdwan(request, env) {
   }
 }
 
+/* ── Camera Movi — Aliases (admin rename) ── */
+async function handleGetCameraAliases(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (!(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  const aliases = await env.DASHBOARD_KV.get('camera_aliases_movi', 'json') || {};
+  return json({ aliases });
+}
+async function handleSaveCameraAlias(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (!(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  const body = await request.json().catch(() => ({}));
+  const { camId, name } = body;
+  if (!camId) return json({ error: 'camId required' }, 400);
+  const aliases = await env.DASHBOARD_KV.get('camera_aliases_movi', 'json') || {};
+  const trimmed = (name || '').trim();
+  if (trimmed) aliases[camId] = trimmed;
+  else delete aliases[camId];
+  await env.DASHBOARD_KV.put('camera_aliases_movi', JSON.stringify(aliases));
+  await logActivity(env, { action: 'camera_alias_save', user: session.username,
+    detail: `cam=${camId} → ${trimmed || '(reset)'}`,
+    ip: request.headers.get('cf-connecting-ip') || '', success: true });
+  return json({ ok: true, aliases });
+}
+
 /* ── Camera Movi — Token ── */
 async function handleCameraToken(request, env) {
   const session = await getSession(request, env);
@@ -2714,8 +2780,13 @@ async function handleCameraToken(request, env) {
   if (!camList || !camList.length) camList = DEFAULT_CAMERAS_MOVI;
   const allCams = camList.filter(c => c.stream);
   const allStreams = allCams.map(c => c.stream);
-  // Return friendly name map: { 'movi-cam01': 'Movi Camera 01', ... }
+  // Build labels: default names first, then overlay admin aliases
   const labels = Object.fromEntries(allCams.map(c => [c.stream, c.name || c.id]));
+  // Stream → camId map (used by client for alias editing)
+  const streamToCamId = Object.fromEntries(allCams.map(c => [c.stream, c.id]));
+  // Apply admin-defined aliases
+  const aliases = await env.DASHBOARD_KV.get('camera_aliases_movi', 'json') || {};
+  allCams.forEach(c => { if (aliases[c.id]) labels[c.stream] = aliases[c.id]; });
 
   // Permission check + camera filtering for non-admin users
   // Re-check role from KV (handles promoted/demoted users whose session may be stale)
@@ -2745,9 +2816,9 @@ async function handleCameraToken(request, env) {
     } else {
       streams = allStreams;
     }
-    return json({ url, streams, labels });
+    return json({ url, streams, labels, streamToCamId, isAdmin: false });
   }
-  return json({ url, streams: allStreams, labels });
+  return json({ url, streams: allStreams, labels, streamToCamId, isAdmin: true });
 }
 
 /* ── Camera Movi — Full Reverse Proxy (HTTP + WebSocket) ── */
@@ -4917,6 +4988,8 @@ export default {
     if (p === '/api/movi-sdwan')                return handleMoviSdwan(request, env);
     if (p === '/api/movi-sdwan-rules')          return handleMoviSdwanRules(request, env);
     if (p === '/api/camera-token')               return handleCameraToken(request, env);
+    if (p === '/api/admin/camera-aliases-movi' && m === 'GET')  return handleGetCameraAliases(request, env);
+    if (p === '/api/admin/camera-aliases-movi' && m === 'PUT')  return handleSaveCameraAlias(request, env);
     if (p.startsWith('/cam-embed/'))             return handleCamEmbed(request, env);
     // ── Termix Movi proxy ──
     if (p.startsWith('/proxy/termix-movi'))      return handleTermixMoviProxy(request, env);

@@ -487,8 +487,12 @@ function buildPortLinks(){
       var mySide = isSw1 ? 'portSw1' : 'portSw2', nbrSide = isSw1 ? 'portSw2' : 'portSw1';
       if (!links[lkKey][mySide]) links[lkKey][mySide] = 'P' + p.portId;
       if (!links[lkKey][nbrSide] && p.neighborPort) {
-        var np = String(p.neighborPort || ''), pm = np.match(/(\d+)$/);
-        links[lkKey][nbrSide] = pm ? ('P'+pm[1]) : (np.replace(/\s+/g,'').slice(0,7) || 'P?');
+        // Same robust parsing as _portNum: strip parentheticals, try last number,
+        // then last slash-segment (e.g. GigabitEthernet1/0/28 (SFP) → P28)
+        var np = String(p.neighborPort || '').trim().replace(/\s*[\(\[][^\)\]]*[\)\]]$/, '').trim();
+        var pm = np.match(/(\d+)\s*$/);
+        if (!pm) { var pts = np.match(/\/(\d+)/g); if (pts) pm = [null, pts[pts.length-1].replace('/','')]; }
+        links[lkKey][nbrSide] = pm ? ('P'+pm[1]) : (np.slice(0, 8) || 'P?');
       }
     });
   });
@@ -565,16 +569,21 @@ function renderTopoPanel() {
   p.push('<text x="'+T_STACK_CX+'" y="'+(wanY+26)+'" text-anchor="middle" font-size="11" fill="#b5b5d0" font-weight="600" font-family="sans-serif">Internet / WAN</text>');
   p.push('<line x1="'+T_STACK_CX+'" y1="'+(wanY+9)+'" x2="'+T_STACK_CX+'" y2="'+stY+'" stroke="#473866" stroke-width="2" stroke-dasharray="5,4"/>');
 
-  /* ── XEN server bridge ── */
-  var xn = byKey['XEN-SW'], c2 = byKey['CoreSW-02'];
-  var csx = stX + stW, csy = c2.cy, exx = xn.cx - xn.w/2, exy = xn.cy, cmx = (csx + exx)/2;
+  /* ── XEN server bridge — dynamically detect which core XEN-SW connects to ── */
+  var xn = byKey['XEN-SW'];
+  // Prefer CoreSW-02 (physical default), but fall back to CoreSW-01 if CDP says so
+  var xenCore = 'CoreSW-02';
+  if (!portLinks[['CoreSW-02','XEN-SW'].sort().join('::')] &&
+       portLinks[['CoreSW-01','XEN-SW'].sort().join('::')]) xenCore = 'CoreSW-01';
+  var c2 = byKey[xenCore] || byKey['CoreSW-02'] || byKey['CoreSW-01'];
+  var csx = stX + stW, csy = c2 ? c2.cy : L.coreY, exx = xn ? xn.cx - xn.w/2 : T_SRV_CX, exy = xn ? xn.cy : L.coreY, cmx = (csx + exx)/2;
   p.push('<path d="M'+csx+','+csy+' C'+cmx+','+csy+' '+cmx+','+exy+' '+exx+','+exy+'" fill="none" stroke="url(#gCable)" stroke-width="3.4" stroke-dasharray="8,5" stroke-linecap="round"/>');
   /* XEN label pill */
-  var xpl = portLinks[['CoreSW-02','XEN-SW'].sort().join('::')];
-  var xlbl = 'Server uplink';
+  var xpl = portLinks[[xenCore,'XEN-SW'].sort().join('::')];
+  var xlbl = 'Server uplink → ' + xenCore;
   if (xpl && (xpl.portSw1 || xpl.portSw2)) {
-    var xs = ['CoreSW-02','XEN-SW'].sort();
-    var cP = 'CoreSW-02' === xs[0] ? xpl.portSw1 : xpl.portSw2;
+    var xs = [xenCore,'XEN-SW'].sort();
+    var cP = xenCore === xs[0] ? xpl.portSw1 : xpl.portSw2;
     var sP = 'XEN-SW' === xs[1] ? xpl.portSw2 : xpl.portSw1;
     xlbl = (cP || '?') + ' ↔ ' + (sP || '?');
   }
@@ -584,7 +593,12 @@ function renderTopoPanel() {
     var tn = byKey[f+'-SW1']; if (!tn) return;
     var x1 = T_STACK_CX, y1 = trunkY + 38, x2 = tn.cx, y2 = tn.cy - tn.h/2, my = (y1+y2)/2;
     p.push('<path d="M'+x1+','+y1+' C'+x1+','+my+' '+x2+','+my+' '+x2+','+y2+'" fill="none" stroke="url(#gCable)" stroke-width="2.8" stroke-linecap="round"/>');
-    var coreKey = (f==='F4'||f==='F5') ? 'CoreSW-02' : 'CoreSW-01';
+    // Dynamically detect which core switch this floor's SW1 connects to via CDP data
+    // instead of hardcoding F4/F5→CoreSW-02 (wrong if physical layout differs)
+    var coreKey = (f==='F4'||f==='F5') ? 'CoreSW-02' : 'CoreSW-01'; // fallback default
+    ['CoreSW-01','CoreSW-02'].forEach(function(ck){
+      if (portLinks[[ck, f+'-SW1'].sort().join('::')]) coreKey = ck;
+    });
     var pl = portLinks[[coreKey, f+'-SW1'].sort().join('::')];
     if (pl && (pl.portSw1 || pl.portSw2)) {
       var st = [coreKey, f+'-SW1'].sort();
@@ -830,10 +844,18 @@ function renderRouteMap(data){
 function _normMac(s){ return String(s||'').replace(/[:.\-\s]/g,'').toLowerCase(); }
 function _portNum(s){
   if (s === undefined || s === null) return '?';
-  var str = String(s), m = str.match(/(\d+)\s*$/);
+  var str = String(s).trim();
+  // Strip trailing parentheticals: " (SFP)", " (Full-duplex)", " [up]", etc.
+  str = str.replace(/\s*[\(\[][^\)\]]*[\)\]]$/, '').trim();
+  // Last digit sequence at end — covers "Port 24", "24", "Gi1/0/24"
+  var m = str.match(/(\d+)\s*$/);
   if (m) return 'P' + m[1];
+  // Last slash-delimited segment — "GigabitEthernet1/0/24" → last /XX → P24
+  var parts = str.match(/\/(\d+)/g);
+  if (parts) return 'P' + parts[parts.length - 1].replace('/', '');
+  // First number fallback
   m = str.match(/(\d+)/);
-  return m ? ('P'+m[1]) : str.slice(0,6);
+  return m ? ('P' + m[1]) : (str.slice(0, 6) || '?');
 }
 function _spdColor(spd){
   if (!spd) return '#7c5cff';
@@ -843,11 +865,19 @@ function _spdColor(spd){
   if (spd.indexOf('10 M') !== -1 || spd.indexOf('10M') !== -1) return '#f87171';
   return '#7c5cff';
 }
+var DEVICE_TYPE_INFO = {
+  'wireless':  { label: 'Access Point Meraki', short: 'AP',      icon: '📡' },
+  'appliance': { label: 'Firewall / MX',       short: 'MX',      icon: '🔥' },
+  'camera':    { label: 'Camera Meraki',        short: 'Camera',  icon: '📷' },
+  'sensor':    { label: 'Cảm biến MT',          short: 'Sensor',  icon: '🌡' },
+  'cellularGateway': { label: 'Cellular Gateway', short: 'MG',   icon: '📶' },
+};
 function buildCables(switches){
-  var macMap = {}, ipMap = {}, nameMap = {};
+  var macMap = {}, ipMap = {}, nameMap = {}, typeMap = {};
   (deviceList || []).forEach(function(d){
     if (d.mac)   macMap[_normMac(d.mac)] = d.name;
     if (d.lanIp) ipMap[d.lanIp] = d.name;
+    if (d.name && d.productType) typeMap[d.name] = d.productType;
   });
   switches.forEach(function(sw){
     var k = matchTopoKey(sw.switchName);
@@ -873,13 +903,24 @@ function buildCables(switches){
       var srcPort = _portNum(p.portId), dstPort = _portNum(p.neighborPort);
       var rawNb = String(p.neighborDevice || '');
       var dstLabel = dstName || (/^[0-9a-f:.\-]{6,}$/i.test(rawNb) ? ('? ('+rawNb+')') : (rawNb || '?'));
-      var a = srcName + '|' + srcPort, b = (dstName || rawNb) + '|' + dstPort;
-      var key = [a, b].sort().join('::');
+      // Dedup key: if both ports known → exact port-pair key (handles LAG duplicates correctly)
+      // If either port is '?' → fall back to device-pair key to prevent same cable appearing twice
+      // when processed from both sides with unresolvable neighbor port formats
+      var devPair = [srcName, (dstName || rawNb)].sort().join('::');
+      var key;
+      if (srcPort !== '?' && dstPort !== '?') {
+        key = [srcName+'|'+srcPort, (dstName||rawNb)+'|'+dstPort].sort().join('::');
+      } else {
+        var knownPort = srcPort !== '?' ? srcPort : dstPort;
+        key = devPair + (knownPort !== '?' ? ('|' + knownPort) : '');
+      }
       if (seen[key]) return;
       seen[key] = 1;
+      var dstType = dstName ? (typeMap[dstName] || null) : null;
       list.push({ src:srcName, srcKey:matchTopoKey(srcName), srcPort:srcPort,
         dst:dstLabel, dstName:dstName, dstKey:dstName?matchTopoKey(dstName):'',
-        dstPort:dstPort, speed:p.speed || '', proto:p.neighborProto || '', resolved:!!dstName });
+        dstPort:dstPort, speed:p.speed || '', proto:p.neighborProto || '', resolved:!!dstName,
+        dstType: dstType });
     });
   });
   return list;
@@ -898,11 +939,17 @@ function _wRender(){
   });
   document.getElementById('wTbody').innerHTML = rows.map(function(r){
     var sc = _spdColor(r.speed);
+    var typeInfo = r.dstType ? DEVICE_TYPE_INFO[r.dstType] : null;
+    var dstCell = esc(r.dst);
+    if (typeInfo) {
+      dstCell += ' <span class="wt-dev-badge" title="'+esc(typeInfo.label)+'">'
+               + typeInfo.icon + ' ' + esc(typeInfo.short) + '</span>';
+    }
     return '<tr class="'+(r.resolved?'':'wt-un')+'">'
       + '<td class="wt-sw">'+esc(r.src)+'</td>'
       + '<td class="wt-pt">'+esc(r.srcPort)+'</td>'
       + '<td class="wt-ar">⟷</td>'
-      + '<td class="wt-sw">'+esc(r.dst)+'</td>'
+      + '<td class="wt-sw">'+dstCell+'</td>'
       + '<td class="wt-pt">'+esc(r.dstPort)+'</td>'
       + '<td class="wt-c"><span class="wt-spd" style="color:'+sc+';border-color:'+sc+'77">'+esc(r.speed||'—')+'</span></td>'
       + '<td class="wt-c wt-pr">'+esc(r.proto||'—')+'</td>'
@@ -1048,6 +1095,8 @@ function renderWiringDiagram(switches){
   var H = [];
   H.push('<style>'
     + '#wiringContainer.wfs{position:fixed;inset:0;z-index:9999;background:var(--bg);overflow:auto;padding:18px}'
+    + '.wfs-exit-btn{display:none;position:fixed;top:12px;right:16px;z-index:10001;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:12px;font-weight:600;padding:6px 16px;cursor:pointer;font-family:inherit}'
+    + '#wiringContainer.wfs .wfs-exit-btn{display:block}'
     + '.wmap-svg{display:block;min-width:'+svgW+'px;background:#15102a;border:1px solid var(--border);border-radius:var(--radius-sm)}'
     + '.wmap-sec{font-size:10px;font-weight:700;letter-spacing:.09em;color:var(--muted);margin:18px 0 12px;text-transform:uppercase;display:flex;align-items:center;gap:8px}'
     + '.wmap-sec::after{content:"";flex:1;height:1px;background:var(--border)}'
@@ -1069,7 +1118,12 @@ function renderWiringDiagram(switches){
     + '.wt-c{text-align:center}'
     + '.wt-spd{font-family:var(--font-mono);font-size:11px;font-weight:600;border:1px solid;border-radius:4px;padding:2px 7px}'
     + '.wt-pr{color:var(--muted);font-family:var(--font-mono);font-size:11px}'
+    + '.wt-dev-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;'
+    + 'padding:1px 6px;border-radius:4px;border:1px solid;margin-left:6px;vertical-align:middle;'
+    + 'color:oklch(0.78 0.14 200);border-color:oklch(0.78 0.14 200 / 0.4);'
+    + 'background:oklch(0.78 0.14 200 / 0.08);cursor:help}'
     + '</style>');
+  H.push('<button class="wfs-exit-btn" onclick="wiringFullscreen()">✕ Thu nhỏ</button>');
   H.push('<svg id="wiringSvg" class="wmap-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'">'+p.join('')+'</svg>');
 
   H.push('<div class="wmap-sec">Bảng cáp vật lý — Nguồn ⟷ Đích (đúng từng port)</div>');
@@ -1099,6 +1153,327 @@ function renderWiringDiagram(switches){
     + '<span><span style="display:inline-block;width:18px;height:3px;border-radius:2px;background:#f87171;margin-right:4px"></span>10M</span>'
     + '<span style="width:1px;height:14px;background:var(--border);display:inline-block"></span>'
     + '<span style="color:var(--muted)">Rê chuột vào 1 switch → hiện cable của nó · bảng bên dưới tra cứu đầy đủ</span>';
+}
+
+/* ── OLD floor-based code removed, reverted to original 4-col layout ── */
+
+/* ═══════════════════════════════════════════════════════════════
+   DRAW ACTIONS (API endpoints preserved exactly)
+   ═══════════════════════════════════════════════════════════════ */
+function drawTopo(){
+  var FLOOR_ORDER = ['F1','F2','F3','F4','F5'];
+  var FLOOR_LABELS = { F1:'TẦNG 1', F2:'TẦNG 2', F3:'TẦNG 3', F4:'TẦNG 4', F5:'TẦNG 5' };
+  var floorMap = {}; // key → floor
+  var floors = {};   // floor → [keys]
+  var ungrouped = [];
+  Object.keys(byK).forEach(function(k){
+    if (CORE.indexOf(k) >= 0) return;
+    var m = k.match(/^F(\d)/i);
+    if (m) {
+      var fl = 'F' + m[1];
+      floorMap[k] = fl;
+      if (!floors[fl]) floors[fl] = [];
+      floors[fl].push(k);
+    } else { ungrouped.push(k); }
+  });
+  /* Sort within each floor naturally */
+  var natSort = function(a,b){ return a.replace(/\d+/g, function(n){return n.padStart(3,'0');}).localeCompare(b.replace(/\d+/g, function(n){return n.padStart(3,'0');})); };
+  Object.keys(floors).forEach(function(fl){ floors[fl].sort(natSort); });
+  ungrouped.sort(natSort);
+
+  /* ── Connection maps ── */
+  function connsOf(k){
+    var out = [];
+    _wCables.forEach(function(c){
+      if (c.srcKey === k)      out.push({ other:c.dstName || c.dst, oKey:c.dstKey, tp:c.srcPort, op:c.dstPort, sp:c.speed, res:c.resolved });
+      else if (c.dstKey === k) out.push({ other:c.src, oKey:c.srcKey, tp:c.dstPort, op:c.srcPort, sp:c.speed, res:true });
+    });
+    return out;
+  }
+  var connMap = {}, adjMap = {};
+  Object.keys(byK).forEach(function(k){
+    var cs = connsOf(k); connMap[k] = cs;
+    var adj = {}; cs.forEach(function(c){ if (c.oKey && byK[c.oKey]) adj[c.oKey] = 1; });
+    adjMap[k] = Object.keys(adj);
+  });
+
+  /* ── Layout constants ── */
+  var PAD = 28, CORE_W = 240, CORE_H = 72, CORE_GAP = 32;
+  var CARD_W = 220, CARD_H = 72, CARD_GAP_X = 16, CARD_GAP_Y = 14;
+  var FLOOR_COLS = 3, FLOOR_PAD = 18, FLOOR_LABEL_W = 46;
+  var ZONE_GAP = 22, CORE_ZONE_MB = 40;
+
+  /* ── SVG width calc ── */
+  var contentW = FLOOR_LABEL_W + FLOOR_PAD + FLOOR_COLS * CARD_W + (FLOOR_COLS - 1) * CARD_GAP_X + FLOOR_PAD;
+  var svgW = Math.max(PAD * 2 + contentW, PAD * 2 + CORE.length * CORE_W + (CORE.length - 1) * CORE_GAP);
+
+  /* ── Position: CORE housing ── */
+  var pos = {};
+  var coreBoxW = CORE.length * CORE_W + (CORE.length - 1) * CORE_GAP + 40;
+  var coreBoxX = (svgW - coreBoxW) / 2;
+  var coreBoxY = 46;
+  var coreInnerY = coreBoxY + 32;
+  var tx = coreBoxX + 20;
+  CORE.forEach(function(k){
+    pos[k] = { x: tx, y: coreInnerY, w: CORE_W, h: CORE_H, cx: tx + CORE_W / 2, cy: coreInnerY + CORE_H / 2, top: true, floor: 'CORE' };
+    tx += CORE_W + CORE_GAP;
+  });
+  var coreBoxH = CORE_H + 48;
+
+  /* ── Position: Floor zones ── */
+  var curY = coreBoxY + coreBoxH + CORE_ZONE_MB;
+  var activeFloors = FLOOR_ORDER.filter(function(fl){ return floors[fl] && floors[fl].length > 0; });
+  var floorZones = {}; // fl → { y, h, keys }
+
+  activeFloors.forEach(function(fl){
+    var keys = floors[fl];
+    var nRows = Math.ceil(keys.length / FLOOR_COLS);
+    var zoneH = FLOOR_PAD * 2 + nRows * CARD_H + (nRows - 1) * CARD_GAP_Y;
+    floorZones[fl] = { y: curY, h: zoneH, keys: keys };
+    var startX = PAD + FLOOR_LABEL_W + FLOOR_PAD;
+    keys.forEach(function(k, i){
+      var col = i % FLOOR_COLS, row = Math.floor(i / FLOOR_COLS);
+      var cx = startX + col * (CARD_W + CARD_GAP_X);
+      var cy = curY + FLOOR_PAD + row * (CARD_H + CARD_GAP_Y);
+      pos[k] = { x: cx, y: cy, w: CARD_W, h: CARD_H, cx: cx + CARD_W / 2, cy: cy + CARD_H / 2, floor: fl };
+    });
+    curY += zoneH + ZONE_GAP;
+  });
+
+  /* ── Position: Ungrouped (if any) ── */
+  if (ungrouped.length) {
+    var nRowsU = Math.ceil(ungrouped.length / FLOOR_COLS);
+    var uzH = FLOOR_PAD * 2 + nRowsU * CARD_H + (nRowsU - 1) * CARD_GAP_Y;
+    floorZones['OTHER'] = { y: curY, h: uzH, keys: ungrouped };
+    var startXU = PAD + FLOOR_LABEL_W + FLOOR_PAD;
+    ungrouped.forEach(function(k, i){
+      var col = i % FLOOR_COLS, row = Math.floor(i / FLOOR_COLS);
+      pos[k] = { x: startXU + col * (CARD_W + CARD_GAP_X), y: curY + FLOOR_PAD + row * (CARD_H + CARD_GAP_Y), w: CARD_W, h: CARD_H, cx: 0, cy: 0, floor: 'OTHER' };
+      pos[k].cx = pos[k].x + CARD_W / 2; pos[k].cy = pos[k].y + CARD_H / 2;
+    });
+    curY += uzH + ZONE_GAP;
+  }
+  var svgH = curY + 10;
+
+  /* ── SVG defs ── */
+  var p = [];
+  p.push('<defs>');
+  p.push('<pattern id="wDots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="0.8" fill="#2a2346"/></pattern>');
+  p.push('<filter id="wSh"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.35"/></filter>');
+  p.push('<filter id="wGlow"><feGaussianBlur stdDeviation="2.5" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>');
+  p.push('<linearGradient id="wgCore" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#201a3a"/><stop offset="100%" stop-color="#1a1530"/></linearGradient>');
+  p.push('<linearGradient id="wgCard" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1e1838"/><stop offset="100%" stop-color="#171230"/></linearGradient>');
+  p.push('</defs>');
+
+  /* ── Background ── */
+  p.push('<rect width="'+svgW+'" height="'+svgH+'" fill="#120e22"/>');
+  p.push('<rect width="'+svgW+'" height="'+svgH+'" fill="url(#wDots)" opacity="0.6"/>');
+
+  /* ── Core housing box ── */
+  p.push('<rect x="'+coreBoxX+'" y="'+coreBoxY+'" width="'+coreBoxW+'" height="'+coreBoxH+'" rx="14" fill="url(#wgCore)" stroke="#3d2e6b" stroke-width="1" stroke-dasharray="6 3" opacity="0.7"/>');
+  p.push('<text x="'+(coreBoxX+18)+'" y="'+(coreBoxY+18)+'" font-size="9.5" fill="#8b7ab8" font-weight="700" font-family="Inter,sans-serif" letter-spacing="2">CORE · SERVER ROOM</text>');
+
+  /* ── Floor zone backgrounds ── */
+  var allFloorKeys = activeFloors.slice();
+  if (ungrouped.length) allFloorKeys.push('OTHER');
+
+  allFloorKeys.forEach(function(fl){
+    var z = floorZones[fl]; if (!z) return;
+    var zX = PAD, zW = svgW - PAD * 2;
+    var isOdd = allFloorKeys.indexOf(fl) % 2 === 0;
+    var fillBg = isOdd ? 'rgba(26,20,48,0.5)' : 'rgba(20,16,40,0.3)';
+    p.push('<g class="wfl-zone" data-floor="'+fl+'">');
+    p.push('<rect x="'+zX+'" y="'+z.y+'" width="'+zW+'" height="'+z.h+'" rx="12" fill="'+fillBg+'" stroke="#2a2346" stroke-width="0.8"/>');
+    /* Vertical floor label */
+    var lbl = FLOOR_LABELS[fl] || (fl === 'OTHER' ? 'KHÁC' : fl);
+    var lblY = z.y + z.h / 2;
+    p.push('<text x="'+(zX + 14)+'" y="'+lblY+'" font-size="11" fill="#6b5a9e" font-weight="800" font-family="Inter,sans-serif" letter-spacing="3" text-anchor="middle" transform="rotate(-90,'+(zX+14)+','+lblY+')">'+escSvg(lbl)+'</text>');
+    /* Floor device count badge */
+    p.push('<text x="'+(zX + FLOOR_LABEL_W - 4)+'" y="'+(z.y + 16)+'" font-size="8" fill="#5a4d80" font-family="Inter,sans-serif" font-weight="600">'+z.keys.length+' SW</text>');
+    p.push('</g>');
+  });
+
+  /* ── Cables (drawn BEFORE cards so cards overlay cable endpoints) ── */
+  var drawn = {};
+  function spdWidth(sp){
+    if (!sp) return 1;
+    if (sp.indexOf('10 G')>=0||sp.indexOf('10G')>=0) return 3.5;
+    if (sp.indexOf('1 G')>=0||sp.indexOf('1G')>=0) return 2.2;
+    if (sp.indexOf('100')>=0&&sp.indexOf('1000')<0) return 1.4;
+    return 1;
+  }
+  Object.keys(byK).forEach(function(k){
+    (connMap[k] || []).forEach(function(c){
+      if (!c.oKey || !pos[c.oKey] || !pos[k]) return;
+      var uid = [k, c.oKey].sort().join('|') + '|' + [c.tp, c.op].sort().join('-');
+      if (drawn[uid]) return; drawn[uid] = 1;
+      var A = pos[k], B = pos[c.oKey], sc = _spdColor(c.sp), d, lx, ly;
+      var sw = spdWidth(c.sp);
+
+      if (A.top && B.top) {
+        /* Core ↔ Core: arc above */
+        var L2 = A.cx < B.cx ? A : B, R2 = A.cx < B.cx ? B : A;
+        var x1 = L2.x + L2.w, y1 = L2.cy, x2 = R2.x, y2 = R2.cy;
+        var arcY = coreBoxY - 14;
+        d = 'M'+x1+','+y1+' C'+(x1+40)+','+arcY+' '+(x2-40)+','+arcY+' '+x2+','+y2;
+        lx = (x1+x2)/2; ly = arcY + 6;
+      } else if (A.top !== B.top) {
+        /* Core ↔ Floor: vertical drop with smooth S-curve */
+        var hi = A.top ? A : B, lo = A.top ? B : A;
+        var x1b = hi.cx, y1b = hi.y + hi.h;
+        var x2b = lo.cx, y2b = lo.y;
+        var drop = (y2b - y1b);
+        var cp1y = y1b + drop * 0.25, cp2y = y2b - drop * 0.25;
+        d = 'M'+x1b+','+y1b+' C'+x1b+','+cp1y+' '+x2b+','+cp2y+' '+x2b+','+y2b;
+        lx = (x1b + x2b) / 2; ly = (y1b + y2b) / 2;
+      } else if (A.floor === B.floor) {
+        /* Same floor: horizontal arc below cards */
+        var left = A.cx < B.cx ? A : B, right = A.cx < B.cx ? B : A;
+        var sameRow = Math.abs(A.y - B.y) < 2;
+        if (sameRow) {
+          var x1c = left.x + left.w, y1c = left.cy, x2c = right.x, y2c = right.cy;
+          var arcBelow = left.y + left.h + 16;
+          d = 'M'+x1c+','+y1c+' C'+x1c+','+ arcBelow+' '+x2c+','+arcBelow+' '+x2c+','+y2c;
+        } else {
+          var hi2 = A.y < B.y ? A : B, lo2 = A.y < B.y ? B : A;
+          var midY2 = (hi2.y + hi2.h + lo2.y) / 2;
+          d = 'M'+hi2.cx+','+(hi2.y+hi2.h)+' C'+hi2.cx+','+midY2+' '+lo2.cx+','+midY2+' '+lo2.cx+','+lo2.y;
+        }
+        lx = (A.cx + B.cx) / 2; ly = (A.cy + B.cy) / 2;
+      } else {
+        /* Different floors: gentle S-curve */
+        var hi3 = A.y < B.y ? A : B, lo3 = A.y < B.y ? B : A;
+        var dy = lo3.y - (hi3.y + hi3.h);
+        d = 'M'+hi3.cx+','+(hi3.y+hi3.h)+' C'+hi3.cx+','+(hi3.y+hi3.h+dy*0.35)+' '+lo3.cx+','+(lo3.y-dy*0.35)+' '+lo3.cx+','+lo3.y;
+        lx = (hi3.cx + lo3.cx) / 2; ly = (hi3.y + hi3.h + lo3.y) / 2;
+      }
+
+      var ttl = k + ' ' + c.tp + '  ⟷  ' + (c.other || c.oKey) + ' ' + c.op + (c.sp ? '  ·  ' + c.sp : '');
+      p.push('<g class="wln" data-k="'+esc(k+'|'+c.oKey)+'" data-spd="'+esc(c.sp||'')+'" style="opacity:0.22"><title>'+escSvg(ttl)+'</title>');
+      p.push('<path d="'+d+'" fill="none" stroke="'+sc+'" stroke-width="'+sw+'" stroke-linecap="round"/>');
+      var lbl = c.tp + ' ↔ ' + c.op, lw = lbl.length * 5.6 + 14;
+      p.push('<g class="wln-lbl" style="display:none"><rect x="'+(lx-lw/2)+'" y="'+(ly-9)+'" width="'+lw+'" height="18" rx="5" fill="#0d0a1c" fill-opacity="0.92" stroke="'+sc+'" stroke-width="0.8"/><text x="'+lx+'" y="'+(ly+4)+'" text-anchor="middle" font-size="9" fill="'+sc+'" font-family="IBM Plex Mono,monospace" font-weight="700">'+escSvg(lbl)+'</text></g>');
+      p.push('</g>');
+    });
+  });
+
+  /* ── Card drawing ── */
+  function drawCard(k){
+    var sw = byK[k], P = pos[k]; if (!P) return;
+    var rx = P.x, ry = P.y, W = P.w, H = P.h;
+    var isCore = CORE.indexOf(k) >= 0;
+    var accentC = isCore ? (k.indexOf('Core')===0 ? '#a78bfa' : '#22d3ee') : '#34d399';
+    var statusC = '#6b6b8a', statusDot = '#555';
+    var pct = 0;
+    if (sw) {
+      pct = sw.totalPorts ? sw.connectedPorts / sw.totalPorts : 0;
+      if (sw.connectedPorts === 0) { statusC = '#f87171'; statusDot = '#f87171'; }
+      else if (pct >= 0.5) { statusC = '#34d399'; statusDot = '#34d399'; }
+      else { statusC = '#fbbf24'; statusDot = '#fbbf24'; }
+    }
+    var cs = connMap[k] || [];
+    var floorAttr = P.floor ? ' data-floor="'+esc(P.floor)+'"' : '';
+    p.push('<g class="wnd" data-k="'+esc(k)+'" data-adj="'+esc((adjMap[k]||[]).join('|'))+'"'+floorAttr+' style="cursor:pointer" onmouseover="wHi(\''+esc(k)+'\')" onmouseout="wHi(\'\')">');
+
+    /* Card background with gradient fill */
+    p.push('<rect class="wnd-card" x="'+rx+'" y="'+ry+'" width="'+W+'" height="'+H+'" rx="10" fill="url(#wgCard)" stroke="'+(isCore?'#4a3880':'#2e2550')+'" stroke-width="1.2" filter="url(#wSh)"/>');
+
+    /* Accent stripe left */
+    p.push('<rect x="'+rx+'" y="'+(ry+8)+'" width="3.5" height="'+(H-16)+'" rx="1.8" fill="'+accentC+'" opacity="0.85"/>');
+
+    /* Status dot with glow */
+    p.push('<circle cx="'+(rx+W-16)+'" cy="'+(ry+14)+'" r="4" fill="'+statusDot+'" filter="url(#wGlow)" opacity="0.8"/>');
+    p.push('<circle cx="'+(rx+W-16)+'" cy="'+(ry+14)+'" r="2" fill="'+statusDot+'"/>');
+
+    /* Name */
+    var nm = sw ? sw.switchName : k;
+    if (nm.length > 20) nm = nm.slice(0,19) + '…';
+    p.push('<text x="'+(rx+14)+'" y="'+(ry+22)+'" font-size="12" fill="#e0daf0" font-family="IBM Plex Mono,monospace" font-weight="700">'+escSvg(nm)+'</text>');
+
+    if (sw) {
+      /* Model + port ratio */
+      p.push('<text x="'+(rx+14)+'" y="'+(ry+38)+'" font-size="8.5" fill="#6b5a9e" font-family="Inter,sans-serif">'+escSvg(sw.switchModel || '?')+'</text>');
+      p.push('<text x="'+(rx+W-14)+'" y="'+(ry+38)+'" text-anchor="end" font-size="9" fill="'+statusC+'" font-family="IBM Plex Mono,monospace" font-weight="600">'+sw.connectedPorts+'/'+sw.totalPorts+' ports</text>');
+
+      /* Cable count */
+      p.push('<text x="'+(rx+14)+'" y="'+(ry+52)+'" font-size="8" fill="#8b7ab8" font-family="Inter,sans-serif">'+cs.length+' cable'+(cs.length!==1?'s':'')+'</text>');
+
+      /* Progress bar with rounded caps */
+      var bw = W - 28, bx2 = rx + 14, byp = ry + H - 10;
+      var barBg = '#1a1530', barFg = pct >= 0.5 ? '#34d399' : pct > 0 ? '#fbbf24' : '#f87171';
+      p.push('<rect x="'+bx2+'" y="'+byp+'" width="'+bw+'" height="3" rx="1.5" fill="'+barBg+'"/>');
+      if (pct > 0) p.push('<rect x="'+bx2+'" y="'+byp+'" width="'+(bw*pct).toFixed(1)+'" height="3" rx="1.5" fill="'+barFg+'" opacity="0.8"/>');
+    } else {
+      p.push('<text x="'+(rx+14)+'" y="'+(ry+40)+'" font-size="8.5" fill="#6b5a9e" font-family="Inter,sans-serif">'+cs.length+' cable'+(cs.length!==1?'s':'')+'</text>');
+    }
+    p.push('</g>');
+  }
+  CORE.forEach(drawCard);
+  Object.keys(floors).forEach(function(fl){ (floors[fl]||[]).forEach(drawCard); });
+  ungrouped.forEach(drawCard);
+
+  var nPairs = Object.keys(drawn).length;
+  var nUnres = _wCables.filter(function(c){ return !c.resolved; }).length;
+
+  /* ── Build HTML ── */
+  var H = [];
+  H.push('<style>'
+    + '#wiringContainer.wfs{position:fixed;inset:0;z-index:9999;background:var(--bg);overflow:auto;padding:18px}'
+    + '.wmap-svg{display:block;min-width:'+svgW+'px;background:#120e22;border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,0.3)}'
+    + '.wmap-sec{font-size:10px;font-weight:700;letter-spacing:.09em;color:var(--muted);margin:18px 0 12px;text-transform:uppercase;display:flex;align-items:center;gap:8px}'
+    + '.wmap-sec::after{content:"";flex:1;height:1px;background:var(--border)}'
+    + '.wmap-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}'
+    + '.wmap-search{flex:1;min-width:200px;max-width:340px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text);font-size:13px;font-family:inherit;outline:none}'
+    + '.wmap-search:focus{border-color:var(--accent)}'
+    + '.wmap-stat{font-size:11px;color:var(--muted);font-family:var(--font-mono)}'
+    + '.wt-wrap{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}'
+    + '#wTable{width:100%;border-collapse:collapse;font-size:13px}'
+    + '#wTable thead th{background:var(--surface-2);color:var(--muted);font-family:var(--font-mono);font-size:10.5px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap}'
+    + '#wTable thead th.wt-c{text-align:center}'
+    + '#wTable tbody td{padding:10px 14px;border-bottom:1px solid var(--border-soft)}'
+    + '#wTable tbody tr:last-child td{border-bottom:none}'
+    + '#wTable tbody tr:hover{background:color-mix(in oklch, var(--accent) 5%, transparent)}'
+    + '#wTable tbody tr.wt-un{opacity:.55}'
+    + '.wt-sw{color:var(--text);font-weight:500}'
+    + '.wt-pt{font-family:var(--font-mono);color:var(--accent);font-weight:600}'
+    + '.wt-ar{font-family:var(--font-mono);color:var(--ok);text-align:center;font-weight:600}'
+    + '.wt-c{text-align:center}'
+    + '.wt-spd{font-family:var(--font-mono);font-size:11px;font-weight:600;border:1px solid;border-radius:4px;padding:2px 7px}'
+    + '.wt-pr{color:var(--muted);font-family:var(--font-mono);font-size:11px}'
+    + '.wt-dev-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;'
+    + 'padding:1px 6px;border-radius:4px;border:1px solid;margin-left:6px;vertical-align:middle;'
+    + 'color:oklch(0.78 0.14 200);border-color:oklch(0.78 0.14 200 / 0.4);'
+    + 'background:oklch(0.78 0.14 200 / 0.08);cursor:help}'
+    + '</style>');
+  H.push('<svg id="wiringSvg" class="wmap-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'">'+p.join('')+'</svg>');
+
+  H.push('<div class="wmap-sec">Bảng cáp vật lý — Nguồn ⟷ Đích (đúng từng port)</div>');
+  H.push('<div class="wmap-tools"><input class="wmap-search" placeholder="🔍 Lọc switch · port · tốc độ…" oninput="wFilter(this.value)"><span class="wmap-stat" id="wStat"></span></div>');
+  H.push('<div class="wt-wrap"><table id="wTable"><thead><tr>'
+    + '<th onclick="wSort(\'src\')">Switch nguồn</th>'
+    + '<th onclick="wSort(\'srcPort\')">Port</th>'
+    + '<th class="wt-c"></th>'
+    + '<th onclick="wSort(\'dst\')">Switch đích</th>'
+    + '<th onclick="wSort(\'dstPort\')">Port</th>'
+    + '<th class="wt-c" onclick="wSort(\'speed\')">Tốc độ</th>'
+    + '<th class="wt-c" onclick="wSort(\'proto\')">Proto</th>'
+    + '</tr></thead><tbody id="wTbody"></tbody></table></div>');
+
+  document.getElementById('wiringContainer').innerHTML = H.join('');
+  _wSort = { col:'src', dir:1 }; _wQ = '';
+  _wRender();
+  document.getElementById('btnWiringFs').style.display = '';
+  var b = document.getElementById('badge-wiring');
+  b.textContent = nPairs + ' link · ' + _wCables.length + ' cáp';
+  b.className = 'panel-badge tone-ok';
+  document.getElementById('wiringCount').textContent = nPairs + ' link' + (nUnres ? ' · ' + nUnres + ' chưa định danh' : '');
+  document.getElementById('wiringLegend').innerHTML =
+    '<span><span style="display:inline-block;width:22px;height:3.5px;border-radius:2px;background:#22d3ee;margin-right:5px"></span>10G</span>'
+    + '<span><span style="display:inline-block;width:18px;height:2.2px;border-radius:2px;background:#34d399;margin-right:5px"></span>1G</span>'
+    + '<span><span style="display:inline-block;width:14px;height:1.4px;border-radius:2px;background:#fbbf24;margin-right:5px"></span>100M</span>'
+    + '<span><span style="display:inline-block;width:10px;height:1px;border-radius:2px;background:#f87171;margin-right:5px"></span>10M</span>'
+    + '<span style="width:1px;height:14px;background:var(--border);display:inline-block"></span>'
+    + '<span style="color:var(--muted)">Rê chuột vào switch → hiện cable · độ dày cáp = tốc độ</span>';
 }
 
 /* ═══════════════════════════════════════════════════════════════

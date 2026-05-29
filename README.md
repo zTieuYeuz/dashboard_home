@@ -26,4 +26,3 @@ npx wrangler deploy
 
 ## Tài liệu kỹ thuật
 
-Chi tiết kiến trúc, API routes, webhook URLs và ghi chú kỹ thuật lưu trong `NOTES.md` (không đồng bộ lên GitHub).

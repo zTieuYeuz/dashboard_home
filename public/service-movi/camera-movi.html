@@ -43,8 +43,18 @@ a.brand{display:flex;align-items:baseline;gap:8px;text-decoration:none;color:inh
 .cam-cell.cam-off{border-color:var(--border-soft);opacity:.7}
 
 /* Label bar */
-.cam-label{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface);border-bottom:1px solid var(--border-soft)}
+.cam-label{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--surface);border-bottom:1px solid var(--border-soft)}
 .cam-name{font-size:11px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono)}
+
+/* Admin rename controls */
+.cam-rename-btn{flex-shrink:0;background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 4px;border-radius:4px;line-height:1;transition:color .15s}
+.cam-rename-btn:hover{color:var(--accent)}
+.cam-rename-row{display:none;align-items:center;gap:4px;padding:4px 10px;background:var(--surface-2);border-bottom:1px solid var(--border-soft)}
+.cam-rename-row.visible{display:flex}
+.cam-rename-input{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 8px;color:var(--text);font-size:12px;font-family:var(--font-mono);outline:none}
+.cam-rename-input:focus{border-color:var(--accent)}
+.cam-rename-save{font-size:11px;font-weight:600;padding:3px 10px;border-radius:var(--radius-sm);border:1px solid color-mix(in oklch,var(--ok) 40%,transparent);background:color-mix(in oklch,var(--ok) 12%,transparent);color:var(--ok);cursor:pointer}
+.cam-rename-cancel{font-size:11px;padding:3px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer}
 .toggle-btn{flex-shrink:0;display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;border:1px solid;cursor:pointer;transition:all .2s;white-space:nowrap;background:transparent;font-family:var(--font-sans)}
 .toggle-btn.is-on{color:var(--ok);border-color:color-mix(in oklch,var(--ok) 30%,transparent);background:color-mix(in oklch,var(--ok) 10%,transparent)}
 .toggle-btn.is-on:hover{background:color-mix(in oklch,var(--ok) 20%,transparent)}
@@ -103,29 +113,29 @@ a.brand{display:flex;align-items:baseline;gap:8px;text-decoration:none;color:inh
   }
 })();
 
-const LS_KEY = 'movi_cam_state_v1';
-const MODE   = 'webrtc,mse,hls,mjpeg';
+const MODE = 'webrtc,mse,hls,mjpeg';
 
-let _streams = [];
-let _camUrl  = '';
-let _labels  = {};   // stream → friendly name, populated from API
-let _state   = {};
-
-function loadState(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)||'{}'); }catch{ return {}; } }
-function saveState(){ localStorage.setItem(LS_KEY, JSON.stringify(_state)); }
+let _streams      = [];
+let _camUrl       = '';
+let _labels       = {};   // stream → display name (default + aliases merged)
+let _streamToCamId = {}; // stream → camId (for alias API)
+let _isAdmin      = false;
+let _state        = {};   // stream → bool (ON/OFF), always starts fresh each page load
 
 async function init() {
-  _state = loadState();
+  // Do NOT restore from localStorage — cameras always start OFF on page load (issue #6)
   try {
     const r = await fetch('/api/camera-token');
     if (!r.ok) throw new Error('Lỗi lấy danh sách camera');
     const d = await r.json();
     if (d.error) throw new Error(d.error);
-    _streams = d.streams || [];
-    _camUrl  = d.url   || '';
-    _labels  = d.labels || {};
-    // Default new cameras to OFF
-    _streams.forEach(s => { if (!(s in _state)) _state[s] = false; });
+    _streams       = d.streams || [];
+    _camUrl        = d.url    || '';
+    _labels        = d.labels || {};
+    _streamToCamId = d.streamToCamId || {};
+    _isAdmin       = d.isAdmin || false;
+    // All cameras default OFF
+    _streams.forEach(s => { _state[s] = false; });
     render();
     document.getElementById('last-update').textContent = new Date().toLocaleTimeString('vi-VN');
   } catch(e) {
@@ -140,20 +150,30 @@ function render() {
   grid.innerHTML = _streams.map(s => {
     const isOn = _state[s];
     const name = _labels[s] || s;
+    const camId = _streamToCamId[s] || s;
+    const renameBtn = _isAdmin
+      ? `<button class="cam-rename-btn" title="Đổi tên camera" onclick="openRename('${esc(s)}','${esc(camId)}')">✏</button>`
+      : '';
     const frame = isOn
-      ? `<iframe src="${_camUrl}/stream.html?src=${s}&mode=${MODE}" allow="autoplay" allowfullscreen></iframe>`
+      ? `<iframe src="${_camUrl}/stream.html?src=${encodeURIComponent(s)}&mode=${MODE}" allow="autoplay" allowfullscreen></iframe>`
       : `<div class="cam-overlay">
            <div class="ico">⏸</div>
            <div class="msg">Stream đã tắt</div>
-           <button class="resume-btn" onclick="toggle('${s}')">▶ Bật lại</button>
+           <button class="resume-btn" onclick="toggle('${esc(s)}')">▶ Bật lại</button>
          </div>`;
     return `
-      <div class="cam-cell ${isOn?'':'cam-off'}" id="cell-${s}">
+      <div class="cam-cell ${isOn?'':'cam-off'}" id="cell-${esc(s)}">
         <div class="cam-label">
-          <span class="cam-name">${name}</span>
-          <button class="toggle-btn ${isOn?'is-on':'is-off'}" onclick="toggle('${s}')">
+          <span class="cam-name" id="lbl-${esc(s)}">${esc(name)}</span>
+          ${renameBtn}
+          <button class="toggle-btn ${isOn?'is-on':'is-off'}" onclick="toggle('${esc(s)}')">
             <span class="toggle-dot"></span>${isOn?'ON':'OFF'}
           </button>
+        </div>
+        <div class="cam-rename-row" id="rename-row-${esc(s)}">
+          <input class="cam-rename-input" id="rename-inp-${esc(s)}" type="text" value="${esc(name)}" placeholder="Tên hiển thị…" maxlength="50">
+          <button class="cam-rename-save" onclick="saveRename('${esc(s)}','${esc(camId)}')">✓ Lưu</button>
+          <button class="cam-rename-cancel" onclick="closeRename('${esc(s)}')">✕</button>
         </div>
         <div class="cam-frame">${frame}</div>
       </div>`;
@@ -161,21 +181,63 @@ function render() {
   updateBadge();
 }
 
+function esc(v){ return String(v||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/'/g,'&#39;'); }
+
 function toggle(s) {
   _state[s] = !_state[s];
-  saveState();
   render();
 }
 
 function setAll(on) {
   _streams.forEach(s => _state[s] = on);
-  saveState();
   render();
 }
 
 function updateBadge() {
   const on = _streams.filter(s => _state[s]).length;
   document.getElementById('status-badge').textContent = `${on} / ${_streams.length} streaming`;
+}
+
+/* ── Admin: rename camera ── */
+function openRename(stream, camId) {
+  const row = document.getElementById('rename-row-' + stream);
+  if (!row) return;
+  row.classList.toggle('visible');
+  if (row.classList.contains('visible')) {
+    const inp = document.getElementById('rename-inp-' + stream);
+    if (inp) { inp.value = _labels[stream] || stream; inp.focus(); inp.select(); }
+  }
+}
+function closeRename(stream) {
+  const row = document.getElementById('rename-row-' + stream);
+  if (row) row.classList.remove('visible');
+}
+async function saveRename(stream, camId) {
+  const inp = document.getElementById('rename-inp-' + stream);
+  if (!inp) return;
+  const newName = inp.value.trim();
+  try {
+    const r = await fetch('/api/admin/camera-aliases-movi', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camId, name: newName })
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || 'Lỗi lưu tên');
+    // Update local labels with server-returned aliases
+    _streams.forEach(s => {
+      const cId = _streamToCamId[s] || s;
+      if (d.aliases && d.aliases[cId]) _labels[s] = d.aliases[cId];
+    });
+    // If alias was cleared for this stream, restore default
+    if (d.aliases && !d.aliases[camId]) {
+      // Keep whatever was the original default (server already handles via labels)
+    }
+    closeRename(stream);
+    render();
+  } catch(e) {
+    alert('Lỗi: ' + e.message);
+  }
 }
 
 init();

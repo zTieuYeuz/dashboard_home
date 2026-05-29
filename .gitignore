@@ -18,3 +18,10 @@ dev_tmp.json
 
 # Technical notes — contains sensitive info (IPs, URLs, credentials)
 NOTES.md
+# Test & docs không liên quan
+TEST_PLAN.md
+TEST_PLAN_Movi_Dashboard.xlsx
+generate_test_xlsx.py
+HANDOVER.md
+GIT_BRANCHING_GUIDE.md
+wrangler.staging.toml
