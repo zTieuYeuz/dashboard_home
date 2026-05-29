@@ -1157,7 +1157,9 @@ async function handleSetupChangePassword(request, env) {
   const temp = await _getSetupTemp(env, setupToken);
   if (!temp) return json({ error: 'Phiên thiết lập đã hết hạn. Vui lòng đăng nhập lại.' }, 401);
   if (!temp.mustChangePassword) return json({ error: 'Không cần đổi mật khẩu' }, 400);
-  if (newPassword.length < 8) return json({ error: 'Mật khẩu tối thiểu 8 ký tự' }, 400);
+  const setupPwCfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(()=>({})) || {};
+  const setupPwMin = Math.max(8, setupPwCfg.pwMinLength ?? 8);
+  if (newPassword.length < setupPwMin) return json({ error: `Mật khẩu tối thiểu ${setupPwMin} ký tự` }, 400);
   const user = await env.DASHBOARD_KV.get(`user:${temp.username}`, 'json');
   if (!user) return json({ error: 'User not found' }, 404);
   user.password = await hashPw(newPassword);
@@ -2496,11 +2498,7 @@ async function handleMerakiClientPolicy(request, env) {
       await env.DASHBOARD_KV.put('meraki_blocked_clients', JSON.stringify(bl));
     } catch (e) {}
     // Log the admin action for auditing
-    try {
-      const lg = await env.DASHBOARD_KV.get('activity_log', 'json') || [];
-      lg.unshift({ ts: Date.now(), user: session.username, action: 'meraki-client-policy', mac, policy });
-      await env.DASHBOARD_KV.put('activity_log', JSON.stringify(lg.slice(0, 200)));
-    } catch (e) {}
+    await logActivity(env, { action: 'meraki-client-policy', username: session.username, ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `${policy} client ${mac}` });
     return json({ success: true, mac, policy, result: payload });
   } catch (e) {
     return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
@@ -4425,12 +4423,13 @@ function json(data, status = 200) {
    Web Proxy — fetch any HTTPS URL, strip frame-blocking headers
    so it can be embedded in an iframe on the dashboard
    ═══════════════════════════════════════════════ */
+function _escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function proxyErr(msg, url) {
   return new Response(
     `<html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:2rem;background:#0b0d14;color:#e2e8f0">
       <h2 style="color:#f87171;margin-bottom:1rem">⚠ Không thể kết nối</h2>
-      <p style="white-space:pre-line;line-height:1.7;color:#cbd5e1">${msg}</p>
-      ${url ? `<p style="margin-top:1rem;font-size:12px;color:#64748b">URL: ${url}</p>` : ''}
+      <p style="white-space:pre-line;line-height:1.7;color:#cbd5e1">${_escHtml(msg)}</p>
+      ${url ? `<p style="margin-top:1rem;font-size:12px;color:#64748b">URL: ${_escHtml(url)}</p>` : ''}
     </body></html>`,
     { status: 502, headers: { 'content-type': 'text/html;charset=utf-8' } }
   );
@@ -4464,6 +4463,13 @@ async function handleProxy(request, env) {
     `"${h}" là địa chỉ IP nội bộ — Cloudflare Worker không thể kết nối tới LAN của anh.\n\n` +
     `Để dùng tính năng này, anh cần tạo Cloudflare Tunnel cho dịch vụ này trước,\n` +
     `rồi dùng URL tunnel (VD: https://fortigate-ui.home-server.id.vn) thay vì IP local.`, target);
+
+  // Whitelist: only allow proxying to our own trusted domains
+  const isTrustedDomain = h === 'home-server.id.vn' || h.endsWith('.home-server.id.vn')
+    || h === 'movi-finance.com' || h.endsWith('.movi-finance.com');
+  if (!isTrustedDomain) return proxyErr(
+    `Proxy chỉ hỗ trợ các domain nội bộ (*.home-server.id.vn, *.movi-finance.com).\n` +
+    `Domain "${h}" không được phép.`, target);
 
   // Forward CF Access credentials ONLY to our own trusted domain
   // (exact host or *.home-server.id.vn — note the leading dot to prevent
@@ -4734,8 +4740,8 @@ async function handleTermixMoviProxy(request, env) {
     return new Response(
       `<html><body style="font:14px system-ui;padding:2rem;background:#1a1a2e;color:#e0e0e0">
         <h2 style="color:#ff6b6b">⚠ Termix Proxy — Fetch Error</h2>
-        <p><b>Target:</b> <code>${target}</code></p>
-        <p><b>Error:</b> <code>${fetchErr.message}</code></p>
+        <p><b>Target:</b> <code>${_escHtml(target)}</code></p>
+        <p><b>Error:</b> <code>${_escHtml(fetchErr.message)}</code></p>
         <p style="color:#888">Kiểm tra: CF Access Bypass, nginx đang chạy, Termix port 8081</p>
       </body></html>`,
       { status: 502, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
@@ -4759,10 +4765,10 @@ async function handleTermixMoviProxy(request, env) {
     return new Response(
       `<html><body style="font:14px system-ui;padding:2rem;background:#1a1a2e;color:#e0e0e0">
         <h2 style="color:#ff6b6b">⚠ Termix Proxy — Upstream Error</h2>
-        <p><b>Target:</b> <code>${target}</code></p>
-        <p><b>Status:</b> <code>${upstream.status} ${upstream.statusText}</code></p>
-        <p><b>Content-Type:</b> <code>${upstream.headers.get('content-type') || 'none'}</code></p>
-        <pre style="background:#111;padding:1rem;border-radius:8px;overflow:auto;color:#ffa;font-size:12px">${errBody.slice(0,500)}</pre>
+        <p><b>Target:</b> <code>${_escHtml(target)}</code></p>
+        <p><b>Status:</b> <code>${upstream.status} ${_escHtml(upstream.statusText)}</code></p>
+        <p><b>Content-Type:</b> <code>${_escHtml(upstream.headers.get('content-type') || 'none')}</code></p>
+        <pre style="background:#111;padding:1rem;border-radius:8px;overflow:auto;color:#ffa;font-size:12px">${_escHtml(errBody.slice(0,500))}</pre>
         <p style="color:#888">Nếu 403: X-Proxy-Token không khớp với nginx. Nếu 502/504: Termix chưa chạy.</p>
       </body></html>`,
       { status: 502, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
@@ -4878,6 +4884,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const p   = url.pathname;
+    const m   = request.method;
     // Global safety net: API paths always return JSON errors, never HTML
     const isApi = p.startsWith('/api/');
     try {
