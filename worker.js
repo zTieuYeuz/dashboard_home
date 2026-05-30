@@ -3929,7 +3929,112 @@ async function handleCasaOS(env) {
 }
 
 /* ═══════════════════════════════════════════════
-   FortiGate — REST API v2 (read-only token)
+   FortiGate Home — 5 workflows riêng, gọi song song
+   Mỗi workflow độc lập: 1 fail không ảnh hưởng cái khác
+   ═══════════════════════════════════════════════ */
+async function handleFortigateWebhook(env) {
+  const n8nUser = (env.HOME_N8N_USER || '').replace(/^﻿/, '').trim();
+  const n8nPass = (env.HOME_N8N_PASS || '').replace(/^﻿/, '').trim();
+  const hdrs = { 'Content-Type': 'application/json' };
+  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
+
+  // Helper: gọi 1 webhook, trả null nếu lỗi/timeout
+  const call = (url, ms = 12000) => {
+    const u = (url || '').replace(/^﻿/, '').trim();
+    if (!u) return Promise.resolve(null);
+    return fetch(u, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(ms) })
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null);
+  };
+
+  const whSys    = env.HOME_WH_FG_SYSTEM;
+  const whRes    = env.HOME_WH_FG_RESOURCES;
+  const whIface  = env.HOME_WH_FG_INTERFACES;
+  const whVpn    = env.HOME_WH_FG_VPN;
+  const whSsl    = env.HOME_WH_FG_SSL;
+  const whPolicy = env.HOME_WH_FG_POLICIES;
+  const whDdns   = env.HOME_WH_FG_DDNS;
+
+  if (!whSys) return json({ error: 'HOME_WH_FG_SYSTEM not configured' }, 500);
+
+  // Gọi tất cả song song — tổng thời gian = max(các nhóm)
+  const [sys, res, iface, vpn, ssl, policy, ddns] = await Promise.all([
+    call(whSys),
+    call(whRes),
+    call(whIface),
+    call(whVpn),
+    call(whSsl),
+    call(whPolicy),
+    call(whDdns, 8000),
+  ]);
+
+  const merged = {
+    system:     sys?.system     || {},
+    resources:  res?.resources  || {},
+    interfaces: iface?.interfaces || [],
+    vpn:        vpn?.vpn        || [],
+    ssl:        ssl?.ssl        || { activeUsers: 0, maxTunnels: null, numTunnels: 0, users: [] },
+    policies:   policy?.policies  || [],
+    ddns:       ddns?.ddns      || [],
+    stats: {
+      ...(iface?.stats  || {}),
+      ...(vpn?.stats    || {}),
+      ...(ssl?.stats    || {}),
+      ...(policy?.stats || {}),
+      ...(ddns?.stats   || {}),
+    },
+  };
+
+  return new Response(JSON.stringify(merged), {
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  });
+}
+
+async function handleFortigateBW(env) {
+  const n8nUser = (env.HOME_N8N_USER || '').replace(/^﻿/, '').trim();
+  const n8nPass = (env.HOME_N8N_PASS || '').replace(/^﻿/, '').trim();
+  const hdrs = { 'Content-Type': 'application/json' };
+  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
+  const whIface = (env.HOME_WH_FG_INTERFACES || '').replace(/^﻿/, '').trim();
+  if (!whIface) return json({ error: 'HOME_WH_FG_INTERFACES not configured' }, 500);
+  try {
+    const r = await fetch(whIface, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return json({ error: 'webhook failed' }, 502);
+    const data = await r.json();
+    const raw = Array.isArray(data) ? data[0] : data;
+    return new Response(JSON.stringify(raw || {}), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    });
+  } catch(e) {
+    return json({ error: e.message }, 500);
+  }
+}
+
+async function handleFortigateReboot(env) {
+  const wh = (env.HOME_WH_FG_REBOOT || '').replace(/^﻿/, '').trim();
+  if (!wh) return json({ error: 'HOME_WH_FG_REBOOT not configured' }, 500);
+  const n8nUser = (env.HOME_N8N_USER || '').replace(/^﻿/, '').trim();
+  const n8nPass = (env.HOME_N8N_PASS || '').replace(/^﻿/, '').trim();
+  const hdrs = { 'Content-Type': 'application/json' };
+  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
+  try {
+    const r = await fetch(wh, {
+      method: 'POST',
+      headers: hdrs,
+      body: '{}',
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!r.ok) return json({ error: 'n8n upstream error', status: r.status }, 502);
+    return new Response(await r.text(), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    });
+  } catch (e) {
+    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   FortiGate — REST API v2 (kept for reference / fallback)
    Via Cloudflare Tunnel + CF Access Service Token
    ═══════════════════════════════════════════════ */
 async function handleFortigate(env, debug = false) {
@@ -5135,9 +5240,19 @@ export default {
       const _s = await getSession(request, env);
       if (!_s) return json({ error: 'Unauthorized' }, 401);
       if (!(await hasPerm(env, _s, 'fortigate'))) return json({ error: 'Không có quyền truy cập FortiGate' }, 403);
-      // debug mode chỉ dành cho admin
-      const _dbg = url.searchParams.has('debug') && (await isAdminUser(env, _s));
-      return handleFortigate(env, _dbg);
+      return handleFortigateWebhook(env);
+    }
+    if (p === '/api/fortigate-bw') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'fortigate'))) return json({ error: 'Không có quyền truy cập FortiGate' }, 403);
+      return handleFortigateBW(env);
+    }
+    if (p === '/api/fortigate-reboot') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await isAdminUser(env, _s))) return json({ error: 'Admin required' }, 403);
+      return handleFortigateReboot(env);
     }
     if (p === '/api/asus') {
       const _s = await getSession(request, env);
