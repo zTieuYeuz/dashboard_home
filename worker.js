@@ -1668,10 +1668,10 @@ const ESXI_SDK        = 'https://esxi.home-server.id.vn/sdk';
    Set via:  wrangler secret put MOVI_N8N_USER  /  MOVI_N8N_PASS
    Never hardcode credentials in source. */
 function moviN8nAuth(env) {
-  const u = env && env.MOVI_N8N_USER;
-  const p = env && env.MOVI_N8N_PASS;
+  const u = (env.MOVI_N8N_USER || '').replace(/^﻿/, '').trim();
+  const p = (env.MOVI_N8N_PASS || '').replace(/^﻿/, '').trim();
   if (!u || !p) throw new Error('MOVI_N8N_USER / MOVI_N8N_PASS not configured');
-  return 'Basic ' + btoa(u + ':' + p);
+  return 'Basic ' + btoa(unescape(encodeURIComponent(u + ':' + p)));
 }
 
 async function checkService(service) {
@@ -2923,22 +2923,20 @@ async function handleCamEmbed(request, env) {
   if (!session) return new Response('Unauthorized', { status: 401 });
   if (!(await hasPerm(env, session, 'camera-movi'))) return new Response('Forbidden', { status: 403 });
 
-  const user   = env.MOVI_CAM_USER || '';
-  const pass   = env.MOVI_CAM_PASS || '';
-  const camUrl = env.MOVI_CAM_URL  || '';
+  const user   = (env.MOVI_CAM_USER || '').replace(/^﻿/, '').trim();
+  const pass   = (env.MOVI_CAM_PASS || '').replace(/^﻿/, '').trim();
+  const camUrl = (env.MOVI_CAM_URL  || '').replace(/^﻿/, '').trim();
   if (!camUrl) return new Response('Camera not configured', { status: 503 });
 
-  const auth    = 'Basic ' + btoa(`${user}:${pass}`);
+  const auth    = 'Basic ' + btoa(unescape(encodeURIComponent(`${user}:${pass}`)));
   const reqUrl  = new URL(request.url);
   const subPath = reqUrl.pathname.replace('/cam-embed', '') || '/';
   const target  = `${camUrl}${subPath}${reqUrl.search}`;
 
   // WebSocket proxy (for go2rtc MSE video stream)
+  // CF Workers fetch does NOT support wss:// — keep target as https://, Workers handles the upgrade
   if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
-    const wsTarget = target.replace(/^https/, 'wss').replace(/^http(?!s)/, 'ws');
-
-    // Connect to upstream go2rtc WebSocket with auth
-    const upstreamResp = await fetch(wsTarget, {
+    const upstreamResp = await fetch(target, {
       headers: {
         'Authorization':        auth,
         'Upgrade':              'websocket',
@@ -3376,11 +3374,11 @@ async function esxiSoapEx(bodyXml, sdkUrl, cfId, cfSec, cookie = '') {
             MOVI_VMWARE_CF_ID, MOVI_VMWARE_CF_SECRET
    ═══════════════════════════════════════════════ */
 async function handleMoviESXi(env, hostNum) {
-  const base  = env[`MOVI_VMWARE0${hostNum}_URL`];
-  const user  = env[`MOVI_VMWARE0${hostNum}_USER`];
-  const pass  = env[`MOVI_VMWARE0${hostNum}_PASS`];
-  const cfId  = env.MOVI_VMWARE_CF_ID;
-  const cfSec = env.MOVI_VMWARE_CF_SECRET;
+  const base  = (env[`MOVI_VMWARE0${hostNum}_URL`]  || '').replace(/^﻿/, '').trim();
+  const user  = (env[`MOVI_VMWARE0${hostNum}_USER`] || '').replace(/^﻿/, '').trim();
+  const pass  = (env[`MOVI_VMWARE0${hostNum}_PASS`] || '').replace(/^﻿/, '').trim();
+  const cfId  = (env.MOVI_VMWARE_CF_ID     || '').replace(/^﻿/, '').trim();
+  const cfSec = (env.MOVI_VMWARE_CF_SECRET || '').replace(/^﻿/, '').trim();
 
   if (!base) return json({ error: `MOVI_VMWARE0${hostNum}_URL not configured` }, 500);
 
@@ -3579,11 +3577,11 @@ async function handleMoviESXiPower(request, env, hostNum) {
   }
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
 
-  const base  = env[`MOVI_VMWARE0${hostNum}_URL`];
-  const user  = env[`MOVI_VMWARE0${hostNum}_USER`];
-  const pass  = env[`MOVI_VMWARE0${hostNum}_PASS`];
-  const cfId  = env.MOVI_VMWARE_CF_ID;
-  const cfSec = env.MOVI_VMWARE_CF_SECRET;
+  const base  = (env[`MOVI_VMWARE0${hostNum}_URL`]  || '').replace(/^﻿/, '').trim();
+  const user  = (env[`MOVI_VMWARE0${hostNum}_USER`] || '').replace(/^﻿/, '').trim();
+  const pass  = (env[`MOVI_VMWARE0${hostNum}_PASS`] || '').replace(/^﻿/, '').trim();
+  const cfId  = (env.MOVI_VMWARE_CF_ID     || '').replace(/^﻿/, '').trim();
+  const cfSec = (env.MOVI_VMWARE_CF_SECRET || '').replace(/^﻿/, '').trim();
   if (!base || !user || !pass) return json({ error: `MOVI_VMWARE0${hostNum} credentials not configured` }, 500);
 
   let body;
