@@ -743,9 +743,26 @@ const __USER__=window.__USER__||_readUserCookie()||{role:'user',permissions:{},i
 const __PERM__=__USER__.isAdmin?'write':(__USER__.permissions['asus']||'read');
 
 /* ── Polling ── */
-let _pollTimer=null;
-function startPolling(){if(_pollTimer)clearInterval(_pollTimer);_pollTimer=setInterval(load,300000);}
-function stopPolling(){if(_pollTimer){clearInterval(_pollTimer);_pollTimer=null;}}
+let _pollTimer=null,_bwTimer=null;
+function startPolling(){
+  if(_pollTimer)clearInterval(_pollTimer);
+  _pollTimer=setInterval(load,600000); // 10 phút — full refresh
+  if(_bwTimer)clearInterval(_bwTimer);
+  _bwTimer=setInterval(loadBW,30000);  // 30s — bandwidth only
+}
+function stopPolling(){
+  if(_pollTimer){clearInterval(_pollTimer);_pollTimer=null;}
+  if(_bwTimer){clearInterval(_bwTimer);_bwTimer=null;}
+}
+
+/* ── Load BW only ── */
+async function loadBW(){
+  try{
+    const r=await fetch('/api/asus/bw');
+    const d=await r.json();
+    if(!d.error)updateBW(d.wan);
+  }catch(e){}
+}
 
 /* ── Load ── */
 async function load(){
