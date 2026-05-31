@@ -13,6 +13,7 @@ node_modules/
 .dev.vars
 .dev.vars.*
 *.secret
+import-secrets.ps1
 sp_tmp.json
 dev_tmp.json
 

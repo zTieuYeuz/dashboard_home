@@ -4262,253 +4262,56 @@ async function handleFortigate(env, debug = false) {
 }
 
 /* ═══════════════════════════════════════════════
-   ASUS Router — HTTP API (asusrouter protocol)
-   Via Cloudflare Tunnel + CF Access Service Token
+   ASUS Router — via n8n webhooks (local IP)
    ═══════════════════════════════════════════════ */
-const ASUS_BASE = 'https://asus-api.home-server.id.vn';
 
-async function asusRequest(path, method, body, token, env) {
-  const cfId  = env.CF_ACCESS_CLIENT_ID;
-  const cfSec = env.CF_ACCESS_CLIENT_SECRET;
-  const headers = { 'User-Agent': 'asusrouter--DUTUtil-' };
-  if (cfId && cfSec) {
-    headers['CF-Access-Client-Id']     = cfId;
-    headers['CF-Access-Client-Secret'] = cfSec;
-  }
-  if (token) headers['Cookie'] = `asus_token=${token}`;
-  if (body)  headers['Content-Type'] = 'application/x-www-form-urlencoded';
-  const opts = { method: method || 'GET', headers, signal: AbortSignal.timeout(12000) };
-  if (body) opts.body = body;
-  try {
-    const r = await fetch(`${ASUS_BASE}${path}`, opts);
-    const text = await r.text();
-    return { ok: r.ok, text };
-  } catch (e) {
-    return { ok: false, text: '', error: e.message };
-  }
-}
 
-async function asusLogin(env) {
-  const user = env.ASUS_USER;
-  const pass = env.ASUS_PASS;
-  if (!user || !pass) return null;
-  const auth = btoa(`${user}:${pass}`);
-  const { ok, text } = await asusRequest(
-    '/login.cgi', 'POST', `login_authorization=${encodeURIComponent(auth)}`, null, env
-  );
-  if (!ok) return null;
-  try { return JSON.parse(text).asus_token || null; } catch { return null; }
-}
-
-async function handleAsus(env) {
-  if (!env.ASUS_USER || !env.ASUS_PASS)
-    return json({ error: 'ASUS_USER / ASUS_PASS not configured' }, 500);
-
-  const token = await asusLogin(env);
-  if (!token) return json({ error: 'ASUS router login failed — check credentials' }, 502);
-
-  // Main hook: only nvram_get + appobj — NO get_clientlist() here
-  // (some firmware breaks the entire response if get_clientlist() is mixed in)
-  const hookVars = [
-    'cpu_usage(appobj)', 'memory_usage(appobj)', 'netdev(appobj)',
-    // wan0_ipaddr = runtime IP on the WAN interface (DHCP/PPPoE live value)
-    // wan_ipaddr  = NVRAM stored value (can be stale after IP change)
-    'nvram_get(wan0_ipaddr)', 'nvram_get(wan_ipaddr)',
-    'nvram_get(wan0_gateway)', 'nvram_get(wan_gateway)',
-    'nvram_get(wan0_dns)',     'nvram_get(wan_dns)',
-    'nvram_get(wan0_proto)',   'nvram_get(wan_proto)',
-    'nvram_get(link_internet)',
-    'nvram_get(ddns_enable_x)', 'nvram_get(ddns_hostname_x)',
-    'nvram_get(ddns_server_x)', 'nvram_get(ddns_ipaddr)', 'nvram_get(ddns_updated)',
-    'nvram_get(wl0_ssid)', 'nvram_get(wl0_channel)', 'nvram_get(wl0_radio)',
-    'nvram_get(wl1_ssid)', 'nvram_get(wl1_channel)', 'nvram_get(wl1_radio)',
-    'nvram_get(productid)', 'nvram_get(firmver)', 'nvram_get(buildno)',
-    'nvram_get(lan_ipaddr)', 'nvram_get(uptime)', 'nvram_get(label_mac)',
-  ].join(';');
-
-  // Fetch main data + client list in parallel (isolated so client list failure doesn't break main data)
-  const [appRes, clRes] = await Promise.all([
-    asusRequest('/appGet.cgi', 'POST', `hook=${encodeURIComponent(hookVars)}`, token, env),
-    asusRequest('/appGet.cgi', 'POST', `hook=${encodeURIComponent('get_clientlist()')}`, token, env),
-  ]);
-
-  let app = {};
-  try { app = JSON.parse(appRes.text || '{}'); } catch {}
-
-  // Client list from separate fetch
-  let clRaw = null;
-  try {
-    const clJson = JSON.parse(clRes.text || '{}');
-    clRaw = clJson.get_clientlist ?? null;
-  } catch {}
-
-  // ── Parse client list ──────────────────────────────────────────────────
-  // get_clientlist() returns either a string "<MAC>><name>><ip>><isWL>><rssi>><online>><ssid>>"
-  // or a JSON object { MAC: { mac, name, ip, isWL, rssi, online, ... } }
-  function connLabel(wl) {
-    const n = parseInt(wl || 0);
-    return n === 0 ? 'Wired' : n === 1 ? '2.4G' : n === 2 ? '5G' : n === 3 ? '5G-2' : 'Unknown';
-  }
-
-  function parseClientList(raw) {
-    if (!raw) return [];
-    // Format A: plain object { MAC: {...} }
-    if (typeof raw === 'object' && !Array.isArray(raw)) {
-      return Object.values(raw).map(c => ({
-        mac:    (c.mac   || c.MAC   || '').toUpperCase(),
-        name:   c.name   || c.nickName || c.NickName || '',
-        ip:     c.ip     || c.ipAddr   || '',
-        type:   connLabel(c.isWL ?? c.type ?? 0),
-        rssi:   parseInt(c.rssi  || 0),
-        online: c.online === true || c.online === '1' || c.online === 1,
-      })).filter(c => c.mac && c.mac.length >= 12);
-    }
-    // Format B: string "<MAC>><name>><ip>><isWL>><rssi>><online>><ssid>>"
-    if (typeof raw === 'string' && raw.trim()) {
-      return raw.replace(/^</, '').split('<').filter(Boolean).map(entry => {
-        const p = entry.split('>');
-        const mac = (p[0] || '').trim().toUpperCase();
-        if (!mac || mac.length < 12) return null;
-        return {
-          mac,
-          name:   (p[1] || '').trim(),
-          ip:     (p[2] || '').trim(),
-          type:   connLabel(p[3]),
-          rssi:   parseInt(p[4] || 0),
-          online: p[5] === '1',
-        };
-      }).filter(Boolean);
-    }
-    return [];
-  }
-
-  const clients = parseClientList(clRaw).filter(c => c.online || c.ip);
-
-  // ── CPU ──
-  const cpuObj = app.cpu_usage || {};
-  let cpuPct = 0;
-  const cores = Object.values(cpuObj).filter(c => c && typeof c === 'object' && c.total);
-  if (cores.length) {
-    const totSum = cores.reduce((s, c) => s + (parseInt(c.total) || 0), 0);
-    const useSum = cores.reduce((s, c) => s + (parseInt(c.usage) || 0), 0);
-    cpuPct = totSum > 0 ? Math.round(useSum / totSum * 100) : 0;
-  }
-
-  // ── Memory ──
-  const memObj   = app.memory_usage || {};
-  const memTotal = parseInt(memObj.mem_total || 0);
-  const memFree  = parseInt(memObj.mem_free  || 0);
-  const memUsed  = memTotal - memFree;
-  const memPct   = memTotal > 0 ? Math.round(memUsed / memTotal * 100) : 0;
-
-  // ── Network ──
-  const netObj  = app.netdev || {};
-  const wanNet  = netObj.INTERNET || netObj.wan || {};
-  const rxBytes = parseInt(wanNet.rx_bytes || 0);
-  const txBytes = parseInt(wanNet.tx_bytes || 0);
-
-  // ── WAN ──
-  // Prefer wan0_ipaddr (runtime interface IP) over wan_ipaddr (NVRAM stored value, can be stale)
-  const wanIp     = (app.wan0_ipaddr  && app.wan0_ipaddr  !== '0.0.0.0' ? app.wan0_ipaddr  : null)
-                 || (app.wan_ipaddr   && app.wan_ipaddr   !== '0.0.0.0' ? app.wan_ipaddr   : null)
-                 || '';
-  const wanGw     = app.wan0_gateway  || app.wan_gateway  || '';
-  const wanDns    = app.wan0_dns      || app.wan_dns      || '';
-  const wanProto  = app.wan0_proto    || app.wan_proto    || '';
-  const wanOnline = app.link_internet === '1' || (wanIp !== '');
-
-  // ── DDNS ──
-  const ddnsEnabled  = app.ddns_enable_x === '1';
-  const ddnsHostname = app.ddns_hostname_x || '';
-  const ddnsServer   = app.ddns_server_x   || '';
-  const ddnsIp       = app.ddns_ipaddr     || '';
-  const ddnsUpdated  = app.ddns_updated    || '';
-  // Working = enabled + has a valid registered IP + last update didn't fail
-  // Note: ddns_updated is often a timestamp like "2025/04/12 08:30:00", not "success"
-  const ddnsHasIp    = ddnsIp && ddnsIp !== '' && ddnsIp !== '0.0.0.0';
-  const ddnsNotFailed = !ddnsUpdated.toLowerCase().match(/fail|error|n\/a|none/);
-  const ddnsWorking  = ddnsEnabled && ddnsHasIp && ddnsNotFailed;
-
-  // ── WiFi client counts from parsed client list ──
-  const wifi24Clients = clients.filter(c => c.type === '2.4G').length;
-  const wifi5Clients  = clients.filter(c => c.type === '5G' || c.type === '5G-2').length;
-  const wiredClients  = clients.filter(c => c.type === 'Wired').length;
-  const totalClients  = clients.length;
-
-  // ── Uptime ──
-  const uptimeSec  = parseInt(app.uptime || 0);
-  const uptimeDays = Math.floor(uptimeSec / 86400);
-  const uptimeHrs  = Math.floor((uptimeSec % 86400) / 3600);
-  const uptimeMins = Math.floor((uptimeSec % 3600) / 60);
-  const uptimeStr  = uptimeDays > 0 ? `${uptimeDays}d ${uptimeHrs}h ${uptimeMins}m`
-                   : uptimeHrs  > 0 ? `${uptimeHrs}h ${uptimeMins}m`
-                   : `${uptimeMins}m`;
-
-  // Logout fire-and-forget
-  asusRequest('/Logout.asp', 'GET', null, token, env).catch(() => {});
-
-  return json({
-    system: {
-      model:     app.productid  || '',
-      firmware:  `${app.firmver || ''}.${app.buildno || ''}`.replace(/^\./,''),
-      lanIp:     app.lan_ipaddr || '',
-      mac:       app.label_mac  || '',
-      uptime:    uptimeStr,
-      uptimeSec,
-    },
-    resources: { cpuPct, memPct, memTotalKB: memTotal, memFreeKB: memFree },
-    wan: {
-      ip:      wanIp,
-      gateway: wanGw,
-      dns:     wanDns,
-      proto:   wanProto.toUpperCase(),
-      online:  wanOnline,
-      rxBytes, txBytes,
-    },
-    ddns: {
-      enabled:  ddnsEnabled,
-      hostname: ddnsHostname,
-      server:   ddnsServer,
-      ip:       ddnsIp,
-      updated:  ddnsUpdated,
-      working:  ddnsWorking,
-    },
-    wifi: {
-      band24: {
-        ssid:    app.wl0_ssid    || '',
-        channel: app.wl0_channel || '',
-        enabled: app.wl0_radio   !== '0',
-        clients: wifi24Clients,
-      },
-      band5: {
-        ssid:    app.wl1_ssid    || '',
-        channel: app.wl1_channel || '',
-        enabled: app.wl1_radio   !== '0',
-        clients: wifi5Clients,
-      },
-    },
-    stats: {
-      wanOnline, ddnsWorking, cpuPct, memPct,
-      totalClients, wifi24Clients, wifi5Clients, wiredClients,
-    },
-    clients,
-  });
+async function handleAsusWebhook(env) {
+  const n8nUser = (env.HOME_N8N_USER || '').replace(/^﻿/, '').trim();
+  const n8nPass = (env.HOME_N8N_PASS || '').replace(/^﻿/, '').trim();
+  const hdrs = { 'Content-Type': 'application/json' };
+  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
+  const call = (url, ms = 15000) => {
+    const u = (url || '').replace(/^﻿/, '').trim();
+    if (!u) return Promise.resolve(null);
+    return fetch(u, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(ms) })
+      .then(r => r.ok ? r.json() : null).catch(() => null);
+  };
+  const whMain    = (env.HOME_WH_ASUS_MAIN    || '').replace(/^﻿/, '').trim();
+  const whClients = (env.HOME_WH_ASUS_CLIENTS || '').replace(/^﻿/, '').trim();
+  if (!whMain) return json({ error: 'HOME_WH_ASUS_MAIN not configured' }, 500);
+  const [main, clients] = await Promise.all([call(whMain), call(whClients)]);
+  return new Response(JSON.stringify({
+    system:         main?.system         || {},
+    resources:      main?.resources      || {},
+    wan:            main?.wan            || {},
+    ddns:           main?.ddns           || {},
+    wifi:           main?.wifi           || {},
+    portForwarding: main?.portForwarding || { enabled: false, rules: [] },
+    dhcpStatic:     main?.dhcpStatic     || [],
+    vpn:            main?.vpn            || { server: { enabled: false }, client: { active: false, proto: '' } },
+    aiProtection:   main?.aiProtection   || { enabled: false },
+    qos:            main?.qos            || { enabled: false },
+    clients:        clients?.clients     || [],
+    stats:          { ...(main?.stats || {}), ...(clients?.stats || {}) },
+  }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 }
 
 async function handleAsusReboot(request, env) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  if (!env.ASUS_USER || !env.ASUS_PASS)
-    return json({ error: 'ASUS_USER / ASUS_PASS not configured' }, 500);
-
-  const token = await asusLogin(env);
-  if (!token) return json({ error: 'Login failed — cannot reboot' }, 502);
-
-  // Send reboot command
-  const { ok, text } = await asusRequest(
-    '/applyapp.cgi', 'POST', 'action_mode=reboot', token, env
-  );
-  // Router may close connection immediately on reboot — treat as success
-  return json({ success: true, message: 'Reboot command sent to ASUS router' });
+  const n8nUser = (env.HOME_N8N_USER || '').replace(/^﻿/, '').trim();
+  const n8nPass = (env.HOME_N8N_PASS || '').replace(/^﻿/, '').trim();
+  const whReboot = (env.HOME_WH_ASUS_REBOOT || '').replace(/^﻿/, '').trim();
+  if (!whReboot) return json({ error: 'HOME_WH_ASUS_REBOOT not configured' }, 500);
+  const hdrs = { 'Content-Type': 'application/json' };
+  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
+  try {
+    await fetch(whReboot, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(20000) })
+      .catch(() => {});
+    return json({ success: true, message: 'Reboot command sent' });
+  } catch (e) {
+    return json({ success: true, message: 'Reboot command sent (router may have disconnected)' });
+  }
 }
 
 function json(data, status = 200) {
@@ -5258,7 +5061,7 @@ export default {
       const _s = await getSession(request, env);
       if (!_s) return json({ error: 'Unauthorized' }, 401);
       if (!(await hasPerm(env, _s, 'asus'))) return json({ error: 'Không có quyền truy cập ASUS Router' }, 403);
-      return handleAsus(env);
+      return handleAsusWebhook(env);
     }
     if (p === '/api/asus/reboot') {
       const _s = await getSession(request, env);
