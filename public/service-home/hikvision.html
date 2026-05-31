@@ -40,11 +40,9 @@ a{color:inherit;text-decoration:none}
 .topnav-item.active{color:var(--text);background:var(--surface-2)}
 .clock{font-family:var(--font-mono);font-size:13px;color:var(--text-2);padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm)}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);transition:all .12s;cursor:pointer}
-.btn.ghost{background:transparent}
+.btn.ghost{background:transparent;border-color:transparent}
 .btn:hover{color:var(--text);border-color:var(--muted)}
 .theme-toggle{width:32px;height:32px;display:grid;place-items:center;padding:0}
-@keyframes spin{to{transform:rotate(360deg)}}
-.btn.refreshing .ri{animation:spin .6s linear infinite}
 
 .page{padding:20px 28px 48px;max-width:1600px;margin:0 auto}
 .cam-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.85rem}
@@ -55,8 +53,33 @@ a{color:inherit;text-decoration:none}
 .cam-cell.cam-off{border-color:var(--border-soft)}
 .cam-cell.cam-unconfigured{opacity:.55}
 
-.cam-label{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface);border-bottom:1px solid var(--border)}
-.cam-name{font-size:12px;font-weight:600;letter-spacing:.2px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Label bar */
+.cam-label{display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--surface);border-bottom:1px solid var(--border);min-height:36px}
+.cam-name-wrap{flex:1;min-width:0;display:flex;align-items:center;gap:4px;overflow:hidden}
+.cam-name{font-size:12px;font-weight:600;letter-spacing:.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cam-name-input{
+  flex:1;min-width:0;font:600 12px/1 var(--font-sans);
+  background:var(--surface-2);border:1px solid var(--accent);
+  border-radius:4px;color:var(--text);padding:2px 6px;outline:none;
+}
+.cam-name-input:focus{border-color:var(--accent)}
+.edit-btn{
+  flex-shrink:0;width:20px;height:20px;display:grid;place-items:center;
+  color:var(--muted);border-radius:4px;transition:all .15s;padding:0;
+  background:transparent;border:none;cursor:pointer;opacity:0;
+}
+.cam-label:hover .edit-btn{opacity:1}
+.edit-btn:hover{color:var(--accent);background:var(--surface-2)}
+.edit-save{flex-shrink:0;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;
+  background:color-mix(in oklch,var(--ok) 15%,transparent);color:var(--ok);
+  border:1px solid color-mix(in oklch,var(--ok) 30%,transparent);cursor:pointer;
+  font-family:var(--font-sans);transition:all .15s}
+.edit-save:hover{background:color-mix(in oklch,var(--ok) 25%,transparent)}
+.edit-cancel{flex-shrink:0;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;
+  background:transparent;color:var(--muted);border:1px solid var(--border);cursor:pointer;
+  font-family:var(--font-sans);transition:all .15s}
+.edit-cancel:hover{color:var(--text)}
+
 .cam-type{font-size:10px;padding:2px 7px;border-radius:8px;font-weight:500;border:1px solid;white-space:nowrap;flex-shrink:0}
 .cam-type.analog{background:color-mix(in oklch,var(--ok) 12%,transparent);color:var(--ok);border-color:color-mix(in oklch,var(--ok) 30%,transparent)}
 .cam-type.ip{background:color-mix(in oklch,var(--accent) 12%,transparent);color:var(--accent);border-color:color-mix(in oklch,var(--accent) 30%,transparent)}
@@ -64,12 +87,10 @@ a{color:inherit;text-decoration:none}
 
 /* Toggle button */
 .toggle-btn{
-  flex-shrink:0;
-  display:flex;align-items:center;gap:4px;
+  flex-shrink:0;display:flex;align-items:center;gap:4px;
   font-size:11px;font-weight:600;font-family:var(--font-sans);
   padding:3px 9px;border-radius:20px;border:1px solid;
-  cursor:pointer;transition:all .2s;white-space:nowrap;
-  background:transparent;
+  cursor:pointer;transition:all .2s;white-space:nowrap;background:transparent;
 }
 .toggle-btn.is-on{color:var(--ok);border-color:color-mix(in oklch,var(--ok) 30%,transparent);background:color-mix(in oklch,var(--ok) 10%,transparent)}
 .toggle-btn.is-on:hover{background:color-mix(in oklch,var(--ok) 18%,transparent)}
@@ -84,8 +105,7 @@ a{color:inherit;text-decoration:none}
 /* Overlays */
 .cam-overlay{
   position:absolute;top:0;left:0;width:100%;height:100%;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:10px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
 }
 .cam-overlay.paused{background:var(--bg)}
 .cam-overlay.unconfigured{background:var(--card)}
@@ -93,7 +113,8 @@ a{color:inherit;text-decoration:none}
 .cam-overlay .msg{font-size:12px;color:var(--muted);text-align:center;line-height:1.7}
 .cam-overlay .resume-btn{
   font-size:11px;padding:4px 14px;border-radius:20px;
-  border:1px solid color-mix(in oklch,var(--ok) 30%,transparent);background:color-mix(in oklch,var(--ok) 10%,transparent);color:var(--ok);
+  border:1px solid color-mix(in oklch,var(--ok) 30%,transparent);
+  background:color-mix(in oklch,var(--ok) 10%,transparent);color:var(--ok);
   cursor:pointer;font-family:var(--font-sans);font-weight:600;transition:all .2s;
 }
 .cam-overlay .resume-btn:hover{background:color-mix(in oklch,var(--ok) 18%,transparent)}
@@ -105,6 +126,7 @@ a{color:inherit;text-decoration:none}
 .legend{display:flex;gap:14px;flex-wrap:wrap}
 .leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
 .leg-dot{width:8px;height:8px;border-radius:50%}
+
 @media(max-width:700px){
   .topbar{height:auto;flex-wrap:wrap;padding:.625rem .75rem;gap:6px}
   .topbar-left{width:100%;gap:8px}
@@ -154,7 +176,7 @@ a{color:inherit;text-decoration:none}
     <div class="bar-info">Stream qua <strong>go2rtc</strong> → Cloudflare Tunnel → Browser · Độ trễ ~0.5–2s</div>
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
       <div style="font-size:11px;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 10px;white-space:nowrap">
-        💡 Dùng <strong style="color:var(--text)">⧉ Pop out</strong> để PiP vẫn chạy khi về Dashboard
+        💡 Hover camera → <strong style="color:var(--text)">✏ Đổi tên</strong> (lưu trên máy này)
       </div>
       <div class="legend">
         <div class="leg-item"><div class="leg-dot" style="background:var(--ok)"></div>Analog</div>
@@ -177,28 +199,37 @@ if(typeof window.__USER__==='undefined'){
 }
 
 /* ── Camera definitions ── */
-const BASE = 'https://camera.home-server.id.vn';
-const MODE = 'webrtc,mse,hls,mjpeg';
+const BASE = '';  // Worker proxy — /cam-home/ prefix
+const MODE = 'mse,hls,mjpeg';
 
 var USER = (typeof window.__USER__ !== 'undefined') ? window.__USER__ : {};
 var CAMERAS = [];
 
-/* ── State (persisted in localStorage) ── */
-const LS_KEY = 'cam_state_v1';
-function loadState(){
-  try{ return JSON.parse(localStorage.getItem(LS_KEY)||'{}'); }catch{ return {}; }
-}
-function saveState(state){ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+/* ── Persisted state ── */
+const LS_STATE = 'cam_state_v1';
+const LS_NAMES = 'cam_names_v1';
 
-// Default: all configured cameras ON
-let state = loadState();
+function loadState(){ try{ return JSON.parse(localStorage.getItem(LS_STATE)||'{}'); }catch{ return {}; } }
+function saveState(s){ localStorage.setItem(LS_STATE, JSON.stringify(s)); }
+function loadNames(){ try{ return JSON.parse(localStorage.getItem(LS_NAMES)||'{}'); }catch{ return {}; } }
+function saveNames(n){ localStorage.setItem(LS_NAMES, JSON.stringify(n)); }
 
+var state = loadState();
+var names = loadNames();  // { [camId]: 'Custom Name' }
+var editingId = null;
+
+/* ── Get display name ── */
+function displayName(c){ return names[c.id] || c.name; }
+
+/* ── Init settings link ── */
+if(USER.isAdmin){ var sl=document.getElementById('settings-link'); if(sl) sl.style.display=''; }
+
+/* ── Load cameras ── */
 function initCameras() {
   fetch('/api/admin/cameras')
     .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function(d) {
       var allCams = d.cameras || [];
-      // Filter by permission for non-admin users
       var allowedIds = USER.isAdmin ? null : (USER.cameras || []);
       var visible = allowedIds === null ? allCams
         : allCams.filter(function(c){ return allowedIds.indexOf(c.id) >= 0; });
@@ -208,12 +239,11 @@ function initCameras() {
           id:    c.id,
           name:  c.name || c.id,
           type:  c.type || 'ip',
-          label: c.stream ? (c.type === 'analog' ? 'Analog · ' : 'IP · ') + c.stream : 'Stream: ' + c.id,
+          label: c.stream ? (c.type === 'analog' ? 'Analog' : 'IP') + ' · ' + c.stream : c.id,
           src:   c.stream || null
         };
       });
 
-      // Init state for any new camera not yet in localStorage
       CAMERAS.forEach(function(c) {
         if (!(c.id in state)) state[c.id] = c.src !== null;
       });
@@ -228,39 +258,100 @@ function initCameras() {
 
 /* ── Render grid ── */
 function render(){
-  const grid = document.getElementById('cam-grid');
+  var grid = document.getElementById('cam-grid');
   grid.innerHTML = CAMERAS.map(function(c){
-    const isOn  = state[c.id];
-    const isUnconfigured = c.src === null;
-    const cellCls = isUnconfigured ? 'cam-cell cam-unconfigured' : isOn ? 'cam-cell' : 'cam-cell cam-off';
+    var isOn = state[c.id];
+    var isUnconfigured = c.src === null;
+    var isEditing = editingId === c.id;
+    var cellCls = isUnconfigured ? 'cam-cell cam-unconfigured' : isOn ? 'cam-cell' : 'cam-cell cam-off';
+    var dname = escHtml(displayName(c));
 
-    const toggleHTML = isUnconfigured ? '' :
+    /* Name area */
+    var nameHtml;
+    if (isEditing) {
+      nameHtml = '<input class="cam-name-input" id="edit-input-'+c.id+'" value="'+dname+'" maxlength="40"'
+        +' onkeydown="handleEditKey(event,\''+c.id+'\')"'
+        +' onclick="event.stopPropagation()">'
+        +'<button class="edit-save" onclick="saveEdit(\''+c.id+'\')">✓</button>'
+        +'<button class="edit-cancel" onclick="cancelEdit()">✕</button>';
+    } else {
+      nameHtml = '<span class="cam-name">'+dname+'</span>'
+        +'<button class="edit-btn" title="Đổi tên" onclick="startEdit(\''+c.id+'\')">'
+        +'<svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">'
+        +'<path d="M11 2l3 3-8 8H3v-3L11 2z"/></svg></button>';
+    }
+
+    /* Toggle */
+    var toggleHTML = isUnconfigured ? '' :
       '<button class="toggle-btn '+(isOn?'is-on':'is-off')+'" onclick="toggle(\''+c.id+'\')">'
       +'<span class="toggle-dot"></span>'+(isOn?'ON':'OFF')+'</button>';
 
-    const frameContent = isUnconfigured
-      ? '<div class="cam-overlay unconfigured"><div class="ico">🔒</div><div class="msg">Chưa cấu hình<br><small>Cần cập nhật mật khẩu</small></div></div>'
-      : isOn
-        ? '<iframe id="frame-'+c.id+'" src="'+BASE+'/stream.html?src='+c.src+'&mode='+MODE+'" allow="autoplay" allowfullscreen></iframe>'
-        : '<div class="cam-overlay paused"><div class="ico">⏸</div><div class="msg">Stream đã tắt</div>'
-          +'<button class="resume-btn" onclick="toggle(\''+c.id+'\')">▶ Bật lại</button></div>';
+    /* Frame */
+    var frameContent;
+    if (isUnconfigured) {
+      frameContent = '<div class="cam-overlay unconfigured"><div class="ico">🔒</div>'
+        +'<div class="msg">Chưa cấu hình<br><small>Cần cập nhật stream</small></div></div>';
+    } else if (isOn) {
+      frameContent = '<iframe id="frame-'+c.id+'" src="/cam-home/stream.html?src='+c.src+'&mode='+MODE+'"'
+        +' allow="autoplay" allowfullscreen></iframe>';
+    } else {
+      frameContent = '<div class="cam-overlay paused"><div class="ico">⏸</div>'
+        +'<div class="msg">Stream đã tắt</div>'
+        +'<button class="resume-btn" onclick="toggle(\''+c.id+'\')">▶ Bật lại</button></div>';
+    }
 
     return '<div class="'+cellCls+'" id="cell-'+c.id+'">'
       +'<div class="cam-label">'
-        +'<span class="cam-name">'+c.name+'</span>'
-        +'<span class="cam-type '+c.type+'">'+c.label+'</span>'
+        +'<div class="cam-name-wrap">'+nameHtml+'</div>'
+        +'<span class="cam-type '+c.type+'">'+escHtml(c.label)+'</span>'
         +toggleHTML
       +'</div>'
       +'<div class="cam-frame">'+frameContent+'</div>'
       +'</div>';
   }).join('');
 
+  /* Focus input if editing */
+  if (editingId) {
+    var inp = document.getElementById('edit-input-'+editingId);
+    if (inp) { inp.focus(); inp.select(); }
+  }
+
   updateBadge();
 }
 
-/* ── Toggle single camera ── */
+/* ── Edit name ── */
+function startEdit(id){
+  editingId = id;
+  render();
+}
+
+function cancelEdit(){
+  editingId = null;
+  render();
+}
+
+function saveEdit(id){
+  var inp = document.getElementById('edit-input-'+id);
+  if (!inp) return;
+  var val = inp.value.trim();
+  if (val) {
+    names[id] = val;
+  } else {
+    delete names[id];
+  }
+  saveNames(names);
+  editingId = null;
+  render();
+}
+
+function handleEditKey(e, id){
+  if (e.key === 'Enter') { e.preventDefault(); saveEdit(id); }
+  else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+}
+
+/* ── Toggle camera ── */
 function toggle(id){
-  const cam = CAMERAS.find(function(c){ return c.id===id; });
+  var cam = CAMERAS.find(function(c){ return c.id===id; });
   if(!cam || cam.src===null) return;
   state[id] = !state[id];
   saveState(state);
@@ -276,43 +367,30 @@ function setAll(on){
 
 /* ── Badge count ── */
 function updateBadge(){
-  const configured = CAMERAS.filter(function(c){ return c.src!==null; });
-  const on = configured.filter(function(c){ return state[c.id]; });
-  document.getElementById('status-badge').textContent = on.length+' / '+CAMERAS.length+' streaming';
+  var configured = CAMERAS.filter(function(c){ return c.src!==null; });
+  var on = configured.filter(function(c){ return state[c.id]; });
+  document.getElementById('status-badge').textContent = on.length+'/'+CAMERAS.length+' streaming';
 }
 
+/* ── Util ── */
+function escHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Init ── */
 initCameras();
 
-/* ── Navigation helpers ── */
-function goBack() {
-  window.location.href = '/';
-}
-
-function openPopout() {
-  // Save current state so popup inherits it
-  saveState(state);
-  var w = screen.width  * 0.72 | 0;
-  var h = screen.height * 0.80 | 0;
-  var l = ((screen.width  - w) / 2) | 0;
-  var t = ((screen.height - h) / 2) | 0;
-  window.open(
-    window.location.href,
-    'camera-popout',
-    'width='+w+',height='+h+',left='+l+',top='+t+',menubar=no,toolbar=no,location=no,status=no,scrollbars=yes'
-  );
-}
-
-/* ── Cảnh báo khi stream đang chạy mà navigate hoặc đóng tab ── */
+/* ── beforeunload warning ── */
 window.addEventListener('beforeunload', function(e) {
   var anyStreaming = CAMERAS.some(function(c){ return c.src !== null && state[c.id]; });
   if (anyStreaming) {
     e.preventDefault();
-    // returnValue required for Chrome/Edge to show native dialog
     e.returnValue = 'Stream camera đang chạy. Bạn có chắc muốn rời trang?';
     return e.returnValue;
   }
 });
 
+/* ── Theme ── */
 (function initTheme(){
   var saved=null; try{saved=localStorage.getItem('dh_theme')}catch(e){}
   if(saved==='light')document.documentElement.dataset.theme='light';
@@ -323,7 +401,12 @@ window.addEventListener('beforeunload', function(e) {
     try{localStorage.setItem('dh_theme',next)}catch(e){}
   });
 })();
-setInterval(function(){var c=document.getElementById('clock');if(c)c.textContent=new Date().toLocaleTimeString('vi-VN',{hour12:false});},1000);
+
+/* ── Clock ── */
+setInterval(function(){
+  var c=document.getElementById('clock');
+  if(c) c.textContent=new Date().toLocaleTimeString('vi-VN',{hour12:false});
+},1000);
 </script>
 </body>
 </html>
