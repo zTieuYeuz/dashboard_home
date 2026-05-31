@@ -1299,7 +1299,7 @@ const WAYFIND_NAV = `<style>
   {i:'\uD83D\uDDA5',n:'VMware01 Movi',d:'ESXi host 01 ? Movi Finance datacenter',h:'/service-movi/vmware01-movi.html'},
   {i:'\uD83D\uDDA5',n:'VMware02 Movi',d:'ESXi host 02 ? Movi Finance datacenter',h:'/service-movi/vmware02-movi.html'},
   {i:'\\uD83D\\uDD25',n:'FortiGate',d:'Firewall · security gateway',h:'/service-home/fortigate.html'},
-  {i:'\\uD83D\\uDDA5',n:'VMware ESXi',d:'Hypervisor · bare metal',h:'/service-home/esxi.html'},
+  {i:'\\uD83D\\uDDA5',n:'VMware ESXi',d:'Hypervisor · bare metal',h:'/service-home/vmware-home.html'},
   {i:'\\uD83C\\uDFE0',n:'CasaOS',d:'Home server OS',h:'/service-home/casaos.html'},
   {i:'\\uD83D\\uDCE1',n:'ASUS Router',d:'Home network router',h:'/service-home/asus.html'},
   {i:'\\uD83D\\uDD00',n:'9Router',d:'Router & network management',h:'/service-home/9router.html'},
@@ -1397,7 +1397,7 @@ const DATA_REFRESH = `<style>
   '/service-movi/vmware02-movi.html':['loadData'],
   '/service-movi/tool-movi.html':[],
   '/service-movi/ssh-movi.html':[],
-  '/service-home/fortigate.html':['load'],'/service-home/esxi.html':['loadData'],'/service-home/casaos.html':['loadData'],
+  '/service-home/fortigate.html':['load'],'/service-home/vmware-home.html':['loadData'],'/service-home/casaos.html':['loadData'],
   '/service-home/asus.html':['load'],'/service-home/9router.html':['loadData'],'/service-home/n8n.html':['loadData'],
   '/service-home/hikvision.html':['loadState'],'/service-home/ssh.html':['loadData'],
   '/bookmarks.html':['loadData'],'/settings.html':['loadSettings']};
@@ -1697,7 +1697,7 @@ async function handleStatus() {
 }
 
 async function handleN8n(env) {
-  const key = env.N8N_API_KEY;
+  const key = (env.N8N_API_KEY || '').replace(/^﻿/, '').trim();
   if (!key) return json({ error: 'N8N_API_KEY not configured' }, 500);
 
   const h = { 'X-N8N-API-KEY': key, 'Accept': 'application/json' };
@@ -1714,13 +1714,18 @@ async function handleN8n(env) {
       fetch(`${N8N_BASE}/tags?limit=100`, opts()),
     ]);
 
+    if (!wfRes.ok) {
+      const txt = await wfRes.text();
+      return json({ error: `n8n server error ${wfRes.status}: ${txt.slice(0, 200)}` }, 502);
+    }
+
     const [wfData, exData, exRunData, credData, varData, tagData] = await Promise.all([
       wfRes.json(),
       exRes.json(),
       exRunRes.ok ? exRunRes.json() : { data: [] },
-      credRes.json(),
-      varRes.json(),
-      tagRes.json(),
+      credRes.ok  ? credRes.json()  : { data: [] },
+      varRes.ok   ? varRes.json()   : { data: [] },
+      tagRes.ok   ? tagRes.json()   : { data: [] },
     ]);
 
     const workflows = (wfData.data || []).map(w => ({
@@ -1790,7 +1795,7 @@ async function handleN8n(env) {
 }
 
 async function handleExecDetail(request, env) {
-  const key = env.N8N_API_KEY;
+  const key = (env.N8N_API_KEY || '').replace(/^﻿/, '').trim();
   if (!key) return json({ error: 'N8N_API_KEY not configured' }, 500);
 
   const url = new URL(request.url);
@@ -1820,7 +1825,7 @@ async function handleExecDetail(request, env) {
 /* ── Movi n8n API (direct API key auth) ──
    Set via:  wrangler secret put MOVI_N8N_API_KEY */
 async function handleMoviN8n(env) {
-  const key = env.MOVI_N8N_API_KEY;
+  const key = (env.MOVI_N8N_API_KEY || '').replace(/^﻿/, '').trim();
   if (!key) return json({ error: 'MOVI_N8N_API_KEY not configured' }, 500);
 
   const h = { 'X-N8N-API-KEY': key, 'Accept': 'application/json' };
@@ -1911,7 +1916,7 @@ async function handleMoviN8n(env) {
 }
 
 async function handleMoviN8nExecDetail(request, env) {
-  const key = env.MOVI_N8N_API_KEY;
+  const key = (env.MOVI_N8N_API_KEY || '').replace(/^﻿/, '').trim();
   if (!key) return json({ error: 'MOVI_N8N_API_KEY not configured' }, 500);
 
   const url = new URL(request.url);
@@ -4025,6 +4030,43 @@ async function handleCasaOS(env) {
 }
 
 /* ═══════════════════════════════════════════════
+   VMware Home — via n8n webhook (SOAP handled by n8n)
+   ═══════════════════════════════════════════════ */
+async function handleVmwareHome(env) {
+  const n8nUser = (env.HOME_N8N_USER || '').replace(/^﻿/, '').trim();
+  const n8nPass = (env.HOME_N8N_PASS || '').replace(/^﻿/, '').trim();
+  const wh      = (env.HOME_WH_VMWARE_DATA || '').replace(/^﻿/, '').trim();
+  if (!wh) return json({ error: 'HOME_WH_VMWARE_DATA not configured' }, 500);
+  const hdrs = { 'Content-Type': 'application/json' };
+  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
+  try {
+    const resp = await fetch(wh, { headers: hdrs, signal: AbortSignal.timeout(30000) });
+    if (!resp.ok) { const t = await resp.text(); return json({ error: `n8n error ${resp.status}: ${t.slice(0,200)}` }, 502); }
+    const raw  = await resp.json();
+    const data = Array.isArray(raw) ? raw[0] : raw;
+    return json(data);
+  } catch (e) { return json({ error: 'Failed to reach n8n', detail: e.message }, 502); }
+}
+
+async function handleVmwareHomePower(request, env) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  const n8nUser = (env.HOME_N8N_USER || '').replace(/^﻿/, '').trim();
+  const n8nPass = (env.HOME_N8N_PASS || '').replace(/^﻿/, '').trim();
+  const wh      = (env.HOME_WH_VMWARE_POWER || '').replace(/^﻿/, '').trim();
+  if (!wh) return json({ error: 'HOME_WH_VMWARE_POWER not configured' }, 500);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
+  const hdrs = { 'Content-Type': 'application/json' };
+  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
+  try {
+    const resp = await fetch(wh, { method: 'POST', headers: hdrs, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) });
+    if (!resp.ok) { const t = await resp.text(); return json({ error: `n8n error ${resp.status}: ${t.slice(0,200)}` }, 502); }
+    const raw  = await resp.json();
+    return json(Array.isArray(raw) ? raw[0] : raw);
+  } catch (e) { return json({ error: 'Failed to reach n8n', detail: e.message }, 502); }
+}
+
+/* ═══════════════════════════════════════════════
    FortiGate Home — 5 workflows riêng, gọi song song
    Mỗi workflow độc lập: 1 fail không ảnh hưởng cái khác
    ═══════════════════════════════════════════════ */
@@ -5187,6 +5229,18 @@ export default {
       if (!_s) return json({ error: 'Unauthorized' }, 401);
       if (!(await isAdminUser(env, _s))) return json({ error: 'Admin required' }, 403);
       return handleAsusReboot(request, env);
+    }
+    if (p === '/api/vmware-home') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'esxi'))) return json({ error: 'Không có quyền truy cập VMware Home' }, 403);
+      return handleVmwareHome(env);
+    }
+    if (p === '/api/vmware-home/power') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await isAdminUser(env, _s))) return json({ error: 'Admin required' }, 403);
+      return handleVmwareHomePower(request, env);
     }
     if (p === '/proxy')           return handleProxy(request, env);
 
