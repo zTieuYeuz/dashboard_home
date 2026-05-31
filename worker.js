@@ -2819,6 +2819,104 @@ async function handleCameraToken(request, env) {
   return json({ url, streams: allStreams, labels, streamToCamId, isAdmin: true });
 }
 
+/* ── Camera Home — Full Reverse Proxy (HTTP + WebSocket) with CF Access Token ── */
+async function handleCamHomeEmbed(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return new Response('Unauthorized', { status: 401 });
+  if (!(await hasPerm(env, session, 'camera'))) return new Response('Forbidden', { status: 403 });
+
+  const camUrl    = 'https://camera.home-server.id.vn';
+  const cfId      = (env.HOME_CAM_CF_CLIENT_ID     || '').replace(/^﻿/, '').trim();
+  const cfSecret  = (env.HOME_CAM_CF_CLIENT_SECRET || '').replace(/^﻿/, '').trim();
+  const g2User    = (env.HOME_GO2RTC_USER          || '').replace(/^﻿/, '').trim();
+  const g2Pass    = (env.HOME_GO2RTC_PASS          || '').replace(/^﻿/, '').trim();
+
+  const authHeaders = {
+    'CF-Access-Client-Id':     cfId,
+    'CF-Access-Client-Secret': cfSecret,
+    ...(g2User ? { 'Authorization': 'Basic ' + btoa(unescape(encodeURIComponent(`${g2User}:${g2Pass}`))) } : {}),
+  };
+
+  const reqUrl  = new URL(request.url);
+  const subPath = reqUrl.pathname.replace('/cam-home', '') || '/';
+  const target  = `${camUrl}${subPath}${reqUrl.search}`;
+
+  // ── WebSocket proxy (MSE streaming) ──
+  // CF Workers fetch does NOT support wss:// — keep target as https://, Workers handles the upgrade
+  if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+    let upstreamResp;
+    try {
+      upstreamResp = await fetch(target, {
+        headers: {
+          ...authHeaders,
+          'Upgrade':               'websocket',
+          'Connection':            'Upgrade',
+          'Sec-WebSocket-Version': '13',
+          'Sec-WebSocket-Key':     'dGhlIHNhbXBsZSBub25jZQ==',
+        },
+      });
+    } catch(e) {
+      return new Response('WebSocket upstream error: ' + e.message, { status: 502 });
+    }
+    const upstream = upstreamResp.webSocket;
+    if (!upstream) return new Response('WebSocket upstream failed (status ' + upstreamResp.status + ')', { status: 502 });
+
+    const { 0: client, 1: server } = new WebSocketPair();
+    server.accept();
+    upstream.accept();
+    server.addEventListener('message',   ({ data }) => { try { upstream.send(data); } catch(_) {} });
+    upstream.addEventListener('message', ({ data }) => { try { server.send(data);   } catch(_) {} });
+    server.addEventListener('close',   ({ code, reason }) => { try { upstream.close(code, reason); } catch(_) {} });
+    upstream.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason);   } catch(_) {} });
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // ── HTTP proxy ──
+  const upstream = await fetch(target, {
+    method:  request.method,
+    headers: authHeaders,
+    ...(request.method !== 'GET' && request.method !== 'HEAD' ? { body: request.body } : {}),
+  });
+
+  const ct = upstream.headers.get('Content-Type') || 'application/octet-stream';
+
+  // Patch go2rtc's HTML: redirect all API/WS calls through /cam-home/
+  if (ct.includes('text/html')) {
+    let html = await upstream.text();
+    const patch = `<script>
+(function(){
+  var _W=window.WebSocket;
+  window.WebSocket=function(u,p){
+    if(typeof u==='string') u=u.replace(/(wss?:\\/\\/[^\\/]+)\\/api\\//,'$1/cam-home/api/');
+    return p!=null?new _W(u,p):new _W(u);
+  };
+  var _f=window.fetch;
+  window.fetch=function(u){
+    var a=Array.prototype.slice.call(arguments);
+    if(typeof u==='string') a[0]=u.replace(/https?:\\/\\/[^\\/]+\\/api\\//,'/cam-home/api/');
+    return _f.apply(this,a);
+  };
+  var _xo=XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open=function(m,u){
+    var a=Array.prototype.slice.call(arguments);
+    if(typeof u==='string') a[1]=u.replace(/https?:\\/\\/[^\\/]+\\/api\\//,'/cam-home/api/');
+    return _xo.apply(this,a);
+  };
+})();
+<\/script>`;
+    html = html.includes('</head>') ? html.replace('</head>', patch + '</head>') : patch + html;
+    return new Response(html, {
+      status: upstream.status,
+      headers: { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' },
+    });
+  }
+
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: { 'Content-Type': ct, 'Cache-Control': 'no-cache' },
+  });
+}
+
 /* ── Camera Movi — Full Reverse Proxy (HTTP + WebSocket) ── */
 async function handleCamEmbed(request, env) {
   const session = await getSession(request, env);
@@ -4921,6 +5019,7 @@ export default {
     if (p === '/api/camera-token')               return handleCameraToken(request, env);
     if (p === '/api/admin/camera-aliases-movi' && m === 'GET')  return handleGetCameraAliases(request, env);
     if (p === '/api/admin/camera-aliases-movi' && m === 'PUT')  return handleSaveCameraAlias(request, env);
+    if (p.startsWith('/cam-home/'))              return handleCamHomeEmbed(request, env);
     if (p.startsWith('/cam-embed/'))             return handleCamEmbed(request, env);
     // ── Termix Movi proxy ──
     if (p.startsWith('/proxy/termix-movi'))      return handleTermixMoviProxy(request, env);
