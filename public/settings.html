@@ -914,10 +914,19 @@ var DELEGATE_SVC_LABELS = {
   'ssh-movi':'SSH Movi',
   'esxi':'VMware ESXi','n8n':'n8n Automation','casaos':'CasaOS',
   '9router':'9Router','fortigate':'FortiGate','asus':'ASUS Router',
-  'ssh':'SSH Terminal','uptime-kuma':'Uptime Kuma',
+  'ssh':'SSH Terminal','uptime-kuma':'Uptime Kuma','camera':'Camera Home',
 };
+/* tool-movi sub-keys — needed to restore parent group visibility in delegate filter */
+var _TOOL_MOVI_SUB = ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search'];
 var _delegateMode = false;   // true when current user is a delegated manager (not admin)
 var _delegateServices = [];  // services the current delegated user can manage
+/* Normalize delegate services: if any tool-movi sub-key present, add virtual parent for group editor */
+function _normalizeDelegateSvcs(arr) {
+  var list = (arr || []).slice();
+  var hasSub = _TOOL_MOVI_SUB.some(function(k){ return list.indexOf(k) >= 0; });
+  if (hasSub && list.indexOf('tool-movi') < 0) list.push('tool-movi');
+  return list;
+}
 
 (function initUI() {
   document.getElementById('user-avatar').textContent = (__USER__.username||'?').charAt(0).toUpperCase();
@@ -941,7 +950,7 @@ var _delegateServices = [];  // services the current delegated user can manage
     // If this user has delegation rights → selectively show Users/UserGroups/Roles tabs
     var cmp = __USER__.canManagePerms || [];
     if (cmp.length > 0) {
-      _delegateMode = true; _delegateServices = cmp;
+      _delegateMode = true; _delegateServices = _normalizeDelegateSvcs(cmp);
       // Show Users tab (renamed)
       var tabU = document.getElementById('tab-btn-users');
       if (tabU) {
@@ -1130,7 +1139,7 @@ function loadUsers() {
     .then(function(r){return r.json();})
     .then(function(d){
       allUsers = d.users || [];
-      if (d.delegateMode) { _delegateMode = true; _delegateServices = d.canManagePerms || []; }
+      if (d.delegateMode) { _delegateMode = true; _delegateServices = _normalizeDelegateSvcs(d.canManagePerms); }
       renderUsers();
     })
     .catch(function(){toast('Lỗi tải user list','err');});
@@ -1396,7 +1405,7 @@ function openUserPerms(username) {
     .then(function(r){return r.json();})
     .then(function(d){
       allUsers = d.users || [];
-      if (d.delegateMode) { _delegateMode = true; _delegateServices = d.canManagePerms || []; }
+      if (d.delegateMode) { _delegateMode = true; _delegateServices = _normalizeDelegateSvcs(d.canManagePerms); }
       renderUsers();
       var u = allUsers.find(function(x){return x.username===username;});
       if (!u) {
