@@ -70,6 +70,46 @@ return `<script>(function(){
 })();<\/script>`;
 }
 
+/* ── IP CIDR whitelist matching ── */
+function _ipToInt(ip) {
+  const parts = (ip || '').split('.');
+  if (parts.length !== 4) return null;
+  return parts.reduce((acc, o) => ((acc << 8) | (parseInt(o, 10) & 0xFF)) >>> 0, 0);
+}
+function _ipInCidr(ip, cidr) {
+  const c = (cidr || '').trim();
+  if (!c.includes('/')) return ip === c;
+  const [net, b] = c.split('/');
+  const bits = parseInt(b, 10);
+  if (bits < 0 || bits > 32) return false;
+  const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
+  const ipN = _ipToInt(ip), netN = _ipToInt(net);
+  if (ipN === null || netN === null) return false;
+  return (ipN & mask) === (netN & mask);
+}
+function checkIpWhitelist(ip, list) {
+  if (!Array.isArray(list) || list.length === 0) return true;
+  return list.some(c => _ipInCidr(ip, c));
+}
+
+/* ── Email notification via n8n webhook (best-effort, never blocks login) ── */
+async function notifyEmail(env, event, data) {
+  try {
+    const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
+    if (!cfg.emailEnabled) return;
+    const wh = (cfg.emailWebhook || '').replace(/^﻿/, '').trim();
+    if (!wh) return;
+    const evts = cfg.emailEvents || {};
+    if (!evts[event]) return;
+    await fetch(wh, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event, ...data, timestamp: new Date().toISOString(), emailTo: (cfg.emailAdminAddress || '').replace(/^﻿/, '').trim() }),
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch (_) { /* never block main flow */ }
+}
+
 /* ── Password hashing ──
    New format (string): "pbkdf2$<iter>$<saltHex>$<hashHex>"
    Legacy format: bare 64-hex SHA-256(pw + ':dh-salt-2024'). Verified for
@@ -176,27 +216,107 @@ async function handleLogin(request, env) {
   if (!username || !password) return json({ error: 'Thiếu username hoặc password' }, 400);
   const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
 
-  // Rate limit: per-IP (20 / 15min) and per-IP+user (8 / 15min)
-  const WIN = 900;
-  if ((await rlGet(env, `ip:${ip}`)) >= 20 || (await rlGet(env, `u:${ip}:${username}`)) >= 8) {
+  // Load system config once for all security checks
+  const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
+
+  // ── 1. IP Whitelist check ──
+  const ipWhitelist = Array.isArray(cfg.ipWhitelist) ? cfg.ipWhitelist.filter(s => s && s.trim()) : [];
+  if (ipWhitelist.length > 0 && !checkIpWhitelist(ip, ipWhitelist)) {
+    await logActivity(env, { action: 'login_blocked_ip', username, ip, success: false, detail: 'IP not in whitelist' });
+    return json({ error: 'Địa chỉ IP của bạn không được phép đăng nhập vào hệ thống.' }, 403);
+  }
+
+  // ── 3. Rate limit (per-IP brute force, window = lockout duration) ──
+  const lockoutMin = Math.max(1, cfg.lockoutDurationMin ?? 15);
+  const WIN = lockoutMin * 60;
+  const maxAttempts = Math.min(20, Math.max(3, cfg.maxLoginAttempts ?? 8));
+  if ((await rlGet(env, `ip:${ip}`)) >= 20 || (await rlGet(env, `u:${ip}:${username}`)) >= maxAttempts) {
     await logActivity(env, { action: 'login_blocked', username, ip, success: false, detail: 'Rate limited' });
-    return json({ error: 'Quá nhiều lần thử. Vui lòng chờ ~15 phút rồi thử lại.' }, 429);
+    return json({ error: `Quá nhiều lần thử. Vui lòng chờ ${lockoutMin} phút rồi thử lại.` }, 429);
   }
 
   const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+
+  // ── 4. Per-user account lockout check ──
+  if (user && user.locked) {
+    const permanentLock = !cfg.lockoutDurationMin || cfg.lockoutDurationMin === 0;
+    if (!permanentLock && user.lockedAt && (Date.now() - user.lockedAt) >= lockoutMin * 60000) {
+      // Auto-unlock: lockout window expired
+      user.locked = false;
+      user.loginAttempts = 0;
+      delete user.lockedAt;
+      await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+    } else {
+      const remainMin = (!permanentLock && user.lockedAt)
+        ? Math.max(1, Math.ceil((user.lockedAt + lockoutMin * 60000 - Date.now()) / 60000))
+        : 0;
+      const errMsg = remainMin > 0
+        ? `Tài khoản bị khóa. Tự động mở khóa sau ${remainMin} phút nữa.`
+        : 'Tài khoản bị khóa. Liên hệ admin để mở khóa.';
+      await logActivity(env, { action: 'login_blocked_locked', username, ip, success: false, detail: 'Account locked' });
+      return json({ error: errMsg }, 403);
+    }
+  }
+
+  // ── 4b. Per-user login time restriction ──
+  if (user && user.loginTimeEnabled) {
+    const tz = user.loginTimeZone || 'Asia/Ho_Chi_Minh';
+    const nowStr = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', timeZone: tz });
+    const start  = user.loginTimeStart || '00:00';
+    const end    = user.loginTimeEnd   || '23:59';
+    if (nowStr < start || nowStr > end) {
+      await logActivity(env, { action: 'login_blocked_time', username, ip, success: false,
+        detail: `${username} outside allowed hours ${start}–${end} (${tz})` });
+      return json({ error: `Tài khoản này chỉ được đăng nhập trong khung giờ ${start} – ${end}.` }, 403);
+    }
+  }
+
   if (!user || !(await verifyPw(password, user.password))) {
     await rlBump(env, `ip:${ip}`, WIN);
     await rlBump(env, `u:${ip}:${username}`, WIN);
     await logActivity(env, { action: 'login_fail', username, ip, success: false, detail: 'Wrong credentials' });
+
+    // Per-user attempt tracking → lock when threshold reached
+    if (user) {
+      user.loginAttempts = (user.loginAttempts || 0) + 1;
+      if (user.loginAttempts >= maxAttempts) {
+        user.locked = true;
+        user.lockedAt = Date.now();
+        await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+        await logActivity(env, { action: 'account_locked', username, ip, success: false, detail: `Locked after ${user.loginAttempts} failed attempts` });
+        // Best-effort email notification (don't await to not block response)
+        notifyEmail(env, 'account_locked', { username, ip, attempts: user.loginAttempts });
+      } else {
+        await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+      }
+    }
     return json({ error: 'Sai tên đăng nhập hoặc mật khẩu' }, 401);
   }
+
+  // Password correct — clear rate limits & reset attempt counter
+  await rlClear(env, `ip:${ip}`);
+  await rlClear(env, `u:${ip}:${username}`);
+  if (user.loginAttempts > 0) {
+    user.loginAttempts = 0;
+    await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  }
+
   // Transparently migrate legacy SHA-256 hashes to PBKDF2 on successful login
   if (!String(user.password || '').startsWith('pbkdf2$')) {
     try { user.password = await hashPw(password);
       await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user)); } catch {}
   }
-  await rlClear(env, `ip:${ip}`);
-  await rlClear(env, `u:${ip}:${username}`);
+
+  // ── 5. Password expiry check ──
+  const pwExpiryDays = cfg.pwExpiryDays ?? 0;
+  if (pwExpiryDays > 0) {
+    const age = user.pwChangedAt ? Date.now() - user.pwChangedAt : Infinity;
+    if (age >= pwExpiryDays * 86400000 && !user.mustChangePassword) {
+      user.mustChangePassword = true;
+      await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+      notifyEmail(env, 'password_expired', { username, ip });
+    }
+  }
 
   // First-login setup: force password change + MFA setup before creating session
   if (user.mustChangePassword || user.mustSetupMfa) {
@@ -222,13 +342,33 @@ async function handleLogin(request, env) {
     return json({ mfaRequired: true, tempToken });
   }
 
-  const loginCfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(()=>({})) || {};
-  const sessionTtl = Math.max(1, loginCfg.sessionTtlHours ?? 8) * 3600;
+  const sessionTtl = Math.max(1, cfg.sessionTtlHours ?? 8) * 3600;
+
+  // ── 6. Max concurrent sessions enforcement ──
+  const maxSessions = cfg.maxConcurrentSessions ?? 0;
+  if (maxSessions > 0) {
+    const listed = await env.DASHBOARD_KV.list({ prefix: 'session:' });
+    const userSessions = [];
+    for (const k of listed.keys) {
+      const s = await env.DASHBOARD_KV.get(k.name, 'json');
+      if (s && s.username === username && Date.now() < (s.expires || 0)) {
+        userSessions.push({ key: k.name, createdAt: s.createdAt || (s.expires - sessionTtl * 1000) });
+      }
+    }
+    if (userSessions.length >= maxSessions) {
+      // Remove oldest session(s) to make room
+      userSessions.sort((a, b) => a.createdAt - b.createdAt);
+      const toKick = userSessions.slice(0, userSessions.length - maxSessions + 1);
+      await Promise.all(toKick.map(s => env.DASHBOARD_KV.delete(s.key)));
+    }
+  }
+
   const token = crypto.randomUUID();
   const canManagePerms = (user.canManagePerms || []).filter(s => ALL_SERVICES.includes(s));
   await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
     username, role: user.role, permissions: user.permissions || {},
     canManagePerms,
+    createdAt: Date.now(),
     expires: Date.now() + sessionTtl * 1000
   }), { expirationTtl: sessionTtl });
 
@@ -243,6 +383,7 @@ async function handleLogin(request, env) {
   h.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
   h.append('Set-Cookie', `dh_user=${userInfo}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
   await logActivity(env, { action: 'login_success', username, ip, success: true });
+  notifyEmail(env, 'login_success', { username, ip });
   return new Response(JSON.stringify({ success: true, role: user.role }), { status: 200, headers: h });
 }
 
@@ -310,6 +451,14 @@ async function handleListUsers(request, env) {
         groups:        d.groups || [],
         userGroups:    d.userGroups || [],
         canManagePerms: d.canManagePerms || [],
+        locked:           !!d.locked,
+        loginAttempts:    d.loginAttempts || 0,
+        lockedAt:         d.lockedAt || null,
+        pwChangedAt:      d.pwChangedAt || null,
+        loginTimeEnabled: !!d.loginTimeEnabled,
+        loginTimeStart:   d.loginTimeStart || '06:00',
+        loginTimeEnd:     d.loginTimeEnd   || '23:00',
+        loginTimeZone:    d.loginTimeZone  || 'Asia/Ho_Chi_Minh',
       });
     }
     return json({ users });
@@ -451,6 +600,54 @@ async function handleDeleteUser(request, env, username) {
   return json({ success: true });
 }
 
+async function handleUnlockUser(request, env, username) {
+  const session = await getSession(request, env);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+  user.locked = false;
+  user.loginAttempts = 0;
+  delete user.lockedAt;
+  await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  await logActivity(env, { action: 'user-unlock', username: session.username,
+    ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Unlocked: ${username}` });
+  return json({ success: true });
+}
+
+async function handleSaveUserLoginTime(request, env, username) {
+  const session = await getSession(request, env);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+  user.loginTimeEnabled = !!body.loginTimeEnabled;
+  if (body.loginTimeStart && /^\d{2}:\d{2}$/.test(body.loginTimeStart)) user.loginTimeStart = body.loginTimeStart;
+  if (body.loginTimeEnd   && /^\d{2}:\d{2}$/.test(body.loginTimeEnd))   user.loginTimeEnd   = body.loginTimeEnd;
+  const allowedTz = ['Asia/Ho_Chi_Minh','Asia/Bangkok','Asia/Singapore','UTC','Asia/Tokyo'];
+  if (body.loginTimeZone && allowedTz.includes(body.loginTimeZone)) user.loginTimeZone = body.loginTimeZone;
+  await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  await logActivity(env, { action: 'user-update-login-time', username: session.username,
+    ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Login time set for: ${username}` });
+  return json({ success: true });
+}
+
+async function handleForceLogoutAll(request, env) {
+  const session = await getSession(request, env);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  const listed = await env.DASHBOARD_KV.list({ prefix: 'session:' });
+  let kicked = 0;
+  await Promise.all(listed.keys.map(async k => {
+    if (k.name !== `session:${session.token}`) {
+      await env.DASHBOARD_KV.delete(k.name);
+      kicked++;
+    }
+  }));
+  const ip = request.headers.get('CF-Connecting-IP') || '?';
+  await logActivity(env, { action: 'force-logout-all', username: session.username, ip, success: true, detail: `Kicked ${kicked} sessions` });
+  notifyEmail(env, 'force_logout_all', { admin: session.username, kicked, ip });
+  return json({ success: true, kicked });
+}
+
 async function handleChangePw(request, env, username) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Not authenticated' }, 401);
@@ -469,10 +666,13 @@ async function handleChangePw(request, env, username) {
     if (!(await verifyTotp(user.mfaSecret, mfaCode))) return json({ error: 'Mã MFA không đúng. Vui lòng kiểm tra lại.' }, 400);
   }
   user.password = await hashPw(body.password);
+  user.pwChangedAt = Date.now();         // track for password expiry
+  user.mustChangePassword = false;       // clear forced-change flag
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
   // Invalidate all existing sessions so old sessions can't reuse stale auth
   await invalidateUserSessions(env, username);
   await logActivity(env, { action: 'password-change', username: session.username, success: true, detail: `Changed password for: ${username}` });
+  notifyEmail(env, 'password_changed', { username, changedBy: session.username });
   return json({ success: true });
 }
 
@@ -1512,9 +1712,19 @@ async function injectUser(request, env) {
     const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(()=>({})) || {};
     const bannerMsg = (cfg.loginBannerMsg || '').trim();
     const idleMin   = Math.max(5, cfg.idleTimeoutMin ?? 30);
+    // Background CSS
+    let bgCss = '';
+    if (cfg.loginBgType === 'color' && cfg.loginBgValue) {
+      const safeColor = String(cfg.loginBgValue).replace(/[<>"']/g, '');
+      bgCss = `<style>body{background:${safeColor}!important}</style>`;
+    } else if (cfg.loginBgType === 'image' && cfg.loginBgValue) {
+      const safeUrl = String(cfg.loginBgValue).replace(/[<>"']/g, '');
+      bgCss = `<style>body{background:url('${safeUrl}') center/cover no-repeat fixed!important;background-color:#09090b!important}</style>`;
+    }
+    const needsPatch = bannerMsg || idleMin !== 30 || bgCss;
     const cleanReq  = new Request(request.url, { method: 'GET', headers: { 'Accept': 'text/html' } });
     const loginRes  = await env.ASSETS.fetch(cleanReq);
-    if (!bannerMsg && idleMin === 30) return loginRes;   // nothing to patch, avoid text() overhead
+    if (!needsPatch) return loginRes;
     let loginHtml = await loginRes.text();
     // Patch idle notice text with actual configured idle timeout
     loginHtml = loginHtml.replace(
@@ -1526,6 +1736,7 @@ async function injectUser(request, env) {
       const bannerHtml = `<div style="margin-bottom:1.25rem;padding:10px 14px;border-radius:10px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);font-size:13px;color:#93c5fd;text-align:center;line-height:1.5">${safe}</div>`;
       loginHtml = loginHtml.replace('<div class="card">', '<div class="card">'+bannerHtml);
     }
+    if (bgCss) loginHtml = loginHtml.replace('</head>', bgCss + '</head>');
     return new Response(loginHtml, { headers: {
       'content-type': 'text/html;charset=utf-8',
       'cache-control': 'no-store',
@@ -3226,17 +3437,44 @@ async function handleGetSystemConfig(request, env) {
   if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
   const cfg = await env.DASHBOARD_KV.get('system_config', 'json') || {};
   return json({
-    sessionTtlHours:   cfg.sessionTtlHours ?? 8,
-    idleTimeoutMin:    cfg.idleTimeoutMin ?? 30,
-    maxUsers:          cfg.maxUsers ?? 50,
-    defaultRole:       cfg.defaultRole ?? 'user',
-    loginBannerMsg:    cfg.loginBannerMsg ?? '',
-    auditRetentionDays:cfg.auditRetentionDays ?? 30,
-    dashboardTitle:    cfg.dashboardTitle ?? '',
-    pwMinLength:       cfg.pwMinLength ?? 6,
-    maxLoginAttempts:  cfg.maxLoginAttempts ?? 8,
-    maintenanceMode:   cfg.maintenanceMode ?? false,
-    maintenanceMsg:    cfg.maintenanceMsg ?? '',
+    // ── Existing ──
+    sessionTtlHours:      cfg.sessionTtlHours ?? 8,
+    idleTimeoutMin:       cfg.idleTimeoutMin ?? 30,
+    maxUsers:             cfg.maxUsers ?? 50,
+    defaultRole:          cfg.defaultRole ?? 'user',
+    loginBannerMsg:       cfg.loginBannerMsg ?? '',
+    auditRetentionDays:   cfg.auditRetentionDays ?? 30,
+    dashboardTitle:       cfg.dashboardTitle ?? '',
+    pwMinLength:          cfg.pwMinLength ?? 6,
+    maxLoginAttempts:     cfg.maxLoginAttempts ?? 8,
+    maintenanceMode:      cfg.maintenanceMode ?? false,
+    maintenanceMsg:       cfg.maintenanceMsg ?? '',
+    // ── Security / Login ──
+    lockoutDurationMin:   cfg.lockoutDurationMin ?? 15,
+    ipWhitelist:          cfg.ipWhitelist ?? [],
+    loginTimeEnabled:     cfg.loginTimeEnabled ?? false,
+    loginTimeStart:       cfg.loginTimeStart ?? '06:00',
+    loginTimeEnd:         cfg.loginTimeEnd ?? '23:00',
+    loginTimeZone:        cfg.loginTimeZone ?? 'Asia/Ho_Chi_Minh',
+    pwExpiryDays:         cfg.pwExpiryDays ?? 0,
+    // ── Session / Device ──
+    maxConcurrentSessions:cfg.maxConcurrentSessions ?? 0,
+    // ── Branding ──
+    loginBgType:          cfg.loginBgType ?? 'none',
+    loginBgValue:         cfg.loginBgValue ?? '',
+    // ── Email Notifications ──
+    emailEnabled:         cfg.emailEnabled ?? false,
+    emailWebhook:         cfg.emailWebhook ?? '',
+    emailAdminAddress:    cfg.emailAdminAddress ?? '',
+    emailEvents: cfg.emailEvents ?? {
+      login_success:    false,
+      login_fail:       true,
+      account_locked:   true,
+      force_logout_all: true,
+      maintenance_toggle: false,
+      password_changed: false,
+      password_expired: true,
+    },
     updatedAt: cfg.updatedAt ?? null,
     updatedBy: cfg.updatedBy ?? null,
   });
@@ -3248,6 +3486,7 @@ async function handleSaveSystemConfig(request, env) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const cfg = await env.DASHBOARD_KV.get('system_config', 'json') || {};
+  // ── Existing fields ──
   if (body.sessionTtlHours !== undefined)   cfg.sessionTtlHours   = Math.min(24, Math.max(1, Number(body.sessionTtlHours) || 8));
   if (body.idleTimeoutMin !== undefined)    cfg.idleTimeoutMin    = Math.min(120, Math.max(5, Number(body.idleTimeoutMin) || 30));
   if (body.maxUsers !== undefined)          cfg.maxUsers          = Math.min(200, Math.max(1, Number(body.maxUsers) || 50));
@@ -3257,8 +3496,37 @@ async function handleSaveSystemConfig(request, env) {
   if (body.dashboardTitle !== undefined)    cfg.dashboardTitle    = String(body.dashboardTitle).slice(0, 60);
   if (body.pwMinLength !== undefined)       cfg.pwMinLength       = Math.min(32, Math.max(4, Number(body.pwMinLength) || 6));
   if (body.maxLoginAttempts !== undefined)  cfg.maxLoginAttempts  = Math.min(20, Math.max(3, Number(body.maxLoginAttempts) || 8));
-  if (body.maintenanceMode !== undefined)   cfg.maintenanceMode   = !!body.maintenanceMode;
+  if (body.maintenanceMode !== undefined) {
+    const prev = cfg.maintenanceMode;
+    cfg.maintenanceMode = !!body.maintenanceMode;
+    if (prev !== cfg.maintenanceMode) notifyEmail(env, 'maintenance_toggle', { enabled: cfg.maintenanceMode, admin: session.username });
+  }
   if (body.maintenanceMsg !== undefined)    cfg.maintenanceMsg    = String(body.maintenanceMsg).slice(0, 300);
+  // ── Security / Login ──
+  if (body.lockoutDurationMin !== undefined) cfg.lockoutDurationMin = Math.min(1440, Math.max(0, Number(body.lockoutDurationMin) || 0));
+  if (body.ipWhitelist !== undefined)        cfg.ipWhitelist        = Array.isArray(body.ipWhitelist)
+    ? body.ipWhitelist.map(s => String(s).trim()).filter(Boolean).slice(0, 50) : [];
+  if (body.loginTimeEnabled !== undefined)   cfg.loginTimeEnabled   = !!body.loginTimeEnabled;
+  if (body.loginTimeStart !== undefined && /^\d{2}:\d{2}$/.test(body.loginTimeStart)) cfg.loginTimeStart = body.loginTimeStart;
+  if (body.loginTimeEnd !== undefined   && /^\d{2}:\d{2}$/.test(body.loginTimeEnd))   cfg.loginTimeEnd   = body.loginTimeEnd;
+  if (body.loginTimeZone !== undefined) {
+    const allowedTz = ['Asia/Ho_Chi_Minh','Asia/Bangkok','Asia/Singapore','UTC','Asia/Tokyo'];
+    if (allowedTz.includes(body.loginTimeZone)) cfg.loginTimeZone = body.loginTimeZone;
+  }
+  if (body.pwExpiryDays !== undefined)       cfg.pwExpiryDays       = Math.min(365, Math.max(0, Number(body.pwExpiryDays) || 0));
+  // ── Session / Device ──
+  if (body.maxConcurrentSessions !== undefined) cfg.maxConcurrentSessions = Math.min(10, Math.max(0, Number(body.maxConcurrentSessions) || 0));
+  // ── Branding ──
+  if (body.loginBgType !== undefined && ['none','color','image'].includes(body.loginBgType)) cfg.loginBgType = body.loginBgType;
+  if (body.loginBgValue !== undefined) cfg.loginBgValue = String(body.loginBgValue).slice(0, 500);
+  // ── Email ──
+  if (body.emailEnabled !== undefined)       cfg.emailEnabled       = !!body.emailEnabled;
+  if (body.emailWebhook !== undefined)       cfg.emailWebhook       = String(body.emailWebhook).slice(0, 500);
+  if (body.emailAdminAddress !== undefined)  cfg.emailAdminAddress  = String(body.emailAdminAddress).slice(0, 200);
+  if (body.emailEvents !== undefined && typeof body.emailEvents === 'object' && !Array.isArray(body.emailEvents)) {
+    cfg.emailEvents = { ...(cfg.emailEvents || {}) };
+    for (const [k, v] of Object.entries(body.emailEvents)) cfg.emailEvents[k] = !!v;
+  }
   cfg.updatedAt = Date.now();
   cfg.updatedBy = session.username;
   await env.DASHBOARD_KV.put('system_config', JSON.stringify(cfg));
@@ -4677,11 +4945,16 @@ export default {
     if (userGrp) return handleUpdateUserGroups(request, env, decodeURIComponent(userGrp[1]));
     const userPnl = p.match(/^\/api\/admin\/users\/([^/]+)\/panels$/);
     if (userPnl) return handleUpdateUserPanels(request, env, decodeURIComponent(userPnl[1]));
+    const userUnlock = p.match(/^\/api\/admin\/users\/([^/]+)\/unlock$/);
+    if (userUnlock && request.method === 'POST') return handleUnlockUser(request, env, decodeURIComponent(userUnlock[1]));
+    const userLoginTime = p.match(/^\/api\/admin\/users\/([^/]+)\/login-time$/);
+    if (userLoginTime && request.method === 'PUT') return handleSaveUserLoginTime(request, env, decodeURIComponent(userLoginTime[1]));
     const userDel  = p.match(/^\/api\/admin\/users\/([^/]+)$/);
     if (userDel) {
       if (request.method === 'DELETE') return handleDeleteUser(request, env, decodeURIComponent(userDel[1]));
       if (request.method === 'PUT')    return handleChangePw(request, env, decodeURIComponent(userDel[1]));
     }
+    if (p === '/api/admin/force-logout-all' && request.method === 'POST') return handleForceLogoutAll(request, env);
 
     // ── Policy Groups API ──
     if (p === '/api/admin/groups') {

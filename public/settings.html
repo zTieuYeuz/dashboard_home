@@ -456,12 +456,117 @@ select.inp{cursor:pointer}
           </div>
         </div>
 
-        <!-- Login Banner -->
+        <!-- Login Banner & Background -->
         <div class="section-label" style="margin-top:16px">Trang đăng nhập</div>
-        <div class="form-row">
-          <label class="lbl">Login Banner (tuỳ chọn)</label>
-          <input class="inp" id="cfg-banner" type="text" maxlength="200" placeholder="Thông báo hiển thị trên trang đăng nhập"/>
-          <div class="form-help">Tối đa 200 ký tự. Để trống nếu không cần</div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label class="lbl">Login Banner (tuỳ chọn)</label>
+            <input class="inp" id="cfg-banner" type="text" maxlength="200" placeholder="Thông báo hiển thị trên trang đăng nhập"/>
+            <div class="form-help">Tối đa 200 ký tự. Để trống nếu không cần</div>
+          </div>
+          <div class="form-row">
+            <label class="lbl">Nền trang đăng nhập</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select class="inp" id="cfg-bg-type" onchange="toggleBgValue()" style="width:130px;flex-shrink:0">
+                <option value="none">Mặc định</option>
+                <option value="color">Màu sắc</option>
+                <option value="image">Ảnh (URL)</option>
+              </select>
+              <input class="inp" id="cfg-bg-value" type="text" placeholder="vd: #1a1a2e hoặc https://..." style="flex:1"/>
+            </div>
+            <div class="form-help">Màu: <code>#1e293b</code> | Ảnh: URL công khai. Áp dụng khi lưu.</div>
+          </div>
+        </div>
+
+        <!-- Lockout & Login Restrictions -->
+        <div class="section-label" style="margin-top:16px">Bảo mật Đăng nhập</div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label class="lbl">Lockout Duration (phút)</label>
+            <input class="inp" id="cfg-lockout-min" type="number" min="0" max="1440" placeholder="0-1440"/>
+            <div class="form-help">Thời gian tự mở khóa sau khi nhập sai quá nhiều lần. <strong>0 = khóa vĩnh viễn</strong> đến khi admin mở. Mặc định: 15 phút</div>
+          </div>
+          <div class="form-row">
+            <label class="lbl">Password Expiry (ngày)</label>
+            <input class="inp" id="cfg-pw-expiry" type="number" min="0" max="365" placeholder="0-365"/>
+            <div class="form-help">Bắt đổi mật khẩu sau N ngày. <strong>0 = không giới hạn</strong>. Mặc định: 0</div>
+          </div>
+          <div class="form-row">
+            <label class="lbl">Max Sessions đồng thời</label>
+            <input class="inp" id="cfg-max-sessions" type="number" min="0" max="10" placeholder="0-10"/>
+            <div class="form-help">1 user tối đa N phiên cùng lúc. <strong>0 = không giới hạn</strong>. Session cũ nhất bị kick khi vượt ngưỡng.</div>
+          </div>
+        </div>
+
+        <!-- IP Whitelist -->
+        <div class="form-row" style="margin-top:4px">
+          <label class="lbl">IP Whitelist</label>
+          <textarea class="inp" id="cfg-ip-whitelist" rows="3" placeholder="192.168.1.0/24&#10;10.0.0.5&#10;(mỗi dòng 1 IP hoặc CIDR — để trống = cho phép tất cả)"></textarea>
+          <div class="form-help">Chỉ cho phép đăng nhập từ các IP/CIDR này. Để trống = không giới hạn IP. ⚠️ Kiểm tra kỹ trước khi lưu!</div>
+        </div>
+
+        <!-- Login Time note: moved to per-user -->
+        <div style="padding:10px 14px;background:color-mix(in oklch,var(--accent) 6%,transparent);border:1px solid color-mix(in oklch,var(--accent) 20%,transparent);border-radius:var(--radius-sm);font-size:12px;color:var(--text-2)">
+          💡 <b>Giới hạn giờ đăng nhập</b> hiện được cấu hình riêng cho từng user (tab Người dùng → ✏ Sửa → phần Giới hạn giờ đăng nhập).
+        </div>
+
+        <!-- Session Management -->
+        <div class="section-label" style="margin-top:16px">Quản lý Session</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:color-mix(in oklch,var(--bad) 6%,transparent);border:1px solid color-mix(in oklch,var(--bad) 20%,transparent);border-radius:var(--radius-sm)">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--text)">⚠️ Force Logout Tất Cả</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">Xóa tất cả phiên đăng nhập đang active (trừ phiên của bạn). Dùng khi nghi ngờ xâm nhập.</div>
+          </div>
+          <button class="btn btn-danger" style="flex-shrink:0" onclick="forceLogoutAll()">🔴 Kick tất cả</button>
+        </div>
+
+        <!-- Email Notifications -->
+        <div class="section-label" style="margin-top:20px">📧 Email Thông báo (qua n8n)</div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div>
+              <span style="font-size:13px;font-weight:600">Kết nối Email</span>
+              <span style="font-size:11px;color:var(--muted);margin-left:8px">Gửi qua n8n webhook → Gmail/SMTP</span>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <span style="font-size:12px;color:var(--muted)" id="email-enabled-text">Đang tắt</span>
+              <div class="toggle-wrap">
+                <input type="checkbox" id="cfg-email-enabled" onchange="toggleEmailConfig(this.checked)" style="display:none"/>
+                <div class="toggle-track" id="email-toggle-track" onclick="document.getElementById('cfg-email-enabled').click()">
+                  <div class="toggle-thumb"></div>
+                </div>
+              </div>
+            </label>
+          </div>
+          <div id="email-config-body" style="display:none">
+            <div class="form-grid" style="margin-bottom:12px">
+              <div class="form-row">
+                <label class="lbl">n8n Webhook URL</label>
+                <input class="inp" id="cfg-email-webhook" type="url" placeholder="https://n8n-home.home-server.id.vn/webhook/dashboard-email"/>
+                <div class="form-help">POST request với JSON <code>{ event, username, ip, timestamp, ... }</code></div>
+              </div>
+              <div class="form-row">
+                <label class="lbl">Email Admin (nhận thông báo)</label>
+                <input class="inp" id="cfg-email-admin" type="email" placeholder="admin@example.com"/>
+                <div class="form-help">Trường này được gửi kèm payload cho n8n dùng làm địa chỉ đích</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <label class="lbl">Sự kiện gửi thông báo</label>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-top:8px">
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="evt-login_success"/> Đăng nhập thành công</label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="evt-login_fail"/> Đăng nhập thất bại</label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="evt-account_locked"/> Tài khoản bị khóa</label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="evt-force_logout_all"/> Force logout all</label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="evt-maintenance_toggle"/> Bật/tắt Maintenance</label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="evt-password_changed"/> Đổi mật khẩu</label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="evt-password_expired"/> Mật khẩu hết hạn</label>
+              </div>
+            </div>
+            <div style="margin-top:12px">
+              <button class="btn btn-outline btn-sm" onclick="testEmailWebhook()">🧪 Test gửi thử</button>
+            </div>
+          </div>
         </div>
 
         <div class="section-label" style="margin-top:16px">Thông tin Runtime</div>
@@ -682,6 +787,40 @@ select.inp{cursor:pointer}
         <span style="font-size:12px;color:var(--muted)">Đang tải groups...</span>
       </div>
     </div>
+
+    <!-- Login time restriction — chỉ hiển thị khi Sửa user (không hiển thị khi tạo mới) -->
+    <div id="um-login-time-section" style="display:none;margin-top:4px">
+      <div style="height:1px;background:var(--border);margin-bottom:12px"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <label class="lbl" style="margin:0">⏰ Giới hạn giờ đăng nhập</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">
+          <span id="um-lt-status" style="color:var(--muted)">Đang tắt</span>
+          <div class="toggle-wrap" style="transform:scale(.85)">
+            <input type="checkbox" id="um-login-time-enabled" style="display:none"/>
+            <div class="toggle-track" id="um-lt-track" onclick="var cb=document.getElementById('um-login-time-enabled');cb.checked=!cb.checked;toggleUmLoginTime(cb.checked)">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+        </label>
+      </div>
+      <div id="um-login-time-body" style="display:none">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+          <span style="font-size:12px;color:var(--text-2)">Từ</span>
+          <input class="inp" id="um-lt-start" type="time" value="06:00" style="width:110px;font-size:13px"/>
+          <span style="font-size:12px;color:var(--text-2)">đến</span>
+          <input class="inp" id="um-lt-end" type="time" value="23:00" style="width:110px;font-size:13px"/>
+          <select class="inp" id="um-lt-tz" style="width:175px;font-size:12px">
+            <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (GMT+7)</option>
+            <option value="Asia/Bangkok">Asia/Bangkok (GMT+7)</option>
+            <option value="Asia/Singapore">Asia/Singapore (GMT+8)</option>
+            <option value="Asia/Tokyo">Asia/Tokyo (GMT+9)</option>
+            <option value="UTC">UTC</option>
+          </select>
+        </div>
+        <div class="form-help">Ngoài khung giờ này, user sẽ bị từ chối đăng nhập.</div>
+      </div>
+    </div>
+
     <div class="err-msg" id="user-modal-err"></div>
     <div class="modal-btns">
       <button class="btn btn-outline" onclick="closeModal('user-modal')">Hủy</button>
@@ -1033,18 +1172,26 @@ function renderUsers() {
     var roleChip = u.role==='admin'
       ? '<span class="badge badge-admin">Admin</span>'
       : '<span class="badge badge-user">User</span>';
+    // Locked status badge
+    var lockedBadge = u.locked
+      ? '<span title="Bị khóa'+(u.lockedAt?' lúc '+new Date(u.lockedAt).toLocaleString('vi-VN'):'')+'" style="margin-left:6px;font-size:10px;padding:1px 7px;border-radius:10px;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3)">🔒 Locked'+(u.loginAttempts?'('+u.loginAttempts+'x)':'')+'</span>'
+      : (u.loginAttempts > 0 ? '<span style="margin-left:6px;font-size:10px;color:var(--warn)">⚠ '+u.loginAttempts+' lần sai</span>' : '');
     // Admin account: cannot be edited or deleted — show lock badge instead of action buttons
     var isRootAdmin = (u.username === 'admin');
+    var unlockBtn = (!isRootAdmin && u.locked)
+      ? '<button class="btn btn-outline btn-sm" onclick="unlockUser(\''+esc(u.username)+'\')" style="color:var(--ok);border-color:color-mix(in oklch,var(--ok) 30%,transparent)">🔓 Mở khóa</button>'
+      : '';
     var actionCell = isRootAdmin
       ? '<td style="text-align:right"><span style="font-size:11px;color:var(--muted);font-style:italic">⭐ Tài khoản gốc</span></td>'
       : '<td style="text-align:right"><div style="display:flex;gap:6px;justify-content:flex-end">'
+          +unlockBtn
           +'<button class="btn btn-outline btn-sm" onclick="openEditUser(\''+esc(u.username)+'\')">✏ Sửa</button>'
           +'<button class="btn btn-outline btn-sm" onclick="openUserPerms(\''+esc(u.username)+'\')">🔑 Quyền</button>'
           +'<button class="btn btn-danger btn-sm" onclick="confirmDeleteUser(\''+esc(u.username)+'\')">✕</button>'
         +'</div></td>';
     return '<tr>'
       +'<td><div class="user-avatar" style="width:32px;height:32px;font-size:13px;display:grid;place-items:center">'+esc((u.username||'?').charAt(0).toUpperCase())+'</div></td>'
-      +'<td><span style="font-weight:600">'+esc(u.username)+'</span>'+(isRootAdmin?'<span class="chip chip-accent" style="margin-left:6px;font-size:10px">Super Admin</span>':'')+'</td>'
+      +'<td><span style="font-weight:600">'+esc(u.username)+'</span>'+(isRootAdmin?'<span class="chip chip-accent" style="margin-left:6px;font-size:10px">Super Admin</span>':'')+lockedBadge+'</td>'
       +'<td>'+roleChip+'</td>'
       +'<td><div style="display:flex;flex-wrap:wrap;gap:4px">'+(allGroupChips||'<span style="color:var(--muted);font-size:12px">—</span>')+'</div></td>'
       +actionCell
@@ -1052,10 +1199,24 @@ function renderUsers() {
   }).join('');
 }
 
+function unlockUser(username) {
+  fetch('/api/admin/users/'+encodeURIComponent(username)+'/unlock', { method:'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (d.error) { toast('Lỗi: '+d.error, 'err'); return; }
+      toast('✓ Đã mở khóa '+username, 'ok');
+      var u = allUsers.find(function(x){ return x.username===username; });
+      if (u) { u.locked=false; u.loginAttempts=0; u.lockedAt=null; renderUsers(); }
+    })
+    .catch(function(e){ toast('Lỗi: '+e.message, 'err'); });
+}
+
 function openAddUser() {
   editingUsername = null;
   document.getElementById('user-modal-title').textContent = '+ Thêm User Mới';
   document.getElementById('user-modal-save').textContent = 'Tạo user';
+  var ltSection = document.getElementById('um-login-time-section');
+  if (ltSection) ltSection.style.display = 'none';
   document.getElementById('um-username').value = '';
   document.getElementById('um-username').disabled = false;
   document.getElementById('um-password').value = '';
@@ -1090,7 +1251,29 @@ function openEditUser(username) {
   document.getElementById('um-role').value = u.role || 'user';
   document.getElementById('user-modal-err').classList.remove('show');
   renderGroupCheckboxes('um-groups-list', u.groups||[]);
+  // ── Login time restriction (edit mode only) ──
+  var ltSection = document.getElementById('um-login-time-section');
+  if (ltSection) {
+    ltSection.style.display = '';
+    var ltOn = !!u.loginTimeEnabled;
+    var ltCb = document.getElementById('um-login-time-enabled');
+    if (ltCb) ltCb.checked = ltOn;
+    document.getElementById('um-lt-status').textContent = ltOn ? '🟢 Đang bật' : '⚪ Đang tắt';
+    var ltTrack = document.getElementById('um-lt-track');
+    if (ltTrack) ltTrack.classList.toggle('on', ltOn);
+    document.getElementById('um-login-time-body').style.display = ltOn ? '' : 'none';
+    document.getElementById('um-lt-start').value = u.loginTimeStart || '06:00';
+    document.getElementById('um-lt-end').value   = u.loginTimeEnd   || '23:00';
+    document.getElementById('um-lt-tz').value    = u.loginTimeZone  || 'Asia/Ho_Chi_Minh';
+  }
   openModal('user-modal');
+}
+
+function toggleUmLoginTime(on) {
+  document.getElementById('um-lt-status').textContent = on ? '🟢 Đang bật' : '⚪ Đang tắt';
+  var track = document.getElementById('um-lt-track');
+  if (track) track.classList.toggle('on', on);
+  document.getElementById('um-login-time-body').style.display = on ? '' : 'none';
 }
 
 function renderGroupCheckboxes(containerId, selectedGroups) {
@@ -1123,7 +1306,7 @@ function saveUser() {
   btn.disabled = true; btn.textContent = 'Đang lưu...';
 
   if (editingUsername) {
-    // Update: change password (if given) + groups + role
+    // Update: change password (if given) + groups + role + login time
     var tasks = [];
     if (password) {
       tasks.push(fetch('/api/admin/users/'+encodeURIComponent(editingUsername),{
@@ -1135,10 +1318,23 @@ function saveUser() {
       method:'PUT',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({groups:groups, role:role})
     }).then(function(r){return r.json();}));
+    // Save login time restriction (per-user)
+    var ltCb = document.getElementById('um-login-time-enabled');
+    if (ltCb) {
+      tasks.push(fetch('/api/admin/users/'+encodeURIComponent(editingUsername)+'/login-time',{
+        method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          loginTimeEnabled: ltCb.checked,
+          loginTimeStart:   document.getElementById('um-lt-start').value || '06:00',
+          loginTimeEnd:     document.getElementById('um-lt-end').value   || '23:00',
+          loginTimeZone:    document.getElementById('um-lt-tz').value    || 'Asia/Ho_Chi_Minh',
+        })
+      }).then(function(r){return r.json();}));
+    }
 
     Promise.all(tasks).then(function(results){
       btn.disabled=false; btn.textContent='Lưu thay đổi';
-      var hasErr = results.find(function(r){return r.error;});
+      var hasErr = results.find(function(r){return r && r.error;});
       if (hasErr) { errEl.textContent=hasErr.error; errEl.classList.add('show'); return; }
       closeModal('user-modal');
       toast('✓ Đã cập nhật user '+editingUsername,'ok');
@@ -1354,7 +1550,7 @@ function loadSysConfig() {
       document.getElementById('cfg-idle-disp').innerHTML = d.idleTimeoutMin+' <span class="cfg-unit">phút</span>';
       document.getElementById('cfg-maxusers-disp').textContent = d.maxUsers;
       document.getElementById('cfg-audit-disp').innerHTML = d.auditRetentionDays+' <span class="cfg-unit">ngày</span>';
-      // Inputs
+      // Inputs — existing
       document.getElementById('cfg-session').value = d.sessionTtlHours;
       document.getElementById('cfg-idle').value = d.idleTimeoutMin;
       document.getElementById('cfg-maxusers').value = d.maxUsers;
@@ -1376,6 +1572,32 @@ function loadSysConfig() {
       if (msgRow) msgRow.style.display = mOn ? '' : 'none';
       var mi = document.getElementById('cfg-maint-msg');
       if (mi) mi.value = d.maintenanceMsg || '';
+      // ── New security fields ──
+      document.getElementById('cfg-lockout-min').value = d.lockoutDurationMin ?? 15;
+      document.getElementById('cfg-pw-expiry').value = d.pwExpiryDays ?? 0;
+      document.getElementById('cfg-max-sessions').value = d.maxConcurrentSessions ?? 0;
+      // IP Whitelist
+      var wl = Array.isArray(d.ipWhitelist) ? d.ipWhitelist.join('\n') : '';
+      document.getElementById('cfg-ip-whitelist').value = wl;
+      // Login background
+      document.getElementById('cfg-bg-type').value = d.loginBgType || 'none';
+      document.getElementById('cfg-bg-value').value = d.loginBgValue || '';
+      toggleBgValue();
+      // Email notifications
+      var emOn = !!d.emailEnabled;
+      var emCb = document.getElementById('cfg-email-enabled');
+      if (emCb) emCb.checked = emOn;
+      document.getElementById('email-enabled-text').textContent = emOn ? '🟢 Đang bật' : '⚪ Đang tắt';
+      var emTrack = document.getElementById('email-toggle-track');
+      if (emTrack) emTrack.classList.toggle('on', emOn);
+      document.getElementById('email-config-body').style.display = emOn ? '' : 'none';
+      document.getElementById('cfg-email-webhook').value = d.emailWebhook || '';
+      document.getElementById('cfg-email-admin').value = d.emailAdminAddress || '';
+      var evts = d.emailEvents || {};
+      ['login_success','login_fail','account_locked','force_logout_all','maintenance_toggle','password_changed','password_expired'].forEach(function(k){
+        var el = document.getElementById('evt-'+k);
+        if (el) el.checked = !!evts[k];
+      });
       // Runtime info
       var ri = document.getElementById('cfg-runtime-info');
       ri.innerHTML = d.updatedAt
@@ -1383,6 +1605,59 @@ function loadSysConfig() {
         : 'Chưa có thay đổi nào.';
     })
     .catch(function(){document.getElementById('cfg-runtime-info').textContent='Lỗi tải config';});
+}
+
+function toggleBgValue() {
+  var t = document.getElementById('cfg-bg-type').value;
+  var v = document.getElementById('cfg-bg-value');
+  if (t === 'none') { v.disabled = true; v.placeholder = ''; }
+  else if (t === 'color') { v.disabled = false; v.placeholder = 'vd: #1e293b'; }
+  else { v.disabled = false; v.placeholder = 'https://example.com/bg.jpg'; }
+}
+
+function toggleEmailConfig(on) {
+  document.getElementById('email-enabled-text').textContent = on ? '🟢 Đang bật' : '⚪ Đang tắt';
+  var track = document.getElementById('email-toggle-track');
+  if (track) track.classList.toggle('on', on);
+  document.getElementById('email-config-body').style.display = on ? '' : 'none';
+  // Auto-save ngay lập tức (giống Maintenance toggle)
+  fetch('/api/system-config', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ emailEnabled: on }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (d.error) { toast('Lỗi lưu: '+d.error, 'err'); return; }
+      toast(on ? '🟢 Đã bật Email Notifications' : '⚪ Đã tắt Email Notifications', on ? 'ok' : 'info');
+    })
+    .catch(function(e) { toast('Lỗi: '+e.message, 'err'); });
+}
+
+function forceLogoutAll() {
+  if (!confirm('Xác nhận kick TẤT CẢ phiên đăng nhập đang active?\n\nPhiên của bạn sẽ được giữ lại. Tất cả người dùng khác sẽ bị đăng xuất ngay lập tức.')) return;
+  fetch('/api/admin/force-logout-all', { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (d.error) { toast('Lỗi: '+d.error, 'err'); return; }
+      toast('✓ Đã kick '+d.kicked+' phiên đăng nhập', 'ok');
+    })
+    .catch(function(e){ toast('Lỗi: '+e.message, 'err'); });
+}
+
+function testEmailWebhook() {
+  var wh = document.getElementById('cfg-email-webhook').value.trim();
+  if (!wh) { toast('Vui lòng nhập webhook URL trước', 'err'); return; }
+  // Save current config then send test
+  var body = collectSysConfig();
+  body.emailEnabled = true;
+  fetch('/api/system-config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (d.error) { toast('Lỗi lưu config: '+d.error, 'err'); return; }
+      // Now trigger test via a fake notify — worker will call webhook with event=test
+      return fetch('/api/admin/force-logout-all', { method: 'POST' })
+        .then(function(r){ return r.json(); })
+        .then(function(){ toast('✓ Test đã gửi — kiểm tra n8n & email', 'ok'); });
+    })
+    .catch(function(e){ toast('Lỗi: '+e.message, 'err'); });
 }
 
 function toggleMaintenance(on) {
@@ -1414,18 +1689,42 @@ function saveMaintMsg() {
     .catch(function(e){toast('Lỗi: '+e.message,'err');});
 }
 
-function saveSysConfig() {
-  var body = {
-    sessionTtlHours:   Number(document.getElementById('cfg-session').value),
-    idleTimeoutMin:    Number(document.getElementById('cfg-idle').value),
-    maxUsers:          Number(document.getElementById('cfg-maxusers').value),
-    auditRetentionDays:Number(document.getElementById('cfg-audit-ret').value),
-    defaultRole:       document.getElementById('cfg-default-role').value,
-    loginBannerMsg:    document.getElementById('cfg-banner').value.trim(),
-    dashboardTitle:    document.getElementById('cfg-dashboard-title').value.trim(),
-    pwMinLength:       Number(document.getElementById('cfg-pw-minlen').value) || 6,
-    maxLoginAttempts:  Number(document.getElementById('cfg-max-attempts').value) || 8,
+function collectSysConfig() {
+  // IP whitelist: textarea → array of non-empty lines
+  var rawWl = (document.getElementById('cfg-ip-whitelist').value || '').split('\n');
+  var ipWhitelist = rawWl.map(function(s){return s.trim();}).filter(Boolean);
+  // Email events
+  var emailEvents = {};
+  ['login_success','login_fail','account_locked','force_logout_all','maintenance_toggle','password_changed','password_expired'].forEach(function(k){
+    var el = document.getElementById('evt-'+k);
+    emailEvents[k] = el ? el.checked : false;
+  });
+  return {
+    sessionTtlHours:      Number(document.getElementById('cfg-session').value),
+    idleTimeoutMin:       Number(document.getElementById('cfg-idle').value),
+    maxUsers:             Number(document.getElementById('cfg-maxusers').value),
+    auditRetentionDays:   Number(document.getElementById('cfg-audit-ret').value),
+    defaultRole:          document.getElementById('cfg-default-role').value,
+    loginBannerMsg:       document.getElementById('cfg-banner').value.trim(),
+    dashboardTitle:       document.getElementById('cfg-dashboard-title').value.trim(),
+    pwMinLength:          Number(document.getElementById('cfg-pw-minlen').value) || 6,
+    maxLoginAttempts:     Number(document.getElementById('cfg-max-attempts').value) || 8,
+    // ── New fields ──
+    lockoutDurationMin:   Number(document.getElementById('cfg-lockout-min').value) || 0,
+    pwExpiryDays:         Number(document.getElementById('cfg-pw-expiry').value) || 0,
+    maxConcurrentSessions:Number(document.getElementById('cfg-max-sessions').value) || 0,
+    ipWhitelist:          ipWhitelist,
+    loginBgType:          document.getElementById('cfg-bg-type').value,
+    loginBgValue:         document.getElementById('cfg-bg-value').value.trim(),
+    emailEnabled:         document.getElementById('cfg-email-enabled').checked,
+    emailWebhook:         document.getElementById('cfg-email-webhook').value.trim(),
+    emailAdminAddress:    document.getElementById('cfg-email-admin').value.trim(),
+    emailEvents:          emailEvents,
   };
+}
+
+function saveSysConfig() {
+  var body = collectSysConfig();
   fetch('/api/system-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json();})
     .then(function(d){

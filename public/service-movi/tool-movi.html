@@ -580,9 +580,9 @@ input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.7}
             </div>
 
             <div class="form-group form-full">
-              <label class="form-label" for="f-group">Phòng Ban (Group) <span style="color:var(--muted);font-weight:400">(tuỳ chọn)</span></label>
+              <label class="form-label" for="f-group">Phòng Ban (Group Fortigate)<span class="req">*</span></label>
               <select class="form-select" id="f-group" name="group">
-                <option value="">&#8212; Không chọn / Xét sau &#8212;</option>
+                <option value="">&#8212; Chọn phòng ban &#8212;</option>
                 <option>GP_IT_PMO</option>
                 <option>GP_BI</option>
                 <option>GP_ACCOUNTING_STAFF</option>
@@ -625,9 +625,11 @@ input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.7}
           </div>
         </div>
 
-        <div style="background:color-mix(in oklch,var(--warn) 8%,transparent);border:1px solid color-mix(in oklch,var(--warn) 25%,transparent);border-radius:var(--radius-sm);padding:.625rem .875rem;font-size:12px;color:var(--warn);margin-bottom:1rem;display:flex;align-items:center;gap:6px">
+        <div style="background:color-mix(in oklch,var(--warn) 8%,transparent);border:1px solid color-mix(in oklch,var(--warn) 25%,transparent);border-radius:var(--radius-sm);padding:.625rem .875rem;font-size:12px;color:var(--warn);margin-bottom:.625rem;display:flex;align-items:center;gap:6px">
           <span>&#9432;</span> Vui lòng kiểm tra lại tất cả thông tin trước khi tạo tài khoản.
         </div>
+
+        <div id="review-validity-banner" style="display:none;align-items:center;gap:8px;padding:.5rem .875rem;border-radius:var(--radius-sm);border:1px solid transparent;margin-bottom:.875rem"></div>
 
         <div id="review-content"></div>
       </div><!-- /step-review -->
@@ -1075,7 +1077,7 @@ var FIELDS = [
   { key:'department',    label:'Department',          section:'Thông tin công việc' },
   { key:'office',        label:'Office',              section:'Thông tin công việc' },
   { key:'company',       label:'Company',             section:'Thông tin công việc' },
-  { key:'group',         label:'Phòng Ban (Group)',   section:'Thông tin công việc', badge:true },
+  { key:'group',         label:'Phòng Ban (Group Fortigate)',   section:'Thông tin công việc', badge:true },
   { key:'mobilePhone',   label:'Mobile Phone',        section:'Liên hệ' },
   { key:'manager',       label:'Manager',             section:'Liên hệ' },
   { key:'createdBy',     label:'Người tạo',           section:'Hệ thống' },
@@ -1138,12 +1140,16 @@ function renderFooter(n) {
         'Tạo Tài Khoản' +
       '</button>';
   } else {
-    f.innerHTML =
-      '<button class="btn btn-ghost" onclick="closeModal()">Đóng</button>' +
-      '<button class="btn btn-primary" onclick="openModal(\'create-user\')">' +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
-        'Tạo tài khoản khác' +
-      '</button>';
+    if (_isSubmitting) {
+      f.innerHTML = '<button class="btn btn-ghost" onclick="closeModal()">Đóng</button>';
+    } else {
+      f.innerHTML =
+        '<button class="btn btn-ghost" onclick="closeModal()">Đóng</button>' +
+        '<button class="btn btn-primary" onclick="openModal(\'create-user\')">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+          'Tạo tài khoản khác' +
+        '</button>';
+    }
   }
 }
 
@@ -1172,7 +1178,7 @@ function goToReview() {
   }
 
   if (!email)    return fail('Email User Movi là bắt buộc.', form.email);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Email User Movi không hợp lệ.', form.email);
+  if (!email.toLowerCase().endsWith('@movi.vn')) return fail('Email User Movi phải có đuôi @movi.vn (ví dụ: ten.ho@movi.vn).', form.email);
   if (!first)    return fail('First Name là bắt buộc.', form.firstName);
   if (!last)     return fail('Last Name là bắt buộc.', form.lastName);
   if (!persMail) return fail('Personal Email là bắt buộc.', form['personalEmail']);
@@ -1181,7 +1187,9 @@ function goToReview() {
   if (!dept)     return fail('Department là bắt buộc.', form.department);
   if (!office)   return fail('Office là bắt buộc.', form.office);
   if (!mobile)   return fail('Mobile Phone là bắt buộc.', form.mobilePhone);
+  if (!/^\d+$/.test(mobile)) return fail('Mobile Phone chỉ được nhập số, không được có chữ hoặc ký tự đặc biệt.', form.mobilePhone);
   if (!company)  return fail('Company là bắt buộc.', form.company);
+  if (!form.group.value) return fail('Phòng Ban (Group Fortigate) là bắt buộc.', document.getElementById('f-group'));
 
   _payload = {
     email:         email,
@@ -1199,6 +1207,15 @@ function goToReview() {
   };
 
   renderReview(_payload);
+  // Hiện banner hợp lệ
+  var vb = document.getElementById('review-validity-banner');
+  if (vb) {
+    vb.style.display = 'flex';
+    vb.innerHTML = '<span style="font-size:14px">✅</span>'
+      + '<span style="font-size:12px;font-weight:600;color:var(--ok)">Tài khoản hợp lệ — sẵn sàng tạo</span>';
+    vb.style.background = 'color-mix(in oklch,var(--ok) 10%,transparent)';
+    vb.style.borderColor = 'color-mix(in oklch,var(--ok) 30%,transparent)';
+  }
   showStep(2);
 }
 
@@ -1253,8 +1270,10 @@ function fmtDt(ts){return new Date(ts).toLocaleString('vi-VN',{day:'2-digit',mon
 function fmtDtShort(ts){return new Date(ts).toLocaleString('vi-VN',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});}
 
 /* ── Poll state ── */
-var _pollUiTimer = null;
-var _pollStart   = 0;
+var _pollUiTimer  = null;
+var _pollStart    = 0;
+var _isSubmitting = false;
+var _TIMEOUT_MS   = 5 * 60 * 1000; /* 5 phút */
 
 function _stopPolling(){
   if(_pollUiTimer){clearInterval(_pollUiTimer);_pollUiTimer=null;}
@@ -1264,12 +1283,73 @@ function _stopPolling(){
 function _renderWaitingUI(){
   var el=document.getElementById('step-success-inner');
   if(!el)return;
+  var elapsed = Date.now() - _pollStart;
+  var remaining = Math.max(0, _TIMEOUT_MS - elapsed);
+  var remSec = Math.ceil(remaining / 1000);
+  var remMin = Math.floor(remSec / 60);
+  var remS   = remSec % 60;
+  var remStr = remMin + ':' + String(remS).padStart(2,'0');
+  var pct    = Math.min(100, (elapsed / _TIMEOUT_MS) * 100);
   el.innerHTML=
     '<div style="text-align:center;padding:2rem 1rem">'
     +'<div class="wait-spinner"></div>'
     +'<div style="font-size:15px;font-weight:600;margin-bottom:.5rem">n8n đang xử lý...</div>'
     +'<div style="font-size:13px;color:var(--muted);margin-bottom:.75rem">Workflow tạo tài khoản Microsoft 365 đang chạy</div>'
-    +'<div style="font-size:12px;color:var(--muted);font-family:var(--font-mono)">⏱ '+fmtElapsed(Date.now()-_pollStart)+'</div>'
+    +'<div style="font-size:12px;color:var(--muted);font-family:var(--font-mono);margin-bottom:.75rem">⏱ Đã chờ: '+fmtElapsed(elapsed)+'</div>'
+    +'<div style="max-width:260px;margin:0 auto .5rem">'
+      +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px">'
+        +'<span>Thời gian còn lại</span><span style="font-family:var(--font-mono);color:'+(remSec<=30?'var(--bad)':'var(--muted)')+'">'+remStr+'</span>'
+      +'</div>'
+      +'<div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">'
+        +'<div style="height:100%;width:'+pct+'%;background:'+(pct>80?'var(--bad)':pct>50?'var(--warn)':'var(--ok)')+';border-radius:2px;transition:width .9s linear"></div>'
+      +'</div>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--muted)">Tự động báo lỗi sau 5 phút nếu không có phản hồi</div>'
+    +'</div>';
+}
+
+/* ── Timeout UI ── */
+function _renderTimeoutUI(payload) {
+  _stopPolling();
+  _isSubmitting = false;
+  renderFooter(3);
+  var el = document.getElementById('step-success-inner');
+  if (!el) return;
+  var fields = [
+    ['Email User Movi', payload.email],
+    ['First Name',      payload.firstName],
+    ['Last Name',       payload.lastName],
+    ['Personal Email',  payload.personalEmail],
+    ['Job Title',       payload.jobTitle],
+    ['Department',      payload.department],
+    ['Office',          payload.office],
+    ['Mobile Phone',    payload.mobilePhone],
+    ['Company',         payload.company],
+    ['Group Fortigate', payload.group],
+    ['Manager',         payload.manager],
+    ['Người tạo',       payload.createdBy],
+  ];
+  var rows = fields.filter(function(r){ return r[1]; }).map(function(r){
+    return '<tr>'
+      +'<td style="padding:5px 10px 5px 0;font-size:12px;color:var(--muted);white-space:nowrap;vertical-align:top">'+esc(r[0])+'</td>'
+      +'<td style="padding:5px 0;font-size:12px;font-family:var(--font-mono);color:var(--text);word-break:break-all">'+esc(r[1])+'</td>'
+      +'</tr>';
+  }).join('');
+  el.innerHTML =
+    '<div class="res-header">'
+    +'<div class="res-icon" style="font-size:2rem">⏱️</div>'
+    +'<div class="res-title" style="color:var(--warn)">Quá thời gian chờ (5 phút)</div>'
+    +'<div class="res-sub" style="color:var(--muted)">Không nhận được phản hồi từ n8n sau 5 phút. Workflow có thể đang chạy hoặc gặp sự cố.</div>'
+    +'</div>'
+    +'<div class="res-body">'
+    +'<div style="display:flex;align-items:flex-start;gap:8px;padding:.6rem .875rem;border-radius:var(--radius-sm);background:color-mix(in oklch,var(--warn) 10%,transparent);border:1px solid color-mix(in oklch,var(--warn) 28%,transparent);margin-bottom:1rem">'
+      +'<span style="flex-shrink:0">⚠️</span>'
+      +'<span style="font-size:12px;color:var(--warn);line-height:1.6">Vui lòng kiểm tra trực tiếp trên n8n để xác nhận tài khoản có được tạo không. Thông tin đã gửi đi được hiển thị bên dưới.</span>'
+    +'</div>'
+    +'<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:.75rem 1rem">'
+      +'<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.625rem">📋 Thông tin đã gửi</div>'
+      +'<table style="width:100%;border-collapse:collapse">'+rows+'</table>'
+    +'</div>'
     +'</div>';
 }
 
@@ -1408,19 +1488,29 @@ async function doSubmit() {
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Đang gửi...';
   closeConfirm();
+  _isSubmitting = true;
   showStep(3);
   _pollStart = Date.now();
   _renderWaitingUI();
   _pollUiTimer = setInterval(_renderWaitingUI, 1000);
+
+  var controller = new AbortController();
+  var _timeoutId = setTimeout(function() { controller.abort(); }, _TIMEOUT_MS);
 
   try {
     var res  = await fetch('/api/tool-movi/create-user', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(_payload),
+      signal: controller.signal,
     });
-    var data = await res.json();
+    clearTimeout(_timeoutId);
     clearInterval(_pollUiTimer); _pollUiTimer = null;
+
+    var data = await res.json();
+
+    _isSubmitting = false;
+    renderFooter(3);
 
     if (!res.ok || data.error) {
       var errMsg = data.error || 'HTTP ' + res.status + (data.detail ? ' — ' + data.detail : '');
@@ -1442,15 +1532,29 @@ async function doSubmit() {
       });
     }
   } catch(err) {
+    clearTimeout(_timeoutId);
     clearInterval(_pollUiTimer); _pollUiTimer = null;
-    showStep(2);
-    showReviewError('Lỗi kết nối: ' + err.message);
-    _saveHistory({
-      tool: 'create-user', toolLabel: 'Tạo User Movi',
-      status: 'error', error: 'Lỗi kết nối: ' + err.message,
-      email: (_payload && _payload.email) || '',
-      input: _payload ? Object.assign({}, _payload) : null,
-    });
+    if (err.name === 'AbortError') {
+      /* Timeout 5 phút */
+      _renderTimeoutUI(_payload);
+      _saveHistory({
+        tool: 'create-user', toolLabel: 'Tạo User Movi',
+        status: 'error', error: 'Timeout sau 5 phút — không nhận được phản hồi từ n8n',
+        email: (_payload && _payload.email) || '',
+        input: _payload ? Object.assign({}, _payload) : null,
+      });
+    } else {
+      _isSubmitting = false;
+      renderFooter(3);
+      showStep(2);
+      showReviewError('Lỗi kết nối: ' + err.message);
+      _saveHistory({
+        tool: 'create-user', toolLabel: 'Tạo User Movi',
+        status: 'error', error: 'Lỗi kết nối: ' + err.message,
+        email: (_payload && _payload.email) || '',
+        input: _payload ? Object.assign({}, _payload) : null,
+      });
+    }
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Xác Nhận Tạo';
