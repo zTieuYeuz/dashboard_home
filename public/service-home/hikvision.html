@@ -197,6 +197,7 @@ if(typeof window.__USER__==='undefined'){
   if(_u)window.__USER__=_u;
   else{window.location.href='/login.html';}
 }
+(function(){var U=window.__USER__||{role:'user',permissions:{},isAdmin:false};var perm=U.isAdmin?'read':(U.permissions&&U.permissions['camera']||'none');if(perm==='none'){document.addEventListener('DOMContentLoaded',function(){var pg=document.querySelector('.page')||document.body;pg.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:12px;color:#71717a"><div style="font-size:48px">🔒</div><div style="font-size:17px;font-weight:600;color:#f4f4f5">Không có quyền truy cập</div><div style="font-size:13px">Trang Camera Home yêu cầu quyền truy cập.<br>Liên hệ admin để được cấp quyền.</div><a href="/" style="margin-top:8px;font-size:13px;color:#3b82f6;text-decoration:none">← Về trang chủ</a></div>';});}})();
 
 /* ── Camera definitions ── */
 const BASE = '';  // Worker proxy — /cam-home/ prefix
