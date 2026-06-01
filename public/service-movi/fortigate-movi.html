@@ -523,6 +523,71 @@ a.brand{display:flex;align-items:baseline;gap:8px;margin-right:20px;text-decorat
     </div>
   </div>
 
+  <!-- Firewall User Monitor -->
+  <div class="sec-panel" id="fw-users-panel">
+    <div class="sec-panel-hdr" onclick="togglePanel('fwusers')">
+      <div class="sec-title" style="margin:0">
+        <span class="sec-title-dot" style="background:var(--blue,#60a5fa)"></span>
+        👤 Firewall User Monitor
+        <span class="fw-badge" style="margin-left:4px;font-size:9px;font-weight:600;color:var(--muted)"></span>
+      </div>
+      <span class="panel-chev closed" id="chev-fwusers">▼</span>
+    </div>
+    <div class="sec-panel-body hidden" id="body-fwusers">
+      <div style="padding:8px 0 10px;display:flex;gap:8px;align-items:center">
+        <input type="text" id="fw-search" placeholder="🔍 Tìm user, IP, group, type..." oninput="filterFwUsers()"
+          style="flex:1;background:var(--surface-2,#1e1e2e);border:1px solid var(--border,#333);color:var(--fg,#e2e8f0);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;transition:border .15s"
+          onfocus="this.style.borderColor='var(--blue,#60a5fa)'" onblur="this.style.borderColor='var(--border,#333)'">
+        <span id="fw-count" style="font-size:11px;color:var(--muted);white-space:nowrap"></span>
+      </div>
+      <div class="data-table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th>User</th><th>IP</th><th>Type</th><th>Groups</th>
+            <th>Duration</th><th>Traffic</th><th style="text-align:center">Action</th>
+          </tr></thead>
+          <tbody id="fw-tbody">
+            <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">Đang tải...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- FortiView Top Sources -->
+  <div class="sec-panel" id="fortiview-source-panel">
+    <div class="sec-panel-hdr" onclick="togglePanel('fortiviewsrc')">
+      <div class="sec-title" style="margin:0">
+        <span class="sec-title-dot" style="background:var(--purple,#a78bfa)"></span>
+        📊 FortiView — Top Sources
+        <span class="fv-badge" style="margin-left:4px;font-size:9px;font-weight:600;color:var(--muted)"></span>
+        <span class="fv-total" style="margin-left:6px;font-size:9px;color:var(--muted)"></span>
+      </div>
+      <span class="panel-chev closed" id="chev-fortiviewsrc">▼</span>
+    </div>
+    <div class="sec-panel-body hidden" id="body-fortiviewsrc">
+      <div class="data-table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th style="text-align:center;width:48px">Rank</th>
+            <th>Source IP</th>
+            <th>User</th>
+            <th>Interface</th>
+            <th>Sent</th>
+            <th>Received</th>
+            <th>Total</th>
+            <th style="text-align:right;width:72px">Sessions</th>
+            <th>Country</th>
+            <th>App</th>
+          </tr></thead>
+          <tbody id="fv-tbody">
+            <tr><td colspan="10" style="text-align:center;color:var(--muted);padding:16px">Đang tải...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   </div>
 </div>
 
@@ -1320,6 +1385,10 @@ window.addEventListener('load',()=>{
   loadPolicy();
   loadDhcp();
   load().then(()=>{ loadSdwan(); loadSdwanRules(); });
+  loadFwUsers();
+  loadFortiviewSource();
+  setInterval(loadFwUsers,30000);
+  setInterval(loadFortiviewSource,30000);
   setInterval(load,20000);
   setInterval(loadSystem,60000);
   setInterval(loadLicense,300000);
@@ -1330,6 +1399,152 @@ window.addEventListener('load',()=>{
   setInterval(loadSdwan,300000);
   setInterval(loadSdwanRules,300000);
 });
+
+function fmtBytes(b){if(!b)return'0 B';if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';if(b<1073741824)return(b/1048576).toFixed(1)+' MB';return(b/1073741824).toFixed(2)+' GB';}
+
+async function loadFwUsers(){
+  try{
+    const r=await fetch('/api/fortigate-movi/firewall-users');
+    const d=await r.json();
+    renderFwUsers(d);
+  }catch(e){console.warn('loadFwUsers',e);}
+}
+
+async function loadFortiviewSource(){
+  try{
+    const r=await fetch('/api/fortigate-movi/fortiview-source');
+    const d=await r.json();
+    renderFortiviewSource(d);
+  }catch(e){console.warn('loadFortiviewSource',e);}
+}
+
+/* ── Firewall Users: cached data + helpers ── */
+var _fwUsersData = [];
+
+function _fwGroupPills(groups){
+  if(!groups||!groups.length) return '<span style="color:var(--muted)">—</span>';
+  var show=groups.slice(0,2), rest=groups.slice(2);
+  var html=show.map(function(g){
+    return '<span title="'+g+'" style="display:inline-block;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--surface-2,#2a2a3a);border:1px solid var(--border,#333);padding:1px 6px;border-radius:10px;font-size:10px;margin:1px 2px;vertical-align:middle">'+g+'</span>';
+  }).join('');
+  if(rest.length){
+    html+='<span title="'+groups.join('\n')+'" style="display:inline-block;background:color-mix(in oklch,var(--blue,#60a5fa) 15%,transparent);border:1px solid var(--blue,#60a5fa);padding:1px 6px;border-radius:10px;font-size:10px;margin:1px 2px;color:var(--blue,#60a5fa);cursor:default;vertical-align:middle">+'+rest.length+'</span>';
+  }
+  return html;
+}
+
+function _fwTypeBadge(type){
+  var colors={auth_logon:'#f59e0b',kerberos:'#a78bfa',radius:'#34d399',local:'#60a5fa'};
+  var c=colors[type]||'#6b7280';
+  return '<span style="background:color-mix(in oklch,'+c+' 15%,transparent);border:1px solid color-mix(in oklch,'+c+' 40%,transparent);color:'+c+';padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600">'+type+'</span>';
+}
+
+function filterFwUsers(){
+  var q=(document.getElementById('fw-search')||{}).value||'';
+  q=q.toLowerCase().trim();
+  var list=q?_fwUsersData.filter(function(u){
+    return (u.user||'').toLowerCase().includes(q)
+      ||(u.ip||'').toLowerCase().includes(q)
+      ||(u.type||'').toLowerCase().includes(q)
+      ||((u.groups||[]).join(' ')).toLowerCase().includes(q);
+  }):_fwUsersData;
+  var cnt=document.getElementById('fw-count');
+  if(cnt)cnt.textContent=q?(list.length+' / '+_fwUsersData.length+' user'):'';
+  _renderFwTable(list);
+}
+
+function _renderFwTable(users){
+  var tbody=document.getElementById('fw-tbody');
+  if(!tbody)return;
+  if(!users.length){
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1rem">Không tìm thấy user nào</td></tr>';
+    return;
+  }
+  tbody.innerHTML=users.map(function(u){
+    var ip=u.ip||'';
+    var uname=u.user||'';
+    var safeIp=ip.replace(/'/g,"\\'"), safeUser=uname.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    return '<tr>'
+      +'<td style="font-weight:500">'+(uname||'—')+'</td>'
+      +'<td style="font-family:var(--font-mono,monospace);font-size:12px">'+(ip||'—')+'</td>'
+      +'<td>'+_fwTypeBadge(u.type||'unknown')+'</td>'
+      +'<td style="max-width:200px">'+_fwGroupPills(u.groups)+'</td>'
+      +'<td style="font-size:12px">'+(u.durationFmt||'—')+'</td>'
+      +'<td style="font-family:var(--font-mono,monospace);font-size:12px">'+fmtBytes(u.bytesSent||0)+'</td>'
+      +'<td style="text-align:center"><button onclick="deauthFwUser(\''+safeIp+'\',\''+safeUser+'\')" '
+        +'style="background:transparent;border:1px solid var(--red,#ef4444);color:var(--red,#ef4444);'
+        +'padding:2px 9px;border-radius:4px;font-size:11px;cursor:pointer;transition:background .15s" '
+        +'onmouseover="this.style.background=\'color-mix(in oklch,var(--red,#ef4444) 15%,transparent)\'" '
+        +'onmouseout="this.style.background=\'transparent\'">⛔ Deauth</button></td>'
+      +'</tr>';
+  }).join('');
+}
+
+function renderFwUsers(d){
+  var panel=document.getElementById('fw-users-panel');
+  if(!panel)return;
+  _fwUsersData=(d&&d.users)||[];
+  var badge=panel.querySelector('.fw-badge');
+  if(badge)badge.textContent=_fwUsersData.length;
+  /* reset search */
+  var si=document.getElementById('fw-search'); if(si)si.value='';
+  var cnt=document.getElementById('fw-count'); if(cnt)cnt.textContent='';
+  _renderFwTable(_fwUsersData);
+}
+
+async function deauthFwUser(ip, username){
+  if(!confirm('Xác nhận deauthenticate user:\n'+(username||ip)+' ('+(ip||'?')+') ?')) return;
+  var btn=event&&event.target;
+  if(btn){btn.disabled=true;btn.textContent='...';}
+  try{
+    var r=await fetch('/api/fortigate-movi/firewall-deauth',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ip:ip,username:username})
+    });
+    var data=await r.json();
+    if(r.ok){
+      alert('✅ Đã deauthenticate: '+(username||ip));
+      loadFwUsers();
+    } else {
+      alert('❌ Lỗi: '+(data.error||('HTTP '+r.status)));
+      if(btn){btn.disabled=false;btn.textContent='⛔ Deauth';}
+    }
+  }catch(e){
+    alert('❌ Kết nối thất bại: '+e.message);
+    if(btn){btn.disabled=false;btn.textContent='⛔ Deauth';}
+  }
+}
+
+function renderFortiviewSource(d){
+  var panel=document.getElementById('fortiview-source-panel');
+  if(!panel)return;
+  var sources=(d&&d.sources)||[];
+  var badge=panel.querySelector('.fv-badge');
+  if(badge)badge.textContent=sources.length;
+  var totalEl=panel.querySelector('.fv-total');
+  if(totalEl&&d&&d.stats)totalEl.textContent=d.stats.totalBytesFmt?'• '+d.stats.totalBytesFmt+' total':'';
+  var tbody=document.getElementById('fv-tbody');
+  if(!tbody)return;
+  if(!sources.length){tbody.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:1rem">Không có dữ liệu FortiView</td></tr>';return;}
+  tbody.innerHTML=sources.map(function(s){
+    var rankColor=s.rank===1?'#f59e0b':s.rank===2?'#94a3b8':s.rank===3?'#cd7c2f':'var(--muted)';
+    var intfBadge=s.srcintf?'<span style="background:var(--surface-2,#2a2a3a);border:1px solid var(--border,#333);padding:1px 6px;border-radius:4px;font-size:10px;white-space:nowrap">'+s.srcintf+'</span>':'—';
+    var appBadge=s.app?'<span style="background:var(--surface-2,#2a2a3a);border:1px solid var(--border,#333);padding:1px 6px;border-radius:4px;font-size:10px">'+s.app+'</span>':'—';
+    return '<tr>'
+      +'<td style="text-align:center;font-weight:700;color:'+rankColor+'">'+s.rank+'</td>'
+      +'<td style="font-family:var(--font-mono,monospace);font-size:12px">'+(s.srcip||'—')+'</td>'
+      +'<td style="font-size:12px;color:var(--fg-2,#94a3b8)">'+(s.username||'—')+'</td>'
+      +'<td>'+intfBadge+'</td>'
+      +'<td style="font-family:var(--font-mono,monospace);font-size:12px;color:var(--green,#4ade80)">'+(s.sentFmt||'—')+'</td>'
+      +'<td style="font-family:var(--font-mono,monospace);font-size:12px;color:var(--blue,#60a5fa)">'+(s.rcvdFmt||'—')+'</td>'
+      +'<td style="font-family:var(--font-mono,monospace);font-size:12px;font-weight:600">'+(s.bytesFmt||'—')+'</td>'
+      +'<td style="text-align:right;font-size:12px">'+(s.sessions||0).toLocaleString()+'</td>'
+      +'<td style="font-size:12px">'+(s.country||'—')+'</td>'
+      +'<td>'+appBadge+'</td>'
+      +'</tr>';
+  }).join('');
+}
 </script>
 </body>
 </html>
