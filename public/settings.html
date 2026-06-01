@@ -796,8 +796,8 @@ select.inp{cursor:pointer}
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">
           <span id="um-lt-status" style="color:var(--muted)">Đang tắt</span>
           <div class="toggle-wrap" style="transform:scale(.85)">
-            <input type="checkbox" id="um-login-time-enabled" style="display:none"/>
-            <div class="toggle-track" id="um-lt-track" onclick="var cb=document.getElementById('um-login-time-enabled');cb.checked=!cb.checked;toggleUmLoginTime(cb.checked)">
+            <input type="checkbox" id="um-login-time-enabled" style="display:none" onchange="toggleUmLoginTime(this.checked)"/>
+            <div class="toggle-track" id="um-lt-track" onclick="document.getElementById('um-login-time-enabled').click()">
               <div class="toggle-thumb"></div>
             </div>
           </div>
@@ -1223,17 +1223,17 @@ function openAddUser() {
   document.getElementById('um-pw-label').textContent = 'Mật khẩu';
   document.getElementById('um-role').value = 'user';
   document.getElementById('user-modal-err').classList.remove('show');
-  // Delegate mode: hide role selector and groups (server enforces role='user', no groups)
+  // Delegate mode: hide role selector only; groups are allowed
   var roleRow = document.getElementById('um-role').closest('.form-row');
   var groupsRow = document.getElementById('um-groups-row');
   if (_delegateMode) {
     if (roleRow) roleRow.style.display = 'none';
-    if (groupsRow) groupsRow.style.display = 'none';
+    if (groupsRow) groupsRow.style.display = '';
   } else {
     if (roleRow) roleRow.style.display = '';
     if (groupsRow) groupsRow.style.display = '';
-    renderGroupCheckboxes('um-groups-list', []);
   }
+  renderGroupCheckboxes('um-groups-list', []);
   openModal('user-modal');
   document.getElementById('um-username').focus();
 }
@@ -1344,9 +1344,9 @@ function saveUser() {
       errEl.textContent='Lỗi: '+e.message; errEl.classList.add('show');
     });
   } else {
-    // In delegate mode: don't send role/groups (server enforces role='user', no groups)
-    var createBody = {username: username, password: password};
-    if (!_delegateMode) { createBody.role = role; createBody.groups = groups; }
+    // In delegate mode: don't send role (server enforces role='user'), but groups are allowed
+    var createBody = {username: username, password: password, groups: groups};
+    if (!_delegateMode) { createBody.role = role; }
     fetch('/api/admin/users',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify(createBody)
@@ -2184,13 +2184,16 @@ function onPermChange(pfx, pageId) {
   var radio = document.querySelector('input[name="'+pfx+'-perm-'+pageId+'"]:checked');
   var perm = radio ? radio.value : 'none';
 
-  // ── Tool-group: toggle sub-tools; clear all when parent = none ──
+  // ── Tool-group: toggle sub-tools; clear all when parent = none, check all when write ──
   var toolSec = document.getElementById(pfx+'-tools-'+pageId);
   if (toolSec) {
     toolSec.style.display = (perm !== 'none') ? '' : 'none';
     if (perm === 'none') {
       // Uncheck all sub-tool checkboxes
       toolSec.querySelectorAll('input[type="checkbox"]').forEach(function(cb){ cb.checked = false; });
+    } else {
+      // Auto-check all sub-tool checkboxes when parent is set to write
+      toolSec.querySelectorAll('input[type="checkbox"]').forEach(function(cb){ cb.checked = true; });
     }
     return; // tool-groups have no panels/cameras
   }
