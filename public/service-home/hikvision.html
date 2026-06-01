@@ -390,6 +390,16 @@ window.addEventListener('beforeunload', function(e) {
   }
 });
 
+/* ── Idle keepalive khi camera đang stream ──
+   Gọi _idleReset() mỗi 60s nếu có camera nào đang ON,
+   tránh bị đăng xuất tự động khi đang xem PiP mà không chạm màn hình. */
+setInterval(function() {
+  var anyOn = CAMERAS.some(function(c){ return c.src !== null && state[c.id]; });
+  if (anyOn && typeof window._idleReset === 'function') {
+    window._idleReset();
+  }
+}, 60000);
+
 /* ── Theme ── */
 (function initTheme(){
   var saved=null; try{saved=localStorage.getItem('dh_theme')}catch(e){}
