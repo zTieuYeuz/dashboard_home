@@ -3402,6 +3402,55 @@ async function handleMoviSystem(request, env) {
   }
 }
 
+async function handleMoviFirewallUsers(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
+  const N8N_URL  = (env.MOVI_WH_FG_FIREWALL_USERS || '').replace(/^﻿/, '').trim();
+  const N8N_AUTH = moviN8nAuth(env);
+  if (!N8N_URL) return json({ error: 'MOVI_WH_FG_FIREWALL_USERS chưa được cấu hình' }, 503);
+  try {
+    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    return json(await resp.json());
+  } catch (e) { return json({ error: e.message }, 502); }
+}
+
+async function handleMoviFortiviewSource(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
+  const N8N_URL  = (env.MOVI_WH_FG_FORTIVIEW_SOURCE || '').replace(/^﻿/, '').trim();
+  const N8N_AUTH = moviN8nAuth(env);
+  if (!N8N_URL) return json({ error: 'MOVI_WH_FG_FORTIVIEW_SOURCE chưa được cấu hình' }, 503);
+  try {
+    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(20000) });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    return json(await resp.json());
+  } catch (e) { return json({ error: e.message }, 502); }
+}
+
+async function handleMoviFirewallDeauth(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
+  const N8N_URL  = (env.MOVI_WH_FG_FIREWALL_DEAUTH || '').replace(/^﻿/, '').trim();
+  const N8N_AUTH = moviN8nAuth(env);
+  if (!N8N_URL) return json({ error: 'MOVI_WH_FG_FIREWALL_DEAUTH chưa được cấu hình' }, 503);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  if (!body || !body.ip) return json({ error: 'Thiếu trường ip' }, 400);
+  try {
+    const resp = await fetch(N8N_URL, {
+      method: 'POST',
+      headers: { 'Authorization': N8N_AUTH, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip: body.ip, username: body.username || '' }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
+    return json(await resp.json());
+  } catch (e) { return json({ error: e.message }, 502); }
+}
+
 async function handleGetActivity(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
@@ -5039,6 +5088,19 @@ export default {
     if (p === '/api/movi-ssl-vpn')              return handleMoviSslVpn(request, env);
     if (p === '/api/movi-policy')               return handleMoviPolicy(request, env);
     if (p === '/api/movi-dhcp')                 return handleMoviDhcp(request, env);
+    if (p === '/api/fortigate-movi/firewall-users') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      return handleMoviFirewallUsers(request, env);
+    }
+    if (p === '/api/fortigate-movi/fortiview-source') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      return handleMoviFortiviewSource(request, env);
+    }
+    if (p === '/api/fortigate-movi/firewall-deauth' && request.method === 'POST') {
+      return handleMoviFirewallDeauth(request, env);
+    }
 
     // ── Service endpoints — require session + permission ──
     if (p === '/api/status') {
