@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════ */
 const SESSION_COOKIE    = 'dh_session';
 const SESSION_TTL       = 60 * 60 * 8;      // default fallback only — runtime reads from KV system_config
-const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','ssh-movi'];
+const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','ssh-movi'];
 
 /* Idle-timer script injected into every authenticated HTML page.
    T = idle timeout ms, W = warning threshold ms (must be < T) */
@@ -521,8 +521,8 @@ async function handleCreateUser(request, env) {
     // Delegated managers can only create 'user' role, not admin
     const allowedRoles = isAdmin ? ['user', 'admin'] : ['user'];
     const role = allowedRoles.includes(body?.role) ? body.role : 'user';
-    // Delegated managers cannot assign policy groups
-    const groups = isAdmin ? (Array.isArray(body?.groups) ? body.groups : []) : [];
+    // Delegated managers can assign policy groups (same as admin)
+    const groups = Array.isArray(body?.groups) ? body.groups : [];
     await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify({
       password: hashed, role, groups, userGroups: [], permissions: {}, panels: {}, cameras: [], created: Date.now(),
       mustChangePassword: true,  // Force password change on first login
@@ -1058,7 +1058,15 @@ async function handleDeleteUserGroup(request, env, groupId) {
 
 async function handleUpdateUserGroups(request, env, username) {
   const session = await getSession(request, env);
-  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const isAdmin = await isAdminUser(env, session);
+  if (!isAdmin) {
+    // Delegate với canManagePerms cũng được phép assign groups
+    const callerUser = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
+    const delegateSvcs = (callerUser && Array.isArray(callerUser.canManagePerms))
+      ? callerUser.canManagePerms.filter(s => ALL_SERVICES.includes(s)) : [];
+    if (!delegateSvcs.length) return json({ error: 'Admin required' }, 403);
+  }
   if (username === 'admin') return json({ error: 'Không thể sửa admin' }, 400);
   const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
   if (!user) return json({ error: 'User not found' }, 404);
