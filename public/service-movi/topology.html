@@ -271,7 +271,6 @@ function _readUserCookie() {
 var __USER__ = window.__USER__ || _readUserCookie() || { role:'user', permissions:{}, isAdmin:false };
 var _ADM = !!__USER__.isAdmin;
 var _UPanels = __USER__.panels || {};
-function canTopoPanel(key){ return _ADM || !!_UPanels[key]; }
 
 (function initTheme() {
   var saved = null;

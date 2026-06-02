@@ -387,7 +387,7 @@ function renderFolders() {
   g.innerHTML = _data.folders.map(function(f, fi){
     var items = f.items || [];
     var folderIcon = f.icon || '📁';
-    var folderColor = f.color || '#60a5fa';
+    var folderColor = (f.color || '#60a5fa').replace(/[^a-zA-Z0-9#(),.\s%]/g, '');
     var bmHtml = items.length ? items.map(function(bm, bi){
       var fav = faviconUrl(bm.url);
       var iconHtml = (bm.icon && bm.icon.trim())

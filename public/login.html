@@ -5,6 +5,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Đăng nhập — Home Lab Dashboard</title>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#09090b;color:#f4f4f5;min-height:100vh;display:flex;align-items:center;justify-content:center;}
@@ -54,6 +55,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <label class="label">Mật khẩu</label>
         <input class="input" id="password" type="password" autocomplete="current-password" placeholder="••••••••" required/>
       </div>
+      <div class="cf-turnstile" data-sitekey="0x4AAAAAADdsKIkKxdp9AUG1" data-theme="dark" data-size="flexible" style="margin-top:.75rem"></div>
       <button class="btn" type="submit" id="loginBtn">Đăng nhập →</button>
       <div class="err" id="errMsg"></div>
     </form>
@@ -153,12 +155,15 @@ async function doLogin(e) {
   btn.textContent = 'Đang đăng nhập...';
   err.classList.remove('show');
   try {
+    var cfToken = '';
+    try { var tsEl = document.querySelector('[name="cf-turnstile-response"]'); if (tsEl) cfToken = tsEl.value || ''; } catch(_){}
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: document.getElementById('username').value.trim(),
         password: document.getElementById('password').value,
+        cfTurnstileToken: cfToken,
       })
     });
     const data = await res.json();
@@ -190,6 +195,8 @@ async function doLogin(e) {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Đăng nhập →';
+    // Reset Turnstile widget for retry
+    try { if (window.turnstile) turnstile.reset(); } catch(_){}
   }
 }
 
