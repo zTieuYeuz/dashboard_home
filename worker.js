@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════ */
 const SESSION_COOKIE    = 'dh_session';
 const SESSION_TTL       = 60 * 60 * 8;      // default fallback only — runtime reads from KV system_config
-const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','ssh-movi'];
+const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','ssh-movi'];
 
 /* Idle-timer script injected into every authenticated HTML page.
    T = idle timeout ms, W = warning threshold ms (must be < T) */
@@ -2302,6 +2302,86 @@ async function handleToolMoviAssetSearch(request, env, session) {
   }
 }
 
+/* ── Tool Movi: Check Email Azure AD ── */
+async function handleToolMoviCheckEmail(request, env, session) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  const webhookUrl = (env.MOVI_WH_AZURE_CHECK_EMAIL || '').replace(/^﻿/, '').trim();
+  if (!webhookUrl) return json({ error: 'MOVI_WH_AZURE_CHECK_EMAIL chưa được cấu hình' }, 503);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  // Accept email OR partial name/keyword — no strict email format check
+  const query = (body.query || body.email || '').trim();
+  if (!query || query.length < 2)
+    return json({ error: 'Nhập ít nhất 2 ký tự để tìm kiếm' }, 400);
+  if (query.length > 100)
+    return json({ error: 'Từ khoá tìm kiếm quá dài' }, 400);
+  try {
+    const url = `${webhookUrl}?email=${encodeURIComponent(query)}`;
+    const resp = await fetch(url, {
+      method: 'GET',
+      headers: { 'Authorization': moviN8nAuth(env) },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      return json({ error: `n8n error: HTTP ${resp.status}`, detail: txt.slice(0, 200) }, 502);
+    }
+    // n8n Respond to Webhook returns $json.body (raw Graph API response)
+    // Shape: { value: [...users], @odata.context: "..." }
+    // OR legacy flat shape: { found, id, displayName, ... }
+    const raw = await resp.json().catch(() => ({}));
+    // Case 1: n8n returns raw Graph API body { value: [...] }
+    if (Array.isArray(raw.value)) {
+      const users = raw.value;
+      return json({ success: true, found: users.length > 0, users });
+    }
+    // Case 2: n8n returns flat single-user fields { found, id, displayName, ... }
+    if (raw.found !== undefined) {
+      const user = (raw.id || raw.displayName) ? {
+        id: raw.id, displayName: raw.displayName,
+        userPrincipalName: raw.userPrincipalName,
+        mail: raw.mail, accountEnabled: raw.accountEnabled,
+      } : null;
+      return json({ success: true, found: !!raw.found, users: user ? [user] : [] });
+    }
+    // Case 3: unexpected shape
+    return json({ success: true, found: false, users: [] });
+  } catch(e) {
+    return json({ error: e.name === 'TimeoutError' ? 'n8n timeout sau 15 giây' : `Lỗi kết nối: ${e.message}` }, 502);
+  }
+}
+
+/* ── Tool Movi: Check Azure Group ── */
+async function handleToolMoviCheckAzureGroup(request, env, session) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  const webhookUrl = (env.MOVI_WH_AZURE_CHECK_GROUP || '').replace(/^﻿/, '').trim();
+  if (!webhookUrl) return json({ error: 'MOVI_WH_AZURE_CHECK_GROUP chưa được cấu hình' }, 503);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const query = (body.query || '').trim();
+  if (!query || query.length < 2)
+    return json({ error: 'Nhập ít nhất 2 ký tự để tìm kiếm' }, 400);
+  if (query.length > 100)
+    return json({ error: 'Từ khoá tìm kiếm quá dài' }, 400);
+  try {
+    const url = `${webhookUrl}?query=${encodeURIComponent(query)}`;
+    const resp = await fetch(url, {
+      method: 'GET',
+      headers: { 'Authorization': moviN8nAuth(env) },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      return json({ error: `n8n error: HTTP ${resp.status}`, detail: txt.slice(0, 200) }, 502);
+    }
+    const raw = await resp.json().catch(() => ({}));
+    if (Array.isArray(raw.value)) {
+      return json({ success: true, found: raw.value.length > 0, groups: raw.value });
+    }
+    return json({ success: true, found: false, groups: [] });
+  } catch(e) {
+    return json({ error: e.name === 'TimeoutError' ? 'n8n timeout sau 15 giây' : `Lỗi kết nối: ${e.message}` }, 502);
+  }
+}
+
 /* ── Tool Movi: Delete User List ── */
 async function handleToolMoviDeleteUserList(request, env, session) {
   if (request.method !== 'GET') return json({ error: 'GET required' }, 405);
@@ -2356,7 +2436,7 @@ async function handleToolMoviDeleteUserAction(request, env, session) {
 /* ── Tool Movi History (KV-backed) ── */
 async function hasAnyToolMoviPerm(env, session) {
   if (session.role === 'admin') return true;
-  for (const key of ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search']) {
+  for (const key of ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group']) {
     if (await hasPerm(env, session, key)) return true;
   }
   return false;
@@ -5157,6 +5237,18 @@ export default {
       if (!_s) return json({ error: 'Unauthorized' }, 401);
       if (!(await hasPerm(env, _s, 'tool-movi-asset-search'))) return json({ error: 'Không có quyền sử dụng Tra Cứu Tài Sản' }, 403);
       return handleToolMoviAssetSearch(request, env, _s);
+    }
+    if (p === '/api/tool-movi/check-email') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'tool-movi-check-email'))) return json({ error: 'Không có quyền sử dụng Kiểm Tra Email Azure' }, 403);
+      return handleToolMoviCheckEmail(request, env, _s);
+    }
+    if (p === '/api/tool-movi/check-azure-group') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'tool-movi-azure-group'))) return json({ error: 'Không có quyền sử dụng Tra Cứu Group Azure' }, 403);
+      return handleToolMoviCheckAzureGroup(request, env, _s);
     }
     if (p === '/api/tool-movi/delete-user') {
       const _s = await getSession(request, env);
