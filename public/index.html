@@ -711,7 +711,7 @@ var SERVICE_CATEGORIES = [
    - 'tool-movi' card is visible if user has ANY of the 4 sub-permissions
 */
 var _permMap = { movi:'topology' };
-var _TOOL_MOVI_KEYS = ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search'];
+var _TOOL_MOVI_KEYS = ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'];
 var SERVICES = __USER__.isAdmin
   ? ALL_SERVICES_DEF
   : ALL_SERVICES_DEF.filter(function(s){
@@ -753,23 +753,7 @@ function statusLabel(s) {
 function statusColor(s) {
   return s === 'online' ? 'var(--ok)' : s === 'offline' ? 'var(--bad)' : s === 'local' ? 'var(--warn)' : 'var(--muted)';
 }
-function sparkSVG(values, color) {
-  if (!values || values.length < 2) return '';
-  var w = 80, h = 22;
-  var min = Math.min.apply(null, values), max = Math.max.apply(null, values);
-  var range = max - min || 1, step = w / (values.length - 1);
-  var pts = values.map(function(v, i){
-    var x = i * step;
-    var y = h - ((v - min) / range) * (h - 4) - 2;
-    return { x: x.toFixed(1), y: y.toFixed(1) };
-  });
-  var d = pts.map(function(p, i){ return (i === 0 ? 'M' : 'L') + p.x + ',' + p.y; }).join(' ');
-  var fillD = d + ' L' + w + ',' + h + ' L0,' + h + ' Z';
-  return '<svg class="spark" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" style="color:' + color + '">'
-    + '<path d="' + fillD + '" fill="currentColor" opacity="0.12"></path>'
-    + '<path d="' + d + '" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"></path>'
-    + '</svg>';
-}
+/* sparkSVG removed — was dead code, never called */
 
 /* ═══════════════════════════════════════════════════════════════
    RENDER SERVICES

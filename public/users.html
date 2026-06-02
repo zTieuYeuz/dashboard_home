@@ -314,11 +314,7 @@ function toast(msg, ok) {
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 function closeOnBg(e, id) { if (e.target.id === id) closeModal(id); }
 
-function permLabel(p) {
-  if (p === 'write') return '<span style="color:var(--green)">write</span>';
-  if (p === 'read')  return '<span style="color:var(--amber)">read</span>';
-  return '<span style="color:var(--muted)">none</span>';
-}
+/* permLabel removed — dead code, never called */
 
 function renderUsers(users) {
   if (!users.length) {
