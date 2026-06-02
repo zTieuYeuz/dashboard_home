@@ -397,6 +397,25 @@ input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.7}
       </button>
     </div>
 
+    <!-- Card: Kiểm Tra Email Azure -->
+    <div class="tool-card">
+      <div class="tool-card-top">
+        <div class="tool-icon tool-icon-blue">&#9993;</div>
+        <div class="tool-info">
+          <div class="tool-name">Tra Cứu Azure AD</div>
+          <div class="tool-desc">Tìm tài khoản và group email trong Azure AD (Microsoft 365)</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="tool-badge"><span class="tool-badge-dot" style="background:var(--accent)"></span>Microsoft Graph API</span>
+        <span style="font-size:11px;color:var(--muted)">Azure AD</span>
+      </div>
+      <button class="tool-btn" style="background:var(--accent)" onclick="ce_openModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Tra Cứu Azure
+      </button>
+    </div>
+
     <!-- Placeholder: Reset Password (coming soon) -->
     <div class="tool-card" data-no-perm style="opacity:.45;pointer-events:none">
       <div class="tool-card-top">
@@ -1013,6 +1032,54 @@ input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.7}
   </div>
 </div><!-- /modal-overlay #modal-asset-search -->
 
+<!-- ═══════════════════════════════════════
+     Modal: Kiểm Tra Email Azure
+═══════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-check-email" onclick="ce_handleOverlayClick(event)">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title">&#128269; Tra Cứu Azure AD</div>
+      <button class="modal-close" onclick="ce_closeModal()" title="Đóng">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="result-banner result-error" id="ce-error-banner"><span>&#9888;</span><span id="ce-error-msg"></span></div>
+      <!-- Tab selector -->
+      <div class="tab-bar" style="margin-bottom:1rem">
+        <button class="tab-btn active" id="ce-tab-user" onclick="ce_switchTab('user')">👤 Tài khoản</button>
+        <button class="tab-btn" id="ce-tab-group" onclick="ce_switchTab('group')">👥 Group Email</button>
+      </div>
+      <div id="ce-section-user" class="form-group" style="margin-bottom:1rem">
+        <label class="form-label">Email hoặc tên nhân viên <span class="req">*</span></label>
+        <div style="display:flex;gap:8px">
+          <input class="form-input" id="ce-email" type="text" placeholder="thoai, nguyen.van.a, @movi.vn..."
+            onkeydown="if(event.key==='Enter')ce_doCheck()" style="flex:1"/>
+          <button class="btn btn-primary" id="ce-search-btn" onclick="ce_doCheck()" style="background:var(--accent);white-space:nowrap">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            Tìm kiếm
+          </button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Nhập email đầy đủ, tên, hoặc một phần tên để tìm kiếm</div>
+      </div>
+      <!-- Group search section -->
+      <div id="ce-section-group" style="display:none;margin-bottom:1rem">
+        <div class="form-group">
+          <label class="form-label">Tên group hoặc email group <span class="req">*</span></label>
+          <div style="display:flex;gap:8px">
+            <input class="form-input" id="ce-group-query" type="text" placeholder="IT-Team, helpdesk, all-staff..."
+              onkeydown="if(event.key==='Enter')ce_doGroupSearch()" style="flex:1"/>
+            <button class="btn btn-primary" id="ce-group-btn" onclick="ce_doGroupSearch()" style="background:var(--accent);white-space:nowrap">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              Tìm Group
+            </button>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Tìm Distribution List, M365 Group, Security Group</div>
+        </div>
+      </div>
+      <div id="ce-result-wrap" style="display:none"></div>
+    </div>
+  </div>
+</div><!-- /modal-overlay #modal-check-email -->
+
 <script>
 /* ── User ── */
 function _readUserCookie(){try{var m=document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/);return m?JSON.parse(decodeURIComponent(m[1])):null;}catch(e){return null;}}
@@ -1043,6 +1110,7 @@ function _lockToolCards() {
     { perm: 'tool-movi-block-user',   fn: 'bu_openModal()',              card: 1 },
     { perm: 'tool-movi-delete-user',  fn: 'du_openModal()',              card: 2 },
     { perm: 'tool-movi-asset-search', fn: 'as_openModal()',              card: 3 },
+    { perm: 'tool-movi-check-email',  fn: 'ce_openModal()',              card: 4 },
   ];
   var cards = document.querySelectorAll('.tool-card:not([data-no-perm])');
   map.forEach(function(m, i) {
@@ -1103,6 +1171,7 @@ function handleOverlayClick(e) {
 }
 document.addEventListener('keydown', function(e){
   if (e.key === 'Escape') {
+    if (document.getElementById('modal-check-email').classList.contains('open')) { ce_closeModal(); return; }
     if (document.getElementById('modal-asset-search').classList.contains('open')) { as_closeModal(); return; }
     if (document.getElementById('modal-delete-user').classList.contains('open')) { du_closeModal(); return; }
     if (document.getElementById('modal-block-user').classList.contains('open')) { bu_closeModal(); return; }
@@ -2646,6 +2715,199 @@ showStep(1);
     .then(function(d){ _updateHistBadge(d.total || 0); })
     .catch(function(){});
 })();
+
+/* ═══════════════════════════════════════
+   Kiểm Tra Email Azure AD
+═══════════════════════════════════════ */
+function ce_openModal() {
+  document.getElementById('modal-check-email').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('ce-email').value = '';
+  document.getElementById('ce-result-wrap').style.display = 'none';
+  document.getElementById('ce-result-wrap').innerHTML = '';
+  document.getElementById('ce-group-query').value = '';
+  ce_switchTab('user');
+  document.getElementById('ce-error-banner').classList.remove('show');
+  setTimeout(function(){ document.getElementById('ce-email').focus(); }, 80);
+}
+function ce_closeModal() {
+  document.getElementById('modal-check-email').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function ce_handleOverlayClick(e) { if (e.target === e.currentTarget) ce_closeModal(); }
+
+async function ce_doCheck() {
+  var query   = document.getElementById('ce-email').value.trim();
+  var errBnr  = document.getElementById('ce-error-banner');
+  var errMsg  = document.getElementById('ce-error-msg');
+  var btn     = document.getElementById('ce-search-btn');
+  var wrap    = document.getElementById('ce-result-wrap');
+
+  errBnr.classList.remove('show');
+  if (!query || query.length < 2) {
+    errMsg.textContent = 'Nhập ít nhất 2 ký tự để tìm kiếm';
+    errBnr.classList.add('show');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Đang tìm...';
+  wrap.style.display = 'none';
+
+  try {
+    var r = await fetch('/api/tool-movi/check-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: query })
+    });
+    var data = await r.json();
+
+    if (!r.ok || data.error) {
+      errMsg.textContent = data.error || 'Lỗi không xác định';
+      errBnr.classList.add('show');
+    } else {
+      wrap.style.display = '';
+      var users = data.users || (data.user ? [data.user] : []);
+      if (data.found && users.length > 0) {
+        var header = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:.75rem">'
+          + '<span style="font-size:20px">&#9989;</span>'
+          + '<div><div style="font-size:13px;font-weight:700;color:var(--ok)">Tìm thấy ' + users.length + ' tài khoản</div>'
+          + '<div style="font-size:11px;color:var(--muted)">Từ khoá: <code style="font-size:10px;background:var(--surface-2);padding:1px 6px;border-radius:3px">' + esc(query) + '</code></div></div>'
+          + '</div>';
+        var cards = users.map(function(u) {
+          var enabled = u.accountEnabled;
+          var statusBadge = enabled
+            ? '<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:20px;background:color-mix(in oklch,var(--ok) 12%,transparent);color:var(--ok);border:1px solid color-mix(in oklch,var(--ok) 30%,transparent);font-weight:600">&#128994; Hoạt động</span>'
+            : '<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:20px;background:color-mix(in oklch,var(--bad) 12%,transparent);color:var(--bad);border:1px solid color-mix(in oklch,var(--bad) 30%,transparent);font-weight:600">&#128308; Bị tắt</span>';
+          return '<div style="background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-sm);padding:.75rem;margin-bottom:.5rem">'
+            + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+            + '<div>'
+            + '<div style="font-size:13px;font-weight:600">' + esc(u.displayName || '—') + '</div>'
+            + '<div style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">' + esc(u.userPrincipalName || '—') + '</div>'
+            + (u.mail && u.mail !== u.userPrincipalName ? '<div style="font-size:11px;color:var(--muted)">' + esc(u.mail) + '</div>' : '')
+            + '</div>'
+            + statusBadge
+            + '</div>'
+            + '</div>';
+        }).join('');
+        wrap.innerHTML = '<div style="background:color-mix(in oklch,var(--ok) 6%,transparent);border:1px solid color-mix(in oklch,var(--ok) 20%,transparent);border-radius:var(--radius-sm);padding:.875rem">'
+          + header + cards + '</div>';
+      } else {
+        wrap.innerHTML =
+          '<div style="background:color-mix(in oklch,var(--bad) 8%,transparent);border:1px solid color-mix(in oklch,var(--bad) 25%,transparent);border-radius:var(--radius-sm);padding:1.5rem;text-align:center">'
+          + '<div style="font-size:36px;margin-bottom:.625rem">&#10060;</div>'
+          + '<div style="font-size:14px;font-weight:700;color:var(--bad);margin-bottom:.375rem">Không tìm thấy tài khoản</div>'
+          + '<div style="font-size:12px;color:var(--muted);line-height:1.7">'
+          + '<code style="background:var(--surface);padding:2px 8px;border-radius:4px;font-size:11px;font-family:var(--font-mono)">' + esc(query) + '</code><br>'
+          + 'không có trong Azure AD / Microsoft 365</div>'
+          + '</div>';
+      }
+    }
+  } catch(e) {
+    errMsg.textContent = 'Lỗi kết nối: ' + e.message;
+    errBnr.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Tìm kiếm';
+  }
+}
+
+function _ceRow(k, v) {
+  return '<div class="res-key">' + k + '</div><div class="res-val">' + (v || '<span style="color:var(--muted)">—</span>') + '</div>';
+}
+
+function ce_switchTab(tab) {
+  var isUser = tab === 'user';
+  document.getElementById('ce-tab-user').classList.toggle('active', isUser);
+  document.getElementById('ce-tab-group').classList.toggle('active', !isUser);
+  document.getElementById('ce-section-user').style.display = isUser ? '' : 'none';
+  document.getElementById('ce-section-group').style.display = isUser ? 'none' : '';
+  document.getElementById('ce-result-wrap').style.display = 'none';
+  document.getElementById('ce-result-wrap').innerHTML = '';
+  document.getElementById('ce-error-banner').classList.remove('show');
+  // Focus the active input
+  setTimeout(function(){
+    var el = isUser ? document.getElementById('ce-email') : document.getElementById('ce-group-query');
+    if (el) el.focus();
+  }, 50);
+}
+
+function _ceGroupTypeBadge(g) {
+  var types = g.groupTypes || [];
+  if (types.indexOf('Unified') >= 0) return '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:color-mix(in oklch,var(--accent) 12%,transparent);color:var(--accent);border:1px solid color-mix(in oklch,var(--accent) 30%,transparent);font-weight:600">M365 Group</span>';
+  if (g.mailEnabled && !g.securityEnabled) return '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:color-mix(in oklch,var(--ok) 12%,transparent);color:var(--ok);border:1px solid color-mix(in oklch,var(--ok) 30%,transparent);font-weight:600">Distribution List</span>';
+  if (!g.mailEnabled && g.securityEnabled) return '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:color-mix(in oklch,var(--warn) 12%,transparent);color:var(--warn);border:1px solid color-mix(in oklch,var(--warn) 30%,transparent);font-weight:600">Security Group</span>';
+  if (g.mailEnabled && g.securityEnabled) return '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:color-mix(in oklch,var(--violet) 12%,transparent);color:var(--violet);border:1px solid color-mix(in oklch,var(--violet) 30%,transparent);font-weight:600">Mail Security</span>';
+  return '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--surface-2);color:var(--muted);border:1px solid var(--border);font-weight:600">Group</span>';
+}
+
+async function ce_doGroupSearch() {
+  var query   = document.getElementById('ce-group-query').value.trim();
+  var errBnr  = document.getElementById('ce-error-banner');
+  var errMsg  = document.getElementById('ce-error-msg');
+  var btn     = document.getElementById('ce-group-btn');
+  var wrap    = document.getElementById('ce-result-wrap');
+
+  errBnr.classList.remove('show');
+  if (!query || query.length < 2) {
+    errMsg.textContent = 'Nhập ít nhất 2 ký tự để tìm kiếm';
+    errBnr.classList.add('show');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Đang tìm...';
+  wrap.style.display = 'none';
+
+  try {
+    var r = await fetch('/api/tool-movi/check-azure-group', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: query })
+    });
+    var data = await r.json();
+
+    if (!r.ok || data.error) {
+      errMsg.textContent = data.error || 'Lỗi không xác định';
+      errBnr.classList.add('show');
+    } else {
+      wrap.style.display = '';
+      var groups = data.groups || [];
+      if (data.found && groups.length > 0) {
+        var header = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:.75rem">'
+          + '<span style="font-size:20px">&#9989;</span>'
+          + '<div><div style="font-size:13px;font-weight:700;color:var(--ok)">Tìm thấy ' + groups.length + ' group</div>'
+          + '<div style="font-size:11px;color:var(--muted)">Từ khoá: <code style="font-size:10px;background:var(--surface-2);padding:1px 6px;border-radius:3px">' + esc(query) + '</code></div></div>'
+          + '</div>';
+        var cards = groups.map(function(g) {
+          return '<div style="background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-sm);padding:.75rem;margin-bottom:.5rem">'
+            + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+            + '<div>'
+            + '<div style="font-size:13px;font-weight:600">' + esc(g.displayName || '—') + '</div>'
+            + (g.mail ? '<div style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">' + esc(g.mail) + '</div>' : '<div style="font-size:11px;color:var(--muted);font-style:italic">Không có email</div>')
+            + '</div>'
+            + _ceGroupTypeBadge(g)
+            + '</div>'
+            + '</div>';
+        }).join('');
+        wrap.innerHTML = '<div style="background:color-mix(in oklch,var(--ok) 6%,transparent);border:1px solid color-mix(in oklch,var(--ok) 20%,transparent);border-radius:var(--radius-sm);padding:.875rem">'
+          + header + cards + '</div>';
+      } else {
+        wrap.innerHTML = '<div style="background:color-mix(in oklch,var(--bad) 8%,transparent);border:1px solid color-mix(in oklch,var(--bad) 25%,transparent);border-radius:var(--radius-sm);padding:1.5rem;text-align:center">'
+          + '<div style="font-size:36px;margin-bottom:.625rem">&#10060;</div>'
+          + '<div style="font-size:14px;font-weight:700;color:var(--bad);margin-bottom:.375rem">Không tìm thấy group</div>'
+          + '<div style="font-size:12px;color:var(--muted);line-height:1.7"><code style="background:var(--surface);padding:2px 8px;border-radius:4px;font-size:11px;font-family:var(--font-mono)">' + esc(query) + '</code><br>không có trong Azure AD</div>'
+          + '</div>';
+      }
+    }
+  } catch(e) {
+    errMsg.textContent = 'Lỗi kết nối: ' + e.message;
+    errBnr.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Tìm Group';
+  }
+}
 
 /* ── Theme + Clock ── */
 (function(){
