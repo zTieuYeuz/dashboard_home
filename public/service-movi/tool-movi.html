@@ -194,11 +194,11 @@ a{color:inherit;text-decoration:none}
 .rpt-clear-btn{padding:7px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-family:var(--font-sans);cursor:pointer;transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:5px}
 .rpt-clear-btn:hover{color:var(--bad);border-color:var(--bad)}
 .rpt-table-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
-.rpt-thead{display:grid;grid-template-columns:110px 140px 1fr 120px 90px 28px;gap:0;padding:.5rem .875rem;background:var(--surface-2);border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.rpt-thead{display:grid;grid-template-columns:110px 220px 1fr 110px 110px 28px;gap:0;padding:.5rem .875rem;background:var(--surface-2);border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .rpt-body{}
 .rpt-row{border-bottom:1px solid var(--border-soft)}
 .rpt-row:last-child{border-bottom:none}
-.rpt-row-top{display:grid;grid-template-columns:110px 140px 1fr 120px 90px 28px;gap:0;padding:.625rem .875rem;cursor:pointer;align-items:center;transition:background .12s;user-select:none}
+.rpt-row-top{display:grid;grid-template-columns:110px 220px 1fr 110px 110px 28px;gap:0;padding:.625rem .875rem;cursor:pointer;align-items:center;transition:background .12s;user-select:none}
 .rpt-row-top:hover{background:color-mix(in oklch,var(--surface-2) 60%,transparent)}
 .rpt-cell{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rpt-time{font-size:11px;font-family:var(--font-mono);color:var(--text-2)}
@@ -206,6 +206,7 @@ a{color:inherit;text-decoration:none}
 .rpt-badge-violet{color:var(--violet);border-color:color-mix(in oklch,var(--violet) 35%,transparent);background:color-mix(in oklch,var(--violet) 10%,transparent)}
 .rpt-badge-blue{color:var(--accent);border-color:color-mix(in oklch,var(--accent) 35%,transparent);background:color-mix(in oklch,var(--accent) 10%,transparent)}
 .rpt-badge-red{color:var(--bad);border-color:color-mix(in oklch,var(--bad) 35%,transparent);background:color-mix(in oklch,var(--bad) 10%,transparent)}
+.rpt-badge-green{color:var(--ok);border-color:color-mix(in oklch,var(--ok) 35%,transparent);background:color-mix(in oklch,var(--ok) 10%,transparent)}
 .rpt-status-ok{color:var(--ok);font-size:12px;font-weight:600}
 .rpt-status-err{color:var(--bad);font-size:12px;font-weight:600}
 .rpt-chevron{display:grid;place-items:center;color:var(--muted);font-size:10px;transition:transform .2s}
@@ -416,6 +417,24 @@ input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.7}
       </button>
     </div>
 
+    <!-- Card: Tạo Policy FortiGate -->
+    <div class="tool-card">
+      <div class="tool-card-top">
+        <div class="tool-icon tool-icon-orange">&#128737;</div>
+        <div class="tool-info">
+          <div class="tool-name">Tạo Policy FortiGate</div>
+          <div class="tool-desc">Tạo policy truy cập mạng LAN hoặc WiFi cho nhân viên theo thời gian</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="tool-badge"><span class="tool-badge-dot" style="background:var(--warn)"></span>FortiGate Movi</span>
+        <span style="font-size:11px;color:var(--muted)">LAN &middot; WiFi</span>
+      </div>
+      <button class="tool-btn" style="background:var(--warn);color:#1a1a1a" onclick="fgp_openModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Tạo Policy
+      </button>
+    </div>
     <!-- Placeholder: Reset Password (coming soon) -->
     <div class="tool-card" data-no-perm style="opacity:.45;pointer-events:none">
       <div class="tool-card-top">
@@ -1080,6 +1099,107 @@ input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.7}
   </div>
 </div><!-- /modal-overlay #modal-check-email -->
 
+<!-- Modal: Tạo Policy FortiGate -->
+<div class="modal-overlay" id="modal-fg-policy" onclick="fgp_handleOverlayClick(event)">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:600px">
+    <div class="modal-header">
+      <div class="modal-title">&#128737; Tạo Policy FortiGate</div>
+      <button class="modal-close" onclick="fgp_closeModal()" title="Đóng">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="result-banner result-error" id="fgp-error-banner"><span>&#9888;</span><span id="fgp-error-msg"></span></div>
+      <div class="result-banner result-success" id="fgp-success-banner" style="display:none"><span>&#9989;</span><span id="fgp-success-msg"></span></div>
+      <div class="tab-bar" style="margin-bottom:1.25rem">
+        <button class="tab-btn active" id="fgp-tab-lan" onclick="fgp_switchTab('lan')">&#127760; LAN</button>
+        <button class="tab-btn" id="fgp-tab-wifi" onclick="fgp_switchTab('wifi')">&#128246; WiFi</button>
+        <button class="tab-btn" id="fgp-tab-active" onclick="fgp_switchTab('active')">&#9201; Đang hoạt động <span id="fgp-active-count" style="display:none;font-size:10px;background:var(--warn);color:#1a1a1a;padding:1px 6px;border-radius:10px;margin-left:4px"></span></button>
+      </div>
+      <!-- Active policies panel -->
+      <div id="fgp-section-active" style="display:none">
+        <div id="fgp-active-list"><div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px">Đang tải...</div></div>
+      </div>
+      <form id="fgp-form" onsubmit="return false">
+        <div class="form-grid">
+          <div class="form-group form-full">
+            <label class="form-label">Email user <span class="req">*</span></label>
+            <input class="form-input" id="fgp-email" type="email" placeholder="email của user"/>
+          </div>
+          <div class="form-group form-full">
+            <label class="form-label">Cho phép sử dụng <span class="req">*</span></label>
+            <select class="form-select" id="fgp-allow-app">
+              <option value="">-- Chọn ứng dụng --</option>
+              <option value="không_có">không_có</option>
+              <option value="ultraview">ultraview</option>
+              <option value="google_meet">google_meet</option>
+              <option value="google_doc">google_doc</option>
+            </select>
+          </div>
+          <div class="form-group form-full">
+            <label class="form-label">Phòng Ban <span class="req">*</span></label>
+            <select class="form-select" id="fgp-department">
+              <option value="">-- Chọn phòng ban --</option>
+              <option value="GP_HR_STAFF">GP_HR_STAFF</option>
+              <option value="GP_IT_PMOGP_BI">GP_IT_PMOGP_BI</option>
+              <option value="GP_ACCOUNTING_STAFF">GP_ACCOUNTING_STAFF</option>
+              <option value="GP_AntiFraud_STAFF">GP_AntiFraud_STAFF</option>
+              <option value="GP_Scorecard_STAFF">GP_Scorecard_STAFF</option>
+              <option value="GP_Specialist_STAFF">GP_Specialist_STAFF</option>
+              <option value="GP_collection_STAFF">GP_collection_STAFF</option>
+              <option value="GP_MKT_STAFF">GP_MKT_STAFF</option>
+              <option value="GP_Risk_Control_STAFF">GP_Risk_Control_STAFF</option>
+              <option value="GP_IT_Designer_STAFF">GP_IT_Designer_STAFF</option>
+              <option value="GP_TELESALE_STAFF">GP_TELESALE_STAFF</option>
+              <option value="GP_Legal_STAFF">GP_Legal_STAFF</option>
+              <option value="GP_SupplyChain_STAFF">GP_SupplyChain_STAFF</option>
+              <option value="GP_Support_Sale_STAFF">GP_Support_Sale_STAFF</option>
+              <option value="GP_OPS_STAFF">GP_OPS_STAFF</option>
+              <option value="GP_Product_STAFF">GP_Product_STAFF</option>
+              <option value="GP_Admin-Procurement">GP_Admin-Procurement</option>
+              <option value="GP_ENG_STAFF">GP_ENG_STAFF</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ngày <span class="req">*</span></label>
+            <input class="form-input" id="fgp-date" type="date"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Vị trí máy <span class="req">*</span></label>
+            <select class="form-select" id="fgp-location">
+              <option value="">-- Chọn tầng --</option>
+              <option value="Tầng_1">Tầng_1</option>
+              <option value="Tầng_2">Tầng_2</option>
+              <option value="Tầng_3">Tầng_3</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Thời gian bắt đầu <span class="req">*</span></label>
+            <input class="form-input" id="fgp-start-time" type="time"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Thời gian kết thúc <span class="req">*</span></label>
+            <input class="form-input" id="fgp-end-time" type="time"/>
+          </div>
+          <div class="form-group form-full">
+            <label class="form-label">Lý do <span class="req">*</span></label>
+            <input class="form-input" id="fgp-reason" type="text" placeholder="Fix lỗi BHXH, họp khẩn..."/>
+          </div>
+          <div class="form-group form-full">
+            <label class="form-label">Người tạo</label>
+            <input class="form-input" id="fgp-creator" type="text" readonly style="opacity:.6;cursor:not-allowed"/>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fgp_closeModal()">Hủy</button>
+      <button class="btn btn-primary" id="fgp-submit-btn" onclick="fgp_submit()" style="background:var(--warn);color:#1a1a1a;border:none">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Tạo Policy LAN
+      </button>
+    </div>
+  </div>
+</div><!-- /modal-overlay #modal-fg-policy -->
+
 <script>
 /* ── User ── */
 function _readUserCookie(){try{var m=document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/);return m?JSON.parse(decodeURIComponent(m[1])):null;}catch(e){return null;}}
@@ -1105,28 +1225,23 @@ function can(key) {
 })();
 
 function _lockToolCards() {
+  // perms: array of keys — card visible if user has ANY of them
   var map = [
-    { perm: 'tool-movi-create-user',  fn: 'openModal(\'create-user\')',  card: 0 },
-    { perm: 'tool-movi-block-user',   fn: 'bu_openModal()',              card: 1 },
-    { perm: 'tool-movi-delete-user',  fn: 'du_openModal()',              card: 2 },
-    { perm: 'tool-movi-asset-search', fn: 'as_openModal()',              card: 3 },
-    { perm: 'tool-movi-check-email',  fn: 'ce_openModal()',              card: 4 },
+    { perms: ['tool-movi-create-user'],                               fn: 'openModal(\'create-user\')', card: 0 },
+    { perms: ['tool-movi-block-user'],                                fn: 'bu_openModal()',             card: 1 },
+    { perms: ['tool-movi-delete-user'],                               fn: 'du_openModal()',             card: 2 },
+    { perms: ['tool-movi-asset-search'],                              fn: 'as_openModal()',             card: 3 },
+    { perms: ['tool-movi-check-email','tool-movi-azure-group'],       fn: 'ce_openModal()',             card: 4 },
+    { perms: ['tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'],  fn: 'fgp_openModal()',            card: 5 },
   ];
   var cards = document.querySelectorAll('.tool-card:not([data-no-perm])');
   map.forEach(function(m, i) {
     var card = cards[i];
     if (!card) return;
-    if (!can(m.perm)) {
-      var btn = card.querySelector('.tool-btn');
-      if (btn) {
-        btn.disabled = true;
-        btn.style.opacity = '.45';
-        btn.style.cursor = 'not-allowed';
-        btn.title = 'Bạn không có quyền sử dụng tính năng này';
-        btn.onclick = function(e) { e.preventDefault(); e.stopPropagation(); };
-        btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Không có quyền';
-      }
-      card.style.opacity = '.55';
+    var hasPerm = m.perms.some(function(p){ return can(p); });
+    if (!hasPerm) {
+      // Hide the card entirely — only show tools user has permission for
+      card.style.display = 'none';
     }
   });
 }
@@ -1171,6 +1286,7 @@ function handleOverlayClick(e) {
 }
 document.addEventListener('keydown', function(e){
   if (e.key === 'Escape') {
+    if (document.getElementById('modal-fg-policy').classList.contains('open')) { fgp_closeModal(); return; }
     if (document.getElementById('modal-check-email').classList.contains('open')) { ce_closeModal(); return; }
     if (document.getElementById('modal-asset-search').classList.contains('open')) { as_closeModal(); return; }
     if (document.getElementById('modal-delete-user').classList.contains('open')) { du_closeModal(); return; }
@@ -1955,9 +2071,10 @@ function renderHistory() {
 
 function _renderHistoryData() {
   // Stats
-  var total = _rptData.length;
-  var ok    = _rptData.filter(function(x){ return x.status === 'done'; }).length;
-  var err   = total - ok;
+  var total  = _rptData.length;
+  var ok     = _rptData.filter(function(x){ return x.status === 'done'; }).length;
+  var active = _rptData.filter(function(x){ return x.status === 'active'; }).length;
+  var err    = total - ok - active;
   document.getElementById('rpt-total').textContent = total;
   document.getElementById('rpt-ok').textContent    = ok;
   document.getElementById('rpt-err').textContent   = err;
@@ -2012,16 +2129,36 @@ function _rptRender(items) {
   }
 
   body.innerHTML = items.map(function(item, i) {
-    var isOk  = item.status === 'done';
-    var raw   = item.result;
-    var d     = Array.isArray(raw) ? raw[0] : (raw || {});
+    var isActive = item.status === 'active';
+    var isOk     = item.status === 'done';
+    var raw      = item.result;
+    var d        = Array.isArray(raw) ? raw[0] : (raw || {});
 
     // Tool badge color
-    var badgeCls = item.tool === 'block-user' ? 'rpt-badge-red' : 'rpt-badge-violet';
-    var toolIcon = item.tool === 'block-user' ? '🚫' : '👤';
+    var badgeCls = item.tool === 'block-user'      ? 'rpt-badge-red'
+                 : item.tool === 'fg-policy-lan'   ? 'rpt-badge-blue'
+                 : item.tool === 'fg-policy-wifi'  ? 'rpt-badge-green'
+                 : 'rpt-badge-violet';
+    var toolIcon = item.tool === 'block-user'      ? '🚫'
+                 : item.tool === 'fg-policy-lan'   ? '🌐'
+                 : item.tool === 'fg-policy-wifi'  ? '📶'
+                 : '👤';
+
+    // Status cell
+    var statusCell;
+    if (isActive && item.expiresAt) {
+      statusCell = '<span class="rpt-countdown-hist" data-expires="' + item.expiresAt + '" '
+        + 'style="font-size:11px;font-family:var(--font-mono);font-weight:700;color:var(--warn);'
+        + 'background:color-mix(in oklch,var(--warn) 10%,transparent);padding:2px 9px;'
+        + 'border-radius:20px;border:1px solid color-mix(in oklch,var(--warn) 28%,transparent)">⏱ --:--:--</span>';
+    } else if (isOk) {
+      statusCell = '<span class="rpt-status-ok">✓ Thành công</span>';
+    } else {
+      statusCell = '<span class="rpt-status-err">✗ Thất bại</span>';
+    }
 
     // Detail HTML
-    var detailHtml = _rptBuildDetail(item, d, isOk);
+    var detailHtml = _rptBuildDetail(item, d, isOk || isActive);
 
     return '<div class="rpt-row" id="rr-' + i + '">'
       + '<div class="rpt-row-top" onclick="_rptToggle(' + i + ')">'
@@ -2032,16 +2169,40 @@ function _rptRender(items) {
           + (item.displayName && item.displayName !== item.email ? '<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(item.displayName) + '</div>' : '')
         + '</div>'
         + '<div class="rpt-cell col-creator" style="font-size:11px;color:var(--muted)">' + esc(item.createdBy || '—') + '</div>'
-        + '<div class="rpt-cell col-status">'
-          + (isOk
-            ? '<span class="rpt-status-ok">✓ Thành công</span>'
-            : '<span class="rpt-status-err">✗ Thất bại</span>')
-        + '</div>'
+        + '<div class="rpt-cell col-status">' + statusCell + '</div>'
         + '<div class="rpt-cell rpt-chevron">▶</div>'
       + '</div>'
       + '<div class="rpt-detail-wrap">' + detailHtml + '</div>'
     + '</div>';
   }).join('');
+
+  // Khởi động countdown timer cho các policy đang active trong lịch sử
+  _startHistCountdown();
+}
+
+var _histCountdownTimer = null;
+function _startHistCountdown() {
+  if (_histCountdownTimer) clearInterval(_histCountdownTimer);
+  var els = document.querySelectorAll('.rpt-countdown-hist');
+  if (!els.length) return;
+  function _tick() {
+    var now = Date.now();
+    document.querySelectorAll('.rpt-countdown-hist').forEach(function(el) {
+      var exp = parseInt(el.dataset.expires, 10);
+      var rem = Math.max(0, exp - now);
+      if (rem === 0) {
+        el.textContent = '⌛ Hết hạn';
+        el.style.color = 'var(--muted)';
+        return;
+      }
+      var h = Math.floor(rem / 3600000);
+      var m = Math.floor((rem % 3600000) / 60000);
+      var s = Math.floor((rem % 60000) / 1000);
+      el.textContent = '⏱ ' + (h ? h + 'g ' : '') + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+    });
+  }
+  _tick();
+  _histCountdownTimer = setInterval(_tick, 1000);
 }
 
 function _rptBuildDetail(item, d, isOk) {
@@ -2081,6 +2242,40 @@ function _rptBuildDetail(item, d, isOk) {
           brow('Người thực hiện', item.createdBy)
           + brow('Thời gian', fmtDt(item.savedAt))
         )
+      + '</div>';
+  }
+
+  // ── FG Policy LAN / WiFi ──
+  if (item.tool === 'fg-policy-lan' || item.tool === 'fg-policy-wifi') {
+    var fp = item.result || {};
+    var isLan = item.tool === 'fg-policy-lan';
+    function fprow(label, value, green) {
+      var valStyle = green ? 'color:var(--ok);font-weight:700;font-family:var(--font-mono)' : 'color:var(--fg)';
+      return '<tr>'
+        + '<td style="padding:5px 10px;font-size:12px;font-weight:600;color:var(--muted);background:color-mix(in oklch,var(--border-soft) 50%,transparent);white-space:nowrap;width:38%;border-bottom:1px solid var(--border-soft)">' + label + '</td>'
+        + '<td style="padding:5px 10px;font-size:12px;' + valStyle + ';border-bottom:1px solid var(--border-soft)">' + esc(value || '—') + '</td>'
+        + '</tr>';
+    }
+    var typeColor = isLan ? 'var(--accent)' : 'var(--ok)';
+    var typeLabel = isLan ? 'LAN' : 'WiFi';
+    return '<div style="margin:.25rem 0">'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:.5rem">'
+      + '<span style="font-size:10px;padding:2px 10px;border-radius:20px;background:' + typeColor + ';color:#fff;font-weight:700">' + typeLabel + '</span>'
+      + '<span style="font-size:12px;font-weight:600;font-family:var(--font-mono)">' + esc(item.email) + '</span>'
+      + (fp.ruleId ? '<span style="font-size:11px;padding:2px 9px;border-radius:20px;background:color-mix(in oklch,var(--ok) 15%,transparent);color:var(--ok);border:1px solid color-mix(in oklch,var(--ok) 30%,transparent);font-weight:700;font-family:var(--font-mono)">Rule #' + esc(fp.ruleId) + '</span>' : '')
+      + '</div>'
+      + '<table style="width:100%;border-collapse:collapse;border:1px solid var(--border-soft);border-radius:var(--radius-sm);overflow:hidden">'
+      + (fp.ruleName ? fprow('Name', fp.ruleName) : '')
+      + fprow('Ngày', fp.date)
+      + fprow('Phòng ban', fp.department)
+      + fprow('Thời gian bắt đầu', fp.startTime)
+      + fprow('Thời gian kết thúc', fp.endTime)
+      + fprow('Vị trí', fp.location)
+      + fprow('Cho phép sử dụng', fp.allowApp)
+      + fprow('Lý do', fp.reason)
+      + fprow('Người tạo', item.createdBy)
+      + (fp.ruleId ? fprow('ID Rule', fp.ruleId, true) : '')
+      + '</table>'
       + '</div>';
   }
 
@@ -2907,6 +3102,214 @@ async function ce_doGroupSearch() {
     btn.disabled = false;
     btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Tìm Group';
   }
+}
+
+/* ═══════════════════════════════════════
+   Tạo Policy FortiGate
+═══════════════════════════════════════ */
+var _fgp_tab = 'lan';
+
+function fgp_openModal() {
+  _fgp_tab = 'lan';
+  document.getElementById('modal-fg-policy').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('fgp-form').reset();
+  document.getElementById('fgp-creator').value = (window.__USER__ && (window.__USER__.displayName || window.__USER__.username)) || '';
+  document.getElementById('fgp-error-banner').classList.remove('show');
+  document.getElementById('fgp-success-banner').style.display = 'none';
+  fgp_switchTab('lan');
+  setTimeout(function(){ document.getElementById('fgp-email').focus(); }, 80);
+}
+function fgp_closeModal() {
+  document.getElementById('modal-fg-policy').classList.remove('open');
+  document.body.style.overflow = '';
+  if (_fgp_countdownTimer) { clearInterval(_fgp_countdownTimer); _fgp_countdownTimer = null; }
+}
+function fgp_handleOverlayClick(e) { if (e.target === e.currentTarget) fgp_closeModal(); }
+
+function fgp_switchTab(tab) {
+  _fgp_tab = tab;
+  document.getElementById('fgp-tab-lan').classList.toggle('active', tab === 'lan');
+  document.getElementById('fgp-tab-wifi').classList.toggle('active', tab === 'wifi');
+  document.getElementById('fgp-tab-active').classList.toggle('active', tab === 'active');
+  var isForm = tab === 'lan' || tab === 'wifi';
+  document.getElementById('fgp-form').style.display = isForm ? '' : 'none';
+  document.getElementById('fgp-section-active').style.display = tab === 'active' ? '' : 'none';
+  var footer = document.querySelector('#modal-fg-policy .modal-footer');
+  if (footer) footer.style.display = isForm ? '' : 'none';
+  var btn = document.getElementById('fgp-submit-btn');
+  if (btn && isForm) btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Tạo Policy ' + tab.toUpperCase();
+  document.getElementById('fgp-error-banner').classList.remove('show');
+  if (tab === 'active') fgp_loadActivePolicies();
+  document.getElementById('fgp-success-banner').style.display = 'none';
+}
+
+async function fgp_submit() {
+  var errBnr = document.getElementById('fgp-error-banner');
+  var errMsg = document.getElementById('fgp-error-msg');
+  var sucBnr = document.getElementById('fgp-success-banner');
+  var btn    = document.getElementById('fgp-submit-btn');
+
+  errBnr.classList.remove('show');
+  sucBnr.style.display = 'none';
+
+  var email     = document.getElementById('fgp-email').value.trim();
+  var allowApp  = document.getElementById('fgp-allow-app').value.trim();
+  var dept      = document.getElementById('fgp-department').value.trim();
+  var date      = document.getElementById('fgp-date').value.trim();
+  var startTime = document.getElementById('fgp-start-time').value.trim();
+  var endTime   = document.getElementById('fgp-end-time').value.trim();
+  var location  = document.getElementById('fgp-location').value.trim();
+  var reason    = document.getElementById('fgp-reason').value.trim();
+
+  if (!email)     { errMsg.textContent = 'Vui lòng nhập Email user'; errBnr.classList.add('show'); return; }
+  if (!allowApp)  { errMsg.textContent = 'Vui lòng chọn ứng dụng cho phép sử dụng'; errBnr.classList.add('show'); return; }
+  if (!dept)      { errMsg.textContent = 'Vui lòng chọn Phòng Ban'; errBnr.classList.add('show'); return; }
+  if (!date)      { errMsg.textContent = 'Vui lòng chọn Ngày'; errBnr.classList.add('show'); return; }
+  if (!location)  { errMsg.textContent = 'Vui lòng chọn vị trí máy'; errBnr.classList.add('show'); return; }
+  if (!startTime) { errMsg.textContent = 'Vui lòng nhập thời gian bắt đầu'; errBnr.classList.add('show'); return; }
+  if (!endTime)   { errMsg.textContent = 'Vui lòng nhập thời gian kết thúc'; errBnr.classList.add('show'); return; }
+  if (!reason)    { errMsg.textContent = 'Vui lòng nhập lý do'; errBnr.classList.add('show'); return; }
+  if (startTime >= endTime) { errMsg.textContent = 'Thời gian kết thúc phải sau thời gian bắt đầu'; errBnr.classList.add('show'); return; }
+
+  var endpoint = _fgp_tab === 'lan' ? '/api/tool-movi/fg-policy-lan' : '/api/tool-movi/fg-policy-wifi';
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin" style="border-top-color:#1a1a1a"></span> Đang tạo...';
+
+  try {
+    var r = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, allowApp: allowApp, department: dept, date: date, startTime: startTime, endTime: endTime, location: location, reason: reason })
+    });
+    var data = await r.json();
+    if (!r.ok || data.error) {
+      errMsg.textContent = data.error || 'Lỗi không xác định';
+      errBnr.classList.add('show');
+    } else {
+      document.getElementById('fgp-form').reset();
+      document.getElementById('fgp-creator').value = (window.__USER__ && (window.__USER__.displayName || window.__USER__.username)) || '';
+      // Add to local cache immediately (no KV consistency delay)
+      if (data.policy) {
+        _fgp_localPolicies.push(data.policy);
+      }
+      // Auto switch to "Đang hoạt động" tab to show policy immediately
+      setTimeout(function() {
+        fgp_switchTab('active');
+        fgp_renderPolicies(_fgp_localPolicies, document.getElementById('fgp-active-list'));
+      }, 300);
+    }
+  } catch(e) {
+    errMsg.textContent = 'Lỗi kết nối: ' + e.message;
+    errBnr.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    fgp_switchTab(_fgp_tab);
+  }
+}
+
+/* ── FG Policy: Active policies + countdown ── */
+var _fgp_countdownTimer = null;
+var _fgp_localPolicies = []; // optimistic local cache
+
+async function fgp_loadActivePolicies() {
+  var wrap = document.getElementById('fgp-active-list');
+  if (_fgp_countdownTimer) { clearInterval(_fgp_countdownTimer); _fgp_countdownTimer = null; }
+
+  // Show local cache immediately (no flicker)
+  var now = Date.now();
+  _fgp_localPolicies = _fgp_localPolicies.filter(function(p){ return !p.expiresAt || p.expiresAt > now; });
+  if (_fgp_localPolicies.length > 0) {
+    fgp_renderPolicies(_fgp_localPolicies, wrap);
+  } else {
+    wrap.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px"><span class="spin" style="border-top-color:var(--warn);width:20px;height:20px;border-width:2px;display:inline-block;margin-bottom:8px"></span><br>Đang tải...</div>';
+  }
+
+  // Also fetch from KV in background (merge deduped by id)
+  try {
+    var r = await fetch('/api/tool-movi/fg-policies');
+    var data = await r.json();
+    if (!r.ok || data.error) {
+      if (_fgp_localPolicies.length === 0) wrap.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--bad);font-size:13px">Lỗi tải danh sách: ' + esc(data.error || '') + '</div>';
+      return;
+    }
+    // Merge KV policies with local, dedupe by id
+    var kvPolicies = data.policies || [];
+    var merged = kvPolicies.slice();
+    _fgp_localPolicies.forEach(function(lp) {
+      if (!merged.some(function(p){ return p.id === lp.id; })) merged.push(lp);
+    });
+    merged = merged.filter(function(p){ return !p.expiresAt || p.expiresAt > Date.now(); });
+    merged.sort(function(a,b){ return (a.expiresAt||0)-(b.expiresAt||0); });
+    // Update local cache
+    _fgp_localPolicies = merged;
+    fgp_renderPolicies(merged, wrap);
+  } catch(e) {
+    if (_fgp_localPolicies.length === 0)
+      wrap.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--bad);font-size:13px">Lỗi kết nối: ' + esc(e.message) + '</div>';
+  }
+}
+
+function fgp_renderPolicies(policies, wrap) {
+  if (_fgp_countdownTimer) { clearInterval(_fgp_countdownTimer); _fgp_countdownTimer = null; }
+  var badge = document.getElementById('fgp-active-count');
+  if (policies.length > 0) { badge.textContent = policies.length; badge.style.display = ''; }
+  else badge.style.display = 'none';
+  if (policies.length === 0) {
+    wrap.innerHTML = '<div style="text-align:center;padding:2.5rem;color:var(--muted);font-size:13px;line-height:1.7">&#9201; Không có policy nào đang hoạt động</div>';
+    return;
+  }
+  wrap.innerHTML = policies.map(function(p) {
+    var isLan = p.type === 'lan';
+    var typeColor = isLan ? 'var(--accent)' : 'var(--ok)';
+    var typeLabel = isLan ? 'LAN' : 'WiFi';
+    function tr(label, value, opt) {
+      opt = opt || {};
+      var labelTd = '<td style="padding:6px 12px;font-size:12px;font-weight:600;color:var(--muted);background:color-mix(in oklch,var(--border-soft) 50%,transparent);white-space:nowrap;width:38%;border-bottom:1px solid var(--border-soft)">' + label + '</td>';
+      var valStyle = 'padding:6px 12px;font-size:12px;border-bottom:1px solid var(--border-soft);';
+      if (opt.green)  valStyle += 'color:var(--ok);font-weight:700;font-family:var(--font-mono)';
+      else            valStyle += 'color:var(--fg)';
+      var valueTd = '<td style="' + valStyle + '">' + esc(value || '—') + '</td>';
+      return '<tr>' + labelTd + valueTd + '</tr>';
+    }
+    return '<div style="background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:.75rem">'
+      /* ── Header ── */
+      + '<div style="display:flex;align-items:center;justify-content:space-between;padding:.55rem .85rem;background:color-mix(in oklch,' + typeColor + ' 12%,transparent);border-bottom:2px solid color-mix(in oklch,' + typeColor + ' 30%,transparent)">'
+      + '<div style="display:flex;align-items:center;gap:8px">'
+      + '<span style="font-size:10px;padding:2px 10px;border-radius:20px;background:' + typeColor + ';color:#fff;font-weight:700;letter-spacing:.5px">' + typeLabel + '</span>'
+      + '<span style="font-size:13px;font-weight:600;font-family:var(--font-mono)">' + esc(p.email) + '</span>'
+      + '</div>'
+      + '<span class="fgp-countdown" data-expires="' + p.expiresAt + '" style="font-size:12px;font-family:var(--font-mono);font-weight:700;color:var(--warn);background:color-mix(in oklch,var(--warn) 12%,transparent);padding:3px 11px;border-radius:20px;border:1px solid color-mix(in oklch,var(--warn) 30%,transparent)">--:--:--</span>'
+      + '</div>'
+      /* ── Table ── */
+      + '<table style="width:100%;border-collapse:collapse">'
+      + (p.ruleName ? tr('Name', p.ruleName) : '')
+      + tr('Ngày', p.date)
+      + tr('Phòng ban', p.department)
+      + tr('Thời gian bắt đầu', p.startTime)
+      + tr('Thời gian kết thúc', p.endTime)
+      + tr('Vị trí', p.location)
+      + tr('Cho phép sử dụng', p.allowApp)
+      + tr('Lý do', p.reason)
+      + tr('Người tạo', p.createdBy)
+      + (p.ruleId ? tr('ID Rule', p.ruleId, {green:true}) : '')
+      + '</table>'
+      + '</div>';
+  }).join('');
+  function _tick() {
+    var now = Date.now();
+    document.querySelectorAll('.fgp-countdown').forEach(function(el) {
+      var exp = parseInt(el.dataset.expires, 10);
+      var rem = Math.max(0, exp - now);
+      if (rem === 0) { el.textContent = 'Hết hạn'; el.style.color = 'var(--muted)'; return; }
+      var h = Math.floor(rem / 3600000);
+      var m = Math.floor((rem % 3600000) / 60000);
+      var s = Math.floor((rem % 60000) / 1000);
+      el.textContent = (h ? (h + 'g ') : '') + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+    });
+  }
+  _tick();
+  _fgp_countdownTimer = setInterval(_tick, 1000);
 }
 
 /* ── Theme + Clock ── */
