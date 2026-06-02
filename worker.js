@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════ */
 const SESSION_COOKIE    = 'dh_session';
 const SESSION_TTL       = 60 * 60 * 8;      // default fallback only — runtime reads from KV system_config
-const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','ssh-movi'];
+const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
 
 /* Idle-timer script injected into every authenticated HTML page.
    T = idle timeout ms, W = warning threshold ms (must be < T) */
@@ -2433,10 +2433,212 @@ async function handleToolMoviDeleteUserAction(request, env, session) {
   }
 }
 
+async function handleToolMoviFgPolicy(request, env, session, policyType, ctx) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  const envKey = policyType === 'lan' ? env.MOVI_WH_FG_POLICY_LAN : env.MOVI_WH_FG_POLICY_WIFI;
+  const webhookUrl = (envKey || '').replace(/^﻿/, '').trim();
+  if (!webhookUrl) return json({ error: "MOVI_WH_FG_POLICY_" + policyType.toUpperCase() + " chưa được cấu hình" }, 503);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const email = (body.email || '').trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Email user không hợp lệ' }, 400);
+  if (!body.date) return json({ error: 'Thiếu ngày' }, 400);
+  if (!body.startTime || !body.endTime) return json({ error: 'Thiếu thời gian bắt đầu/kết thúc' }, 400);
+  const ip = request.headers.get('CF-Connecting-IP') || '?';
+
+  const policyId = crypto.randomUUID();
+  const expiresAt = new Date(`${body.date}T${body.endTime}:00+07:00`).getTime();
+  const effectiveTtl = Math.max(60, Math.floor((expiresAt - Date.now()) / 1000));
+  // KV TTL = thời gian đến endTime + 15 phút buffer (n8n cần thời gian xóa rule rồi mới callback)
+  const kvTtl = effectiveTtl + 900;
+  const policyData = {
+    id: policyId, type: policyType,
+    email, allowApp: (body.allowApp || '').trim(),
+    department: (body.department || '').trim(),
+    date: body.date, startTime: body.startTime, endTime: body.endTime,
+    location: (body.location || '').trim(),
+    reason: (body.reason || '').trim(),
+    createdBy: session.username,
+    createdAt: Date.now(), expiresAt,
+  };
+  // Generate a single-use callback token — n8n sends this back when deleting rule
+  const callbackToken = crypto.randomUUID();
+  // Store token → policyId mapping (TTL same as policy)
+  await env.DASHBOARD_KV.put(`fgcb:${callbackToken}`, policyId, { expirationTtl: kvTtl }).catch(() => {});
+
+  const payload = [{ data: {
+    'policyId':            policyId,       // for reference
+    'callbackToken':       callbackToken,  // n8n sends this back to mark done
+    'Email user':          email,
+    'cho phép sử dụng':   policyData.allowApp,
+    'phòng Ban':           policyData.department,
+    'Ngày':                body.date,
+    'thời gian bắt đầu ': body.startTime,
+    'thời gian kết thúc': body.endTime,
+    'vị trí máy':         policyData.location,
+    'Lý do':              policyData.reason,
+    'Người Tạo':          session.username,
+  }}];
+
+  try {
+    // Wait for n8n Respond to Webhook #1 (policy created confirmation)
+    const resp = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': moviN8nAuth(env) },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(120000), // 2 min — wait for FortiGate + Teams
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      return json({ error: "n8n error: HTTP " + resp.status, detail: txt.slice(0, 200) }, 502);
+    }
+    // Parse n8n response — trích xuất Rule ID + Rule Name từ Teams message HTML
+    let ruleId = null, ruleName = null;
+    try {
+      const respData = await resp.json();
+      // n8n trả về Teams message JSON, body.content là HTML
+      const html = respData?.body?.content || respData?.content || '';
+      // Extract Rule ID: <td>ID Rule</td><td>174</td>
+      const mId = html.match(/ID Rule<\/td>\s*<td[^>]*>(\d+)<\/td>/i);
+      if (mId) ruleId = mId[1];
+      // Extract Rule Name: <td>Name</td><td>N8N-xxx-...</td>
+      const mName = html.match(/>\s*Name\s*<\/td>\s*<td[^>]*>([^<]+)<\/td>/i);
+      if (mName) ruleName = mName[1].trim();
+    } catch (_) {}
+    if (ruleId)   policyData.ruleId   = ruleId;
+    if (ruleName) policyData.ruleName = ruleName;
+    // Policy confirmed created — now save to KV
+    try {
+      await env.DASHBOARD_KV.put(`fgpolicy:${policyId}`, JSON.stringify(policyData), { expirationTtl: kvTtl });
+    } catch (kvErr) { console.error('fgpolicy KV save error:', kvErr); }
+    await logActivity(env, { action: "tool-movi-fg-policy-" + policyType, username: session.username, ip, success: true, detail: "Policy " + policyType.toUpperCase() + " [" + policyId.slice(0,8) + "] cho " + email + " " + body.date + (ruleId ? " Rule#" + ruleId : '') });
+    // Lưu vào lịch sử ngay khi tạo xong (không đợi callback)
+    try {
+      const hist = await env.DASHBOARD_KV.get('tool_movi_history', 'json') || [];
+      hist.unshift({
+        id:          policyId,
+        tool:        'fg-policy-' + policyType,
+        toolLabel:   'Policy ' + policyType.toUpperCase() + ' — Đang hoạt động',
+        email:       policyData.email,
+        displayName: policyData.email,
+        createdBy:   policyData.createdBy,
+        status:      'active',   // phân biệt với "done" khi xóa xong
+        expiresAt:   policyData.expiresAt,
+        result: {
+          type:       policyData.type,
+          ruleName:   policyData.ruleName || null,
+          ruleId:     policyData.ruleId   || null,
+          date:       policyData.date,
+          startTime:  policyData.startTime,
+          endTime:    policyData.endTime,
+          location:   policyData.location,
+          allowApp:   policyData.allowApp,
+          department: policyData.department,
+          reason:     policyData.reason,
+        },
+        error:   null,
+        input:   null,
+        savedAt: Date.now(),
+      });
+      if (hist.length > 1000) hist.length = 1000;
+      await env.DASHBOARD_KV.put('tool_movi_history', JSON.stringify(hist));
+    } catch (_) {}
+    return json({ success: true, policy: policyData });
+  } catch(e) {
+    await logActivity(env, { action: "tool-movi-fg-policy-" + policyType, username: session.username, ip, success: false, detail: "Failed: " + e.message });
+    return json({ error: e.name === 'TimeoutError' ? 'n8n timeout sau 2 phút — kiểm tra FortiGate/Teams' : "Lỗi kết nối: " + e.message }, 502);
+  }
+}
+
+/* ── Tool Movi: FG Policy Done callback (n8n gọi về khi xóa rule xong) ── */
+async function handleFgPolicyDone(request, env) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const callbackToken = (body.callbackToken || '').trim();
+  if (!callbackToken) return json({ error: 'Missing callbackToken' }, 400);
+  // Lookup token → policyId (token is single-use, TTL same as policy)
+  const policyId = await env.DASHBOARD_KV.get(`fgcb:${callbackToken}`).catch(() => null);
+  if (!policyId) return json({ error: 'Invalid or expired token' }, 403);
+  // Load policy data before deleting (for history)
+  const policyData = await env.DASHBOARD_KV.get(`fgpolicy:${policyId}`, 'json').catch(() => null);
+  // Delete both the policy and the token
+  await Promise.all([
+    env.DASHBOARD_KV.delete(`fgpolicy:${policyId}`).catch(() => {}),
+    env.DASHBOARD_KV.delete(`fgcb:${callbackToken}`).catch(() => {}),
+  ]);
+  // Update tool_movi_history: đổi label từ "Đã tạo rule" → "Đã xóa rule" (tìm theo policyId)
+  if (policyData) {
+    try {
+      const history = await env.DASHBOARD_KV.get('tool_movi_history', 'json') || [];
+      const existIdx = history.findIndex(h => h.id === policyId);
+      if (existIdx >= 0) {
+        // Cập nhật entry cũ: đổi sang "Đã xóa rule", xóa expiresAt, đổi status
+        history[existIdx].toolLabel  = 'Policy ' + policyData.type.toUpperCase() + ' — Đã xóa rule';
+        history[existIdx].status     = 'done';
+        history[existIdx].expiresAt  = null;
+        history[existIdx].doneAt     = Date.now();
+        history[existIdx].savedAt    = Date.now();
+      } else {
+        // Không tìm thấy entry cũ → thêm mới
+        history.unshift({
+          id:          policyId,
+          tool:        'fg-policy-' + policyData.type,
+          toolLabel:   'Policy ' + policyData.type.toUpperCase() + ' — Đã xóa rule',
+          email:       policyData.email,
+          displayName: policyData.email,
+          createdBy:   policyData.createdBy,
+          status:      'done',
+          expiresAt:   null,
+          doneAt:      Date.now(),
+          result: {
+            type:       policyData.type,
+            ruleName:   policyData.ruleName  || null,
+            ruleId:     policyData.ruleId    || null,
+            date:       policyData.date,
+            startTime:  policyData.startTime,
+            endTime:    policyData.endTime,
+            location:   policyData.location,
+            allowApp:   policyData.allowApp,
+            department: policyData.department,
+            reason:     policyData.reason,
+          },
+          error:   null,
+          input:   null,
+          savedAt: Date.now(),
+        });
+      }
+      if (history.length > 1000) history.length = 1000;
+      await env.DASHBOARD_KV.put('tool_movi_history', JSON.stringify(history));
+    } catch (_) {}
+  }
+  return json({
+    success: true,
+    policyId,
+    message: 'Policy đã được xóa và ghi vào lịch sử',
+    policy: policyData || { id: policyId },
+  });
+}
+
+/* ── Tool Movi: List active FG policies ── */
+async function handleListFgPolicies(request, env, session) {
+  if (request.method !== 'GET') return json({ error: 'GET required' }, 405);
+  try {
+    const listed = await env.DASHBOARD_KV.list({ prefix: 'fgpolicy:' });
+    const now = Date.now();
+    const all = await Promise.all(listed.keys.map(k => env.DASHBOARD_KV.get(k.name, 'json')));
+    const policies = all
+      .filter(p => p != null)          // KV already handles TTL expiry
+      .filter(p => !p.expiresAt || p.expiresAt > now - 60000) // 1 min grace
+      .sort((a, b) => (a.expiresAt || 0) - (b.expiresAt || 0));
+    return json({ success: true, policies });
+  } catch(e) {
+    return json({ error: e.message }, 502);
+  }
+}
+
 /* ── Tool Movi History (KV-backed) ── */
 async function hasAnyToolMoviPerm(env, session) {
   if (session.role === 'admin') return true;
-  for (const key of ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group']) {
+  for (const key of ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi']) {
     if (await hasPerm(env, session, key)) return true;
   }
   return false;
@@ -5249,6 +5451,29 @@ export default {
       if (!_s) return json({ error: 'Unauthorized' }, 401);
       if (!(await hasPerm(env, _s, 'tool-movi-azure-group'))) return json({ error: 'Không có quyền sử dụng Tra Cứu Group Azure' }, 403);
       return handleToolMoviCheckAzureGroup(request, env, _s);
+    }
+    if (p === '/api/tool-movi/fg-policy-lan') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'tool-movi-fg-policy-lan'))) return json({ error: 'Không có quyền tạo Policy LAN' }, 403);
+      return handleToolMoviFgPolicy(request, env, _s, 'lan', ctx);
+    }
+    if (p === '/api/tool-movi/fg-policy-wifi') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'tool-movi-fg-policy-wifi'))) return json({ error: 'Không có quyền tạo Policy WiFi' }, 403);
+      return handleToolMoviFgPolicy(request, env, _s, 'wifi', ctx);
+    }
+    if (p === '/api/tool-movi/fg-policies') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'tool-movi-fg-policy-lan')) && !(await hasPerm(env, _s, 'tool-movi-fg-policy-wifi')))
+        return json({ error: 'Không có quyền' }, 403);
+      return handleListFgPolicies(request, env, _s);
+    }
+    if (p === '/api/tool-movi/fg-policy-done') {
+      // n8n callback — no session required, verified by Basic auth
+      return handleFgPolicyDone(request, env);
     }
     if (p === '/api/tool-movi/delete-user') {
       const _s = await getSession(request, env);
