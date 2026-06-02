@@ -482,7 +482,7 @@ function fmtDur(s){
 }
 function barCls(p){return p>=85?'bar-red':p>=65?'bar-amber':'bar-green';}
 function valCls(p){return p>=85?'c-red':p>=65?'c-amber':'c-green';}
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
 /* ── Policy filter ── */
 let _policies=[];

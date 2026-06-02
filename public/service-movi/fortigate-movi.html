@@ -696,7 +696,7 @@ function draw(){
 }
 
 /* ── Helpers ── */
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function fmtY(v){
   if(!v&&v!==0)return'0';
   if(v>=1000)return(v/1000).toFixed(1)+'G';

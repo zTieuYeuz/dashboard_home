@@ -178,6 +178,14 @@ async function getSession(request, env) {
     if (session) await env.DASHBOARD_KV.delete(`session:${token}`).catch(() => {});
     return null;
   }
+  // Session-IP binding: reject if client IP changed since login
+  if (session.boundIp) {
+    const currentIp = request.headers.get('cf-connecting-ip') || '';
+    if (currentIp && currentIp !== session.boundIp) {
+      await env.DASHBOARD_KV.delete(`session:${token}`).catch(() => {});
+      return null;
+    }
+  }
   return { ...session, token };
 }
 
@@ -215,6 +223,28 @@ async function handleLogin(request, env) {
   const { username, password } = body || {};
   if (!username || !password) return json({ error: 'Thiếu username hoặc password' }, 400);
   const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
+
+  // ── 0. Cloudflare Turnstile verification (bot protection) ──
+  const turnstileSecret = (env.CF_TURNSTILE_SECRET_KEY || '').trim();
+  if (turnstileSecret) {
+    const cfToken = (body.cfTurnstileToken || '').trim();
+    if (!cfToken) return json({ error: 'Vui lòng hoàn thành xác minh bảo mật (Turnstile).' }, 400);
+    try {
+      const tsRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `secret=${encodeURIComponent(turnstileSecret)}&response=${encodeURIComponent(cfToken)}&remoteip=${encodeURIComponent(ip)}`,
+      });
+      const tsData = await tsRes.json();
+      if (!tsData.success) {
+        await logActivity(env, { action: 'login_blocked_turnstile', username, ip, success: false, detail: `Turnstile fail: ${(tsData['error-codes']||[]).join(',')}` });
+        return json({ error: 'Xác minh bảo mật thất bại. Vui lòng thử lại.' }, 403);
+      }
+    } catch (tsErr) {
+      // Turnstile API down — fail open to not lock out all users, but log it
+      await logActivity(env, { action: 'turnstile_error', username, ip, success: false, detail: tsErr.message });
+    }
+  }
 
   // Load system config once for all security checks
   const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
@@ -368,6 +398,7 @@ async function handleLogin(request, env) {
   await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
     username, role: user.role, permissions: user.permissions || {},
     canManagePerms,
+    boundIp: ip,
     createdAt: Date.now(),
     expires: Date.now() + sessionTtl * 1000
   }), { expirationTtl: sessionTtl });
@@ -400,6 +431,7 @@ async function handleSessionRefresh(request, env) {
   await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
     username: session.username, role: freshRole,
     permissions: session.permissions || {},
+    boundIp: session.boundIp || '',
     expires: newExpires,
   }), { expirationTtl: refreshTtl });
   const h = new Headers({ 'Content-Type': 'application/json' });
@@ -1071,10 +1103,29 @@ async function handleUpdateUserGroups(request, env, username) {
   const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
   if (!user) return json({ error: 'User not found' }, 404);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  user.groups = Array.isArray(body.groups) ? body.groups : [];
-  // Allow role change (admin→user or user→admin) when explicitly provided
+  if (isAdmin) {
+    // Admin can assign any group
+    user.groups = Array.isArray(body.groups) ? body.groups : [];
+  } else {
+    // [F-02 fix] Delegate: preserve existing admin-role groups, block adding new ones
+    const currentAdminGroups = [];
+    for (const gid of (user.groups || [])) {
+      const g = await env.DASHBOARD_KV.get(`policy_group:${gid}`, 'json');
+      if (g && g.role === 'admin') currentAdminGroups.push(gid);
+    }
+    const requested = Array.isArray(body.groups) ? body.groups : [];
+    const safeNew = [];
+    for (const gid of requested) {
+      if (currentAdminGroups.includes(gid)) continue; // already preserved below
+      const g = await env.DASHBOARD_KV.get(`policy_group:${gid}`, 'json');
+      if (g && g.role === 'admin') continue; // delegate cannot assign admin-role groups
+      safeNew.push(gid);
+    }
+    user.groups = [...currentAdminGroups, ...safeNew];
+  }
+  // Allow role change — CHỈ ADMIN mới được đổi role (delegate KHÔNG được)
   const oldRole = user.role;
-  if (body.role !== undefined) {
+  if (body.role !== undefined && isAdmin) {
     const allowed = ['user', 'admin'];
     if (allowed.includes(body.role)) user.role = body.role;
   }
@@ -1313,6 +1364,7 @@ async function handleMfaVerify(request, env) {
   const token = crypto.randomUUID();
   await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
     username: temp.username, role: user.role, permissions: user.permissions || {},
+    boundIp: ip,
     expires: Date.now() + mfaSessionTtl * 1000
   }), { expirationTtl: mfaSessionTtl });
   const userInfo = encodeURIComponent(JSON.stringify({
@@ -1329,12 +1381,13 @@ async function handleMfaVerify(request, env) {
 
 /* ── Setup Flow Handlers (first-login: change password + MFA setup) ── */
 
-async function _createSessionAfterSetup(username, user, env) {
+async function _createSessionAfterSetup(username, user, env, boundIp) {
   const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
   const sessionTtl = Math.max(1, cfg.sessionTtlHours ?? 8) * 3600;
   const token = crypto.randomUUID();
   await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
     username, role: user.role, permissions: user.permissions || {},
+    boundIp: boundIp || '',
     expires: Date.now() + sessionTtl * 1000,
   }), { expirationTtl: sessionTtl });
   const userInfo = encodeURIComponent(JSON.stringify({
@@ -1378,7 +1431,7 @@ async function handleSetupChangePassword(request, env) {
   await env.DASHBOARD_KV.put(`setup_temp:${setupToken}`, JSON.stringify(updatedTemp), { expirationTtl: 600 });
   await logActivity(env, { action: 'setup_password_changed', username: temp.username, ip, success: true });
   if (temp.mustSetupMfa) return json({ success: true, step: 'setupMfa', setupToken });
-  return await _createSessionAfterSetup(temp.username, user, env);
+  return await _createSessionAfterSetup(temp.username, user, env, ip);
 }
 
 async function handleSetupMfaInit(request, env) {
@@ -1433,7 +1486,7 @@ async function handleSetupMfaComplete(request, env) {
   await env.DASHBOARD_KV.delete(`setup_mfa_secret:${setupToken}`).catch(() => {});
   await env.DASHBOARD_KV.delete(rlKey).catch(() => {});  // clean up on success
   await logActivity(env, { action: 'setup_mfa_complete', username: temp.username, ip, success: true });
-  return await _createSessionAfterSetup(temp.username, user, env);
+  return await _createSessionAfterSetup(temp.username, user, env, ip);
 }
 
 /* Shared "Wayfinding" quick-switcher — injected into every authenticated page.
@@ -1495,28 +1548,32 @@ const WAYFIND_NAV = `<style>
 <script>(function(){
  if(window.__wfNav)return; window.__wfNav=1;
  if(location.pathname==='/login.html')return;
- var U=(window.__USER__||{}), adm=!!U.isAdmin;
- var S=[
-  {i:'\\u2316',n:'Dashboard',d:'Trang chủ · tất cả dịch vụ',h:'/'},
-  {i:'\\uD83C\\uDF10',n:'Meraki-Network',d:'Network client monitor · Cisco Meraki',h:'/service-movi/meraki.html'},
-  {i:'\\uD83D\\uDDFA',n:'Movi Map Network',d:'Sơ đồ topology · route · dây switch',h:'/service-movi/topology.html'},
-  {i:'\\uD83D\\uDD25',n:'FortiGate Movi',d:'Firewall dashboard · bandwidth · interfaces live',h:'/service-movi/fortigate-movi.html'},
-  {i:'\\uD83D\\uDCF9',n:'Camera Movi',d:'Camera live · go2rtc · RTSP streams',h:'/service-movi/camera-movi.html'},
-  {i:'\\u26A1',n:'n8n Movi',d:'Workflow automation · Movi Finance',h:'/service-movi/n8n-movi.html'},
-  {i:'🛠',n:'Tool Movi',d:'Workflow triggers ? n8n automation',h:'/service-movi/tool-movi.html'},
-  {i:'\uD83D\uDDA5',n:'VMware01 Movi',d:'ESXi host 01 ? Movi Finance datacenter',h:'/service-movi/vmware01-movi.html'},
-  {i:'\uD83D\uDDA5',n:'VMware02 Movi',d:'ESXi host 02 ? Movi Finance datacenter',h:'/service-movi/vmware02-movi.html'},
-  {i:'\\uD83D\\uDD25',n:'FortiGate',d:'Firewall · security gateway',h:'/service-home/fortigate.html'},
-  {i:'\\uD83D\\uDDA5',n:'VMware ESXi',d:'Hypervisor · bare metal',h:'/service-home/vmware-home.html'},
-  {i:'\\uD83C\\uDFE0',n:'CasaOS',d:'Home server OS',h:'/service-home/casaos.html'},
-  {i:'\\uD83D\\uDCE1',n:'ASUS Router',d:'Home network router',h:'/service-home/asus.html'},
-  {i:'\\uD83D\\uDD00',n:'9Router',d:'Router & network management',h:'/service-home/9router.html'},
-  {i:'\\u26A1',n:'n8n Automation',d:'Workflow & bot automation',h:'/service-home/n8n.html'},
-  {i:'\\uD83D\\uDCF7',n:'Camera',d:'Hệ thống camera · go2rtc',h:'/service-home/hikvision.html'},
-  {i:'\\uD83D\\uDDA7',n:'SSH Terminal',d:'Web SSH · Termix',h:'/service-home/ssh.html'},
-  {i:'\\uD83D\\uDD16',n:'Bookmarks',d:'Liên kết nhanh',h:'/bookmarks.html'}
+ var U=(window.__USER__||{}), adm=!!U.isAdmin, P=U.permissions||{};
+ var _TMK=['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'];
+ function _hp(pk){if(!pk)return true;if(Array.isArray(pk))return pk.some(function(k){return(P[k]||'none')!=='none';});return(P[pk]||'none')!=='none';}
+ var _ALL=[
+  {i:'\\u2316',n:'Dashboard',d:'Trang chủ · tất cả dịch vụ',h:'/',p:null},
+  {i:'\\uD83C\\uDF10',n:'Meraki-Network',d:'Network client monitor · Cisco Meraki',h:'/service-movi/meraki.html',p:'meraki'},
+  {i:'\\uD83D\\uDDFA',n:'Movi Map Network',d:'Sơ đồ topology · route · dây switch',h:'/service-movi/topology.html',p:'topology'},
+  {i:'\\uD83D\\uDD25',n:'FortiGate Movi',d:'Firewall dashboard · bandwidth · interfaces live',h:'/service-movi/fortigate-movi.html',p:'fortigate-movi'},
+  {i:'\\uD83D\\uDCF9',n:'Camera Movi',d:'Camera live · go2rtc · RTSP streams',h:'/service-movi/camera-movi.html',p:'camera-movi'},
+  {i:'\\u26A1',n:'n8n Movi',d:'Workflow automation · Movi Finance',h:'/service-movi/n8n-movi.html',p:'n8n-movi'},
+  {i:'🛠',n:'Tool Movi',d:'Workflow triggers · n8n automation',h:'/service-movi/tool-movi.html',p:_TMK},
+  {i:'\uD83D\uDDA5',n:'VMware01 Movi',d:'ESXi host 01 · Movi Finance datacenter',h:'/service-movi/vmware01-movi.html',p:'vmware01-movi'},
+  {i:'\uD83D\uDDA5',n:'VMware02 Movi',d:'ESXi host 02 · Movi Finance datacenter',h:'/service-movi/vmware02-movi.html',p:'vmware02-movi'},
+  {i:'\\uD83D\\uDD25',n:'FortiGate',d:'Firewall · security gateway',h:'/service-home/fortigate.html',p:'fortigate'},
+  {i:'\\uD83D\\uDDA5',n:'VMware ESXi',d:'Hypervisor · bare metal',h:'/service-home/vmware-home.html',p:'esxi'},
+  {i:'\\uD83C\\uDFE0',n:'CasaOS',d:'Home server OS',h:'/service-home/casaos.html',p:'casaos'},
+  {i:'\\uD83D\\uDCE1',n:'ASUS Router',d:'Home network router',h:'/service-home/asus.html',p:'asus'},
+  {i:'\\uD83D\\uDD00',n:'9Router',d:'Router & network management',h:'/service-home/9router.html',p:'9router'},
+  {i:'\\u26A1',n:'n8n Automation',d:'Workflow & bot automation',h:'/service-home/n8n.html',p:'n8n'},
+  {i:'\\uD83D\\uDCF7',n:'Camera',d:'Hệ thống camera · go2rtc',h:'/service-home/hikvision.html',p:'camera'},
+  {i:'\\uD83D\\uDDA7',n:'SSH Terminal',d:'Web SSH · Termix',h:'/service-home/ssh.html',p:'ssh'},
+  {i:'\\uD83D\\uDDA7',n:'Termix Movi',d:'SSH Movi · token auth',h:'/service-movi/ssh-movi.html',p:'ssh-movi'},
+  {i:'\\uD83D\\uDD16',n:'Bookmarks',d:'Liên kết nhanh',h:'/bookmarks.html',p:null}
  ];
- if(adm){S.push({i:'\\u2699',n:'Settings',d:'Cài đặt hệ thống · User · Audit · Role · MFA (admin)',h:'/settings.html'});}
+ if(adm){_ALL.push({i:'\\u2699',n:'Settings',d:'Cài đặt hệ thống · User · Audit · Role · MFA (admin)',h:'/settings.html',p:null});}
+ var S=adm?_ALL:_ALL.filter(function(s){return _hp(s.p);});
  var here=location.pathname.replace(/\\/index\\.html$/,'/')||'/';
 
  var fab=document.getElementById('wf-fab'),
@@ -1723,11 +1780,15 @@ async function injectUser(request, env) {
     // Background CSS
     let bgCss = '';
     if (cfg.loginBgType === 'color' && cfg.loginBgValue) {
-      const safeColor = String(cfg.loginBgValue).replace(/[<>"']/g, '');
-      bgCss = `<style>body{background:${safeColor}!important}</style>`;
+      const safeColor = String(cfg.loginBgValue).replace(/[^a-zA-Z0-9#(),.\s%]/g, '');
+      if (/^(#[0-9a-fA-F]{3,8}|rgb|rgba|hsl|hsla|oklch)/i.test(safeColor.trim())) {
+        bgCss = `<style>body{background:${safeColor}!important}</style>`;
+      }
     } else if (cfg.loginBgType === 'image' && cfg.loginBgValue) {
-      const safeUrl = String(cfg.loginBgValue).replace(/[<>"']/g, '');
-      bgCss = `<style>body{background:url('${safeUrl}') center/cover no-repeat fixed!important;background-color:#09090b!important}</style>`;
+      const safeUrl = String(cfg.loginBgValue).replace(/[<>"';{}()]/g, '');
+      if (/^https:\/\//i.test(safeUrl.trim())) {
+        bgCss = `<style>body{background:url('${safeUrl}') center/cover no-repeat fixed!important;background-color:#09090b!important}</style>`;
+      }
     }
     const needsPatch = bannerMsg || idleMin !== 30 || bgCss;
     const cleanReq  = new Request(request.url, { method: 'GET', headers: { 'Accept': 'text/html' } });
@@ -1751,7 +1812,7 @@ async function injectUser(request, env) {
       'x-frame-options': 'DENY',
       'x-content-type-options': 'nosniff',
       'referrer-policy': 'strict-origin-when-cross-origin',
-      'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; frame-ancestors 'none'",
+      'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; frame-src https://challenges.cloudflare.com; object-src 'none'; frame-ancestors 'none'",
     } });
   }
 
@@ -1788,6 +1849,49 @@ a:hover{background:#4f46e5}</style></head>
 <body><div class="box"><div class="icon">🚧</div><h1>Hệ thống đang bảo trì</h1><p>${msg}</p>
 <a href="/login.html">Đăng xuất</a></div></body></html>`;
     return new Response(maintHtml, { status: 503, headers: { 'content-type':'text/html;charset=utf-8','cache-control':'no-store','retry-after':'3600' } });
+  }
+
+  // ── Server-side page permission gate ──
+  // Admins bypass all checks. Non-admin users are redirected to home
+  // if they try to access a page they don't have permission for.
+  if (!isAdmin) {
+    const _PAGE_PERM = {
+      '/service-movi/meraki.html': 'meraki',
+      '/service-movi/topology.html': 'topology',
+      '/service-movi/fortigate-movi.html': 'fortigate-movi',
+      '/service-movi/camera-movi.html': 'camera-movi',
+      '/service-movi/n8n-movi.html': 'n8n-movi',
+      '/service-movi/tool-movi.html': ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'],
+      '/service-movi/vmware01-movi.html': 'vmware01-movi',
+      '/service-movi/vmware02-movi.html': 'vmware02-movi',
+      '/service-movi/ssh-movi.html': 'ssh-movi',
+      '/service-home/fortigate.html': 'fortigate',
+      '/service-home/vmware-home.html': 'esxi',
+      '/service-home/casaos.html': 'casaos',
+      '/service-home/asus.html': 'asus',
+      '/service-home/9router.html': '9router',
+      '/service-home/n8n.html': 'n8n',
+      '/service-home/hikvision.html': 'camera',
+      '/service-home/ssh.html': 'ssh',
+      '/settings.html': '_mgmt',
+      '/users.html': '_mgmt',
+      '/policy.html': '_mgmt',
+    };
+    const _reqPerm = _PAGE_PERM[url.pathname];
+    if (_reqPerm) {
+      let _allowed = false;
+      if (_reqPerm === '_mgmt') {
+        // Admin-area pages: allow if user is a delegated manager
+        _allowed = (effPerms.canManagePerms || []).length > 0;
+      } else {
+        const _perms = effPerms.permissions || {};
+        const _keys = Array.isArray(_reqPerm) ? _reqPerm : [_reqPerm];
+        _allowed = _keys.some(k => (_perms[k] || 'none') !== 'none');
+      }
+      if (!_allowed) {
+        return Response.redirect(new URL('/', request.url).toString(), 302);
+      }
+    }
   }
 
   const idleMin = Math.max(5, sysCfg.idleTimeoutMin ?? 30);
@@ -2550,8 +2654,14 @@ async function handleToolMoviFgPolicy(request, env, session, policyType, ctx) {
 }
 
 /* ── Tool Movi: FG Policy Done callback (n8n gọi về khi xóa rule xong) ── */
+/* Bảo mật 3 lớp: CF Access Service Token → Basic Auth → callbackToken UUID */
 async function handleFgPolicyDone(request, env) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  // Lớp 2: Verify Basic Auth từ n8n (Lớp 1 là CF Access Service Token ở edge)
+  const authH = request.headers.get('Authorization') || '';
+  try {
+    if (authH !== moviN8nAuth(env)) return json({ error: 'Unauthorized' }, 401);
+  } catch { return json({ error: 'Auth config error' }, 500); }
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const callbackToken = (body.callbackToken || '').trim();
   if (!callbackToken) return json({ error: 'Missing callbackToken' }, 400);
@@ -3723,7 +3833,7 @@ async function handleMoviFortiviewSource(request, env) {
 async function handleMoviFirewallDeauth(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
+  if (!(await hasWritePerm(env, session, 'fortigate-movi'))) return json({ error: 'Cần quyền Write trên FortiGate Movi để deauth user' }, 403);
   const N8N_URL  = (env.MOVI_WH_FG_FIREWALL_DEAUTH || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   if (!N8N_URL) return json({ error: 'MOVI_WH_FG_FIREWALL_DEAUTH chưa được cấu hình' }, 503);
@@ -4968,6 +5078,9 @@ async function handleSshMoviVerify(request, env) {
   const data  = await env.DASHBOARD_KV.get(kvKey, 'json');
   if (!data) return new Response('Forbidden', { status: 403 });
 
+  // Single-use: xóa token ngay để chống replay attack
+  await env.DASHBOARD_KV.delete(kvKey).catch(() => {});
+
   // 3. Token valid — create a session
   const sessionBytes = new Uint8Array(32);
   crypto.getRandomValues(sessionBytes);
@@ -5148,12 +5261,19 @@ async function handleTermixMoviProxy(request, env) {
   // HTML — inject JS to rewrite WebSocket/fetch/XHR URLs to proxy path
   if (ct.includes('text/html')) {
     let html = await upstream.text();
+    // [H2 fix] Extract JWT from HttpOnly cookie for safe server-side injection.
+    // The JWT cookie is HttpOnly so JS cannot read it via document.cookie.
+    // Instead we extract it here and inject as a scoped JS variable.
+    const _reqCookies = request.headers.get('cookie') || '';
+    const _jwtMatch = _reqCookies.split(';').map(c=>c.trim()).find(c=>c.startsWith('jwt='));
+    const _jwtVal = _jwtMatch ? _jwtMatch.slice(4) : '';
     // Patcher must run BEFORE Termix's Vue bundle — inject at very start of <head>
     // NOTE: NO new RegExp() here — use indexOf/slice only to avoid escaping issues
     const patch = `<script>
 (function(){
   var B='/proxy/termix-movi';
   var O='termix-movi.home-server.id.vn';
+  var __JWT='${_jwtVal.replace(/'/g, "\\'")}'; // server-injected, HttpOnly safe
   console.log('[proxy-patcher] loaded B='+B);
   function rw(u,isWS){
     if(typeof u!=='string'||!u)return u;
@@ -5179,11 +5299,11 @@ async function handleTermixMoviProxy(request, env) {
   window.WebSocket=function(u,p){
     var r=rw(u,true);
     // For SSH websocket: append JWT as ?token= so verifyClient can auth
+    // [H2 fix] JWT is injected server-side (__JWT), NOT read from document.cookie (HttpOnly)
     if(r.indexOf('/ssh/websocket')!==-1){
-      var jm=document.cookie.match(/(?:^|;\s*)jwt=([^;]+)/);
-      var _tk=jm?jm[1]:(localStorage.getItem('token')||localStorage.getItem('jwt')||localStorage.getItem('authToken')||'');
+      var _tk=__JWT||(localStorage.getItem('token')||localStorage.getItem('jwt')||localStorage.getItem('authToken')||'');
       if(_tk)r+=(r.indexOf('?')===-1?'?':'&')+'token='+_tk;
-      else console.warn('[proxy-patcher] SSH WS: no JWT found in cookie or localStorage');
+      else console.warn('[proxy-patcher] SSH WS: no JWT found');
     }
     if(r!==u)console.log('[proxy-patcher] WS',u,'->',r);
     return p!=null?new _W(r,p):new _W(r);
@@ -5230,10 +5350,10 @@ async function handleTermixMoviProxy(request, env) {
 }
 
 // Rewrite Set-Cookie from Termix backend: remove Domain, set Path to proxy prefix
-// Also remove HttpOnly so the JWT cookie is readable by JS patcher for direct WS auth
+// KEEP HttpOnly (H2 fix) — JWT is injected server-side for WS auth, not via document.cookie
 function _rewriteTermixCookie(sc) {
   sc = sc.replace(/;\s*Domain=[^;]*/gi, '');
-  sc = sc.replace(/;\s*HttpOnly/gi, '');  // allow JS to read jwt for WebSocket auth
+  // HttpOnly is preserved — prevents XSS from stealing Termix JWT
   if (/;\s*Path=\//i.test(sc)) {
     sc = sc.replace(/;\s*Path=\//i, '; Path=/proxy/termix-movi/');
   } else if (!/;\s*Path=/i.test(sc)) {

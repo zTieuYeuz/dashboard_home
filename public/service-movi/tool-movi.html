@@ -2736,15 +2736,7 @@ function as_statusBadge(status) {
     return '<span class="as-badge-disposed">🟡 ' + esc(status) + '</span>';
   return '<span class="as-badge-storage">' + esc(status) + '</span>';
 }
-function as_statusBadgeSmall(status) {
-  if (!status) return '<span style="color:var(--muted);font-size:11px">—</span>';
-  var s = status.toLowerCase();
-  if (s.includes('đang sử dụng')) return '<span class="as-badge-active">🟢</span>';
-  if (s.includes('hỏng') || s.includes('sửa')) return '<span class="as-badge-broken">🔴</span>';
-  if (s.includes('kho') || s.includes('chờ')) return '<span class="as-badge-storage">⚪</span>';
-  if (s.includes('thanh lý') || s.includes('hủy')) return '<span class="as-badge-disposed">🟡</span>';
-  return '<span class="as-badge-storage" style="font-size:10px">' + esc(status) + '</span>';
-}
+/* as_statusBadgeSmall removed — dead code */
 
 /* ── Search ── */
 async function as_search() {
@@ -3005,10 +2997,6 @@ async function ce_doCheck() {
     btn.disabled = false;
     btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Tìm kiếm';
   }
-}
-
-function _ceRow(k, v) {
-  return '<div class="res-key">' + k + '</div><div class="res-val">' + (v || '<span style="color:var(--muted)">—</span>') + '</div>';
 }
 
 function ce_switchTab(tab) {
