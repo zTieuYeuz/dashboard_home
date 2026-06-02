@@ -5284,7 +5284,7 @@ export default {
       if (request.method !== 'OPTIONS') {
         const _s = await getSession(request, env);
         if (!_s) return json({ error: 'Unauthorized' }, 401);
-        if (!(await isAdminUser(env, _s))) return json({ error: 'Admin required' }, 403);
+        if (!(await hasWritePerm(env, _s, 'vmware01-movi'))) return json({ error: 'Cần quyền Write trên VMware01 Movi để thực hiện thao tác này' }, 403);
       }
       return handleMoviESXiPower(request, env, '1');
     }
@@ -5292,7 +5292,7 @@ export default {
       if (request.method !== 'OPTIONS') {
         const _s = await getSession(request, env);
         if (!_s) return json({ error: 'Unauthorized' }, 401);
-        if (!(await isAdminUser(env, _s))) return json({ error: 'Admin required' }, 403);
+        if (!(await hasWritePerm(env, _s, 'vmware02-movi'))) return json({ error: 'Cần quyền Write trên VMware02 Movi để thực hiện thao tác này' }, 403);
       }
       return handleMoviESXiPower(request, env, '2');
     }
