@@ -155,7 +155,7 @@ function render() {
       ? `<button class="cam-rename-btn" title="Đổi tên camera" onclick="openRename('${esc(s)}','${esc(camId)}')">✏</button>`
       : '';
     const frame = isOn
-      ? `<iframe src="${_camUrl}/stream.html?src=${encodeURIComponent(s)}&mode=${MODE}" allow="autoplay" allowfullscreen></iframe>`
+      ? `<iframe src="/cam-embed/stream.html?src=${encodeURIComponent(s)}&mode=${MODE}" allow="autoplay" allowfullscreen></iframe>`
       : `<div class="cam-overlay">
            <div class="ico">⏸</div>
            <div class="msg">Stream đã tắt</div>
