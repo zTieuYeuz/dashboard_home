@@ -178,14 +178,9 @@ async function getSession(request, env) {
     if (session) await env.DASHBOARD_KV.delete(`session:${token}`).catch(() => {});
     return null;
   }
-  // Session-IP binding: reject if client IP changed since login
-  if (session.boundIp) {
-    const currentIp = request.headers.get('cf-connecting-ip') || '';
-    if (currentIp && currentIp !== session.boundIp) {
-      await env.DASHBOARD_KV.delete(`session:${token}`).catch(() => {});
-      return null;
-    }
-  }
+  // Session-IP binding: log IP change but do NOT invalidate session
+  // (strict binding causes false logouts on dynamic IPs / CGNAT / mobile)
+  // boundIp is kept in session data for audit purposes only.
   return { ...session, token };
 }
 
