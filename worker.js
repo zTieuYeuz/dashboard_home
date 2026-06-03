@@ -3500,21 +3500,40 @@ async function handleCamHomeEmbed(request, env) {
     let html = await upstream.text();
     const patch = `<script>
 (function(){
+  var PRX='/cam-home';
+  var CAM='camera.home-server.id.vn';
+  function rwHTTP(u){
+    if(typeof u!=='string'||!u)return u;
+    if(u.indexOf('https://'+CAM)===0)return PRX+u.slice(('https://'+CAM).length);
+    if(u.indexOf('http://'+CAM)===0)return PRX+u.slice(('http://'+CAM).length);
+    if(u.charAt(0)==='/'&&u.indexOf('/cam-home')!==0)return PRX+u;
+    return u;
+  }
+  function rwWS(u){
+    if(typeof u!=='string'||!u)return u;
+    var h=window.location.host;
+    if(u.indexOf('wss://'+CAM)===0)return 'wss://'+h+PRX+u.slice(('wss://'+CAM).length);
+    if(u.indexOf('ws://'+CAM)===0)return 'wss://'+h+PRX+u.slice(('ws://'+CAM).length);
+    if(u.charAt(0)==='/'&&u.indexOf('/cam-home')!==0)return 'wss://'+h+PRX+u;
+    return u;
+  }
   var _W=window.WebSocket;
   window.WebSocket=function(u,p){
-    if(typeof u==='string') u=u.replace(/(wss?:\\/\\/[^\\/]+)\\/api\\//,'$1/cam-home/api/');
+    u=rwWS(u);
     return p!=null?new _W(u,p):new _W(u);
   };
+  window.WebSocket.prototype=_W.prototype;
+  for(var k in _W)try{window.WebSocket[k]=_W[k];}catch(e){}
   var _f=window.fetch;
-  window.fetch=function(u){
-    var a=Array.prototype.slice.call(arguments);
-    if(typeof u==='string') a[0]=u.replace(/https?:\\/\\/[^\\/]+\\/api\\//,'/cam-home/api/');
+  window.fetch=function(){
+    var a=[].slice.call(arguments);
+    if(typeof a[0]==='string')a[0]=rwHTTP(a[0]);
     return _f.apply(this,a);
   };
   var _xo=XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open=function(m,u){
-    var a=Array.prototype.slice.call(arguments);
-    if(typeof u==='string') a[1]=u.replace(/https?:\\/\\/[^\\/]+\\/api\\//,'/cam-home/api/');
+  XMLHttpRequest.prototype.open=function(){
+    var a=[].slice.call(arguments);
+    if(typeof a[1]==='string')a[1]=rwHTTP(a[1]);
     return _xo.apply(this,a);
   };
 })();
