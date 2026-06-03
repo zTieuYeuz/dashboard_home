@@ -1915,9 +1915,9 @@ a:hover{background:#4f46e5}</style></head>
       }
       var dt=window.__USER__.dashboardTitle;
       if(dt){
-        document.title=document.title.replace(/Home Lab/g,dt);
+        document.title=document.title.replace(/Dashboard SYSTEM/g,dt);
         var bn=document.querySelector('.brand-name');
-        if(bn&&bn.textContent.trim()==='Home Lab')bn.textContent=dt;
+        if(bn&&bn.textContent.trim()==='Dashboard SYSTEM')bn.textContent=dt;
       }
     });
   })();
