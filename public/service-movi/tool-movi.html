@@ -1162,7 +1162,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.7}
             <label class="form-label">Ngày <span class="req">*</span></label>
             <input class="form-input" id="fgp-date" type="date"/>
           </div>
-          <div class="form-group">
+          <div class="form-group" id="fgp-location-group">
             <label class="form-label">Vị trí máy <span class="req">*</span></label>
             <select class="form-select" id="fgp-location">
               <option value="">-- Chọn tầng --</option>
@@ -1194,7 +1194,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.7}
       <button class="btn btn-ghost" onclick="fgp_closeModal()">Hủy</button>
       <button class="btn btn-primary" id="fgp-submit-btn" onclick="fgp_submit()" style="background:var(--warn);color:#1a1a1a;border:none">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        Tạo Policy LAN
+        <span id="fgp-submit-label">Tạo Policy LAN</span>
       </button>
     </div>
   </div>
@@ -3125,6 +3125,12 @@ function fgp_switchTab(tab) {
   document.getElementById('fgp-section-active').style.display = tab === 'active' ? '' : 'none';
   var footer = document.querySelector('#modal-fg-policy .modal-footer');
   if (footer) footer.style.display = isForm ? '' : 'none';
+  // Ẩn/hiện Vị trí máy theo tab
+  var locGrp = document.getElementById('fgp-location-group');
+  if (locGrp) locGrp.style.display = tab === 'wifi' ? 'none' : '';
+  // Đổi text button
+  var lbl = document.getElementById('fgp-submit-label');
+  if (lbl) lbl.textContent = tab === 'wifi' ? 'Tạo Policy WiFi' : 'Tạo Policy LAN';
   var btn = document.getElementById('fgp-submit-btn');
   if (btn && isForm) btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Tạo Policy ' + tab.toUpperCase();
   document.getElementById('fgp-error-banner').classList.remove('show');
@@ -3147,14 +3153,14 @@ async function fgp_submit() {
   var date      = document.getElementById('fgp-date').value.trim();
   var startTime = document.getElementById('fgp-start-time').value.trim();
   var endTime   = document.getElementById('fgp-end-time').value.trim();
-  var location  = document.getElementById('fgp-location').value.trim();
+  var location  = _fgp_tab === 'wifi' ? '' : document.getElementById('fgp-location').value.trim();
   var reason    = document.getElementById('fgp-reason').value.trim();
 
   if (!email)     { errMsg.textContent = 'Vui lòng nhập Email user'; errBnr.classList.add('show'); return; }
   if (!allowApp)  { errMsg.textContent = 'Vui lòng chọn ứng dụng cho phép sử dụng'; errBnr.classList.add('show'); return; }
   if (!dept)      { errMsg.textContent = 'Vui lòng chọn Phòng Ban'; errBnr.classList.add('show'); return; }
   if (!date)      { errMsg.textContent = 'Vui lòng chọn Ngày'; errBnr.classList.add('show'); return; }
-  if (!location)  { errMsg.textContent = 'Vui lòng chọn vị trí máy'; errBnr.classList.add('show'); return; }
+  if (_fgp_tab === 'lan' && !location) { errMsg.textContent = 'Vui lòng chọn vị trí máy'; errBnr.classList.add('show'); return; }
   if (!startTime) { errMsg.textContent = 'Vui lòng nhập thời gian bắt đầu'; errBnr.classList.add('show'); return; }
   if (!endTime)   { errMsg.textContent = 'Vui lòng nhập thời gian kết thúc'; errBnr.classList.add('show'); return; }
   if (!reason)    { errMsg.textContent = 'Vui lòng nhập lý do'; errBnr.classList.add('show'); return; }
@@ -3165,10 +3171,12 @@ async function fgp_submit() {
   btn.innerHTML = '<span class="spin" style="border-top-color:#1a1a1a"></span> Đang tạo...';
 
   try {
+    var payload = { email: email, allowApp: allowApp, department: dept, date: date, startTime: startTime, endTime: endTime, reason: reason };
+    if (_fgp_tab === 'lan') payload.location = location;
     var r = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email, allowApp: allowApp, department: dept, date: date, startTime: startTime, endTime: endTime, location: location, reason: reason })
+      body: JSON.stringify(payload)
     });
     var data = await r.json();
     if (!r.ok || data.error) {

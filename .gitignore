@@ -26,3 +26,6 @@ generate_test_xlsx.py
 HANDOVER.md
 GIT_BRANCHING_GUIDE.md
 wrangler.staging.toml
+
+# n8n workflow JSONs — chứa credentials ESXi, không commit
+n8n-workflows/
