@@ -4099,11 +4099,10 @@ async function esxiSoapEx(bodyXml, sdkUrl, cfId, cfSec, cookie = '') {
 
 /* ═══════════════════════════════════════════════
    Movi VMware ESXi — SOAP (via CF Tunnel + ZT Service Token)
-   Secrets: MOVI_VMWARE01_URL, MOVI_VMWARE01_USER, MOVI_VMWARE01_PASS
-            MOVI_VMWARE02_URL, MOVI_VMWARE02_USER, MOVI_VMWARE02_PASS
-            MOVI_VMWARE_CF_ID, MOVI_VMWARE_CF_SECRET
+   ⚠️  DEPRECATED — replaced by handleMoviVmwareData (n8n webhook proxy)
+   Kept here for reference only. Routes no longer call these functions.
    ═══════════════════════════════════════════════ */
-async function handleMoviESXi(env, hostNum) {
+async function handleMoviESXi_DEPRECATED(env, hostNum) {
   const base  = (env[`MOVI_VMWARE0${hostNum}_URL`]  || '').replace(/^﻿/, '').trim();
   const user  = (env[`MOVI_VMWARE0${hostNum}_USER`] || '').replace(/^﻿/, '').trim();
   const pass  = (env[`MOVI_VMWARE0${hostNum}_PASS`] || '').replace(/^﻿/, '').trim();
@@ -4298,7 +4297,7 @@ async function handleMoviESXi(env, hostNum) {
   }
 }
 
-async function handleMoviESXiPower(request, env, hostNum) {
+async function handleMoviESXiPower_DEPRECATED(request, env, hostNum) {
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: {
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -4505,6 +4504,45 @@ async function handleVmwareHomePower(request, env) {
     const resp = await fetch(wh, { method: 'POST', headers: hdrs, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) });
     if (!resp.ok) { const t = await resp.text(); return json({ error: `n8n error ${resp.status}: ${t.slice(0,200)}` }, 502); }
     const raw  = await resp.json();
+    return json(Array.isArray(raw) ? raw[0] : raw);
+  } catch (e) { return json({ error: 'Failed to reach n8n', detail: e.message }, 502); }
+}
+
+/* ═══════════════════════════════════════════════
+   Movi VMware — n8n webhook proxy (thay thế SOAP trực tiếp)
+   Secrets: MOVI_WH_VMWARE01_DATA, MOVI_WH_VMWARE01_POWER
+            MOVI_WH_VMWARE02_DATA, MOVI_WH_VMWARE02_POWER
+            Auth: MOVI_N8N_USER / MOVI_N8N_PASS
+   ═══════════════════════════════════════════════ */
+async function handleMoviVmwareData(env, hostNum) {
+  const moviUser = (env.MOVI_N8N_USER || '').replace(/^﻿/, '').trim();
+  const moviPass = (env.MOVI_N8N_PASS || '').replace(/^﻿/, '').trim();
+  const wh = (env[`MOVI_WH_VMWARE0${hostNum}_DATA`] || '').replace(/^﻿/, '').trim();
+  if (!wh) return json({ error: `MOVI_WH_VMWARE0${hostNum}_DATA not configured` }, 500);
+  const hdrs = { 'Content-Type': 'application/json' };
+  if (moviUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${moviUser}:${moviPass}`)));
+  try {
+    const resp = await fetch(wh, { headers: hdrs, signal: AbortSignal.timeout(30000) });
+    if (!resp.ok) { const t = await resp.text(); return json({ error: `n8n error ${resp.status}: ${t.slice(0,200)}` }, 502); }
+    const raw = await resp.json();
+    return json(Array.isArray(raw) ? raw[0] : raw);
+  } catch (e) { return json({ error: 'Failed to reach n8n', detail: e.message }, 502); }
+}
+
+async function handleMoviVmwarePower(request, env, hostNum) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  const moviUser = (env.MOVI_N8N_USER || '').replace(/^﻿/, '').trim();
+  const moviPass = (env.MOVI_N8N_PASS || '').replace(/^﻿/, '').trim();
+  const wh = (env[`MOVI_WH_VMWARE0${hostNum}_POWER`] || '').replace(/^﻿/, '').trim();
+  if (!wh) return json({ error: `MOVI_WH_VMWARE0${hostNum}_POWER not configured` }, 500);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
+  const hdrs = { 'Content-Type': 'application/json' };
+  if (moviUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${moviUser}:${moviPass}`)));
+  try {
+    const resp = await fetch(wh, { method: 'POST', headers: hdrs, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) });
+    if (!resp.ok) { const t = await resp.text(); return json({ error: `n8n error ${resp.status}: ${t.slice(0,200)}` }, 502); }
+    const raw = await resp.json();
     return json(Array.isArray(raw) ? raw[0] : raw);
   } catch (e) { return json({ error: 'Failed to reach n8n', detail: e.message }, 502); }
 }
@@ -5650,29 +5688,25 @@ export default {
       const _s = await getSession(request, env);
       if (!_s) return json({ error: 'Unauthorized' }, 401);
       if (!(await hasPerm(env, _s, 'vmware01-movi'))) return json({ error: 'Không có quyền truy cập VMware01 Movi' }, 403);
-      return handleMoviESXi(env, '1');
+      return handleMoviVmwareData(env, '1');
     }
     if (p === '/api/vmware02-movi') {
       const _s = await getSession(request, env);
       if (!_s) return json({ error: 'Unauthorized' }, 401);
       if (!(await hasPerm(env, _s, 'vmware02-movi'))) return json({ error: 'Không có quyền truy cập VMware02 Movi' }, 403);
-      return handleMoviESXi(env, '2');
+      return handleMoviVmwareData(env, '2');
     }
     if (p === '/api/vmware01-movi/power') {
-      if (request.method !== 'OPTIONS') {
-        const _s = await getSession(request, env);
-        if (!_s) return json({ error: 'Unauthorized' }, 401);
-        if (!(await hasWritePerm(env, _s, 'vmware01-movi'))) return json({ error: 'Cần quyền Write trên VMware01 Movi để thực hiện thao tác này' }, 403);
-      }
-      return handleMoviESXiPower(request, env, '1');
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await isAdminUser(env, _s))) return json({ error: 'Admin required để thực hiện power action VMware01 Movi' }, 403);
+      return handleMoviVmwarePower(request, env, '1');
     }
     if (p === '/api/vmware02-movi/power') {
-      if (request.method !== 'OPTIONS') {
-        const _s = await getSession(request, env);
-        if (!_s) return json({ error: 'Unauthorized' }, 401);
-        if (!(await hasWritePerm(env, _s, 'vmware02-movi'))) return json({ error: 'Cần quyền Write trên VMware02 Movi để thực hiện thao tác này' }, 403);
-      }
-      return handleMoviESXiPower(request, env, '2');
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await isAdminUser(env, _s))) return json({ error: 'Admin required để thực hiện power action VMware02 Movi' }, 403);
+      return handleMoviVmwarePower(request, env, '2');
     }
     if (p === '/api/9router') {
       const _s = await getSession(request, env);
