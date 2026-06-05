@@ -631,7 +631,7 @@ input { font: inherit; }
       <div class="port-load-bar" id="portsLoadBar" style="display:none">
         <div class="port-load-track"><div class="port-load-fill" id="portsLoadFill"></div></div>
         <div class="port-load-meta">
-          <span>Đang thu thập dữ liệu từ switches (~50s)…</span>
+          <span>Đang thu thập dữ liệu từ switches…</span>
           <span class="mono" id="portsLoadTimer">0s</span>
         </div>
       </div>
@@ -1326,7 +1326,11 @@ function loadAll() {
   Promise.all([loadClients(), loadDevices(), loadStatus(), loadEvents(), loadUplinks(), loadVlansRoutes()]).finally(function(){
     btn.classList.remove('refreshing'); btn.disabled = false;
   });
-  // Switch ports NOT auto-refreshed — takes ~50s, use the button manually
+  // Auto-refresh switch ports nếu panel đang mở VÀ đã load ít nhất 1 lần
+  var portsPanel = document.getElementById('panel-ports');
+  if (_portsLoaded && portsPanel && portsPanel.classList.contains('is-open')) {
+    loadSwitchPorts();
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1369,7 +1373,7 @@ function startPortsProgressBar(){
   if (_portsBarIv) clearInterval(_portsBarIv);
   _portsBarIv = setInterval(function(){
     var s = (Date.now() - _portsBarT0) / 1000;
-    document.getElementById('portsLoadFill').style.width = Math.min(s/50*95, 95).toFixed(1) + '%';
+    document.getElementById('portsLoadFill').style.width = Math.min(s/60*95, 95).toFixed(1) + '%';
     document.getElementById('portsLoadTimer').textContent = s.toFixed(0) + 's';
   }, 300);
 }
@@ -1530,15 +1534,18 @@ function filterSwitches(){
   document.getElementById('switchGrid').innerHTML = rows.map(renderSwitchCard).join('');
 }
 
+var _portsLoaded = false; // track whether ports have been loaded at least once
+
 function loadSwitchPorts(){
   document.getElementById('btnLoadPorts').disabled = true;
   document.getElementById('btnLoadPorts').classList.add('refreshing');
   document.getElementById('switchGrid').innerHTML = '<div class="port-empty"><span class="spinner"></span><br>Đang tải dữ liệu switch ports…</div>';
   startPortsProgressBar();
   fetch('/api/meraki-switch-ports', { cache:'no-store' })
-    .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(r){ return r.ok ? r.json() : r.json().then(function(d){ return Promise.reject((d&&(d.error||d.detail))||r.status); }).catch(function(){ return Promise.reject(r.status); }); })
     .then(function(d){
       stopPortsProgressBar(true);
+      _portsLoaded = true;
       allSwitches = d.switches || [];
       buildStatusPortMap();
       var dead = d.deadSwitches || 0;

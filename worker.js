@@ -2266,7 +2266,7 @@ async function handleMoviN8nExecDetail(request, env) {
    ═══════════════════════════════════════════════ */
 async function handleToolMoviCreateUser(request, env, session, ctx) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = env.MOVI_TOOL_CREATE_USER_WEBHOOK;
+  const webhookUrl = (env.MOVI_TOOL_CREATE_USER_WEBHOOK || '').replace(/^﻿/, '').trim();
   if (!webhookUrl) return json({ error: 'MOVI_TOOL_CREATE_USER_WEBHOOK not configured. Run: npx wrangler secret put MOVI_TOOL_CREATE_USER_WEBHOOK' }, 500);
 
   let body;
@@ -2323,7 +2323,7 @@ async function handleToolMoviCreateUser(request, env, session, ctx) {
 /* ── Tool Movi: Block User ── */
 async function handleToolMoviBlockUser(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = env.MOVI_WH_BLOCK_USER;
+  const webhookUrl = (env.MOVI_WH_BLOCK_USER || '').replace(/^﻿/, '').trim();
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const email     = (body.email || '').trim();
   const startDate = (body.startDate || '').trim();
@@ -2369,7 +2369,7 @@ async function handleToolMoviBlockUser(request, env, session) {
 /* ── Tool Movi: Asset Search ── */
 async function handleToolMoviAssetSearch(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = env.MOVI_WH_ASSET_SEARCH;
+  const webhookUrl = (env.MOVI_WH_ASSET_SEARCH || '').replace(/^﻿/, '').trim();
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const params = {
     email:     (body.email     || '').trim(),
@@ -2483,8 +2483,7 @@ async function handleToolMoviCheckAzureGroup(request, env, session) {
 
 /* ── Tool Movi: Delete User List ── */
 async function handleToolMoviDeleteUserList(request, env, session) {
-  if (request.method !== 'GET') return json({ error: 'GET required' }, 405);
-  const webhookUrl = env.MOVI_WH_DELETE_USER_LIST;
+  const webhookUrl = (env.MOVI_WH_DELETE_USER_LIST || '').replace(/^﻿/, '').trim();
   try {
     const resp = await fetch(webhookUrl, {
       method: 'GET',
@@ -2506,7 +2505,7 @@ async function handleToolMoviDeleteUserList(request, env, session) {
 /* ── Tool Movi: Delete User Action ── */
 async function handleToolMoviDeleteUserAction(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = env.MOVI_WH_DELETE_USER;
+  const webhookUrl = (env.MOVI_WH_DELETE_USER || '').replace(/^﻿/, '').trim();
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const email = (body.email || '').trim();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Email không hợp lệ' }, 400);
@@ -2977,7 +2976,7 @@ async function handleMerakiDevices(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = env.MOVI_WH_MERAKI_DEVICES;
+  const N8N_URL  = (env.MOVI_WH_MERAKI_DEVICES || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -3022,7 +3021,7 @@ async function handleMerakiClients(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = env.MOVI_WH_MERAKI_CLIENTS;
+  const N8N_URL  = (env.MOVI_WH_MERAKI_CLIENTS || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -3073,7 +3072,7 @@ async function handleMerakiClientPolicy(request, env) {
     return json({ error: "policy phải là 'Blocked' hoặc 'Normal'" }, 400);
   }
 
-  const N8N_URL  = env.MOVI_WH_MERAKI_CLIENT_POLICY;
+  const N8N_URL  = (env.MOVI_WH_MERAKI_CLIENT_POLICY || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -3130,7 +3129,7 @@ async function handleMerakiDeviceStatus(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = env.MOVI_WH_MERAKI_DEV_STATUS;
+  const N8N_URL  = (env.MOVI_WH_MERAKI_DEV_STATUS || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -3167,10 +3166,10 @@ async function handleMerakiSwitchPorts(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = env.MOVI_WH_MERAKI_SW_PORTS;
+  const N8N_URL  = (env.MOVI_WH_MERAKI_SW_PORTS || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   try {
-    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(50000) });
+    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(60000) });
     if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
     const raw = await resp.json();
     const switches = Array.isArray(raw) ? raw : [raw];
@@ -3180,7 +3179,7 @@ async function handleMerakiSwitchPorts(request, env) {
     const deadSwitches   = switches.filter(sw => sw.connectedPorts === 0).length;
     return json({ switches, totalSwitches: switches.length, totalPorts, connectedPorts, errorPorts, deadSwitches, fetchedAt: new Date().toISOString() });
   } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
+    return json({ error: 'Failed to reach n8n', detail: e.message + ' (timeout 90s)', }, 502);
   }
 }
 
@@ -3189,7 +3188,7 @@ async function handleMerakiSwitchPortConfigs(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = env.MOVI_WH_MERAKI_PORT_CFG;
+  const N8N_URL  = (env.MOVI_WH_MERAKI_PORT_CFG || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(50000) });
@@ -3207,7 +3206,7 @@ async function handleMerakiLinkAggregations(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = env.MOVI_WH_MERAKI_LINK_AGG;
+  const N8N_URL  = (env.MOVI_WH_MERAKI_LINK_AGG || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -3235,7 +3234,7 @@ async function handleMerakiUplinks(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = env.MOVI_WH_MERAKI_UPLINKS;
+  const N8N_URL  = (env.MOVI_WH_MERAKI_UPLINKS || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -3261,7 +3260,7 @@ async function handleMerakiL3Routing(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = env.MOVI_WH_MERAKI_L3;
+  const N8N_URL  = (env.MOVI_WH_MERAKI_L3 || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -3289,7 +3288,7 @@ async function handleMerakiEvents(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = env.MOVI_WH_MERAKI_EVENTS;
+  const N8N_URL  = (env.MOVI_WH_MERAKI_EVENTS || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -3309,7 +3308,7 @@ async function handleMoviSdwanRules(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = env.MOVI_WH_FG_SDWAN_RULES;
+  const N8N_URL  = (env.MOVI_WH_FG_SDWAN_RULES || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
@@ -3332,7 +3331,7 @@ async function handleMoviSdwan(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = env.MOVI_WH_FG_SDWAN_MEMBERS;
+  const N8N_URL  = (env.MOVI_WH_FG_SDWAN_MEMBERS || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
@@ -3660,7 +3659,7 @@ async function handleMoviInterfaces(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = env.MOVI_WH_FG_INTERFACES;
+  const N8N_URL  = (env.MOVI_WH_FG_INTERFACES || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -3685,7 +3684,7 @@ async function handleMoviPolicy(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = env.MOVI_WH_FG_POLICY;
+  const N8N_URL  = (env.MOVI_WH_FG_POLICY || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
@@ -3701,7 +3700,7 @@ async function handleMoviDhcp(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = env.MOVI_WH_FG_ROUTING;
+  const N8N_URL  = (env.MOVI_WH_FG_ROUTING || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
@@ -3717,7 +3716,7 @@ async function handleMoviSslVpn(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = env.MOVI_WH_FG_SSL_VPN;
+  const N8N_URL  = (env.MOVI_WH_FG_SSL_VPN || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -3742,7 +3741,7 @@ async function handleMoviVpn(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = env.MOVI_WH_FG_VPN;
+  const N8N_URL  = (env.MOVI_WH_FG_VPN || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -3769,7 +3768,7 @@ async function handleMoviLicense(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = env.MOVI_WH_FG_LICENSE;
+  const N8N_URL  = (env.MOVI_WH_FG_LICENSE || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -3794,7 +3793,7 @@ async function handleMoviSystem(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = env.MOVI_WH_FG_SYSTEM;
+  const N8N_URL  = (env.MOVI_WH_FG_SYSTEM || '').replace(/^﻿/, '').trim();
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -4566,13 +4565,13 @@ async function handleFortigateWebhook(env) {
       .catch(() => null);
   };
 
-  const whSys    = env.HOME_WH_FG_SYSTEM;
-  const whRes    = env.HOME_WH_FG_RESOURCES;
-  const whIface  = env.HOME_WH_FG_INTERFACES;
-  const whVpn    = env.HOME_WH_FG_VPN;
-  const whSsl    = env.HOME_WH_FG_SSL;
-  const whPolicy = env.HOME_WH_FG_POLICIES;
-  const whDdns   = env.HOME_WH_FG_DDNS;
+  const whSys    = (env.HOME_WH_FG_SYSTEM    || '').replace(/^﻿/, '').trim();
+  const whRes    = (env.HOME_WH_FG_RESOURCES || '').replace(/^﻿/, '').trim();
+  const whIface  = (env.HOME_WH_FG_INTERFACES|| '').replace(/^﻿/, '').trim();
+  const whVpn    = (env.HOME_WH_FG_VPN       || '').replace(/^﻿/, '').trim();
+  const whSsl    = (env.HOME_WH_FG_SSL       || '').replace(/^﻿/, '').trim();
+  const whPolicy = (env.HOME_WH_FG_POLICIES  || '').replace(/^﻿/, '').trim();
+  const whDdns   = (env.HOME_WH_FG_DDNS      || '').replace(/^﻿/, '').trim();
 
   if (!whSys) return json({ error: 'HOME_WH_FG_SYSTEM not configured' }, 500);
 
