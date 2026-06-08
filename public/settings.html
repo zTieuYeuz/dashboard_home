@@ -222,6 +222,11 @@ select.inp{cursor:pointer}
 
 /* ── Misc ── */
 .empty-state{padding:3rem 2rem;text-align:center;color:var(--muted);font-size:13px}
+.search-wrap{position:relative}
+.search-wrap svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted)}
+.search-input{padding:7px 12px 7px 32px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;outline:none;transition:border-color .15s;font-family:var(--font-sans);width:220px}
+.search-input:focus{border-color:var(--accent)}
+.search-input::placeholder{color:var(--muted)}
 .section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border-soft)}
 .info-row{display:flex;justify-content:space-between;align-items:center;padding:.75rem 0;border-bottom:1px solid var(--border-soft);font-size:13px}
 .info-row:last-child{border-bottom:none}
@@ -292,7 +297,13 @@ select.inp{cursor:pointer}
           <div class="panel-title">👥 Quản lý Người dùng</div>
           <div class="panel-desc">Thêm, sửa, xóa tài khoản và phân quyền từng người dùng</div>
         </div>
-        <button class="btn btn-primary" onclick="openAddUser()">+ Thêm user</button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="search-wrap">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input class="search-input" id="user-search" type="text" placeholder="Tìm kiếm user..." oninput="renderUsers()"/>
+          </div>
+          <button class="btn btn-primary" onclick="openAddUser()">+ Thêm user</button>
+        </div>
       </div>
       <div class="tbl-wrap">
         <table class="data-table">
@@ -1233,13 +1244,19 @@ function loadUsers() {
 
 function renderUsers() {
   var tbody = document.getElementById('user-tbody');
+  var q = ((document.getElementById('user-search') || {}).value || '').trim().toLowerCase();
+  var list = q ? allUsers.filter(function(u){ return (u.username||'').toLowerCase().indexOf(q) !== -1; }) : allUsers;
   if (!allUsers.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Chưa có user nào</td></tr>';
     return;
   }
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Không tìm thấy user "'+q+'"</td></tr>';
+    return;
+  }
   // ── Delegated user mode: simplified table ──
   if (_delegateMode) {
-    tbody.innerHTML = allUsers.map(function(u){
+    tbody.innerHTML = list.map(function(u){
       var roleChip = u.role==='admin'
         ? '<span class="badge badge-admin">Admin</span>'
         : '<span class="badge badge-user">User</span>';
@@ -1260,7 +1277,7 @@ function renderUsers() {
     return;
   }
 
-  tbody.innerHTML = allUsers.map(function(u){
+  tbody.innerHTML = list.map(function(u){
     var groups = (u.groups||[]).map(function(g){return '<span class="chip chip-accent">📋 '+esc(g)+'</span>';}).join('');
     var ugChips = (u.userGroups||[]).map(function(g){return '<span class="chip" style="border-color:rgba(20,184,166,.3);color:#2dd4bf;background:rgba(20,184,166,.08)">🗂 '+esc(g)+'</span>';}).join('');
     var allGroupChips = ugChips + groups;
