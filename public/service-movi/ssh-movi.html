@@ -179,6 +179,19 @@ var _popupRef  = null;
   });
 })();
 
+/* ── Post-login auto-reload bridge ──
+   loginRedirect: Patcher gửi sau khi login thành công VÀ không phát hiện 2FA screen.
+   Nếu có 2FA: patcher im lặng, user nhập mã, Termix navigate qua location patcher. ── */
+window.addEventListener('message', function(e) {
+  if (!e.data || e.data._termixProxy !== true) return;
+  if (e.data.type !== 'loginRedirect') return;
+  if (!_termixUrl) return;
+  var frame = document.getElementById('termix-frame');
+  if (!frame) return;
+  setConnStatus('loading', 'Đang tải app...');
+  setTimeout(function() { frame.src = '/proxy/termix-movi/'; }, 400);
+});
+
 /* ── Connect — load proxy iframe directly (Worker handles CF Service Token auth) ── */
 function connect() {
   var btn = document.getElementById('connect-btn');

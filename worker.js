@@ -486,6 +486,8 @@ async function handleListUsers(request, env) {
         loginTimeStart:   d.loginTimeStart || '06:00',
         loginTimeEnd:     d.loginTimeEnd   || '23:00',
         loginTimeZone:    d.loginTimeZone  || 'Asia/Ho_Chi_Minh',
+        microsoftEmail:   d.microsoftEmail || null,
+        mfaEnabled:       !!d.mfaEnabled,
       });
     }
     return json({ users });
@@ -563,6 +565,33 @@ async function handleCreateUser(request, env) {
     console.error('handleCreateUser error:', e);
     return json({ error: 'Lỗi tạo user. Vui lòng thử lại.' }, 500);
   }
+}
+
+async function handleLinkMicrosoftEmail(request, env, username) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  if (!(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const email = (body.microsoftEmail || '').toLowerCase().trim();
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: 'Email không hợp lệ' }, 400);
+  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+  if (!user) return json({ error: 'User không tồn tại' }, 404);
+  // Check trùng email với user khác
+  if (email) {
+    const userlist = await env.DASHBOARD_KV.get('userlist', 'json') || [];
+    for (const u of userlist) {
+      if (u === username) continue;
+      const other = await env.DASHBOARD_KV.get(`user:${u}`, 'json');
+      if (other && (other.microsoftEmail || '').toLowerCase().trim() === email)
+        return json({ error: `Email "${email}" đã được liên kết với user "${u}"` }, 409);
+    }
+  }
+  if (email) user.microsoftEmail = email;
+  else delete user.microsoftEmail;
+  await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  await logActivity(env, { action: 'link_microsoft_email', username: session.username, success: true,
+    detail: email ? `Linked ${username} → ${email}` : `Unlinked ${username}` });
+  return json({ success: true, username, microsoftEmail: email || null });
 }
 
 async function handleUpdatePermissions(request, env, username) {
@@ -764,6 +793,8 @@ async function computeEffectivePermissions(env, username) {
     canManagePerms: Array.isArray(user.canManagePerms)
       ? user.canManagePerms.filter(s => ALL_SERVICES.includes(s))
       : [],
+    mfaEnabled:  !!(user.mfaEnabled),
+    isSaml:      !!(user.microsoftEmail),
   };
 
   // Track processed policy groups to avoid double-applying
@@ -1316,8 +1347,36 @@ async function handleMfaEnable(request, env) {
 }
 
 async function handleMfaDisable(request, env) {
-  // MFA is mandatory on this system — disabling is not allowed for anyone
-  return json({ error: 'MFA là bắt buộc trên hệ thống này và không thể tắt. Bạn chỉ có thể đổi mã MFA (reset secret).' }, 403);
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Not authenticated' }, 401);
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+
+  const user = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+
+  // Local accounts: MFA is mandatory and cannot be disabled
+  if (!user.microsoftEmail) {
+    return json({ error: 'MFA là bắt buộc đối với tài khoản local và không thể tắt. Bạn chỉ có thể đổi mã MFA (reset secret).' }, 403);
+  }
+
+  // SAML/Microsoft accounts: MFA is optional — allow disable with OTP confirmation
+  if (!user.mfaEnabled || !user.mfaSecret) {
+    return json({ success: true, message: 'MFA chưa được bật.' });
+  }
+
+  let body; try { body = await request.json(); } catch { body = {}; }
+  const { code } = body || {};
+  if (!code) return json({ error: 'Cần nhập mã OTP hiện tại để tắt MFA.' }, 400);
+  if (!(await verifyTotp(user.mfaSecret, String(code)))) {
+    return json({ error: 'Mã OTP không đúng.' }, 400);
+  }
+
+  user.mfaEnabled = false;
+  user.mfaSecret  = null;
+  await env.DASHBOARD_KV.put(`user:${session.username}`, JSON.stringify(user));
+  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
+  await logActivity(env, { action: 'mfa_disabled', username: session.username, ip, success: true, detail: 'SAML user disabled MFA' });
+  return json({ success: true });
 }
 
 async function handleMfaStatus(request, env) {
@@ -1372,6 +1431,344 @@ async function handleMfaVerify(request, env) {
   h.append('Set-Cookie', `dh_user=${userInfo}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${mfaSessionTtl}`);
   await logActivity(env, { action: 'mfa_success', username: temp.username, ip, success: true });
   return new Response(JSON.stringify({ success: true, role: user.role }), { status: 200, headers: h });
+}
+
+/* ── Microsoft OIDC SSO ── */
+
+async function handleMicrosoftAuth(request, env) {
+  const clientId = (env.SAML_AZURE_CLIENT_ID  || '').replace(/^﻿/, '').trim();
+  const tenantId = (env.SAML_AZURE_TENANT_ID  || '').replace(/^﻿/, '').trim();
+  const origin   = new URL(request.url).origin;
+  if (!clientId || !tenantId) return Response.redirect(`${origin}/login.html?sso_error=` + encodeURIComponent('Microsoft SSO chưa được cấu hình'), 302);
+
+  const state = crypto.randomUUID();
+  const ip    = request.headers.get('cf-connecting-ip') || 'unknown';
+  await env.DASHBOARD_KV.put(`ms_state:${state}`, JSON.stringify({ ip, created: Date.now() }), { expirationTtl: 600 });
+
+  const redirectUri = `${origin}/auth/microsoft/callback`;
+  const params      = new URLSearchParams({
+    client_id:     clientId,
+    response_type: 'code',
+    redirect_uri:  redirectUri,
+    response_mode: 'query',
+    scope:         'openid profile email User.Read',
+    state,
+  });
+  return Response.redirect(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?${params}`, 302);
+}
+
+async function handleMicrosoftCallback(request, env) {
+  const url       = new URL(request.url);
+  const code      = url.searchParams.get('code');
+  const state     = url.searchParams.get('state');
+  const msError   = url.searchParams.get('error');
+  const msErrDesc = url.searchParams.get('error_description');
+
+  const clientId     = (env.SAML_AZURE_CLIENT_ID     || '').replace(/^﻿/, '').trim();
+  const tenantId     = (env.SAML_AZURE_TENANT_ID     || '').replace(/^﻿/, '').trim();
+  const clientSecret = (env.SAML_AZURE_CLIENT_SECRET || '').replace(/^﻿/, '').trim();
+
+  const _origin = new URL(request.url).origin;
+  const fail = (msg) => Response.redirect(`${_origin}/login.html?sso_error=` + encodeURIComponent(msg), 302);
+
+  if (msError)        return fail(msErrDesc || msError);
+  if (!code || !state) return fail('Thiếu thông tin xác thực từ Microsoft');
+  if (!clientId || !tenantId || !clientSecret) return fail('Microsoft SSO chưa được cấu hình đầy đủ');
+
+  // Validate state (CSRF protection)
+  const storedState = await env.DASHBOARD_KV.get(`ms_state:${state}`, 'json');
+  if (!storedState) return fail('Phiên xác thực đã hết hạn. Vui lòng thử lại.');
+  await env.DASHBOARD_KV.delete(`ms_state:${state}`).catch(() => {});
+
+  const origin      = new URL(request.url).origin;
+  const redirectUri = `${origin}/auth/microsoft/callback`;
+
+  // Exchange authorization code → tokens
+  let tokenData;
+  try {
+    const tokenRes = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body:    new URLSearchParams({
+        client_id:     clientId,
+        client_secret: clientSecret,
+        code,
+        redirect_uri:  redirectUri,
+        grant_type:    'authorization_code',
+        scope:         'openid profile email User.Read',
+      }),
+    });
+    tokenData = await tokenRes.json();
+  } catch (e) {
+    return fail('Không thể liên hệ Microsoft. Vui lòng thử lại.');
+  }
+  if (tokenData.error) return fail(tokenData.error_description || tokenData.error);
+
+  // Decode ID token (JWT) — token đến từ Microsoft qua HTTPS server-side, đã tin cậy
+  let idPayload;
+  try {
+    const part = (tokenData.id_token || '').split('.')[1] || '';
+    // Base64url → base64 → decode
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/').padEnd(part.length + (4 - part.length % 4) % 4, '=');
+    idPayload = JSON.parse(atob(b64));
+  } catch (e) {
+    return fail('Không thể đọc thông tin từ Microsoft token');
+  }
+
+  // Validate basic claims
+  if (idPayload.exp && Math.floor(Date.now() / 1000) > idPayload.exp) return fail('Token Microsoft đã hết hạn');
+  if (idPayload.aud && idPayload.aud !== clientId) return fail('Token không hợp lệ (aud mismatch)');
+
+  // Extract email — Microsoft có thể trả về các field khác nhau tùy tenant
+  const msEmail = (idPayload.preferred_username || idPayload.email || idPayload.unique_name || '').toLowerCase().trim();
+  if (!msEmail) return fail('Không lấy được email từ tài khoản Microsoft');
+
+  const ip  = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
+  const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
+
+  // Kiểm tra domain được phép (nếu có cấu hình SAML_AZURE_ALLOWED_DOMAIN)
+  const allowedDomain = (env.SAML_AZURE_ALLOWED_DOMAIN || '').replace(/^﻿/, '').trim().toLowerCase();
+  if (allowedDomain) {
+    const emailDomain = msEmail.split('@')[1] || '';
+    if (emailDomain !== allowedDomain)
+      return fail(`Domain "${emailDomain}" không được phép đăng nhập. Chỉ chấp nhận @${allowedDomain}`);
+  }
+
+  const emailPrefix = msEmail.split('@')[0].replace(/[^a-zA-Z0-9_.@-]/g, '').slice(0, 64);
+  const userlist    = await env.DASHBOARD_KV.get('userlist', 'json') || [];
+  let matchedUser = null, matchedUsername = null;
+
+  // Bước 1: Tìm user đã được liên kết với email Microsoft này
+  for (const uname of userlist) {
+    const u = await env.DASHBOARD_KV.get(`user:${uname}`, 'json');
+    if (!u) continue;
+    if ((u.microsoftEmail || '').toLowerCase().trim() === msEmail) {
+      matchedUser = u; matchedUsername = uname; break;
+    }
+  }
+
+  // Bước 2: Auto-link theo username prefix đã bị tắt (bảo mật — kẻ tấn công có thể dùng email
+  // trùng tên để chiếm tài khoản). Admin phải dùng API PUT /api/admin/users/:username/microsoft-email
+  // để liên kết thủ công. Bước 1 đã xử lý đủ trường hợp đã liên kết rồi.
+
+  // Bước 3: Không tìm thấy → TỪ CHỐI. Admin phải tạo user và liên kết microsoftEmail trước.
+  // Không auto-create: bất kỳ Azure tenant user nào cũng có thể lấy token hợp lệ nếu Azure App
+  // chưa bật "Assignment required" — auto-create sẽ cho phép người lạ vào dashboard.
+  if (!matchedUser) {
+    await logActivity(env, { action: 'login_microsoft_rejected', ip, success: false, detail: `No dashboard account linked to ${msEmail}` });
+    return new Response(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Truy cập bị từ chối</title>
+<style>body{font-family:system-ui,sans-serif;background:#09090b;color:#f4f4f5;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+.box{text-align:center;max-width:420px;padding:32px;background:#18181b;border:1px solid #27272a;border-radius:16px}
+.icon{font-size:48px;margin-bottom:16px}.title{font-size:18px;font-weight:700;color:#f87171;margin-bottom:10px}
+.msg{font-size:14px;color:#a1a1aa;line-height:1.6;margin-bottom:8px}
+.email{font-size:13px;color:#60a5fa;font-family:monospace;background:#1e2a3a;padding:4px 10px;border-radius:6px;display:inline-block;margin:8px 0 16px}
+.note{font-size:12px;color:#71717a;margin-top:12px}
+.btn{margin-top:18px;padding:8px 20px;background:#3f3f46;color:#f4f4f5;border:none;border-radius:6px;cursor:pointer;font-size:13px;text-decoration:none;display:inline-block}
+</style></head><body><div class="box">
+<div class="icon">🚫</div>
+<div class="title">Tài khoản chưa được cấp quyền</div>
+<div class="msg">Tài khoản Microsoft của bạn chưa được liên kết với dashboard.</div>
+<div class="email">${msEmail}</div>
+<div class="msg">Vui lòng liên hệ admin để được cấp quyền truy cập.</div>
+<div class="note">Admin cần tạo tài khoản và liên kết email Azure trong phần Cài đặt Hệ thống.</div>
+<a class="btn" href="/login.html">← Quay lại đăng nhập</a>
+</div></body></html>`, { status: 403, headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
+  }
+
+  if (matchedUser.locked) return fail('Tài khoản bị khóa. Vui lòng liên hệ admin.');
+
+  // ── MFA check for SSO users: if MFA enabled, require TOTP before creating session ──
+  if (matchedUser.mfaEnabled && matchedUser.mfaSecret) {
+    const mfaTempToken = crypto.randomUUID();
+    await env.DASHBOARD_KV.put(`ms_mfa_temp:${mfaTempToken}`, JSON.stringify({
+      username: matchedUsername,
+      boundIp: ip,
+      expires: Date.now() + 300_000,
+    }), { expirationTtl: 300 });
+    await logActivity(env, { action: 'login_microsoft_mfa_required', username: matchedUsername, ip, success: true, detail: 'MFA step required for SSO' });
+    const t = mfaTempToken;
+    const mfaHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Xác minh MFA</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font-family:system-ui,sans-serif;background:#09090b;color:#f4f4f5;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+.box{text-align:center;width:320px;padding:0 16px}
+.icon{font-size:40px;margin-bottom:12px}
+h3{margin:0 0 6px;font-size:16px;font-weight:600}
+p{color:#a1a1aa;font-size:13px;margin:0 0 20px;line-height:1.5}
+input{width:100%;padding:12px;background:#18181b;border:1px solid #3f3f46;border-radius:8px;color:#f4f4f5;font-size:22px;letter-spacing:6px;text-align:center;box-sizing:border-box;outline:none}
+input:focus{border-color:#2563eb}
+.btn{width:100%;padding:11px;margin-top:12px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+.btn:hover{background:#1d4ed8}.btn:disabled{opacity:.5;cursor:not-allowed}
+.err{color:#ef4444;font-size:13px;margin-top:10px;min-height:18px}
+</style></head><body><div class="box">
+<div class="icon">🔐</div>
+<h3>Xác minh hai bước</h3>
+<p>Đăng nhập Microsoft thành công.<br>Nhập mã 6 số từ ứng dụng authenticator.</p>
+<input type="text" id="otp" maxlength="6" inputmode="numeric" pattern="[0-9]*" placeholder="000000" autocomplete="one-time-code" autofocus>
+<div class="err" id="err"></div>
+<button class="btn" id="btn" onclick="doVerify()">🔑 Xác minh</button>
+</div><script>
+var T='${t}';
+var inp=document.getElementById('otp');
+var btn=document.getElementById('btn');
+var err=document.getElementById('err');
+inp.addEventListener('input',function(){this.value=this.value.replace(/\\D/g,'');});
+inp.addEventListener('keydown',function(e){if(e.key==='Enter')doVerify();});
+function doVerify(){
+  var code=inp.value.replace(/\\D/g,'');
+  err.textContent='';
+  if(code.length!==6){err.textContent='Nhập đủ 6 số';return;}
+  btn.disabled=true;btn.textContent='⏳ Đang xác minh...';
+  fetch('/auth/microsoft/mfa',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tempToken:T,code:code})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(d.success){
+      try{new BroadcastChannel('ms_sso_ch').postMessage('done');}catch(e){}
+      try{if(window.opener&&!window.opener.closed){window.opener.postMessage({type:'ms_sso_done'},window.location.origin);}}catch(e){}
+      window.close();
+      setTimeout(function(){if(!window.closed){window.location.href='/';}},1500);
+    }else{
+      err.textContent=d.error||'Sai mã OTP';
+      btn.disabled=false;btn.textContent='🔑 Xác minh';
+      inp.value='';inp.focus();
+    }
+  }).catch(function(){
+    err.textContent='Lỗi kết nối. Vui lòng thử lại.';
+    btn.disabled=false;btn.textContent='🔑 Xác minh';
+  });
+}
+<\/script></body></html>`;
+    return new Response(mfaHtml, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  }
+
+  const sessionTtl    = Math.max(1, cfg.sessionTtlHours ?? 8) * 3600;
+  const token         = crypto.randomUUID();
+  const canManagePerms = (matchedUser.canManagePerms || []).filter(s => ALL_SERVICES.includes(s));
+
+  await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
+    username: matchedUsername, role: matchedUser.role,
+    permissions: matchedUser.permissions || {},
+    canManagePerms,
+    boundIp: ip,
+    authMethod: 'microsoft',
+    createdAt: Date.now(),
+    expires: Date.now() + sessionTtl * 1000,
+  }), { expirationTtl: sessionTtl });
+
+  const userInfo = encodeURIComponent(JSON.stringify({
+    username: matchedUsername, role: matchedUser.role,
+    permissions: matchedUser.permissions || {},
+    isAdmin: matchedUser.role === 'admin',
+    canManagePerms,
+    authMethod: 'microsoft',
+    mfaEnabled: false,
+  }));
+
+  await logActivity(env, { action: 'login_microsoft', username: matchedUsername, ip, success: true, detail: `SSO via ${msEmail}` });
+  notifyEmail(env, 'login_success', { username: matchedUsername, ip });
+
+  // Trả về HTML — nếu mở từ popup thì postMessage để login page tự navigate, rồi close ngay.
+  // KHÔNG navigate popup (window.location.href = '/') vì sẽ gây popup hiện dashboard.
+  // NOTE: window.opener bị nullify bởi COOP headers của Microsoft sau khi OAuth redirect.
+  // Không thể dùng opener.postMessage() hay check hasOpener để detect popup flow.
+  // Dùng BroadcastChannel (same-origin, không phụ thuộc opener) để notify login page.
+  const popupHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Đăng nhập thành công</title>
+<style>body{font-family:sans-serif;background:#09090b;color:#f4f4f5;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+.box{text-align:center}.icon{font-size:48px;margin-bottom:12px}.msg{font-size:15px;color:#a1a1aa}
+.closebtn{margin-top:18px;padding:8px 20px;background:#3b82f6;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;display:none}</style>
+</head><body><div class="box">
+<div class="icon">✅</div>
+<div class="msg" id="msg">Đăng nhập thành công. Đang đóng...</div>
+<button class="closebtn" id="cbtn" onclick="window.close()">Đóng cửa sổ này</button>
+</div>
+<script>
+(function(){
+  // 1. Broadcast to all same-origin windows (login page listener picks this up)
+  //    BroadcastChannel works even when window.opener is null (COOP breaks opener but not BC)
+  try { new BroadcastChannel('ms_sso_ch').postMessage('done'); } catch(e) {}
+  // 2. Also try postMessage directly (fallback if BroadcastChannel not available)
+  try { if (window.opener && !window.opener.closed) {
+    window.opener.postMessage({ type: 'ms_sso_done' }, window.location.origin);
+  }} catch(e) {}
+  // 3. Close this popup — works if opened by window.open() regardless of opener status
+  window.close();
+  // 4. Fallback: if still open after 1.5s, this is likely a full-page redirect (not popup).
+  //    Navigate to dashboard directly.
+  setTimeout(function(){
+    if (!window.closed) {
+      // Still open: window.close() was blocked (e.g. full-page redirect, no BroadcastChannel listener closed us)
+      // Safe to navigate — if login page already received BC message and navigated, this is the only window
+      window.location.href = '/';
+    }
+  }, 1500);
+})();
+</script></body></html>`;
+
+  const h = new Headers({ 'Content-Type': 'text/html; charset=utf-8' });
+  h.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
+  h.append('Set-Cookie', `dh_user=${userInfo}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
+  return new Response(popupHtml, { status: 200, headers: h });
+}
+
+/* ── Microsoft SSO — MFA verify (POST /auth/microsoft/mfa) ── */
+async function handleMicrosoftMfaVerify(request, env) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { tempToken, code } = body || {};
+  if (!tempToken || !code) return json({ error: 'Thiếu tempToken hoặc code' }, 400);
+  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
+
+  const temp = await env.DASHBOARD_KV.get(`ms_mfa_temp:${tempToken}`, 'json');
+  if (!temp || Date.now() > temp.expires) {
+    if (temp) await env.DASHBOARD_KV.delete(`ms_mfa_temp:${tempToken}`).catch(() => {});
+    return json({ error: 'Phiên đã hết hạn. Vui lòng đăng nhập lại.' }, 401);
+  }
+
+  // Rate limit: max 6 wrong guesses then burn the temp token
+  if ((await rlGet(env, `ms_mfa:${tempToken}`)) >= 6) {
+    await env.DASHBOARD_KV.delete(`ms_mfa_temp:${tempToken}`).catch(() => {});
+    await logActivity(env, { action: 'mfa_blocked', username: temp.username, ip, success: false, detail: 'Too many OTP attempts (SSO)' });
+    return json({ error: 'Sai mã quá nhiều lần. Vui lòng đăng nhập lại.' }, 429);
+  }
+
+  const user = await env.DASHBOARD_KV.get(`user:${temp.username}`, 'json');
+  if (!user || !user.mfaEnabled || !user.mfaSecret) return json({ error: 'Lỗi xác thực MFA' }, 400);
+
+  if (!(await verifyTotp(user.mfaSecret, String(code)))) {
+    await rlBump(env, `ms_mfa:${tempToken}`, 360);
+    await logActivity(env, { action: 'mfa_fail', username: temp.username, ip, success: false, detail: 'Wrong OTP (SSO)' });
+    return json({ error: 'Mã OTP không đúng' }, 400);
+  }
+
+  // OTP correct — clean up temp + create full session
+  await rlClear(env, `ms_mfa:${tempToken}`);
+  await env.DASHBOARD_KV.delete(`ms_mfa_temp:${tempToken}`).catch(() => {});
+
+  const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
+  const sessionTtl = Math.max(1, cfg.sessionTtlHours ?? 8) * 3600;
+  const token = crypto.randomUUID();
+  const canManagePerms = (user.canManagePerms || []).filter(s => ALL_SERVICES.includes(s));
+
+  await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
+    username: temp.username, role: user.role, permissions: user.permissions || {},
+    canManagePerms, boundIp: ip, authMethod: 'microsoft',
+    createdAt: Date.now(), expires: Date.now() + sessionTtl * 1000,
+  }), { expirationTtl: sessionTtl });
+
+  const userInfo = encodeURIComponent(JSON.stringify({
+    username: temp.username, role: user.role,
+    permissions: user.permissions || {},
+    isAdmin: user.role === 'admin',
+    canManagePerms, authMethod: 'microsoft', mfaEnabled: true,
+  }));
+
+  await logActivity(env, { action: 'login_microsoft', username: temp.username, ip, success: true, detail: 'SSO + MFA verified' });
+  notifyEmail(env, 'login_success', { username: temp.username, ip });
+
+  const h = new Headers({ 'Content-Type': 'application/json' });
+  h.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
+  h.append('Set-Cookie', `dh_user=${userInfo}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
+  return new Response(JSON.stringify({ success: true }), { status: 200, headers: h });
 }
 
 /* ── Setup Flow Handlers (first-login: change password + MFA setup) ── */
@@ -1868,7 +2265,7 @@ a:hover{background:#4f46e5}</style></head>
       '/service-home/n8n.html': 'n8n',
       '/service-home/hikvision.html': 'camera',
       '/service-home/ssh.html': 'ssh',
-      '/settings.html': '_mgmt',
+      // '/settings.html' intentionally NOT gated — all authenticated users can access own profile/MFA settings
       '/users.html': '_mgmt',
       '/policy.html': '_mgmt',
     };
@@ -1902,7 +2299,10 @@ a:hover{background:#4f46e5}</style></head>
     groups: isAdmin ? [] : effPerms.groups,
     isAdmin,
     canManagePerms: isAdmin ? [] : (effPerms.canManagePerms || []),
-    dashboardTitle: dashTitle
+    dashboardTitle: dashTitle,
+    authMethod: session.authMethod || 'local',
+    mfaEnabled: !!(effPerms.mfaEnabled),
+    isSaml: !!(effPerms.isSaml),
   })};
   /* Auto-inject Settings link + apply custom dashboard title */
   (function(){
@@ -1921,7 +2321,50 @@ a:hover{background:#4f46e5}</style></head>
       }
     });
   })();
-  </script>` + makeIdleScript(idleMs, warnMs);
+  </script>` + makeIdleScript(idleMs, warnMs) + `<script>(function(){
+  var u=window.__USER__;
+  if(!u||!u.isSaml||u.mfaEnabled)return;
+  function _showMfaWarn(){
+    if(document.getElementById('_mfaw'))return;
+    var d=document.createElement('div');
+    d.id='_mfaw';
+    d.style.cssText='position:fixed;bottom:20px;left:20px;z-index:9998;'
+      +'background:#1c1917;border:1px solid #92400e;border-left:3px solid #f59e0b;'
+      +'border-radius:8px;padding:12px 14px;display:flex;align-items:flex-start;'
+      +'gap:10px;font-family:system-ui,sans-serif;font-size:12px;color:#fde68a;'
+      +'max-width:270px;box-shadow:0 4px 16px rgba(0,0,0,.55)';
+    /* icon */
+    var ic=document.createElement('span');
+    ic.textContent='🔐';
+    ic.style.cssText='font-size:20px;line-height:1.3;flex-shrink:0';
+    /* body */
+    var bdy=document.createElement('div');
+    bdy.style.flex='1';
+    var ttl=document.createElement('b');
+    ttl.textContent='Chưa bật MFA';
+    ttl.style.cssText='font-size:13px;color:#fbbf24;display:block;margin-bottom:3px';
+    var txt=document.createTextNode('Bật xác thực 2 bước để bảo mật tài khoản Microsoft. ');
+    var lnk=document.createElement('a');
+    lnk.href='/settings.html#mfa';
+    lnk.textContent='Bật ngay →';
+    lnk.style.cssText='color:#fbbf24;text-decoration:underline;font-weight:600';
+    bdy.appendChild(ttl); bdy.appendChild(txt); bdy.appendChild(lnk);
+    /* close button */
+    var btn=document.createElement('button');
+    btn.textContent='×';
+    btn.title='Đóng';
+    btn.style.cssText='background:none;border:none;color:#78716c;cursor:pointer;'
+      +'font-size:18px;padding:0 0 0 4px;line-height:1;flex-shrink:0;align-self:flex-start';
+    btn.addEventListener('click',function(){var e=document.getElementById('_mfaw');if(e)e.remove();});
+    d.appendChild(ic); d.appendChild(bdy); d.appendChild(btn);
+    document.body.appendChild(d);
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',_showMfaWarn);
+  } else {
+    _showMfaWarn();
+  }
+})();<\/script>`;
   // Head: user + idle scripts.  Body end: the Wayfinding switcher as static
   // markup (DOM-ready, immune to the page's own client-side re-rendering).
   let newHtml = /<\/head>/i.test(html)
@@ -1956,8 +2399,8 @@ a:hover{background:#4f46e5}</style></head>
         "connect-src 'self' https://*.home-server.id.vn wss://*.home-server.id.vn https://*.movi-finance.com wss://*.movi-finance.com https://speed.cloudflare.com; " +
         // Google Fonts files + data URIs
         "font-src 'self' data: https://fonts.gstatic.com; " +
-        // Allow camera (go2rtc) and SSH terminal (termix) iframes
-        "frame-src 'self' https://camera.home-server.id.vn https://termix.home-server.id.vn https://termix-movi.home-server.id.vn https://cam.movi-finance.com https://termix.movi-finance.com; " +
+        // Allow camera (go2rtc), SSH terminal (termix) iframes, and Microsoft OIDC silent renewal
+        "frame-src 'self' https://camera.home-server.id.vn https://termix.home-server.id.vn https://termix-movi.home-server.id.vn https://cam.movi-finance.com https://termix.movi-finance.com https://login.microsoftonline.com; " +
         "object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
     }
   });
@@ -5188,9 +5631,9 @@ async function handleTermixMoviProxy(request, env) {
   if (!(await hasPerm(env, session, 'ssh-movi')))
     return new Response('Không có quyền truy cập Termix Movi', { status: 403 });
 
-  const termixOrigin = (env.TERMIX_MOVI_URL || 'https://termix-movi.home-server.id.vn').replace(/\/$/, '');
-  const clientId     = env.TERMIX_MOVI_CF_CLIENT_ID;
-  const clientSecret = env.TERMIX_MOVI_CF_CLIENT_SECRET;
+  const termixOrigin = (env.TERMIX_MOVI_URL || 'https://termix-movi.home-server.id.vn').replace(/^﻿/, '').trim().replace(/\/$/, '');
+  const clientId     = (env.TERMIX_MOVI_CF_CLIENT_ID     || '').replace(/^﻿/, '').trim();
+  const clientSecret = (env.TERMIX_MOVI_CF_CLIENT_SECRET || '').replace(/^﻿/, '').trim();
 
   // Build target URL (strip /proxy/termix-movi prefix)
   const reqUrl  = new URL(request.url);
@@ -5205,8 +5648,17 @@ async function handleTermixMoviProxy(request, env) {
     upHeaders.set('CF-Access-Client-Secret', clientSecret);
   }
   // Shared secret header — nginx validates này để block direct browser access
-  const moviSecret = env.TERMIX_MOVI_SECRET;
+  const moviSecret = (env.TERMIX_MOVI_SECRET || '').replace(/^﻿/, '').trim();
   if (moviSecret) upHeaders.set('X-Proxy-Token', moviSecret);
+
+  // X-Forwarded-Host: needed so Termix generates + stores redirect_uri = https://<dashboard>/users/oidc/callback
+  // for BOTH the authorization URL AND the code→token exchange (both must use the same redirect_uri).
+  // Without this, Termix stores redirect_uri=termix-movi.../callback but Microsoft issues code for
+  // dashboard.../callback → mismatch → 400 on token exchange.
+  // Post-login redirect (Termix → dashboard URL) is handled in the redirect handler below.
+  const _dashFwdOrigin = new URL(request.url);
+  upHeaders.set('X-Forwarded-Host',  _dashFwdOrigin.hostname);
+  upHeaders.set('X-Forwarded-Proto', 'https');
 
   // Forward Termix session cookies, strip dashboard cookies
   const rawCookie = request.headers.get('cookie') || '';
@@ -5277,9 +5729,10 @@ async function handleTermixMoviProxy(request, env) {
   let upstream;
   try {
     upstream = await fetch(target, {
-      method:  request.method,
-      headers: upHeaders,
-      body:    ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
+      method:   request.method,
+      headers:  upHeaders,
+      body:     ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
+      redirect: 'manual', // Don't follow redirects — rewrite Location headers ourselves
     });
   } catch (fetchErr) {
     return new Response(
@@ -5291,6 +5744,36 @@ async function handleTermixMoviProxy(request, env) {
       </body></html>`,
       { status: 502, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
     );
+  }
+
+  // Handle 3xx redirects from Termix — rewrite Location headers before forwarding to browser.
+  // Without this, Termix's Location headers point to termix-movi.home-server.id.vn (blocked by CF Access).
+  if (upstream.status >= 300 && upstream.status < 400) {
+    const _loc    = upstream.headers.get('Location') || '';
+    const _reqOri = new URL(request.url).origin;
+    let   _newLoc = _loc;
+
+    if (_loc.startsWith('https://termix-movi.home-server.id.vn')) {
+      // Absolute Termix URL → proxy path
+      _newLoc = '/proxy/termix-movi' + _loc.slice('https://termix-movi.home-server.id.vn'.length);
+    } else if (_loc === _reqOri + '/' || _loc === _reqOri) {
+      // Termix redirected to our dashboard root — redirect to Termix app root through proxy
+      _newLoc = '/proxy/termix-movi/';
+    } else if (_loc.startsWith(_reqOri + '/') && !_loc.startsWith(_reqOri + '/proxy/')) {
+      // Termix redirected to our dashboard domain for a non-proxy path — redirect to proxy root
+      _newLoc = '/proxy/termix-movi/';
+    } else if (_loc.startsWith('/') && !_loc.startsWith('/proxy/termix-movi') && !_loc.startsWith('//')) {
+      // Root-relative → prefix with proxy path
+      _newLoc = '/proxy/termix-movi' + _loc;
+    }
+    // else: already absolute external URL — pass through as-is
+
+    const _rhRedir = new Headers({ 'Location': _newLoc, 'Cache-Control': 'no-cache' });
+    const _setSCR  = typeof upstream.headers.getAll === 'function'
+      ? upstream.headers.getAll('set-cookie')
+      : (upstream.headers.get('set-cookie') ? [upstream.headers.get('set-cookie')] : []);
+    for (const _sc of _setSCR) _rhRedir.append('Set-Cookie', _rewriteTermixCookie(_sc));
+    return new Response(null, { status: upstream.status, headers: _rhRedir });
   }
 
   // Non-2xx: pass through 4xx as-is so Termix frontend can handle auth errors (401, 403, etc.)
@@ -5390,20 +5873,68 @@ async function handleTermixMoviProxy(request, env) {
   XMLHttpRequest.prototype.open=function(){
     var a=[].slice.call(arguments);
     if(typeof a[1]==='string'){var r=rw(a[1]);if(r!==a[1]){console.log('[proxy-patcher] XHR',a[1],'->',r);a[1]=r;}}
+    this._proxyUrl=a[1]||'';
     return _x.apply(this,a);
   };
-  // Patch location.assign / location.replace (hard navigation)
+  // loginRedirect: reload parent iframe sau khi login thanh cong
+  // Don gian: sau POST /users/login -> 200 -> fire loginRedirect sau 800ms
+  function _fireLoginRedirect(src){
+    console.log('[proxy-patcher] loginRedirect from:',src);
+    try{window.parent.postMessage({_termixProxy:true,type:'loginRedirect'},'*');}catch(e){}
+  }
+  try{
+    var _xs=XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send=function(){
+      var self=this;
+      if(self._proxyUrl&&self._proxyUrl.indexOf('/users/login')!==-1){
+        self.addEventListener('load',function(){
+          if(self.status>=200&&self.status<300){
+            console.log('[proxy-patcher] login 200 -> loginRedirect in 800ms');
+            setTimeout(function(){_fireLoginRedirect('login-ok');},800);
+          }
+        });
+      }
+      return _xs.apply(this,arguments);
+    };
+  }catch(e){console.warn('[proxy-patcher] XHR send patch failed',e);}
+  // Patch location.assign / location.replace (URL rewriting only)
   try{
     var _la=location.assign.bind(location);
     location.assign=function(u){var r=rw(u);console.log('[proxy-patcher] assign',u,'->',r);return _la(r);};
     var _lr=location.replace.bind(location);
     location.replace=function(u){var r=rw(u);console.log('[proxy-patcher] replace',u,'->',r);return _lr(r);};
   }catch(e){console.warn('[proxy-patcher] location patch failed',e);}
-  // Global error logger to catch post-login failures
+  // Patch location.href setter (URL rewriting only)
+  try{
+    var _hd=Object.getOwnPropertyDescriptor(Location.prototype,'href');
+    if(_hd&&_hd.set){
+      Object.defineProperty(Location.prototype,'href',{
+        get:_hd.get,
+        set:function(u){var r=rw(u);if(r!==u)console.log('[proxy-patcher] href=',u,'->',r);_hd.set.call(this,r);},
+        configurable:true
+      });
+    }
+  }catch(e){console.warn('[proxy-patcher] href setter patch failed',e);}
+  // Patch history.pushState / replaceState (URL rewriting only)
+  try{
+    var _hps=history.pushState.bind(history);
+    var _hrs=history.replaceState.bind(history);
+    history.pushState=function(state,title,url){
+      var r=(url!=null)?rw(String(url)):url;
+      if(r!==url)console.log('[proxy-patcher] pushState',url,'->',r);
+      return _hps(state,title,r);
+    };
+    history.replaceState=function(state,title,url){
+      var r=(url!=null)?rw(String(url)):url;
+      if(r!==url)console.log('[proxy-patcher] replaceState',url,'->',r);
+      return _hrs(state,title,r);
+    };
+  }catch(e){console.warn('[proxy-patcher] history patch failed',e);}
+  // Global error logger to catch post-load failures
   window.addEventListener('unhandledrejection',function(e){
     console.error('[proxy-patcher] unhandledRejection',e.reason);
   });
-  console.log('[proxy-patcher] ready — WS+fetch+XHR+location patched');
+  console.log('[proxy-patcher] ready — WS+fetch+XHR+location+history patched');
 })();
 <\/script>`;
     // Inject at very FIRST position inside <head> so it runs before any other script
@@ -5450,6 +5981,11 @@ export default {
     if (p === '/api/auth/refresh')                 return handleSessionRefresh(request, env);
     if (p === '/api/auth/mfa/verify')              return handleMfaVerify(request, env);
 
+    // ── Microsoft OIDC SSO (public — no session required) ──
+    if (p === '/auth/microsoft')          return handleMicrosoftAuth(request, env);
+    if (p === '/auth/microsoft/callback') return handleMicrosoftCallback(request, env);
+    if (p === '/auth/microsoft/mfa' && request.method === 'POST') return handleMicrosoftMfaVerify(request, env);
+
     // ── First-login setup flow (no session required — use setupToken) ──
     if (p === '/api/auth/setup/change-password')   return handleSetupChangePassword(request, env);
     if (p === '/api/auth/setup/mfa-init')          return handleSetupMfaInit(request, env);
@@ -5474,6 +6010,8 @@ export default {
     if (userGrp) return handleUpdateUserGroups(request, env, decodeURIComponent(userGrp[1]));
     const userPnl = p.match(/^\/api\/admin\/users\/([^/]+)\/panels$/);
     if (userPnl) return handleUpdateUserPanels(request, env, decodeURIComponent(userPnl[1]));
+    const userMsLink = p.match(/^\/api\/admin\/users\/([^/]+)\/microsoft-email$/);
+    if (userMsLink && request.method === 'PUT') return handleLinkMicrosoftEmail(request, env, decodeURIComponent(userMsLink[1]));
     const userUnlock = p.match(/^\/api\/admin\/users\/([^/]+)\/unlock$/);
     if (userUnlock && request.method === 'POST') return handleUnlockUser(request, env, decodeURIComponent(userUnlock[1]));
     const userLoginTime = p.match(/^\/api\/admin\/users\/([^/]+)\/login-time$/);
