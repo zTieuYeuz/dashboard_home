@@ -230,6 +230,7 @@ select.inp{cursor:pointer}
 .badge{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.05em}
 .badge-admin{background:color-mix(in oklch,var(--accent) 15%,transparent);color:var(--accent);border:1px solid color-mix(in oklch,var(--accent) 30%,transparent)}
 .badge-user{background:color-mix(in oklch,var(--muted) 12%,transparent);color:var(--muted);border:1px solid var(--border)}
+.chip-azure{background:rgba(0,120,212,.12);color:#60a5fa;border:1px solid rgba(0,120,212,.3);font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;display:inline-flex;align-items:center;gap:3px;vertical-align:middle}
 @media(max-width:900px){.role-layout{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -668,29 +669,42 @@ select.inp{cursor:pointer}
        ══════════════════════════════════════════════ -->
   <div class="tab-content" id="tc-account">
     <!-- Change Password -->
-    <div class="panel">
+    <div class="panel" id="pw-panel">
       <div class="panel-header">
         <div>
           <div class="panel-title">🔑 Đổi mật khẩu</div>
-          <div class="panel-desc">Cập nhật mật khẩu đăng nhập của bạn</div>
+          <div class="panel-desc" id="pw-panel-desc">Cập nhật mật khẩu đăng nhập của bạn</div>
         </div>
       </div>
       <div class="panel-body" style="max-width:420px">
-        <div class="form-row">
-          <label class="lbl">Mật khẩu mới</label>
-          <input class="inp" id="acc-pw" type="password" placeholder="Tối thiểu 6 ký tự" autocomplete="new-password"/>
+        <!-- Notice cho SAML users (ẩn mặc định, hiện bằng JS) -->
+        <div id="pw-saml-notice" style="display:none;background:color-mix(in oklch,var(--accent) 8%,transparent);border:1px solid color-mix(in oklch,var(--accent) 25%,transparent);border-radius:8px;padding:.75rem 1rem;font-size:13px;color:var(--text);line-height:1.6">
+          <div style="font-weight:600;margin-bottom:4px;color:var(--accent)">🔗 Tài khoản Microsoft</div>
+          Mật khẩu được quản lý bởi Microsoft 365. Để thay đổi, vui lòng truy cập
+          <a href="https://account.microsoft.com/security" target="_blank" rel="noopener"
+             style="color:var(--accent);font-weight:600;text-decoration:underline">account.microsoft.com/security</a>
+          hoặc
+          <a href="https://office365.com" target="_blank" rel="noopener"
+             style="color:var(--accent);font-weight:600;text-decoration:underline">office365.com</a>.
         </div>
-        <div class="form-row">
-          <label class="lbl">Xác nhận mật khẩu</label>
-          <input class="inp" id="acc-pw2" type="password" placeholder="Nhập lại mật khẩu mới"/>
+        <!-- Form thay đổi mật khẩu (ẩn với SAML users) -->
+        <div id="pw-local-form">
+          <div class="form-row">
+            <label class="lbl">Mật khẩu mới</label>
+            <input class="inp" id="acc-pw" type="password" placeholder="Tối thiểu 6 ký tự" autocomplete="new-password"/>
+          </div>
+          <div class="form-row">
+            <label class="lbl">Xác nhận mật khẩu</label>
+            <input class="inp" id="acc-pw2" type="password" placeholder="Nhập lại mật khẩu mới"/>
+          </div>
+          <div class="form-row" id="acc-mfa-row" style="display:none">
+            <label class="lbl">🔐 Mã MFA xác nhận</label>
+            <input class="inp" id="acc-mfa-code" type="text" inputmode="numeric" maxlength="6" placeholder="6 chữ số từ Authenticator" autocomplete="one-time-code"/>
+            <div class="form-help">Nhập mã từ Microsoft/Google Authenticator để xác nhận đổi mật khẩu.</div>
+          </div>
+          <div class="err-msg" id="acc-pw-err"></div>
+          <button class="btn btn-primary" onclick="changeMyPassword()">Lưu mật khẩu</button>
         </div>
-        <div class="form-row" id="acc-mfa-row" style="display:none">
-          <label class="lbl">🔐 Mã MFA xác nhận</label>
-          <input class="inp" id="acc-mfa-code" type="text" inputmode="numeric" maxlength="6" placeholder="6 chữ số từ Authenticator" autocomplete="one-time-code"/>
-          <div class="form-help">Nhập mã từ Microsoft/Google Authenticator để xác nhận đổi mật khẩu.</div>
-        </div>
-        <div class="err-msg" id="acc-pw-err"></div>
-        <button class="btn btn-primary" onclick="changeMyPassword()">Lưu mật khẩu</button>
       </div>
     </div>
 
@@ -699,18 +713,24 @@ select.inp{cursor:pointer}
       <div class="panel-header">
         <div>
           <div class="panel-title">🔐 Xác thực hai bước (MFA)</div>
-          <div class="panel-desc">Bắt buộc — không thể tắt. Chỉ có thể đổi mã (reset secret).</div>
+          <div class="panel-desc" id="mfa-panel-desc">Đang tải...</div>
         </div>
         <div id="mfa-status-badge"><span style="font-size:12px;color:var(--muted)">Đang tải...</span></div>
       </div>
       <div class="panel-body">
-        <div style="background:color-mix(in oklch,var(--warn) 8%,transparent);border:1px solid color-mix(in oklch,var(--warn) 25%,transparent);border-radius:8px;padding:.625rem .875rem;font-size:12px;color:var(--warn);margin-bottom:1rem;display:flex;align-items:center;gap:6px">
+        <!-- Banner bắt buộc — chỉ hiện với local accounts -->
+        <div id="mfa-mandatory-banner" style="background:color-mix(in oklch,var(--warn) 8%,transparent);border:1px solid color-mix(in oklch,var(--warn) 25%,transparent);border-radius:8px;padding:.625rem .875rem;font-size:12px;color:var(--warn);margin-bottom:1rem;display:flex;align-items:center;gap:6px">
           <span>⚠️</span> MFA là <strong>bắt buộc</strong> trên hệ thống này. Tắt MFA không được phép kể cả với Admin.
         </div>
+        <!-- Banner tùy chọn — chỉ hiện với SAML accounts -->
+        <div id="mfa-optional-banner" style="display:none;background:color-mix(in oklch,var(--accent) 8%,transparent);border:1px solid color-mix(in oklch,var(--accent) 25%,transparent);border-radius:8px;padding:.625rem .875rem;font-size:12px;color:var(--accent);margin-bottom:1rem;display:none;align-items:center;gap:6px">
+          <span>ℹ️</span> Tài khoản Microsoft đã có bảo mật riêng. MFA dashboard là <strong>tùy chọn</strong> — có thể bật hoặc tắt.
+        </div>
         <p id="mfa-desc" style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6"></p>
-        <div style="display:flex;gap:8px">
-          <button id="btn-enable-mfa" class="btn btn-primary" onclick="startMfaSetup()" style="display:none">🔐 Thiết lập MFA</button>
-          <button id="btn-reset-mfa"  class="btn btn-outline" onclick="startMfaSetup(true)" style="display:none">🔄 Đổi mã MFA</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="btn-enable-mfa"  class="btn btn-primary" onclick="startMfaSetup()"       style="display:none">🔐 Thiết lập MFA</button>
+          <button id="btn-reset-mfa"   class="btn btn-outline" onclick="startMfaSetup(true)"   style="display:none">🔄 Đổi mã MFA</button>
+          <button id="btn-disable-mfa" class="btn btn-danger"  onclick="openDisableMfaModal()" style="display:none">🔓 Tắt MFA</button>
         </div>
       </div>
     </div>
@@ -755,7 +775,27 @@ select.inp{cursor:pointer}
   </div>
 </div>
 
-<!-- MFA Disable Modal removed — MFA is mandatory and cannot be disabled -->
+<!-- MFA Disable Modal (SAML users only) -->
+<div class="modal-overlay hidden" id="mfa-disable-modal" onclick="if(event.target.id==='mfa-disable-modal')closeModal('mfa-disable-modal')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:400px">
+    <div class="modal-title">🔓 Tắt xác thực hai bước</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6">
+      Tài khoản Microsoft đã được bảo vệ bởi bảo mật của Microsoft.<br>
+      Nhập mã OTP hiện tại để xác nhận tắt MFA dashboard.
+    </p>
+    <div class="form-row">
+      <label class="lbl">Mã OTP hiện tại</label>
+      <input class="inp" id="mfa-disable-code" type="text" inputmode="numeric" maxlength="6"
+             placeholder="000000" autocomplete="one-time-code"
+             style="text-align:center;font-size:22px;font-weight:700;letter-spacing:8px"/>
+    </div>
+    <div class="err-msg" id="mfa-disable-err"></div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal('mfa-disable-modal')">Hủy</button>
+      <button class="btn btn-danger"  onclick="confirmDisableMfa()">🔓 Xác nhận tắt MFA</button>
+    </div>
+  </div>
+</div>
 
 <!-- ══════ MODALS ══════ -->
 
@@ -763,28 +803,71 @@ select.inp{cursor:pointer}
 <div class="modal-overlay hidden" id="user-modal" onclick="if(event.target.id==='user-modal')closeModal('user-modal')">
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-title" id="user-modal-title">Thêm User</div>
-    <div class="form-grid">
-      <div class="form-row">
-        <label class="lbl">Username</label>
-        <input class="inp" id="um-username" placeholder="VD: long.vd hoặc user@movi.vn" autocomplete="off"/>
-        <div class="form-help">3-64 ký tự: a-z 0-9 . @ _ -</div>
+
+    <!-- Loại đăng nhập — luôn hiển thị đầu tiên -->
+    <div class="form-row" style="margin-bottom:4px">
+      <label class="lbl">Loại đăng nhập</label>
+      <select class="inp" id="um-login-type" onchange="onLoginTypeChange(this.value)">
+        <option value="local">🔑 Local (username + mật khẩu)</option>
+        <option value="azure">☁ Azure (Microsoft SSO)</option>
+      </select>
+    </div>
+
+    <div style="height:1px;background:var(--border);margin:10px 0 12px"></div>
+
+    <!-- ── BLOCK LOCAL ── -->
+    <div id="um-block-local">
+      <div class="form-grid">
+        <div class="form-row">
+          <label class="lbl">Username</label>
+          <input class="inp" id="um-username" placeholder="VD: long.vd" autocomplete="off"/>
+          <div class="form-help">3-64 ký tự: a-z 0-9 . @ _ -</div>
+        </div>
+        <div class="form-row">
+          <label class="lbl">Role</label>
+          <select class="inp" id="um-role">
+            <option value="user">user</option>
+            <option value="admin">admin</option>
+          </select>
+        </div>
       </div>
       <div class="form-row">
-        <label class="lbl">Role</label>
-        <select class="inp" id="um-role">
-          <option value="user">user</option>
-          <option value="admin">admin</option>
-        </select>
+        <label class="lbl" id="um-pw-label">Mật khẩu</label>
+        <input class="inp" id="um-password" type="password" placeholder="Tối thiểu 6 ký tự" autocomplete="new-password"/>
+      </div>
+      <div class="form-row" id="um-groups-row">
+        <label class="lbl">Policy Groups</label>
+        <div id="um-groups-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
+          <span style="font-size:12px;color:var(--muted)">Đang tải groups...</span>
+        </div>
       </div>
     </div>
-    <div class="form-row">
-      <label class="lbl" id="um-pw-label">Mật khẩu</label>
-      <input class="inp" id="um-password" type="password" placeholder="Tối thiểu 6 ký tự" autocomplete="new-password"/>
-    </div>
-    <div class="form-row" id="um-groups-row">
-      <label class="lbl">Policy Groups</label>
-      <div id="um-groups-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
-        <span style="font-size:12px;color:var(--muted)">Đang tải groups...</span>
+
+    <!-- ── BLOCK AZURE ── -->
+    <div id="um-block-azure" style="display:none">
+      <div class="form-grid">
+        <div class="form-row">
+          <label class="lbl" style="display:flex;align-items:center;gap:5px">
+            <span class="chip-azure" style="font-size:10px">☁</span> Email Microsoft
+          </label>
+          <input class="inp" id="um-ms-email" type="email" placeholder="vd: ngoc.plm@movi.vn" autocomplete="off"/>
+          <div class="form-help" id="um-ms-help">Email Azure AD — username tự tạo từ email này</div>
+        </div>
+        <div class="form-row">
+          <label class="lbl">Role</label>
+          <select class="inp" id="um-role-az">
+            <option value="user">user</option>
+            <option value="admin">admin</option>
+          </select>
+        </div>
+      </div>
+      <!-- username ẩn khi edit Azure (vẫn cần cho edit mode) -->
+      <input type="hidden" id="um-username-az"/>
+      <div class="form-row" id="um-groups-row-az">
+        <label class="lbl">Policy Groups</label>
+        <div id="um-groups-list-az" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
+          <span style="font-size:12px;color:var(--muted)">Đang tải groups...</span>
+        </div>
       </div>
     </div>
 
@@ -820,6 +903,9 @@ select.inp{cursor:pointer}
         <div class="form-help">Ngoài khung giờ này, user sẽ bị từ chối đăng nhập.</div>
       </div>
     </div>
+
+    <!-- Azure info (read-only, hidden — không dùng nữa) -->
+    <div id="um-azure-section" style="display:none"></div>
 
     <div class="err-msg" id="user-modal-err"></div>
     <div class="modal-btns">
@@ -1187,6 +1273,13 @@ function renderUsers() {
       : (u.loginAttempts > 0 ? '<span style="margin-left:6px;font-size:10px;color:var(--warn)">⚠ '+u.loginAttempts+' lần sai</span>' : '');
     // Admin account: cannot be edited or deleted — show lock badge instead of action buttons
     var isRootAdmin = (u.username === 'admin');
+    var isMicrosoft = !!(u.microsoftEmail);
+    var azureBadge = isMicrosoft
+      ? '<span class="chip-azure" style="margin-left:6px" title="Đăng nhập qua Microsoft Azure: '+esc(u.microsoftEmail||'')+'">☁ Azure</span>'
+      : '';
+    var emailSub = isMicrosoft
+      ? '<div style="font-size:11px;color:#60a5fa;margin-top:2px;opacity:.85">'+esc(u.microsoftEmail)+'</div>'
+      : '';
     var unlockBtn = (!isRootAdmin && u.locked)
       ? '<button class="btn btn-outline btn-sm" onclick="unlockUser(\''+esc(u.username)+'\')" style="color:var(--ok);border-color:color-mix(in oklch,var(--ok) 30%,transparent)">🔓 Mở khóa</button>'
       : '';
@@ -1200,7 +1293,7 @@ function renderUsers() {
         +'</div></td>';
     return '<tr>'
       +'<td><div class="user-avatar" style="width:32px;height:32px;font-size:13px;display:grid;place-items:center">'+esc((u.username||'?').charAt(0).toUpperCase())+'</div></td>'
-      +'<td><span style="font-weight:600">'+esc(u.username)+'</span>'+(isRootAdmin?'<span class="chip chip-accent" style="margin-left:6px;font-size:10px">Super Admin</span>':'')+lockedBadge+'</td>'
+      +'<td><div><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span style="font-weight:600">'+esc(u.username)+'</span>'+(isRootAdmin?'<span class="chip chip-accent" style="font-size:10px">Super Admin</span>':'')+azureBadge+lockedBadge+'</div>'+emailSub+'</div></td>'
       +'<td>'+roleChip+'</td>'
       +'<td><div style="display:flex;flex-wrap:wrap;gap:4px">'+(allGroupChips||'<span style="color:var(--muted);font-size:12px">—</span>')+'</div></td>'
       +actionCell
@@ -1220,29 +1313,33 @@ function unlockUser(username) {
     .catch(function(e){ toast('Lỗi: '+e.message, 'err'); });
 }
 
+function onLoginTypeChange(val) {
+  var isAzure = (val === 'azure');
+  document.getElementById('um-block-local').style.display = isAzure ? 'none' : '';
+  document.getElementById('um-block-azure').style.display = isAzure ? '' : 'none';
+}
+
 function openAddUser() {
   editingUsername = null;
   document.getElementById('user-modal-title').textContent = '+ Thêm User Mới';
   document.getElementById('user-modal-save').textContent = 'Tạo user';
-  var ltSection = document.getElementById('um-login-time-section');
-  if (ltSection) ltSection.style.display = 'none';
+  document.getElementById('um-login-time-section').style.display = 'none';
+  // Reset local block
   document.getElementById('um-username').value = '';
   document.getElementById('um-username').disabled = false;
   document.getElementById('um-password').value = '';
   document.getElementById('um-pw-label').textContent = 'Mật khẩu';
   document.getElementById('um-role').value = 'user';
+  // Reset azure block
+  document.getElementById('um-ms-email').value = '';
+  document.getElementById('um-username-az').value = '';
+  document.getElementById('um-role-az').value = 'user';
+  // Default: local
+  document.getElementById('um-login-type').value = 'local';
+  onLoginTypeChange('local');
   document.getElementById('user-modal-err').classList.remove('show');
-  // Delegate mode: hide role selector only; groups are allowed
-  var roleRow = document.getElementById('um-role').closest('.form-row');
-  var groupsRow = document.getElementById('um-groups-row');
-  if (_delegateMode) {
-    if (roleRow) roleRow.style.display = 'none';
-    if (groupsRow) groupsRow.style.display = '';
-  } else {
-    if (roleRow) roleRow.style.display = '';
-    if (groupsRow) groupsRow.style.display = '';
-  }
   renderGroupCheckboxes('um-groups-list', []);
+  renderGroupCheckboxes('um-groups-list-az', []);
   openModal('user-modal');
   document.getElementById('um-username').focus();
 }
@@ -1253,13 +1350,39 @@ function openEditUser(username) {
   editingUsername = username;
   document.getElementById('user-modal-title').textContent = '✏ Sửa User: ' + username;
   document.getElementById('user-modal-save').textContent = 'Lưu thay đổi';
-  document.getElementById('um-username').value = username;
-  document.getElementById('um-username').disabled = true;
-  document.getElementById('um-password').value = '';
-  document.getElementById('um-pw-label').textContent = 'Đổi mật khẩu (để trống nếu không đổi)';
-  document.getElementById('um-role').value = u.role || 'user';
   document.getElementById('user-modal-err').classList.remove('show');
-  renderGroupCheckboxes('um-groups-list', u.groups||[]);
+
+  var loginType = u.microsoftEmail ? 'azure' : 'local';
+  document.getElementById('um-login-type').value = loginType;
+  onLoginTypeChange(loginType);
+
+  if (loginType === 'azure') {
+    // Azure block
+    document.getElementById('um-ms-email').value = u.microsoftEmail || '';
+    document.getElementById('um-username-az').value = username;
+    document.getElementById('um-role-az').value = u.role || 'user';
+    renderGroupCheckboxes('um-groups-list-az', u.groups||[]);
+    // Local block (reset, không dùng)
+    document.getElementById('um-username').value = username;
+    document.getElementById('um-username').disabled = true;
+    document.getElementById('um-password').value = '';
+    document.getElementById('um-role').value = u.role || 'user';
+    renderGroupCheckboxes('um-groups-list', u.groups||[]);
+  } else {
+    // Local block
+    document.getElementById('um-username').value = username;
+    document.getElementById('um-username').disabled = true;
+    document.getElementById('um-password').value = '';
+    document.getElementById('um-pw-label').textContent = 'Đổi mật khẩu (để trống nếu không đổi)';
+    document.getElementById('um-role').value = u.role || 'user';
+    renderGroupCheckboxes('um-groups-list', u.groups||[]);
+    // Azure block (reset)
+    document.getElementById('um-ms-email').value = '';
+    document.getElementById('um-username-az').value = username;
+    document.getElementById('um-role-az').value = u.role || 'user';
+    renderGroupCheckboxes('um-groups-list-az', u.groups||[]);
+  }
+
   // ── Login time restriction (edit mode only) ──
   var ltSection = document.getElementById('um-login-time-section');
   if (ltSection) {
@@ -1303,21 +1426,38 @@ function renderGroupCheckboxes(containerId, selectedGroups) {
 function saveUser() {
   var errEl = document.getElementById('user-modal-err');
   errEl.classList.remove('show');
-  var username = document.getElementById('um-username').value.trim();
-  var password = document.getElementById('um-password').value;
-  var role = document.getElementById('um-role').value;
-  var groups = Array.from(document.querySelectorAll('.um-group-cb:checked')).map(function(cb){return cb.value;});
+  var loginType = document.getElementById('um-login-type').value;
+  var isAzure = (loginType === 'azure');
 
-  if (!editingUsername && !username) { errEl.textContent='Username không được để trống'; errEl.classList.add('show'); return; }
-  if (!editingUsername && !password) { errEl.textContent='Mật khẩu không được để trống khi tạo mới'; errEl.classList.add('show'); return; }
+  // Đọc dữ liệu từ đúng block đang hiển thị
+  var username, password, role, groups, msEmail;
+  if (isAzure) {
+    msEmail  = (document.getElementById('um-ms-email').value || '').trim().toLowerCase();
+    role     = document.getElementById('um-role-az').value;
+    groups   = Array.from(document.getElementById('um-groups-list-az').querySelectorAll('.um-group-cb:checked')).map(function(cb){return cb.value;});
+    // username: khi edit dùng hidden field; khi tạo mới tự derive từ email
+    username = editingUsername || document.getElementById('um-username-az').value.trim() ||
+               msEmail.split('@')[0].toLowerCase().replace(/[^a-z0-9_\-]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'') || 'azuser';
+    password = '';
+  } else {
+    username = editingUsername || document.getElementById('um-username').value.trim();
+    password = document.getElementById('um-password').value;
+    role     = document.getElementById('um-role').value;
+    groups   = Array.from(document.getElementById('um-groups-list').querySelectorAll('.um-group-cb:checked')).map(function(cb){return cb.value;});
+    msEmail  = '';
+  }
+
+  if (!editingUsername && !isAzure && !username) { errEl.textContent='Username không được để trống'; errEl.classList.add('show'); return; }
+  if (!editingUsername && !isAzure && !password)  { errEl.textContent='Mật khẩu không được để trống'; errEl.classList.add('show'); return; }
+  if (!editingUsername && isAzure  && !msEmail)   { errEl.textContent='Email Microsoft không được để trống'; errEl.classList.add('show'); return; }
 
   var btn = document.getElementById('user-modal-save');
   btn.disabled = true; btn.textContent = 'Đang lưu...';
 
   if (editingUsername) {
-    // Update: change password (if given) + groups + role + login time
+    // Update: change password (nếu local & có nhập) + groups + role + microsoft email + login time
     var tasks = [];
-    if (password) {
+    if (!isAzure && password) {
       tasks.push(fetch('/api/admin/users/'+encodeURIComponent(editingUsername),{
         method:'PUT',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({password:password})
@@ -1327,7 +1467,16 @@ function saveUser() {
       method:'PUT',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({groups:groups, role:role})
     }).then(function(r){return r.json();}));
-    // Save login time restriction (per-user)
+    // Save Microsoft email (link hoặc unlink)
+    var currentMsEmail = (allUsers.find(function(u){return u.username===editingUsername;})||{}).microsoftEmail||'';
+    var newMsEmail = isAzure ? msEmail : '';
+    if (newMsEmail !== (currentMsEmail||'').toLowerCase()) {
+      tasks.push(fetch('/api/admin/users/'+encodeURIComponent(editingUsername)+'/microsoft-email',{
+        method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({microsoftEmail: newMsEmail || null})
+      }).then(function(r){return r.json();}));
+    }
+    // Save login time restriction
     var ltCb = document.getElementById('um-login-time-enabled');
     if (ltCb) {
       tasks.push(fetch('/api/admin/users/'+encodeURIComponent(editingUsername)+'/login-time',{
@@ -1353,15 +1502,28 @@ function saveUser() {
       errEl.textContent='Lỗi: '+e.message; errEl.classList.add('show');
     });
   } else {
-    // In delegate mode: don't send role (server enforces role='user'), but groups are allowed
-    var createBody = {username: username, password: password, groups: groups};
+    // Tạo user mới
+    var createBody = {username: username, password: password || crypto.randomUUID(), groups: groups};
     if (!_delegateMode) { createBody.role = role; }
     fetch('/api/admin/users',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify(createBody)
     }).then(function(r){return r.json();}).then(function(d){
+      if(d.error){btn.disabled=false;btn.textContent='Tạo user';errEl.textContent=d.error;errEl.classList.add('show');return;}
+      // Nếu Azure → link email ngay sau khi tạo
+      if (isAzure && msEmail) {
+        return fetch('/api/admin/users/'+encodeURIComponent(username)+'/microsoft-email',{
+          method:'PUT',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({microsoftEmail: msEmail})
+        }).then(function(r){return r.json();}).then(function(d2){
+          btn.disabled=false; btn.textContent='Tạo user';
+          if(d2.error){closeModal('user-modal');toast('✓ Tạo user '+username+' (cảnh báo: '+d2.error+')','warn');loadUsers();return;}
+          closeModal('user-modal');
+          toast('✓ Đã tạo user '+username+' và liên kết Azure email','ok');
+          loadUsers();
+        });
+      }
       btn.disabled=false; btn.textContent='Tạo user';
-      if(d.error){errEl.textContent=d.error;errEl.classList.add('show');return;}
       closeModal('user-modal');
       toast('✓ Đã tạo user '+username,'ok');
       loadUsers();
@@ -2428,6 +2590,25 @@ function changeMyPassword() {
   }).catch(function(e){ errEl.textContent='Lỗi: '+e.message; errEl.classList.add('show'); });
 }
 
+/* ── Account Tab init — ẩn/hiện đổi mật khẩu theo loại tài khoản ── */
+function initAccountTab() {
+  var isSaml = !!(window.__USER__ && window.__USER__.isSaml);
+  var notice    = document.getElementById('pw-saml-notice');
+  var localForm = document.getElementById('pw-local-form');
+  var panelDesc = document.getElementById('pw-panel-desc');
+  if (isSaml) {
+    // SAML: ẩn form, hiện notice
+    if (notice)    notice.style.display    = 'block';
+    if (localForm) localForm.style.display = 'none';
+    if (panelDesc) panelDesc.textContent   = 'Quản lý bởi Microsoft 365';
+  } else {
+    // Local: ẩn notice, hiện form
+    if (notice)    notice.style.display    = 'none';
+    if (localForm) localForm.style.display = '';
+    if (panelDesc) panelDesc.textContent   = 'Cập nhật mật khẩu đăng nhập của bạn';
+  }
+}
+
 /* ── MFA Management ── */
 var _mfaSecret = null;
 var _mfaIsReset = false; // true = đổi mã, false = thiết lập lần đầu
@@ -2437,26 +2618,89 @@ function loadMfaStatus() {
   fetch('/api/auth/mfa/status')
     .then(function(r){ return r.json(); })
     .then(function(d) {
-      var on = d.enabled;
+      var on     = d.enabled;
       _mfaEnabled = !!on;
+      var isSaml = !!(window.__USER__ && window.__USER__.isSaml);
+
+      // ── Panel description & info banner ──
+      var panelDesc      = document.getElementById('mfa-panel-desc');
+      var mandatoryBanner = document.getElementById('mfa-mandatory-banner');
+      var optionalBanner  = document.getElementById('mfa-optional-banner');
+      if (isSaml) {
+        if (panelDesc)       panelDesc.textContent     = 'Tùy chọn — có thể bật hoặc tắt.';
+        if (mandatoryBanner) mandatoryBanner.style.display = 'none';
+        if (optionalBanner)  { optionalBanner.style.display = 'flex'; }
+      } else {
+        if (panelDesc)       panelDesc.textContent     = 'Bắt buộc — không thể tắt. Chỉ có thể đổi mã (reset secret).';
+        if (mandatoryBanner) mandatoryBanner.style.display = '';
+        if (optionalBanner)  optionalBanner.style.display  = 'none';
+      }
+
+      // ── Status badge ──
       var badge = document.getElementById('mfa-status-badge');
-      if (!badge) return;
-      badge.innerHTML = on
+      if (badge) badge.innerHTML = on
         ? '<span class="chip chip-ok" style="font-size:12px;padding:3px 12px">✓ Đang bật</span>'
         : '<span class="chip chip-err" style="font-size:12px;padding:3px 12px">✗ Chưa thiết lập</span>';
+
+      // ── Description text ──
       var desc = document.getElementById('mfa-desc');
       if (desc) desc.textContent = on
-        ? 'Tài khoản đang được bảo vệ bởi xác thực hai bước (Microsoft/Google Authenticator). Để thay đổi thiết bị Authenticator, nhấn "Đổi mã MFA".'
-        : '⚠️ Tài khoản chưa thiết lập MFA. Vui lòng thiết lập ngay.';
+        ? 'Tài khoản đang được bảo vệ bởi xác thực hai bước. Để thay đổi thiết bị Authenticator, nhấn "Đổi mã MFA".'
+        : isSaml
+          ? 'Tài khoản chưa thiết lập MFA dashboard. Tài khoản Microsoft của bạn đã có bảo mật riêng — thêm MFA dashboard cho lớp bảo vệ thứ hai.'
+          : '⚠️ Tài khoản chưa thiết lập MFA. Vui lòng thiết lập ngay.';
+
+      // ── Buttons ──
       var btnEn  = document.getElementById('btn-enable-mfa');
       var btnRst = document.getElementById('btn-reset-mfa');
+      var btnDis = document.getElementById('btn-disable-mfa');
       if (btnEn)  btnEn.style.display  = on ? 'none' : '';
       if (btnRst) btnRst.style.display = on ? ''     : 'none';
-      // Show MFA confirmation field in change-password form when MFA is enabled
+      // "Tắt MFA" chỉ hiện với SAML users khi MFA đang bật
+      if (btnDis) btnDis.style.display = (on && isSaml) ? '' : 'none';
+
+      // ── Show MFA confirm field in change-password form ──
       var mfaRow = document.getElementById('acc-mfa-row');
       if (mfaRow) mfaRow.style.display = on ? '' : 'none';
     })
     .catch(function(){});
+}
+
+function openDisableMfaModal() {
+  var inp = document.getElementById('mfa-disable-code');
+  var err = document.getElementById('mfa-disable-err');
+  if (inp) inp.value = '';
+  if (err) { err.textContent = ''; err.classList.remove('show'); }
+  openModal('mfa-disable-modal');
+  if (inp) setTimeout(function(){ inp.focus(); }, 150);
+}
+
+function confirmDisableMfa() {
+  var code = (document.getElementById('mfa-disable-code').value || '').replace(/\D/g,'');
+  var err  = document.getElementById('mfa-disable-err');
+  err.classList.remove('show');
+  if (!/^\d{6}$/.test(code)) {
+    err.textContent = 'Mã OTP phải có đúng 6 chữ số';
+    err.classList.add('show');
+    return;
+  }
+  fetch('/api/auth/mfa/disable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: code })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d) {
+    if (d.success) {
+      closeModal('mfa-disable-modal');
+      toast('✓ MFA đã được tắt.', 'ok');
+      loadMfaStatus();
+    } else {
+      err.textContent = d.error || 'Không thể tắt MFA';
+      err.classList.add('show');
+    }
+  })
+  .catch(function(){ err.textContent = 'Lỗi kết nối'; err.classList.add('show'); });
 }
 
 function startMfaSetup(isReset) {
@@ -2784,11 +3028,19 @@ window.addEventListener('DOMContentLoaded', function(){
     loadMfaStatus();
     loadAuditLog();
   }
+  // Điều chỉnh panel "Đổi mật khẩu" theo loại tài khoản
+  initAccountTab();
   // Auto-filter numeric input — MFA setup code
   var _mfaSetupEl = document.getElementById('mfa-setup-code');
   if (_mfaSetupEl) {
     _mfaSetupEl.addEventListener('input', function(){ this.value = this.value.replace(/\D/g,''); });
     _mfaSetupEl.addEventListener('keydown', function(e){ if (e.key==='Enter') confirmEnableMfa(); });
+  }
+  // Auto-filter numeric input — MFA disable code
+  var _mfaDisEl = document.getElementById('mfa-disable-code');
+  if (_mfaDisEl) {
+    _mfaDisEl.addEventListener('input', function(){ this.value = this.value.replace(/\D/g,''); });
+    _mfaDisEl.addEventListener('keydown', function(e){ if (e.key==='Enter') confirmDisableMfa(); });
   }
   // Auto-filter numeric input — MFA confirm field in change-password form
   var _accMfaEl = document.getElementById('acc-mfa-code');
