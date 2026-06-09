@@ -1140,12 +1140,52 @@ function loadBlockedClients() {
   if (!__USER__.isAdmin) return;
   document.getElementById('activity-section').style.display = '';
   var ACTION_MAP = {
-    login_success: { label:'Login',          tone:'ok'   },
-    login_fail:    { label:'Login failed',   tone:'bad'  },
-    login_mfa:     { label:'MFA required',   tone:'mute' },
-    mfa_success:   { label:'MFA OK',         tone:'ok'   },
-    mfa_fail:      { label:'MFA failed',     tone:'bad'  },
-    logout:        { label:'Logout',         tone:'mute' },
+    login_success:                  { label:'Login',        tone:'ok'   },
+    login_fail:                     { label:'Login fail',   tone:'bad'  },
+    login_mfa:                      { label:'MFA step',     tone:'mute' },
+    login_microsoft:                { label:'MS Login',     tone:'ok'   },
+    login_microsoft_mfa_required:   { label:'MS MFA',       tone:'mute' },
+    login_microsoft_rejected:       { label:'MS Rejected',  tone:'bad'  },
+    login_blocked:                  { label:'Blocked',      tone:'bad'  },
+    login_blocked_ip:               { label:'IP Blocked',   tone:'bad'  },
+    login_blocked_locked:           { label:'Locked',       tone:'bad'  },
+    login_blocked_time:             { label:'Time Block',   tone:'bad'  },
+    login_blocked_turnstile:        { label:'Bot Block',    tone:'bad'  },
+    login_setup_required:           { label:'Setup req',    tone:'warn' },
+    logout:                         { label:'Logout',       tone:'mute' },
+    mfa_success:                    { label:'MFA OK',       tone:'ok'   },
+    mfa_fail:                       { label:'MFA fail',     tone:'bad'  },
+    mfa_blocked:                    { label:'MFA blocked',  tone:'bad'  },
+    mfa_disabled:                   { label:'MFA off',      tone:'warn' },
+    setup_mfa_complete:             { label:'MFA setup',    tone:'ok'   },
+    setup_mfa_blocked:              { label:'MFA blk',      tone:'bad'  },
+    setup_password_changed:         { label:'Pw changed',   tone:'ok'   },
+    'password-change':              { label:'Pw change',    tone:'ok'   },
+    link_microsoft_email:           { label:'MS linked',    tone:'ok'   },
+    account_locked:                 { label:'Acc locked',   tone:'bad'  },
+    'user-delete':                  { label:'User del',     tone:'bad'  },
+    'user-unlock':                  { label:'Unlocked',     tone:'ok'   },
+    'user-update-login-time':       { label:'Login time',   tone:'mute' },
+    'role-change':                  { label:'Role change',  tone:'warn' },
+    'group-update':                 { label:'Group upd',    tone:'mute' },
+    'user-group-create':            { label:'Group new',    tone:'ok'   },
+    'user-group-delete':            { label:'Group del',    tone:'bad'  },
+    'user-group-update':            { label:'Group upd',    tone:'mute' },
+    'system-config-update':         { label:'Config upd',   tone:'warn' },
+    'force-logout-all':             { label:'Force logout', tone:'bad'  },
+    'audit-purge':                  { label:'Audit purge',  tone:'warn' },
+    'camera_alias_save':            { label:'Cam alias',    tone:'mute' },
+    'meraki-client-policy':         { label:'Meraki pol',   tone:'mute' },
+    'ssh-movi-token-issued':        { label:'SSH token',    tone:'ok'   },
+    'ssh-movi-token-verified':      { label:'SSH verify',   tone:'ok'   },
+    'tool-movi-block-user':         { label:'Block user',   tone:'bad'  },
+    'tool-movi-delete-user':        { label:'Delete user',  tone:'bad'  },
+    'delegate-create-user':         { label:'Del create',   tone:'ok'   },
+    'delegate-update-perm':         { label:'Del perm',     tone:'mute' },
+    'delegate-create-policygroup':  { label:'Del grp',      tone:'ok'   },
+    'delegate-update-policygroup':  { label:'Del grp upd',  tone:'mute' },
+    'delegate-set-manage-perms':    { label:'Del mgr',      tone:'mute' },
+    turnstile_error:                { label:'Turnstile err',tone:'bad'  },
   };
   fetch('/api/activity')
     .then(function(r){ return r.ok ? r.json() : null; })
@@ -1157,9 +1197,11 @@ function loadBlockedClients() {
         return;
       }
       list.innerHTML = log.slice(0, 12).map(function(e){
-        var a = ACTION_MAP[e.action] || { label: e.action, tone:'mute' };
+        var raw = (e.action || '').replace(/_/g,' ');
+        var fallback = raw.length > 12 ? raw.slice(0,11)+'…' : raw;
+        var a = ACTION_MAP[e.action] || { label: fallback, tone:'mute' };
         return '<li class="act-row">'
-          + '<span class="tag-pill ' + a.tone + '">' + esc(a.label) + '</span>'
+          + '<span class="tag-pill ' + a.tone + '" title="'+esc(e.action)+'">'+esc(a.label)+'</span>'
           + '<span class="act-user">' + esc(e.username) + '</span>'
           + '<span class="act-ip mono">' + esc(e.ip) + '</span>'
           + '<span class="act-time">' + timeAgo(e.ts) + ' trước</span>'

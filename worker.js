@@ -70,6 +70,9 @@ return `<script>(function(){
 })();<\/script>`;
 }
 
+/* ── Strip BOM + trim any env/config string value ── */
+function cleanEnv(v) { return (v || '').replace(/^﻿/, '').trim(); }
+
 /* ── IP CIDR whitelist matching ── */
 function _ipToInt(ip) {
   const parts = (ip || '').split('.');
@@ -97,14 +100,14 @@ async function notifyEmail(env, event, data) {
   try {
     const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
     if (!cfg.emailEnabled) return;
-    const wh = (cfg.emailWebhook || '').replace(/^﻿/, '').trim();
+    const wh = cleanEnv(cfg.emailWebhook);
     if (!wh) return;
     const evts = cfg.emailEvents || {};
     if (!evts[event]) return;
     await fetch(wh, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event, ...data, timestamp: new Date().toISOString(), emailTo: (cfg.emailAdminAddress || '').replace(/^﻿/, '').trim() }),
+      body: JSON.stringify({ event, ...data, timestamp: new Date().toISOString(), emailTo: cleanEnv(cfg.emailAdminAddress) }),
       signal: AbortSignal.timeout(8000),
     });
   } catch (_) { /* never block main flow */ }
@@ -465,31 +468,27 @@ async function handleListUsers(request, env) {
   const list = await env.DASHBOARD_KV.get('userlist', 'json') || ['admin'];
 
   if (await isAdminUser(env, session)) {
-    // Full admin list
-    const users = [];
-    for (const u of list) {
-      const d = await env.DASHBOARD_KV.get(`user:${u}`, 'json');
-      if (d) users.push({
-        username:      u,
-        role:          d.role,
-        permissions:   d.permissions || {},
-        panels:        d.panels || {},
-        cameras:       d.cameras || [],
-        groups:        d.groups || [],
-        userGroups:    d.userGroups || [],
-        canManagePerms: d.canManagePerms || [],
-        locked:           !!d.locked,
-        loginAttempts:    d.loginAttempts || 0,
-        lockedAt:         d.lockedAt || null,
-        pwChangedAt:      d.pwChangedAt || null,
-        loginTimeEnabled: !!d.loginTimeEnabled,
-        loginTimeStart:   d.loginTimeStart || '06:00',
-        loginTimeEnd:     d.loginTimeEnd   || '23:00',
-        loginTimeZone:    d.loginTimeZone  || 'Asia/Ho_Chi_Minh',
-        microsoftEmail:   d.microsoftEmail || null,
-        mfaEnabled:       !!d.mfaEnabled,
-      });
-    }
+    const data = await Promise.all(list.map(u => env.DASHBOARD_KV.get(`user:${u}`, 'json')));
+    const users = data.map((d, i) => !d ? null : ({
+      username:         list[i],
+      role:             d.role,
+      permissions:      d.permissions || {},
+      panels:           d.panels || {},
+      cameras:          d.cameras || [],
+      groups:           d.groups || [],
+      userGroups:       d.userGroups || [],
+      canManagePerms:   d.canManagePerms || [],
+      locked:           !!d.locked,
+      loginAttempts:    d.loginAttempts || 0,
+      lockedAt:         d.lockedAt || null,
+      pwChangedAt:      d.pwChangedAt || null,
+      loginTimeEnabled: !!d.loginTimeEnabled,
+      loginTimeStart:   d.loginTimeStart || '06:00',
+      loginTimeEnd:     d.loginTimeEnd   || '23:00',
+      loginTimeZone:    d.loginTimeZone  || 'Asia/Ho_Chi_Minh',
+      microsoftEmail:   d.microsoftEmail || null,
+      mfaEnabled:       !!d.mfaEnabled,
+    })).filter(Boolean);
     return json({ users });
   }
 
@@ -800,23 +799,26 @@ async function computeEffectivePermissions(env, username) {
   // Track processed policy groups to avoid double-applying
   const processed = new Set();
 
-  // 1. Direct policy group assignments (user.groups)
-  for (const gid of eff.groups) {
-    if (processed.has(gid)) continue;
-    processed.add(gid);
-    const g = await env.DASHBOARD_KV.get(`policy_group:${gid}`, 'json');
-    _mergePolicyGroup(g, eff);
+  // 1. Direct policy group assignments — fetch all in parallel
+  const directGids = eff.groups.filter(gid => { processed.add(gid); return true; });
+  if (directGids.length > 0) {
+    const groups = await Promise.all(directGids.map(gid => env.DASHBOARD_KV.get(`policy_group:${gid}`, 'json')));
+    groups.forEach(g => _mergePolicyGroup(g, eff));
   }
 
-  // 2. User Groups → assigned Role Management Groups
-  for (const ugid of eff.userGroups) {
-    const ug = await env.DASHBOARD_KV.get(`user_group:${ugid}`, 'json');
-    if (!ug) continue;
-    for (const pgid of (ug.roleGroups || [])) {
-      if (processed.has(pgid)) continue;
-      processed.add(pgid);
-      const g = await env.DASHBOARD_KV.get(`policy_group:${pgid}`, 'json');
-      _mergePolicyGroup(g, eff);
+  // 2. User Groups → Role Management Groups — fetch user_groups in parallel, then policy_groups in parallel
+  if (eff.userGroups.length > 0) {
+    const userGroups = await Promise.all(eff.userGroups.map(ugid => env.DASHBOARD_KV.get(`user_group:${ugid}`, 'json')));
+    const pgIds = [];
+    for (const ug of userGroups) {
+      if (!ug) continue;
+      for (const pgid of (ug.roleGroups || [])) {
+        if (!processed.has(pgid)) { processed.add(pgid); pgIds.push(pgid); }
+      }
+    }
+    if (pgIds.length > 0) {
+      const policyGroups = await Promise.all(pgIds.map(pgid => env.DASHBOARD_KV.get(`policy_group:${pgid}`, 'json')));
+      policyGroups.forEach(g => _mergePolicyGroup(g, eff));
     }
   }
 
@@ -982,12 +984,13 @@ async function handleDeleteGroup(request, env, groupId) {
   const ids = (await env.DASHBOARD_KV.get('policy_groups', 'json') || []).filter(id => id !== groupId);
   await env.DASHBOARD_KV.put('policy_groups', JSON.stringify(ids));
   const userlist = await env.DASHBOARD_KV.get('userlist', 'json') || [];
-  for (const u of userlist) {
-    const user = await env.DASHBOARD_KV.get(`user:${u}`, 'json');
-    if (user && user.groups && user.groups.includes(groupId)) {
+  if (userlist.length > 0) {
+    const allUsers = await Promise.all(userlist.map(u => env.DASHBOARD_KV.get(`user:${u}`, 'json')));
+    await Promise.all(allUsers.map((user, i) => {
+      if (!user || !user.groups || !user.groups.includes(groupId)) return Promise.resolve();
       user.groups = user.groups.filter(g => g !== groupId);
-      await env.DASHBOARD_KV.put(`user:${u}`, JSON.stringify(user));
-    }
+      return env.DASHBOARD_KV.put(`user:${userlist[i]}`, JSON.stringify(user));
+    }));
   }
   return json({ success: true });
 }
@@ -1436,8 +1439,8 @@ async function handleMfaVerify(request, env) {
 /* ── Microsoft OIDC SSO ── */
 
 async function handleMicrosoftAuth(request, env) {
-  const clientId = (env.SAML_AZURE_CLIENT_ID  || '').replace(/^﻿/, '').trim();
-  const tenantId = (env.SAML_AZURE_TENANT_ID  || '').replace(/^﻿/, '').trim();
+  const clientId = cleanEnv(env.SAML_AZURE_CLIENT_ID);
+  const tenantId = cleanEnv(env.SAML_AZURE_TENANT_ID);
   const origin   = new URL(request.url).origin;
   if (!clientId || !tenantId) return Response.redirect(`${origin}/login.html?sso_error=` + encodeURIComponent('Microsoft SSO chưa được cấu hình'), 302);
 
@@ -1464,9 +1467,9 @@ async function handleMicrosoftCallback(request, env) {
   const msError   = url.searchParams.get('error');
   const msErrDesc = url.searchParams.get('error_description');
 
-  const clientId     = (env.SAML_AZURE_CLIENT_ID     || '').replace(/^﻿/, '').trim();
-  const tenantId     = (env.SAML_AZURE_TENANT_ID     || '').replace(/^﻿/, '').trim();
-  const clientSecret = (env.SAML_AZURE_CLIENT_SECRET || '').replace(/^﻿/, '').trim();
+  const clientId     = cleanEnv(env.SAML_AZURE_CLIENT_ID);
+  const tenantId     = cleanEnv(env.SAML_AZURE_TENANT_ID);
+  const clientSecret = cleanEnv(env.SAML_AZURE_CLIENT_SECRET);
 
   const _origin = new URL(request.url).origin;
   const fail = (msg) => Response.redirect(`${_origin}/login.html?sso_error=` + encodeURIComponent(msg), 302);
@@ -1527,7 +1530,7 @@ async function handleMicrosoftCallback(request, env) {
   const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
 
   // Kiểm tra domain được phép (nếu có cấu hình SAML_AZURE_ALLOWED_DOMAIN)
-  const allowedDomain = (env.SAML_AZURE_ALLOWED_DOMAIN || '').replace(/^﻿/, '').trim().toLowerCase();
+  const allowedDomain = cleanEnv(env.SAML_AZURE_ALLOWED_DOMAIN).toLowerCase();
   if (allowedDomain) {
     const emailDomain = msEmail.split('@')[1] || '';
     if (emailDomain !== allowedDomain)
@@ -2437,8 +2440,8 @@ const NINEROUTER_BASE = 'https://9router.home-server.id.vn';
    Set via:  wrangler secret put MOVI_N8N_USER  /  MOVI_N8N_PASS
    Never hardcode credentials in source. */
 function moviN8nAuth(env) {
-  const u = (env.MOVI_N8N_USER || '').replace(/^﻿/, '').trim();
-  const p = (env.MOVI_N8N_PASS || '').replace(/^﻿/, '').trim();
+  const u = cleanEnv(env.MOVI_N8N_USER);
+  const p = cleanEnv(env.MOVI_N8N_PASS);
   if (!u || !p) throw new Error('MOVI_N8N_USER / MOVI_N8N_PASS not configured');
   return 'Basic ' + btoa(unescape(encodeURIComponent(u + ':' + p)));
 }
@@ -2466,7 +2469,7 @@ async function handleStatus() {
 }
 
 async function handleN8n(env) {
-  const key = (env.N8N_API_KEY || '').replace(/^﻿/, '').trim();
+  const key = cleanEnv(env.N8N_API_KEY);
   if (!key) return json({ error: 'N8N_API_KEY not configured' }, 500);
 
   const h = { 'X-N8N-API-KEY': key, 'Accept': 'application/json' };
@@ -2564,7 +2567,7 @@ async function handleN8n(env) {
 }
 
 async function handleExecDetail(request, env) {
-  const key = (env.N8N_API_KEY || '').replace(/^﻿/, '').trim();
+  const key = cleanEnv(env.N8N_API_KEY);
   if (!key) return json({ error: 'N8N_API_KEY not configured' }, 500);
 
   const url = new URL(request.url);
@@ -2594,7 +2597,7 @@ async function handleExecDetail(request, env) {
 /* ── Movi n8n API (direct API key auth) ──
    Set via:  wrangler secret put MOVI_N8N_API_KEY */
 async function handleMoviN8n(env) {
-  const key = (env.MOVI_N8N_API_KEY || '').replace(/^﻿/, '').trim();
+  const key = cleanEnv(env.MOVI_N8N_API_KEY);
   if (!key) return json({ error: 'MOVI_N8N_API_KEY not configured' }, 500);
 
   const h = { 'X-N8N-API-KEY': key, 'Accept': 'application/json' };
@@ -2685,7 +2688,7 @@ async function handleMoviN8n(env) {
 }
 
 async function handleMoviN8nExecDetail(request, env) {
-  const key = (env.MOVI_N8N_API_KEY || '').replace(/^﻿/, '').trim();
+  const key = cleanEnv(env.MOVI_N8N_API_KEY);
   if (!key) return json({ error: 'MOVI_N8N_API_KEY not configured' }, 500);
 
   const url = new URL(request.url);
@@ -2718,7 +2721,7 @@ async function handleMoviN8nExecDetail(request, env) {
    ═══════════════════════════════════════════════ */
 async function handleToolMoviCreateUser(request, env, session, ctx) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = (env.MOVI_TOOL_CREATE_USER_WEBHOOK || '').replace(/^﻿/, '').trim();
+  const webhookUrl = cleanEnv(env.MOVI_TOOL_CREATE_USER_WEBHOOK);
   if (!webhookUrl) return json({ error: 'MOVI_TOOL_CREATE_USER_WEBHOOK not configured. Run: npx wrangler secret put MOVI_TOOL_CREATE_USER_WEBHOOK' }, 500);
 
   let body;
@@ -2775,7 +2778,7 @@ async function handleToolMoviCreateUser(request, env, session, ctx) {
 /* ── Tool Movi: Block User ── */
 async function handleToolMoviBlockUser(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = (env.MOVI_WH_BLOCK_USER || '').replace(/^﻿/, '').trim();
+  const webhookUrl = cleanEnv(env.MOVI_WH_BLOCK_USER);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const email     = (body.email || '').trim();
   const startDate = (body.startDate || '').trim();
@@ -2821,7 +2824,7 @@ async function handleToolMoviBlockUser(request, env, session) {
 /* ── Tool Movi: Asset Search ── */
 async function handleToolMoviAssetSearch(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = (env.MOVI_WH_ASSET_SEARCH || '').replace(/^﻿/, '').trim();
+  const webhookUrl = cleanEnv(env.MOVI_WH_ASSET_SEARCH);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const params = {
     email:     (body.email     || '').trim(),
@@ -2856,7 +2859,7 @@ async function handleToolMoviAssetSearch(request, env, session) {
 /* ── Tool Movi: Check Email Azure AD ── */
 async function handleToolMoviCheckEmail(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = (env.MOVI_WH_AZURE_CHECK_EMAIL || '').replace(/^﻿/, '').trim();
+  const webhookUrl = cleanEnv(env.MOVI_WH_AZURE_CHECK_EMAIL);
   if (!webhookUrl) return json({ error: 'MOVI_WH_AZURE_CHECK_EMAIL chưa được cấu hình' }, 503);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   // Accept email OR partial name/keyword — no strict email format check
@@ -2904,7 +2907,7 @@ async function handleToolMoviCheckEmail(request, env, session) {
 /* ── Tool Movi: Check Azure Group ── */
 async function handleToolMoviCheckAzureGroup(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = (env.MOVI_WH_AZURE_CHECK_GROUP || '').replace(/^﻿/, '').trim();
+  const webhookUrl = cleanEnv(env.MOVI_WH_AZURE_CHECK_GROUP);
   if (!webhookUrl) return json({ error: 'MOVI_WH_AZURE_CHECK_GROUP chưa được cấu hình' }, 503);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const query = (body.query || '').trim();
@@ -2935,7 +2938,7 @@ async function handleToolMoviCheckAzureGroup(request, env, session) {
 
 /* ── Tool Movi: Delete User List ── */
 async function handleToolMoviDeleteUserList(request, env, session) {
-  const webhookUrl = (env.MOVI_WH_DELETE_USER_LIST || '').replace(/^﻿/, '').trim();
+  const webhookUrl = cleanEnv(env.MOVI_WH_DELETE_USER_LIST);
   try {
     const resp = await fetch(webhookUrl, {
       method: 'GET',
@@ -2957,7 +2960,7 @@ async function handleToolMoviDeleteUserList(request, env, session) {
 /* ── Tool Movi: Delete User Action ── */
 async function handleToolMoviDeleteUserAction(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = (env.MOVI_WH_DELETE_USER || '').replace(/^﻿/, '').trim();
+  const webhookUrl = cleanEnv(env.MOVI_WH_DELETE_USER);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const email = (body.email || '').trim();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Email không hợp lệ' }, 400);
@@ -2986,7 +2989,7 @@ async function handleToolMoviDeleteUserAction(request, env, session) {
 async function handleToolMoviFgPolicy(request, env, session, policyType, ctx) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   const envKey = policyType === 'lan' ? env.MOVI_WH_FG_POLICY_LAN : env.MOVI_WH_FG_POLICY_WIFI;
-  const webhookUrl = (envKey || '').replace(/^﻿/, '').trim();
+  const webhookUrl = cleanEnv(envKey);
   if (!webhookUrl) return json({ error: "MOVI_WH_FG_POLICY_" + policyType.toUpperCase() + " chưa được cấu hình" }, 503);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const email = (body.email || '').trim();
@@ -3428,7 +3431,7 @@ async function handleMerakiDevices(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = (env.MOVI_WH_MERAKI_DEVICES || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_DEVICES);
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -3473,7 +3476,7 @@ async function handleMerakiClients(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = (env.MOVI_WH_MERAKI_CLIENTS || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_CLIENTS);
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -3524,7 +3527,7 @@ async function handleMerakiClientPolicy(request, env) {
     return json({ error: "policy phải là 'Blocked' hoặc 'Normal'" }, 400);
   }
 
-  const N8N_URL  = (env.MOVI_WH_MERAKI_CLIENT_POLICY || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_CLIENT_POLICY);
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -3581,7 +3584,7 @@ async function handleMerakiDeviceStatus(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = (env.MOVI_WH_MERAKI_DEV_STATUS || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_DEV_STATUS);
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -3618,7 +3621,7 @@ async function handleMerakiSwitchPorts(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = (env.MOVI_WH_MERAKI_SW_PORTS || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_SW_PORTS);
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(60000) });
@@ -3640,7 +3643,7 @@ async function handleMerakiSwitchPortConfigs(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = (env.MOVI_WH_MERAKI_PORT_CFG || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_PORT_CFG);
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(50000) });
@@ -3658,7 +3661,7 @@ async function handleMerakiLinkAggregations(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = (env.MOVI_WH_MERAKI_LINK_AGG || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_LINK_AGG);
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -3686,7 +3689,7 @@ async function handleMerakiUplinks(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = (env.MOVI_WH_MERAKI_UPLINKS || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_UPLINKS);
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -3712,7 +3715,7 @@ async function handleMerakiL3Routing(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = (env.MOVI_WH_MERAKI_L3 || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_L3);
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -3740,7 +3743,7 @@ async function handleMerakiEvents(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = (env.MOVI_WH_MERAKI_EVENTS || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_EVENTS);
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -3760,7 +3763,7 @@ async function handleMoviSdwanRules(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = (env.MOVI_WH_FG_SDWAN_RULES || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_SDWAN_RULES);
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
@@ -3783,7 +3786,7 @@ async function handleMoviSdwan(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = (env.MOVI_WH_FG_SDWAN_MEMBERS || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_SDWAN_MEMBERS);
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
@@ -3887,10 +3890,10 @@ async function handleCamHomeEmbed(request, env) {
   if (!(await hasPerm(env, session, 'camera'))) return new Response('Forbidden', { status: 403 });
 
   const camUrl    = 'https://camera.home-server.id.vn';
-  const cfId      = (env.HOME_CAM_CF_CLIENT_ID     || '').replace(/^﻿/, '').trim();
-  const cfSecret  = (env.HOME_CAM_CF_CLIENT_SECRET || '').replace(/^﻿/, '').trim();
-  const g2User    = (env.HOME_GO2RTC_USER          || '').replace(/^﻿/, '').trim();
-  const g2Pass    = (env.HOME_GO2RTC_PASS          || '').replace(/^﻿/, '').trim();
+  const cfId      = cleanEnv(env.HOME_CAM_CF_CLIENT_ID);
+  const cfSecret  = cleanEnv(env.HOME_CAM_CF_CLIENT_SECRET);
+  const g2User    = cleanEnv(env.HOME_GO2RTC_USER);
+  const g2Pass    = cleanEnv(env.HOME_GO2RTC_PASS);
 
   const authHeaders = {
     'CF-Access-Client-Id':     cfId,
@@ -4003,9 +4006,9 @@ async function handleCamEmbed(request, env) {
   if (!session) return new Response('Unauthorized', { status: 401 });
   if (!(await hasPerm(env, session, 'camera-movi'))) return new Response('Forbidden', { status: 403 });
 
-  const user   = (env.MOVI_CAM_USER || '').replace(/^﻿/, '').trim();
-  const pass   = (env.MOVI_CAM_PASS || '').replace(/^﻿/, '').trim();
-  const camUrl = (env.MOVI_CAM_URL  || '').replace(/^﻿/, '').trim();
+  const user   = cleanEnv(env.MOVI_CAM_USER);
+  const pass   = cleanEnv(env.MOVI_CAM_PASS);
+  const camUrl = cleanEnv(env.MOVI_CAM_URL);
   if (!camUrl) return new Response('Camera not configured', { status: 503 });
 
   const auth    = 'Basic ' + btoa(unescape(encodeURIComponent(`${user}:${pass}`)));
@@ -4123,7 +4126,7 @@ async function handleMoviInterfaces(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = (env.MOVI_WH_FG_INTERFACES || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_INTERFACES);
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -4148,7 +4151,7 @@ async function handleMoviPolicy(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = (env.MOVI_WH_FG_POLICY || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_POLICY);
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
@@ -4164,7 +4167,7 @@ async function handleMoviDhcp(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = (env.MOVI_WH_FG_ROUTING || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_ROUTING);
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
@@ -4180,7 +4183,7 @@ async function handleMoviSslVpn(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = (env.MOVI_WH_FG_SSL_VPN || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_SSL_VPN);
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -4205,7 +4208,7 @@ async function handleMoviVpn(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = (env.MOVI_WH_FG_VPN || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_VPN);
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -4232,7 +4235,7 @@ async function handleMoviLicense(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = (env.MOVI_WH_FG_LICENSE || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_LICENSE);
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -4257,7 +4260,7 @@ async function handleMoviSystem(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = (env.MOVI_WH_FG_SYSTEM || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_SYSTEM);
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -4302,7 +4305,7 @@ async function handleMoviFirewallUsers(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = (env.MOVI_WH_FG_FIREWALL_USERS || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_FIREWALL_USERS);
   const N8N_AUTH = moviN8nAuth(env);
   if (!N8N_URL) return json({ error: 'MOVI_WH_FG_FIREWALL_USERS chưa được cấu hình' }, 503);
   try {
@@ -4316,7 +4319,7 @@ async function handleMoviFortiviewSource(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = (env.MOVI_WH_FG_FORTIVIEW_SOURCE || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_FORTIVIEW_SOURCE);
   const N8N_AUTH = moviN8nAuth(env);
   if (!N8N_URL) return json({ error: 'MOVI_WH_FG_FORTIVIEW_SOURCE chưa được cấu hình' }, 503);
   try {
@@ -4330,7 +4333,7 @@ async function handleMoviFirewallDeauth(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasWritePerm(env, session, 'fortigate-movi'))) return json({ error: 'Cần quyền Write trên FortiGate Movi để deauth user' }, 403);
-  const N8N_URL  = (env.MOVI_WH_FG_FIREWALL_DEAUTH || '').replace(/^﻿/, '').trim();
+  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_FIREWALL_DEAUTH);
   const N8N_AUTH = moviN8nAuth(env);
   if (!N8N_URL) return json({ error: 'MOVI_WH_FG_FIREWALL_DEAUTH chưa được cấu hình' }, 503);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
@@ -4654,9 +4657,9 @@ async function handleCasaOS(env) {
    VMware Home — via n8n webhook (SOAP handled by n8n)
    ═══════════════════════════════════════════════ */
 async function handleVmwareHome(env) {
-  const n8nUser = (env.HOME_N8N_USER || '').replace(/^﻿/, '').trim();
-  const n8nPass = (env.HOME_N8N_PASS || '').replace(/^﻿/, '').trim();
-  const wh      = (env.HOME_WH_VMWARE_DATA || '').replace(/^﻿/, '').trim();
+  const n8nUser = cleanEnv(env.HOME_N8N_USER);
+  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
+  const wh      = cleanEnv(env.HOME_WH_VMWARE_DATA);
   if (!wh) return json({ error: 'HOME_WH_VMWARE_DATA not configured' }, 500);
   const hdrs = { 'Content-Type': 'application/json' };
   if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
@@ -4671,9 +4674,9 @@ async function handleVmwareHome(env) {
 
 async function handleVmwareHomePower(request, env) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const n8nUser = (env.HOME_N8N_USER || '').replace(/^﻿/, '').trim();
-  const n8nPass = (env.HOME_N8N_PASS || '').replace(/^﻿/, '').trim();
-  const wh      = (env.HOME_WH_VMWARE_POWER || '').replace(/^﻿/, '').trim();
+  const n8nUser = cleanEnv(env.HOME_N8N_USER);
+  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
+  const wh      = cleanEnv(env.HOME_WH_VMWARE_POWER);
   if (!wh) return json({ error: 'HOME_WH_VMWARE_POWER not configured' }, 500);
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
@@ -4694,9 +4697,9 @@ async function handleVmwareHomePower(request, env) {
             Auth: MOVI_N8N_USER / MOVI_N8N_PASS
    ═══════════════════════════════════════════════ */
 async function handleMoviVmwareData(env, hostNum) {
-  const moviUser = (env.MOVI_N8N_USER || '').replace(/^﻿/, '').trim();
-  const moviPass = (env.MOVI_N8N_PASS || '').replace(/^﻿/, '').trim();
-  const wh = (env[`MOVI_WH_VMWARE0${hostNum}_DATA`] || '').replace(/^﻿/, '').trim();
+  const moviUser = cleanEnv(env.MOVI_N8N_USER);
+  const moviPass = cleanEnv(env.MOVI_N8N_PASS);
+  const wh = cleanEnv(env[`MOVI_WH_VMWARE0${hostNum}_DATA`]);
   if (!wh) return json({ error: `MOVI_WH_VMWARE0${hostNum}_DATA not configured` }, 500);
   const hdrs = { 'Content-Type': 'application/json' };
   if (moviUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${moviUser}:${moviPass}`)));
@@ -4710,9 +4713,9 @@ async function handleMoviVmwareData(env, hostNum) {
 
 async function handleMoviVmwarePower(request, env, hostNum) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const moviUser = (env.MOVI_N8N_USER || '').replace(/^﻿/, '').trim();
-  const moviPass = (env.MOVI_N8N_PASS || '').replace(/^﻿/, '').trim();
-  const wh = (env[`MOVI_WH_VMWARE0${hostNum}_POWER`] || '').replace(/^﻿/, '').trim();
+  const moviUser = cleanEnv(env.MOVI_N8N_USER);
+  const moviPass = cleanEnv(env.MOVI_N8N_PASS);
+  const wh = cleanEnv(env[`MOVI_WH_VMWARE0${hostNum}_POWER`]);
   if (!wh) return json({ error: `MOVI_WH_VMWARE0${hostNum}_POWER not configured` }, 500);
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
@@ -4731,27 +4734,27 @@ async function handleMoviVmwarePower(request, env, hostNum) {
    Mỗi workflow độc lập: 1 fail không ảnh hưởng cái khác
    ═══════════════════════════════════════════════ */
 async function handleFortigateWebhook(env) {
-  const n8nUser = (env.HOME_N8N_USER || '').replace(/^﻿/, '').trim();
-  const n8nPass = (env.HOME_N8N_PASS || '').replace(/^﻿/, '').trim();
+  const n8nUser = cleanEnv(env.HOME_N8N_USER);
+  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
   const hdrs = { 'Content-Type': 'application/json' };
   if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
 
   // Helper: gọi 1 webhook, trả null nếu lỗi/timeout
   const call = (url, ms = 12000) => {
-    const u = (url || '').replace(/^﻿/, '').trim();
+    const u = cleanEnv(url);
     if (!u) return Promise.resolve(null);
     return fetch(u, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(ms) })
       .then(r => r.ok ? r.json() : null)
       .catch(() => null);
   };
 
-  const whSys    = (env.HOME_WH_FG_SYSTEM    || '').replace(/^﻿/, '').trim();
-  const whRes    = (env.HOME_WH_FG_RESOURCES || '').replace(/^﻿/, '').trim();
-  const whIface  = (env.HOME_WH_FG_INTERFACES|| '').replace(/^﻿/, '').trim();
-  const whVpn    = (env.HOME_WH_FG_VPN       || '').replace(/^﻿/, '').trim();
-  const whSsl    = (env.HOME_WH_FG_SSL       || '').replace(/^﻿/, '').trim();
-  const whPolicy = (env.HOME_WH_FG_POLICIES  || '').replace(/^﻿/, '').trim();
-  const whDdns   = (env.HOME_WH_FG_DDNS      || '').replace(/^﻿/, '').trim();
+  const whSys    = cleanEnv(env.HOME_WH_FG_SYSTEM);
+  const whRes    = cleanEnv(env.HOME_WH_FG_RESOURCES);
+  const whIface  = cleanEnv(env.HOME_WH_FG_INTERFACES);
+  const whVpn    = cleanEnv(env.HOME_WH_FG_VPN);
+  const whSsl    = cleanEnv(env.HOME_WH_FG_SSL);
+  const whPolicy = cleanEnv(env.HOME_WH_FG_POLICIES);
+  const whDdns   = cleanEnv(env.HOME_WH_FG_DDNS);
 
   if (!whSys) return json({ error: 'HOME_WH_FG_SYSTEM not configured' }, 500);
 
@@ -4789,11 +4792,11 @@ async function handleFortigateWebhook(env) {
 }
 
 async function handleFortigateBW(env) {
-  const n8nUser = (env.HOME_N8N_USER || '').replace(/^﻿/, '').trim();
-  const n8nPass = (env.HOME_N8N_PASS || '').replace(/^﻿/, '').trim();
+  const n8nUser = cleanEnv(env.HOME_N8N_USER);
+  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
   const hdrs = { 'Content-Type': 'application/json' };
   if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
-  const whIface = (env.HOME_WH_FG_INTERFACES || '').replace(/^﻿/, '').trim();
+  const whIface = cleanEnv(env.HOME_WH_FG_INTERFACES);
   if (!whIface) return json({ error: 'HOME_WH_FG_INTERFACES not configured' }, 500);
   try {
     const r = await fetch(whIface, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(8000) });
@@ -4809,10 +4812,10 @@ async function handleFortigateBW(env) {
 }
 
 async function handleFortigateReboot(env) {
-  const wh = (env.HOME_WH_FG_REBOOT || '').replace(/^﻿/, '').trim();
+  const wh = cleanEnv(env.HOME_WH_FG_REBOOT);
   if (!wh) return json({ error: 'HOME_WH_FG_REBOOT not configured' }, 500);
-  const n8nUser = (env.HOME_N8N_USER || '').replace(/^﻿/, '').trim();
-  const n8nPass = (env.HOME_N8N_PASS || '').replace(/^﻿/, '').trim();
+  const n8nUser = cleanEnv(env.HOME_N8N_USER);
+  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
   const hdrs = { 'Content-Type': 'application/json' };
   if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
   try {
@@ -5065,18 +5068,18 @@ async function handleFortigate(env, debug = false) {
 
 
 async function handleAsusWebhook(env) {
-  const n8nUser = (env.HOME_N8N_USER || '').replace(/^﻿/, '').trim();
-  const n8nPass = (env.HOME_N8N_PASS || '').replace(/^﻿/, '').trim();
+  const n8nUser = cleanEnv(env.HOME_N8N_USER);
+  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
   const hdrs = { 'Content-Type': 'application/json' };
   if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
   const call = (url, ms = 15000) => {
-    const u = (url || '').replace(/^﻿/, '').trim();
+    const u = cleanEnv(url);
     if (!u) return Promise.resolve(null);
     return fetch(u, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(ms) })
       .then(r => r.ok ? r.json() : null).catch(() => null);
   };
-  const whMain    = (env.HOME_WH_ASUS_MAIN    || '').replace(/^﻿/, '').trim();
-  const whClients = (env.HOME_WH_ASUS_CLIENTS || '').replace(/^﻿/, '').trim();
+  const whMain    = cleanEnv(env.HOME_WH_ASUS_MAIN);
+  const whClients = cleanEnv(env.HOME_WH_ASUS_CLIENTS);
   if (!whMain) return json({ error: 'HOME_WH_ASUS_MAIN not configured' }, 500);
   const [main, clients] = await Promise.all([call(whMain), call(whClients)]);
   return new Response(JSON.stringify({
@@ -5096,11 +5099,11 @@ async function handleAsusWebhook(env) {
 }
 
 async function handleAsusBw(env) {
-  const n8nUser = (env.HOME_N8N_USER || '').replace(/^﻿/, '').trim();
-  const n8nPass = (env.HOME_N8N_PASS || '').replace(/^﻿/, '').trim();
+  const n8nUser = cleanEnv(env.HOME_N8N_USER);
+  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
   const hdrs = { 'Content-Type': 'application/json' };
   if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
-  const whMain = (env.HOME_WH_ASUS_MAIN || '').replace(/^﻿/, '').trim();
+  const whMain = cleanEnv(env.HOME_WH_ASUS_MAIN);
   if (!whMain) return json({ error: 'HOME_WH_ASUS_MAIN not configured' }, 500);
   try {
     const r = await fetch(whMain, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(15000) });
@@ -5113,9 +5116,9 @@ async function handleAsusBw(env) {
 
 async function handleAsusReboot(request, env) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const n8nUser = (env.HOME_N8N_USER || '').replace(/^﻿/, '').trim();
-  const n8nPass = (env.HOME_N8N_PASS || '').replace(/^﻿/, '').trim();
-  const whReboot = (env.HOME_WH_ASUS_REBOOT || '').replace(/^﻿/, '').trim();
+  const n8nUser = cleanEnv(env.HOME_N8N_USER);
+  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
+  const whReboot = cleanEnv(env.HOME_WH_ASUS_REBOOT);
   if (!whReboot) return json({ error: 'HOME_WH_ASUS_REBOOT not configured' }, 500);
   const hdrs = { 'Content-Type': 'application/json' };
   if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
@@ -5368,9 +5371,9 @@ async function handleTermixMoviProxy(request, env) {
   if (!(await hasPerm(env, session, 'ssh-movi')))
     return new Response('Không có quyền truy cập Termix Movi', { status: 403 });
 
-  const termixOrigin = (env.TERMIX_MOVI_URL || 'https://termix-movi.home-server.id.vn').replace(/^﻿/, '').trim().replace(/\/$/, '');
-  const clientId     = (env.TERMIX_MOVI_CF_CLIENT_ID     || '').replace(/^﻿/, '').trim();
-  const clientSecret = (env.TERMIX_MOVI_CF_CLIENT_SECRET || '').replace(/^﻿/, '').trim();
+  const termixOrigin = (cleanEnv(env.TERMIX_MOVI_URL) || 'https://termix-movi.home-server.id.vn').replace(/\/$/, '');
+  const clientId     = cleanEnv(env.TERMIX_MOVI_CF_CLIENT_ID);
+  const clientSecret = cleanEnv(env.TERMIX_MOVI_CF_CLIENT_SECRET);
 
   // Build target URL (strip /proxy/termix-movi prefix)
   const reqUrl  = new URL(request.url);
@@ -5385,7 +5388,7 @@ async function handleTermixMoviProxy(request, env) {
     upHeaders.set('CF-Access-Client-Secret', clientSecret);
   }
   // Shared secret header — nginx validates này để block direct browser access
-  const moviSecret = (env.TERMIX_MOVI_SECRET || '').replace(/^﻿/, '').trim();
+  const moviSecret = cleanEnv(env.TERMIX_MOVI_SECRET);
   if (moviSecret) upHeaders.set('X-Proxy-Token', moviSecret);
 
   // X-Forwarded-Host: needed so Termix generates + stores redirect_uri = https://<dashboard>/users/oidc/callback

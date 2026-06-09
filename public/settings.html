@@ -180,14 +180,18 @@ select.inp{cursor:pointer}
 .user-actions{display:flex;gap:6px;flex-shrink:0}
 
 /* ── Audit Log ── */
-.log-row{display:flex;align-items:flex-start;gap:12px;padding:.875rem 1.5rem;border-bottom:1px solid var(--border-soft)}
+.log-row{display:grid;grid-template-columns:minmax(0,220px) minmax(0,140px) minmax(0,105px) 1fr minmax(0,130px);gap:10px;align-items:center;padding:.7rem 1.5rem;border-bottom:1px solid var(--border-soft)}
 .log-row:last-child{border-bottom:none}
-.log-ts{font-family:var(--font-mono);font-size:11px;color:var(--muted);white-space:nowrap;min-width:115px}
-.log-user{font-size:12px;font-weight:600;min-width:80px}
-.log-action{font-size:12px;flex:1}
-.log-status{font-size:11px;padding:2px 8px;border-radius:20px;flex-shrink:0}
-.log-ok{background:color-mix(in oklch,var(--ok) 12%,transparent);color:var(--ok);border:1px solid color-mix(in oklch,var(--ok) 25%,transparent)}
-.log-fail{background:color-mix(in oklch,var(--bad) 12%,transparent);color:var(--bad);border:1px solid color-mix(in oklch,var(--bad) 25%,transparent)}
+.log-badge-wrap{min-width:0}
+.log-badge{display:inline-block;font-size:11px;font-weight:600;font-family:var(--font-mono);padding:3px 8px;border-radius:6px;white-space:nowrap;border:1px solid}
+.log-badge-ok{background:color-mix(in oklch,var(--ok) 10%,transparent);color:var(--ok);border-color:color-mix(in oklch,var(--ok) 25%,transparent)}
+.log-badge-fail{background:color-mix(in oklch,var(--bad) 10%,transparent);color:var(--bad);border-color:color-mix(in oklch,var(--bad) 25%,transparent)}
+.log-badge-neutral{background:var(--surface-2);color:var(--text-2);border-color:var(--border)}
+.log-user{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.log-ip{font-size:11px;font-family:var(--font-mono);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.log-detail{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.log-ts{font-family:var(--font-mono);font-size:11px;color:var(--muted);white-space:nowrap;text-align:right;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:700px){.log-row{grid-template-columns:minmax(0,150px) minmax(0,90px) 1fr;}.log-ip,.log-detail{display:none}}
 
 /* ── System Config ── */
 .cfg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
@@ -1954,16 +1958,17 @@ function renderAuditLog(logs) {
   el.innerHTML = logs.map(function(l){
     var dt = new Date(l.ts);
     var ts = dt.toLocaleDateString('vi-VN')+' '+dt.toLocaleTimeString('vi-VN',{hour12:false});
-    var statusCls = l.success === false ? 'log-fail' : 'log-ok';
-    var statusTxt = l.success === false ? 'Thất bại' : 'OK';
+    var isFail = l.success === false;
+    var act = (l.action || '?').toUpperCase();
+    var actDisplay = act.length > 22 ? act.slice(0, 21) + '…' : act;
+    var actLow = act.toLowerCase();
+    var badgeCls = isFail ? 'log-badge-fail' : (actLow.includes('login') ? 'log-badge-ok' : 'log-badge-neutral');
     return '<div class="log-row">'
+      +'<div class="log-badge-wrap"><span class="log-badge '+badgeCls+'" title="'+esc(act)+'">'+esc(actDisplay)+'</span></div>'
+      +'<div class="log-user">'+esc(l.username||'—')+'</div>'
+      +'<div class="log-ip">'+esc(l.ip||'—')+'</div>'
+      +'<div class="log-detail">'+esc(l.detail||'—')+'</div>'
       +'<div class="log-ts">'+esc(ts)+'</div>'
-      +'<div class="log-user">'+esc(l.username||'?')+'</div>'
-      +'<div class="log-action"><strong>'+esc(l.action||'?')+'</strong>'
-        +(l.detail?' <span style="color:var(--muted);font-size:11px">· '+esc(l.detail)+'</span>':'')
-        +(l.ip?' <span style="color:var(--muted);font-size:10px;font-family:var(--font-mono)">'+esc(l.ip)+'</span>':'')
-      +'</div>'
-      +'<span class="log-status '+statusCls+'">'+statusTxt+'</span>'
     +'</div>';
   }).join('');
 }
