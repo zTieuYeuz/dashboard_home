@@ -1095,7 +1095,11 @@ function _normalizeDelegateSvcs(arr) {
           else
             desc.textContent = 'Bạn được quyền tạo user mới trong hệ thống.';
         }
-        // Keep Add User button visible — delegates can create users
+        // Hide "Add User" button if delegate does NOT have sysPerms.addUser
+        if (!sp.addUser) {
+          var addBtn = ph.querySelector('.btn-primary');
+          if (addBtn) addBtn.style.display = 'none';
+        }
       }
     }
     // sysPerms.systemConfig → show System Config tab
@@ -1379,6 +1383,10 @@ function onLoginTypeChange(val) {
 }
 
 function openAddUser() {
+  if (!__USER__.isAdmin && !(__USER__.sysPerms && __USER__.sysPerms.addUser)) {
+    toast('Bạn không có quyền tạo user', 'err');
+    return;
+  }
   editingUsername = null;
   document.getElementById('user-modal-title').textContent = '+ Thêm User Mới';
   document.getElementById('user-modal-save').textContent = 'Tạo user';
