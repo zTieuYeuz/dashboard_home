@@ -332,7 +332,7 @@ select.inp{cursor:pointer}
       <div class="panel-header">
         <div>
           <div class="panel-title" id="user-perm-title">Quyền riêng của user</div>
-          <div class="panel-desc">Ghi đè quyền nhóm cho user này. Quyền "write" luôn ưu tiên hơn quyền nhóm.</div>
+          <div class="panel-desc">Quyền riêng từng user — chỉ có tác dụng khi user <strong>không thuộc</strong> nhóm có Role Management. Nếu user đã vào nhóm có role (admin/user), role đó <strong>ưu tiên cao nhất</strong> và quyền riêng bên dưới sẽ không có tác dụng.</div>
         </div>
         <button class="btn btn-outline btn-sm" onclick="closeUserPermPanel()">✕ Đóng</button>
       </div>
@@ -1210,10 +1210,14 @@ var SERVICE_MOVI_PAGES = [
    type:'tool-group',
    perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'},
    tools:[
-     {id:'tool-movi-create-user',  name:'Tạo User Movi',   icon:'👤'},
-     {id:'tool-movi-block-user',   name:'Block User Movi', icon:'🚫'},
-     {id:'tool-movi-delete-user',  name:'Xóa User Movi',   icon:'🗑️'},
-     {id:'tool-movi-asset-search', name:'Tra Cứu Tài Sản', icon:'🔍'},
+     {id:'tool-movi-create-user',    name:'Tạo User Movi',    icon:'👤'},
+     {id:'tool-movi-block-user',     name:'Block User Movi',  icon:'🚫'},
+     {id:'tool-movi-delete-user',    name:'Xóa User Movi',    icon:'🗑️'},
+     {id:'tool-movi-asset-search',   name:'Tra Cứu Tài Sản',  icon:'🔍'},
+     {id:'tool-movi-check-email',    name:'Check Email Azure', icon:'📧'},
+     {id:'tool-movi-azure-group',    name:'Azure AD Group',    icon:'👥'},
+     {id:'tool-movi-fg-policy-lan',  name:'FG Policy LAN',     icon:'🔒'},
+     {id:'tool-movi-fg-policy-wifi', name:'FG Policy WiFi',    icon:'📶'},
    ]},
 ];
 
@@ -1619,6 +1623,22 @@ function openUserPerms(username) {
         _renderDelegatePermEditor(u);
       } else {
         renderPermEditor('user-perm-editor', u.permissions||{}, u.panels||{}, u.cameras||[], 'usr');
+        // Show warning if user is in a Role Management group (their individual perms are overridden)
+        var roleGroups = (u.groups||[]).map(function(gid){
+          return allGroups.find(function(g){ return g.id===gid; });
+        }).filter(function(g){ return g && g.role; });
+        if (roleGroups.length > 0) {
+          var grpNames = roleGroups.map(function(g){
+            var rl = g.role === 'admin' ? '👑 admin' : '👤 user';
+            return '"'+esc(g.name)+'" ('+rl+')';
+          }).join(', ');
+          var warnEl = document.createElement('div');
+          warnEl.style.cssText = 'margin-bottom:14px;padding:10px 14px;border-radius:8px;background:color-mix(in oklch,var(--warn) 10%,transparent);border:1px solid color-mix(in oklch,var(--warn) 40%,transparent)';
+          warnEl.innerHTML = '<div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:4px">⚠️ User đang thuộc nhóm Role Management</div>'
+            +'<div style="font-size:12px;line-height:1.6;color:var(--text)">Nhóm: <strong>'+grpNames+'</strong><br>'
+            +'Role của nhóm có <strong>ưu tiên cao nhất</strong> và ghi đè toàn bộ — các quyền riêng bên dưới <strong>không có tác dụng</strong> khi user thuộc nhóm có role.</div>';
+          document.getElementById('user-perm-editor').prepend(warnEl);
+        }
         // Admin: also render delegation section
         if (isAdmin) _renderDelegateSvcSection(u);
       }
@@ -1849,6 +1869,11 @@ function toggleBgValue() {
   else { v.disabled = false; v.placeholder = 'https://example.com/bg.jpg'; }
 }
 
+function _apiJson(r) {
+  if (r.status === 401) { toast('Phiên đăng nhập hết hạn — đang chuyển về trang đăng nhập...', 'err'); setTimeout(function(){ location.href = '/'; }, 1500); return null; }
+  return r.json();
+}
+
 function toggleEmailConfig(on) {
   document.getElementById('email-enabled-text').textContent = on ? '🟢 Đang bật' : '⚪ Đang tắt';
   var track = document.getElementById('email-toggle-track');
@@ -1857,8 +1882,9 @@ function toggleEmailConfig(on) {
   // Auto-save ngay lập tức (giống Maintenance toggle)
   fetch('/api/system-config', { method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ emailEnabled: on }) })
-    .then(function(r){ return r.json(); })
+    .then(_apiJson)
     .then(function(d) {
+      if (!d) return;
       if (d.error) { toast('Lỗi lưu: '+d.error, 'err'); return; }
       toast(on ? '🟢 Đã bật Email Notifications' : '⚪ Đã tắt Email Notifications', on ? 'ok' : 'info');
     })
@@ -1879,19 +1905,28 @@ function forceLogoutAll() {
 function testEmailWebhook() {
   var wh = document.getElementById('cfg-email-webhook').value.trim();
   if (!wh) { toast('Vui lòng nhập webhook URL trước', 'err'); return; }
-  // Save current config then send test
+  var btn = document.querySelector('button[onclick="testEmailWebhook()"]');
+  var origText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang gửi...'; }
+  // Save current config first so latest webhook URL is persisted
   var body = collectSysConfig();
   body.emailEnabled = true;
   fetch('/api/system-config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
-    .then(function(r){ return r.json(); })
+    .then(_apiJson)
     .then(function(d) {
+      if (!d) return;
       if (d.error) { toast('Lỗi lưu config: '+d.error, 'err'); return; }
-      // Now trigger test via a fake notify — worker will call webhook with event=test
-      return fetch('/api/admin/force-logout-all', { method: 'POST' })
-        .then(function(r){ return r.json(); })
-        .then(function(){ toast('✓ Test đã gửi — kiểm tra n8n & email', 'ok'); });
+      // Use dedicated test endpoint — sends event:"test" directly without side effects
+      return fetch('/api/admin/test-email', { method: 'POST' })
+        .then(_apiJson)
+        .then(function(r) {
+          if (!r) return;
+          if (r.error) { toast('Lỗi test webhook: '+r.error, 'err'); return; }
+          toast('✓ Test đã gửi — kiểm tra n8n & email', 'ok');
+        });
     })
-    .catch(function(e){ toast('Lỗi: '+e.message, 'err'); });
+    .catch(function(e){ toast('Lỗi: '+e.message, 'err'); })
+    .finally(function(){ if (btn) { btn.disabled = false; btn.textContent = origText; } });
 }
 
 function toggleMaintenance(on) {
@@ -1903,8 +1938,9 @@ function toggleMaintenance(on) {
   if (msgRow) msgRow.style.display = on ? '' : 'none';
   fetch('/api/system-config',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({maintenanceMode:on})})
-    .then(function(r){return r.json();})
+    .then(_apiJson)
     .then(function(d){
+      if(!d)return;
       if(d.error){toast('Lỗi: '+d.error,'err');return;}
       toast(on ? '🚧 Đã bật Maintenance Mode' : '✓ Đã tắt Maintenance Mode', on ? 'warn' : 'ok');
     })
@@ -1915,8 +1951,9 @@ function saveMaintMsg() {
   var msg = (document.getElementById('cfg-maint-msg').value || '').trim();
   fetch('/api/system-config',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({maintenanceMsg:msg})})
-    .then(function(r){return r.json();})
+    .then(_apiJson)
     .then(function(d){
+      if(!d)return;
       if(d.error){toast('Lỗi: '+d.error,'err');return;}
       toast('✓ Đã lưu thông báo bảo trì','ok');
     })
@@ -1960,8 +1997,9 @@ function collectSysConfig() {
 function saveSysConfig() {
   var body = collectSysConfig();
   fetch('/api/system-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-    .then(function(r){return r.json();})
+    .then(_apiJson)
     .then(function(d){
+      if(!d)return;
       if(d.error){toast('Lỗi: '+d.error,'err');return;}
       toast('✓ Đã lưu cấu hình hệ thống','ok');
       loadSysConfig();
@@ -2197,16 +2235,36 @@ function renderGroupEditor(group) {
   var addRow = document.createElement('div');
   addRow.style.cssText = 'display:flex;gap:8px;margin-top:10px;align-items:center';
   var nonMembers = allUsers.filter(function(u){
-    return u.role!=='admin' && (u.groups||[]).indexOf(group.id)<0;
+    if (u.role === 'admin') return false;
+    if ((u.groups||[]).indexOf(group.id) >= 0) return false;
+    if (group.role) {
+      var alreadyInRoleGroup = (u.groups||[]).some(function(gid){
+        var g = allGroups.find(function(x){return x.id===gid;});
+        return g && g.role;
+      });
+      if (alreadyInRoleGroup) return false;
+    }
+    return true;
   });
+  var hiddenCount = group.role ? allUsers.filter(function(u){
+    if (u.role === 'admin') return false;
+    if ((u.groups||[]).indexOf(group.id) >= 0) return false;
+    return (u.groups||[]).some(function(gid){
+      var g = allGroups.find(function(x){return x.id===gid;});
+      return g && g.role;
+    });
+  }).length : 0;
   if (nonMembers.length) {
     addRow.innerHTML = '<select class="inp" id="grp-add-select" style="flex:1;font-size:12px;padding:6px 8px">'
       +'<option value="">— Chọn user để thêm —</option>'
       +nonMembers.map(function(u){return '<option value="'+esc(u.username)+'">'+esc(u.username)+'</option>';}).join('')
       +'</select>'
-      +'<button class="btn btn-primary btn-sm" onclick="addUserToGroup(\''+esc(group.id)+'\')">+ Thêm</button>';
+      +'<button class="btn btn-primary btn-sm" onclick="addUserToGroup(\''+esc(group.id)+'\')">+ Thêm</button>'
+      +(hiddenCount > 0 ? '<span style="font-size:11px;color:var(--muted);margin-left:4px">('+hiddenCount+' user đã có role khác)</span>' : '');
   } else {
-    addRow.innerHTML = '<span style="font-size:12px;color:var(--muted)">Tất cả users đã trong nhóm này</span>';
+    addRow.innerHTML = '<span style="font-size:12px;color:var(--muted)">'
+      +(hiddenCount > 0 ? 'Không còn user phù hợp ('+hiddenCount+' user đã thuộc nhóm Role Management khác)' : 'Tất cả users đã trong nhóm này')
+      +'</span>';
   }
   membersSection.appendChild(addRow);
   el.appendChild(membersSection);
@@ -2234,6 +2292,17 @@ function addUserToGroup(groupId) {
   var username = sel.value;
   var u = allUsers.find(function(x){return x.username===username;});
   if (!u) return;
+  // Validate: each user can only be in 1 Role Management group
+  var targetGroup = allGroups.find(function(g){return g.id===groupId;});
+  if (targetGroup && targetGroup.role) {
+    var existingRoleGroup = (u.groups||[]).map(function(gid){
+      return allGroups.find(function(g){return g.id===gid;});
+    }).find(function(g){ return g && g.role; });
+    if (existingRoleGroup) {
+      toast('Không thể thêm: "'+username+'" đã thuộc nhóm "'+existingRoleGroup.name+'" có role. Mỗi user chỉ được join 1 nhóm Role Management!', 'err');
+      return;
+    }
+  }
   var newGroups = (u.groups||[]).concat([groupId]).filter(function(v,i,a){return a.indexOf(v)===i;});
   fetch('/api/admin/users/'+encodeURIComponent(username)+'/groups',{
     method:'PUT',headers:{'Content-Type':'application/json'},

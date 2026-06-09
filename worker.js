@@ -96,21 +96,24 @@ function checkIpWhitelist(ip, list) {
 }
 
 /* ── Email notification via n8n webhook (best-effort, never blocks login) ── */
-async function notifyEmail(env, event, data) {
-  try {
-    const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
-    if (!cfg.emailEnabled) return;
-    const wh = cleanEnv(cfg.emailWebhook);
-    if (!wh) return;
-    const evts = cfg.emailEvents || {};
-    if (!evts[event]) return;
-    await fetch(wh, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event, ...data, timestamp: new Date().toISOString(), emailTo: cleanEnv(cfg.emailAdminAddress) }),
-      signal: AbortSignal.timeout(8000),
-    });
-  } catch (_) { /* never block main flow */ }
+function notifyEmail(env, ctx, event, data) {
+  const work = async () => {
+    try {
+      const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
+      if (!cfg.emailEnabled) return;
+      const wh = cleanEnv(cfg.emailWebhook);
+      if (!wh) return;
+      const evts = cfg.emailEvents || {};
+      if (!evts[event]) return;
+      await fetch(wh, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event, ...data, timestamp: new Date().toISOString(), emailTo: cleanEnv(cfg.emailAdminAddress) }),
+        signal: AbortSignal.timeout(8000),
+      });
+    } catch (_) { /* never block main flow */ }
+  };
+  if (ctx) ctx.waitUntil(work()); else work();
 }
 
 /* ── Password hashing ──
@@ -214,7 +217,7 @@ async function ensureAdmin(env) {
   return true;
 }
 
-async function handleLogin(request, env) {
+async function handleLogin(request, env, ctx) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   await ensureAdmin(env);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
@@ -313,7 +316,7 @@ async function handleLogin(request, env) {
         await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
         await logActivity(env, { action: 'account_locked', username, ip, success: false, detail: `Locked after ${user.loginAttempts} failed attempts` });
         // Best-effort email notification (don't await to not block response)
-        notifyEmail(env, 'account_locked', { username, ip, attempts: user.loginAttempts });
+        notifyEmail(env, ctx, 'account_locked', { username, ip, attempts: user.loginAttempts });
       } else {
         await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
       }
@@ -342,7 +345,7 @@ async function handleLogin(request, env) {
     if (age >= pwExpiryDays * 86400000 && !user.mustChangePassword) {
       user.mustChangePassword = true;
       await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
-      notifyEmail(env, 'password_expired', { username, ip });
+      notifyEmail(env, ctx, 'password_expired', { username, ip });
     }
   }
 
@@ -412,7 +415,7 @@ async function handleLogin(request, env) {
   h.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
   h.append('Set-Cookie', `dh_user=${userInfo}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
   await logActivity(env, { action: 'login_success', username, ip, success: true });
-  notifyEmail(env, 'login_success', { username, ip });
+  notifyEmail(env, ctx, 'login_success', { username, ip });
   return new Response(JSON.stringify({ success: true, role: user.role }), { status: 200, headers: h });
 }
 
@@ -686,7 +689,7 @@ async function handleSaveUserLoginTime(request, env, username) {
   return json({ success: true });
 }
 
-async function handleForceLogoutAll(request, env) {
+async function handleForceLogoutAll(request, env, ctx) {
   const session = await getSession(request, env);
   if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
   const listed = await env.DASHBOARD_KV.list({ prefix: 'session:' });
@@ -699,11 +702,41 @@ async function handleForceLogoutAll(request, env) {
   }));
   const ip = request.headers.get('CF-Connecting-IP') || '?';
   await logActivity(env, { action: 'force-logout-all', username: session.username, ip, success: true, detail: `Kicked ${kicked} sessions` });
-  notifyEmail(env, 'force_logout_all', { admin: session.username, kicked, ip });
+  notifyEmail(env, ctx, 'force_logout_all', { admin: session.username, kicked, ip });
   return json({ success: true, kicked });
 }
 
-async function handleChangePw(request, env, username) {
+async function handleTestEmail(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Session expired' }, 401);
+  if (!(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  const cfg = await env.DASHBOARD_KV.get('system_config', 'json') || {};
+  if (!cfg.emailEnabled) return json({ error: 'Email notifications chưa được bật' }, 400);
+  const wh = cleanEnv(cfg.emailWebhook);
+  if (!wh) return json({ error: 'Webhook URL chưa được cấu hình' }, 400);
+  const ip = request.headers.get('CF-Connecting-IP') || '?';
+  try {
+    const res = await fetch(wh, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: 'test',
+        username: session.username,
+        ip,
+        timestamp: new Date().toISOString(),
+        emailTo: cleanEnv(cfg.emailAdminAddress),
+        message: 'Test email từ Dashboard — nếu nhận được email này, webhook đang hoạt động đúng.',
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return json({ error: `Webhook trả về HTTP ${res.status}` }, 502);
+    return json({ success: true });
+  } catch (e) {
+    return json({ error: `Không thể kết nối webhook: ${e.message}` }, 502);
+  }
+}
+
+async function handleChangePw(request, env, username, ctx) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Not authenticated' }, 401);
   if (!(await isAdminUser(env, session)) && session.username !== username) return json({ error: 'Forbidden' }, 403);
@@ -727,7 +760,7 @@ async function handleChangePw(request, env, username) {
   // Invalidate all existing sessions so old sessions can't reuse stale auth
   await invalidateUserSessions(env, username);
   await logActivity(env, { action: 'password-change', username: session.username, success: true, detail: `Changed password for: ${username}` });
-  notifyEmail(env, 'password_changed', { username, changedBy: session.username });
+  notifyEmail(env, ctx, 'password_changed', { username, changedBy: session.username });
   return json({ success: true });
 }
 
@@ -1152,6 +1185,14 @@ async function handleUpdateUserGroups(request, env, username) {
     }
     user.groups = [...currentAdminGroups, ...safeNew];
   }
+  // Validate: mỗi user chỉ được join tối đa 1 nhóm có role (role-management group)
+  if (user.groups && user.groups.length > 0) {
+    const groupData = await Promise.all(user.groups.map(gid => env.DASHBOARD_KV.get(`policy_group:${gid}`, 'json')));
+    const roleGroups = groupData.filter(g => g && g.role);
+    if (roleGroups.length > 1) {
+      return json({ error: `Mỗi user chỉ được join 1 nhóm Role Management. Đang cố gán: ${roleGroups.map(g => '"'+g.name+'"').join(', ')}` }, 400);
+    }
+  }
   // Allow role change — CHỈ ADMIN mới được đổi role (delegate KHÔNG được)
   const oldRole = user.role;
   if (body.role !== undefined && isAdmin) {
@@ -1460,7 +1501,7 @@ async function handleMicrosoftAuth(request, env) {
   return Response.redirect(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?${params}`, 302);
 }
 
-async function handleMicrosoftCallback(request, env) {
+async function handleMicrosoftCallback(request, env, ctx) {
   const url       = new URL(request.url);
   const code      = url.searchParams.get('code');
   const state     = url.searchParams.get('state');
@@ -1667,7 +1708,7 @@ function doVerify(){
   }));
 
   await logActivity(env, { action: 'login_microsoft', username: matchedUsername, ip, success: true, detail: `SSO via ${msEmail}` });
-  notifyEmail(env, 'login_success', { username: matchedUsername, ip });
+  notifyEmail(env, ctx, 'login_success', { username: matchedUsername, ip });
 
   // Trả về HTML — nếu mở từ popup thì postMessage để login page tự navigate, rồi close ngay.
   // KHÔNG navigate popup (window.location.href = '/') vì sẽ gây popup hiện dashboard.
@@ -1714,7 +1755,7 @@ function doVerify(){
 }
 
 /* ── Microsoft SSO — MFA verify (POST /auth/microsoft/mfa) ── */
-async function handleMicrosoftMfaVerify(request, env) {
+async function handleMicrosoftMfaVerify(request, env, ctx) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const { tempToken, code } = body || {};
@@ -1766,7 +1807,7 @@ async function handleMicrosoftMfaVerify(request, env) {
   }));
 
   await logActivity(env, { action: 'login_microsoft', username: temp.username, ip, success: true, detail: 'SSO + MFA verified' });
-  notifyEmail(env, 'login_success', { username: temp.username, ip });
+  notifyEmail(env, ctx, 'login_success', { username: temp.username, ip });
 
   const h = new Headers({ 'Content-Type': 'application/json' });
   h.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
@@ -4428,9 +4469,10 @@ async function handleGetSystemConfig(request, env) {
   });
 }
 
-async function handleSaveSystemConfig(request, env) {
+async function handleSaveSystemConfig(request, env, ctx) {
   const session = await getSession(request, env);
-  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  if (!session) return json({ error: 'Session expired' }, 401);
+  if (!(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const cfg = await env.DASHBOARD_KV.get('system_config', 'json') || {};
@@ -4447,7 +4489,7 @@ async function handleSaveSystemConfig(request, env) {
   if (body.maintenanceMode !== undefined) {
     const prev = cfg.maintenanceMode;
     cfg.maintenanceMode = !!body.maintenanceMode;
-    if (prev !== cfg.maintenanceMode) notifyEmail(env, 'maintenance_toggle', { enabled: cfg.maintenanceMode, admin: session.username });
+    if (prev !== cfg.maintenanceMode) notifyEmail(env, ctx, 'maintenance_toggle', { enabled: cfg.maintenanceMode, admin: session.username });
   }
   if (body.maintenanceMsg !== undefined)    cfg.maintenanceMsg    = String(body.maintenanceMsg).slice(0, 300);
   // ── Security / Login ──
@@ -5716,15 +5758,15 @@ export default {
     if (p === '/api/ssh-movi/verify') return handleSshMoviVerify(request, env);
 
     // ── Auth API (public) ──
-    if (p === '/api/auth/login')                   return handleLogin(request, env);
+    if (p === '/api/auth/login')                   return handleLogin(request, env, ctx);
     if (p === '/api/auth/logout')                  return handleLogout(request, env);
     if (p === '/api/auth/refresh')                 return handleSessionRefresh(request, env);
     if (p === '/api/auth/mfa/verify')              return handleMfaVerify(request, env);
 
     // ── Microsoft OIDC SSO (public — no session required) ──
     if (p === '/auth/microsoft')          return handleMicrosoftAuth(request, env);
-    if (p === '/auth/microsoft/callback') return handleMicrosoftCallback(request, env);
-    if (p === '/auth/microsoft/mfa' && request.method === 'POST') return handleMicrosoftMfaVerify(request, env);
+    if (p === '/auth/microsoft/callback') return handleMicrosoftCallback(request, env, ctx);
+    if (p === '/auth/microsoft/mfa' && request.method === 'POST') return handleMicrosoftMfaVerify(request, env, ctx);
 
     // ── First-login setup flow (no session required — use setupToken) ──
     if (p === '/api/auth/setup/change-password')   return handleSetupChangePassword(request, env);
@@ -5759,9 +5801,10 @@ export default {
     const userDel  = p.match(/^\/api\/admin\/users\/([^/]+)$/);
     if (userDel) {
       if (request.method === 'DELETE') return handleDeleteUser(request, env, decodeURIComponent(userDel[1]));
-      if (request.method === 'PUT')    return handleChangePw(request, env, decodeURIComponent(userDel[1]));
+      if (request.method === 'PUT')    return handleChangePw(request, env, decodeURIComponent(userDel[1]), ctx);
     }
-    if (p === '/api/admin/force-logout-all' && request.method === 'POST') return handleForceLogoutAll(request, env);
+    if (p === '/api/admin/force-logout-all' && request.method === 'POST') return handleForceLogoutAll(request, env, ctx);
+    if (p === '/api/admin/test-email' && request.method === 'POST') return handleTestEmail(request, env);
 
     // ── Policy Groups API ──
     if (p === '/api/admin/groups') {
@@ -5810,7 +5853,7 @@ export default {
     if (p === '/api/audit-log/purge') return handlePurgeAuditLog(request, env);
     if (p === '/api/system-config') {
       if (request.method === 'GET') return handleGetSystemConfig(request, env);
-      if (request.method === 'POST') return handleSaveSystemConfig(request, env);
+      if (request.method === 'POST') return handleSaveSystemConfig(request, env, ctx);
     }
     if (p === '/api/meraki-clients')       return handleMerakiClients(request, env);
     if (p === '/api/meraki-client-policy')    return handleMerakiClientPolicy(request, env);
