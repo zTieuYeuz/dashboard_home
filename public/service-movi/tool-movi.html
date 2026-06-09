@@ -1096,6 +1096,9 @@ input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.7}
       </div>
       <div id="ce-result-wrap" style="display:none"></div>
     </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="ce_closeModal()">Đóng</button>
+    </div>
   </div>
 </div><!-- /modal-overlay #modal-check-email -->
 
@@ -1117,6 +1120,9 @@ input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.7}
       <!-- Active policies panel -->
       <div id="fgp-section-active" style="display:none">
         <div id="fgp-active-list"><div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px">Đang tải...</div></div>
+        <div style="padding:.875rem 0 0;border-top:1px solid var(--border);display:flex;justify-content:flex-end;margin-top:8px">
+          <button class="btn btn-ghost" onclick="fgp_closeModal()">Đóng</button>
+        </div>
       </div>
       <form id="fgp-form" onsubmit="return false">
         <div class="form-grid">
@@ -1281,19 +1287,16 @@ function closeModal() {
   closeConfirm();
   document.body.style.overflow = '';
 }
-function handleOverlayClick(e) {
-  if (e.target === e.currentTarget) closeModal();
-}
+function handleOverlayClick(e) { /* disabled: click outside no longer closes */ }
 document.addEventListener('keydown', function(e){
   if (e.key === 'Escape') {
-    if (document.getElementById('modal-fg-policy').classList.contains('open')) { fgp_closeModal(); return; }
-    if (document.getElementById('modal-check-email').classList.contains('open')) { ce_closeModal(); return; }
-    if (document.getElementById('modal-asset-search').classList.contains('open')) { as_closeModal(); return; }
-    if (document.getElementById('modal-delete-user').classList.contains('open')) { du_closeModal(); return; }
-    if (document.getElementById('modal-block-user').classList.contains('open')) { bu_closeModal(); return; }
+    // Escape only closes confirm dialogs (not main modals — use ✕ button to avoid accidental close)
     var co = document.getElementById('confirm-overlay');
-    if (co.classList.contains('open')) { closeConfirm(); return; }
-    closeModal();
+    if (co && co.classList.contains('open')) { closeConfirm(); return; }
+    var buco = document.getElementById('bu-confirm-overlay');
+    if (buco && buco.classList.contains('open')) { bu_closeConfirm(); return; }
+    var duco = document.getElementById('du-confirm-overlay');
+    if (duco && duco.classList.contains('open')) { du_closeConfirm(); return; }
   }
 });
 
@@ -1769,7 +1772,7 @@ function bu_closeModal() {
   if (_bu_pollTimer) { clearInterval(_bu_pollTimer); _bu_pollTimer = null; }
   document.body.style.overflow = '';
 }
-function bu_handleOverlayClick(e) { if (e.target === e.currentTarget) bu_closeModal(); }
+function bu_handleOverlayClick(e) { /* disabled */ }
 
 function bu_showStep(n) {
   _bu_step = n;
@@ -2377,7 +2380,7 @@ function du_closeModal() {
   if (_du_delTimer) { clearInterval(_du_delTimer); _du_delTimer = null; }
   document.body.style.overflow = '';
 }
-function du_handleOverlayClick(e) { if (e.target === e.currentTarget) du_closeModal(); }
+function du_handleOverlayClick(e) { /* disabled */ }
 function du_closeConfirm() { document.getElementById('du-confirm-overlay').classList.remove('open'); }
 
 /* ── Mode switch ── */
@@ -2701,7 +2704,7 @@ function as_closeModal() {
   document.getElementById('modal-asset-search').classList.remove('open');
   document.body.style.overflow = '';
 }
-function as_handleOverlayClick(e) { if (e.target === e.currentTarget) as_closeModal(); }
+function as_handleOverlayClick(e) { /* disabled */ }
 
 function as_clearSearch() {
   _as_data = [];
@@ -2921,7 +2924,7 @@ function ce_closeModal() {
   document.getElementById('modal-check-email').classList.remove('open');
   document.body.style.overflow = '';
 }
-function ce_handleOverlayClick(e) { if (e.target === e.currentTarget) ce_closeModal(); }
+function ce_handleOverlayClick(e) { /* disabled */ }
 
 async function ce_doCheck() {
   var query   = document.getElementById('ce-email').value.trim();
@@ -3113,7 +3116,7 @@ function fgp_closeModal() {
   document.body.style.overflow = '';
   if (_fgp_countdownTimer) { clearInterval(_fgp_countdownTimer); _fgp_countdownTimer = null; }
 }
-function fgp_handleOverlayClick(e) { if (e.target === e.currentTarget) fgp_closeModal(); }
+function fgp_handleOverlayClick(e) { /* disabled */ }
 
 function fgp_switchTab(tab) {
   _fgp_tab = tab;
