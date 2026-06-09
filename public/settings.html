@@ -1778,22 +1778,25 @@ function saveManagePerms() {
   var sysCbs = document.querySelectorAll('.delegate-sys-cb');
   var sysPerms = {};
   Array.from(sysCbs).forEach(function(cb){ if (cb.checked) sysPerms[cb.value] = true; });
-  // Save both in parallel
-  Promise.all([
-    fetch('/api/admin/users/'+encodeURIComponent(username)+'/manage-perms', {
-      method: 'PUT', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({canManagePerms: canManagePerms})
-    }).then(function(r){return r.json();}),
-    fetch('/api/admin/users/'+encodeURIComponent(username)+'/sys-perms', {
+  // Save sequentially to avoid KV race condition (both endpoints read-modify-write same key)
+  fetch('/api/admin/users/'+encodeURIComponent(username)+'/manage-perms', {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({canManagePerms: canManagePerms})
+  }).then(function(r){return r.json();})
+  .then(function(r1) {
+    if (r1 && r1.error) { toast('Lỗi: '+r1.error, 'err'); return Promise.reject(null); }
+    return fetch('/api/admin/users/'+encodeURIComponent(username)+'/sys-perms', {
       method: 'PUT', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({sysPerms: sysPerms})
-    }).then(function(r){return r.json();})
-  ]).then(function(results){
-    var err = (results[0]&&results[0].error) || (results[1]&&results[1].error);
-    if (err) { toast('Lỗi: '+err, 'err'); return; }
+    }).then(function(r){return r.json();});
+  })
+  .then(function(r2) {
+    if (!r2) return;
+    if (r2.error) { toast('Lỗi: '+r2.error, 'err'); return; }
     toast('✓ Đã lưu ủy quyền cho ' + username, 'ok');
     loadUsers();
-  }).catch(function(e){ toast('Lỗi: '+e.message,'err'); });
+  })
+  .catch(function(e){ if (e) toast('Lỗi: '+e.message,'err'); });
 }
 
 function closeUserPermPanel() {
@@ -3291,18 +3294,18 @@ function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
    INIT
    ═══════════════════════════════════════════════════════════ */
 window.addEventListener('DOMContentLoaded', function(){
+  var _sp = __USER__.sysPerms || {};
   if (__USER__.isAdmin) {
     // Admin: load everything
     loadSettings();
-  } else if ((__USER__.canManagePerms||[]).length > 0) {
-    // Delegated manager: load users, policy groups, user groups + personal account data
-    loadUsers();
-    loadGroups();
-    loadUserGroups();
-    loadMfaStatus();
-    loadAuditLog();
   } else {
-    // Non-admin: only load what they can see (Account tab + Audit Log)
+    // Delegated manager or sys-perm user: load based on what they can access
+    if ((__USER__.canManagePerms||[]).length > 0 || _sp.addUser) {
+      loadUsers();
+      loadGroups();
+      loadUserGroups();
+    }
+    if (_sp.systemConfig) loadSysConfig();
     loadMfaStatus();
     loadAuditLog();
   }
