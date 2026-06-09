@@ -169,6 +169,14 @@ select.inp{cursor:pointer}
 .cam-check-label{display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 12px;border:1px solid var(--border);border-radius:20px;cursor:pointer;background:var(--surface);transition:all .15s;white-space:nowrap}
 .cam-check-label:has(input:checked){border-color:var(--warn);background:color-mix(in oklch,var(--warn) 10%,transparent);color:var(--warn)}
 .cam-check-label input{width:13px;height:13px;accent-color:var(--warn);cursor:pointer}
+.dlg-group{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px}
+.dlg-group-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:var(--surface);cursor:pointer;user-select:none;font-size:12px;font-weight:600;gap:8px}
+.dlg-group-hdr:hover{background:var(--surface-2)}
+.dlg-group-hdr .dlg-arrow{font-size:10px;color:var(--muted);transition:transform .2s}
+.dlg-group-hdr.open .dlg-arrow{transform:rotate(180deg)}
+.dlg-group-body{display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px;background:var(--bg);border-top:1px solid var(--border)}
+.dlg-group-body.hidden{display:none}
+.dlg-sel-all{font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;margin-left:auto}
 
 /* ── User Row ── */
 .user-row{display:flex;align-items:center;gap:14px;padding:1rem 1.5rem;border-bottom:1px solid var(--border)}
@@ -336,7 +344,7 @@ select.inp{cursor:pointer}
           <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">
             Tích vào service nào thì user này có thể vào mục <b>User Management</b> và chỉnh permissions của user khác — <b>nhưng chỉ được chỉnh đúng service đó</b>, không nhiều hơn.
           </div>
-          <div id="user-perm-delegate-list" style="display:flex;flex-wrap:wrap;gap:8px 16px;margin-bottom:12px"></div>
+          <div id="user-perm-delegate-list" style="margin-bottom:12px"></div>
           <button class="btn btn-outline" onclick="saveManagePerms()">🛡 Lưu ủy quyền</button>
         </div>
         <div style="margin-top:14px;display:flex;gap:8px">
@@ -1007,18 +1015,25 @@ var __USER__ = window.__USER__ || _readUserCookie() || { username:'?', role:'use
 
 /* Human-readable names for all service IDs — must be declared BEFORE initUI() runs */
 var DELEGATE_SVC_LABELS = {
-  'meraki':'Meraki Network','fortigate-movi':'FortiGate Movi','camera-movi':'Camera Movi',
-  'n8n-movi':'n8n Movi','topology':'Movi Map Network','vmware01-movi':'VMware01 Movi',
-  'vmware02-movi':'VMware02 Movi','tool-movi':'Tool Movi',
-  'tool-movi-create-user':'Tool: Tạo User','tool-movi-block-user':'Tool: Block User',
-  'tool-movi-delete-user':'Tool: Xóa User','tool-movi-asset-search':'Tool: Tra Cứu Tài Sản',
-  'ssh-movi':'SSH Movi',
+  /* ── Service Home ── */
   'esxi':'VMware ESXi','n8n':'n8n Automation','casaos':'CasaOS',
   '9router':'9Router','fortigate':'FortiGate','asus':'ASUS Router',
   'ssh':'SSH Terminal','uptime-kuma':'Uptime Kuma','camera':'Camera Home',
+  /* ── Service Movi ── */
+  'meraki':'Meraki Network','topology':'Movi Map Network',
+  'fortigate-movi':'FortiGate Movi','camera-movi':'Camera Movi',
+  'n8n-movi':'n8n Movi','vmware01-movi':'VMware01 Movi','vmware02-movi':'VMware02 Movi',
+  'tool-movi-create-user':'Tool: Tạo User','tool-movi-block-user':'Tool: Block User',
+  'tool-movi-delete-user':'Tool: Xóa User','tool-movi-asset-search':'Tool: Tra Cứu Tài Sản',
+  'tool-movi-check-email':'Tool: Check Email','tool-movi-azure-group':'Tool: Azure Group',
+  'tool-movi-fg-policy-lan':'Tool: FG Policy LAN','tool-movi-fg-policy-wifi':'Tool: FG Policy WiFi',
+  'ssh-movi':'Termix Movi',
 };
+var _DELEGATE_HOME = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera'];
+var _DELEGATE_MOVI = ['meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
 /* tool-movi sub-keys — needed to restore parent group visibility in delegate filter */
 var _TOOL_MOVI_SUB = ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'];
+/* tool-movi virtual key kept for group-editor compatibility only, not shown in delegate list */
 var _delegateMode = false;   // true when current user is a delegated manager (not admin)
 var _delegateServices = [];  // services the current delegated user can manage
 /* Normalize delegate services: if any tool-movi sub-key present, add virtual parent for group editor */
@@ -1633,19 +1648,42 @@ function _renderDelegatePermEditor(u) {
   el.appendChild(wrapper);
 }
 
-/* Render the delegation section (admin view only): checkboxes for which services user can manage */
+/* Render the delegation section (admin view only): checkboxes grouped by Home / Movi */
 function _renderDelegateSvcSection(u) {
   var el = document.getElementById('user-perm-delegate-list');
   if (!el) return;
   var current = u.canManagePerms || [];
-  var allSvcs = Object.keys(DELEGATE_SVC_LABELS);
-  el.innerHTML = allSvcs.map(function(svc){
-    var checked = current.indexOf(svc) >= 0;
-    return '<label class="cam-check-label" style="min-width:180px">'
-      +'<input type="checkbox" class="delegate-svc-cb" value="'+esc(svc)+'"'+(checked?' checked':'')+'>'
-      +esc(DELEGATE_SVC_LABELS[svc]||svc)
-    +'</label>';
-  }).join('');
+
+  function renderGroup(id, icon, title, svcs) {
+    var checks = svcs.map(function(svc){
+      var checked = current.indexOf(svc) >= 0;
+      return '<label class="cam-check-label">'
+        +'<input type="checkbox" class="delegate-svc-cb" value="'+esc(svc)+'"'+(checked?' checked':'')+'>'
+        +esc(DELEGATE_SVC_LABELS[svc]||svc)
+        +'</label>';
+    }).join('');
+    var checkedCount = svcs.filter(function(s){ return current.indexOf(s) >= 0; }).length;
+    var badge = checkedCount > 0
+      ? ' <span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:10px;background:color-mix(in oklch,var(--warn) 15%,transparent);color:var(--warn);border:1px solid color-mix(in oklch,var(--warn) 30%,transparent)">'+checkedCount+'/'+svcs.length+'</span>'
+      : ' <span style="font-size:10px;color:var(--muted)">'+svcs.length+' services</span>';
+    return '<div class="dlg-group">'
+      +'<div class="dlg-group-hdr open" onclick="toggleDlgGroup(this)">'
+        +'<span>'+icon+' '+title+badge+'</span>'
+        +'<span class="dlg-arrow">▼</span>'
+      +'</div>'
+      +'<div class="dlg-group-body">'+checks+'</div>'
+    +'</div>';
+  }
+
+  el.innerHTML =
+    renderGroup('home','🏠','Service Home',_DELEGATE_HOME) +
+    renderGroup('movi','🏢','Service Movi',_DELEGATE_MOVI);
+}
+
+function toggleDlgGroup(hdr) {
+  hdr.classList.toggle('open');
+  var body = hdr.nextElementSibling;
+  if (body) body.classList.toggle('hidden');
 }
 
 /* Save canManagePerms for current user (admin only) */
