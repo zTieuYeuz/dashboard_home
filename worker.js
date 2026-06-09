@@ -481,6 +481,7 @@ async function handleListUsers(request, env) {
       groups:           d.groups || [],
       userGroups:       d.userGroups || [],
       canManagePerms:   d.canManagePerms || [],
+      sysPerms:         sanitizeSysPerms(d.sysPerms || {}),
       locked:           !!d.locked,
       loginAttempts:    d.loginAttempts || 0,
       lockedAt:         d.lockedAt || null,
@@ -495,10 +496,11 @@ async function handleListUsers(request, env) {
     return json({ users });
   }
 
-  // Non-admin: check if they have delegation rights
+  // Non-admin: check if they have delegation rights or sysPerms.addUser
   const callerUser = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
   const canManage = (callerUser && Array.isArray(callerUser.canManagePerms)) ? callerUser.canManagePerms.filter(s => ALL_SERVICES.includes(s)) : [];
-  if (!canManage.length) return json({ error: 'Admin required' }, 403);
+  const hasSysAddUser = !!(callerUser?.sysPerms?.addUser);
+  if (!canManage.length && !hasSysAddUser) return json({ error: 'Admin required' }, 403);
 
   // Return filtered list: basic info + only the managed service permissions
   const users = [];
@@ -514,11 +516,11 @@ async function handleListUsers(request, env) {
       permissions: filteredPerms,
       panels:      {},
       cameras:     [],
-      groups:      [],
-      userGroups:  [],
+      groups:      d.groups || [],
+      userGroups:  d.userGroups || [],
     });
   }
-  return json({ users, delegateMode: true, canManagePerms: canManage });
+  return json({ users, delegateMode: true, canManagePerms: canManage, sysPerms: sanitizeSysPerms(callerUser?.sysPerms || {}) });
 }
 
 async function handleCreateUser(request, env) {
@@ -527,9 +529,11 @@ async function handleCreateUser(request, env) {
     if (!session) return json({ error: 'Unauthorized' }, 401);
     const isAdmin = await isAdminUser(env, session);
     if (!isAdmin) {
-      // Allow delegated managers to create users
+      // Allow delegated managers or users with sysPerms.addUser to create users
+      const callerRaw = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
       const delegateSvcs = await getSessionDelegateServices(env, session);
-      if (!delegateSvcs.length) return json({ error: 'Admin required' }, 403);
+      const canAddUser = (callerRaw?.sysPerms?.addUser === true) || delegateSvcs.length > 0;
+      if (!canAddUser) return json({ error: 'Admin required' }, 403);
     }
     if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
     let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
@@ -614,6 +618,8 @@ async function handleUpdatePermissions(request, env, username) {
 
   // Non-admin: check delegation rights
   if (username === session.username) return json({ error: 'Không thể tự xét quyền cho bản thân qua tính năng này' }, 400);
+  // Block delegated users from editing admin accounts
+  if (user.role === 'admin') return json({ error: 'Không thể chỉnh quyền của tài khoản admin' }, 403);
   const callerUser = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
   const canManage = (callerUser && Array.isArray(callerUser.canManagePerms)) ? callerUser.canManagePerms.filter(s => ALL_SERVICES.includes(s)) : [];
   if (!canManage.length) return json({ error: 'Không có quyền thay đổi permissions của người khác' }, 403);
@@ -644,6 +650,19 @@ async function handleSetManagePerms(request, env, username) {
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
   await logActivity(env, { action: 'delegate-set-manage-perms', username: session.username, success: true, detail: `canManagePerms for ${username}: [${canManagePerms.join(', ')}]` });
   return json({ success: true, username, canManagePerms });
+}
+
+async function handleSetSysPerms(request, env, username) {
+  const session = await getSession(request, env);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  if (username === 'admin') return json({ error: 'Không thể sửa admin' }, 400);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+  user.sysPerms = sanitizeSysPerms(body.sysPerms || {});
+  await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  await logActivity(env, { action: 'set-sys-perms', username: session.username, success: true, detail: `sysPerms for ${username}: ${JSON.stringify(user.sysPerms)}` });
+  return json({ success: true, username, sysPerms: user.sysPerms });
 }
 
 async function handleDeleteUser(request, env, username) {
@@ -825,6 +844,7 @@ async function computeEffectivePermissions(env, username) {
     canManagePerms: Array.isArray(user.canManagePerms)
       ? user.canManagePerms.filter(s => ALL_SERVICES.includes(s))
       : [],
+    sysPerms:    sanitizeSysPerms(user.sysPerms || {}),
     mfaEnabled:  !!(user.mfaEnabled),
     isSaml:      !!(user.microsoftEmail),
   };
@@ -895,6 +915,13 @@ function sanitizePermissions(raw) {
   }
   return out;
 }
+function sanitizeSysPerms(raw) {
+  if (!raw || typeof raw !== 'object') return {};
+  const out = {};
+  if (raw.addUser === true) out.addUser = true;
+  if (raw.systemConfig === true) out.systemConfig = true;
+  return out;
+}
 function sanitizePanels(raw) {
   if (!raw || typeof raw !== 'object') return {};
   const out = {};
@@ -927,10 +954,11 @@ function _truncateJson(v, maxBytes) {
 async function handleListGroups(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
-  // Allow admin (incl. group-admin) OR delegated managers (users with canManagePerms)
+  // Allow admin, delegated managers, or users with sysPerms.addUser (read-only for group assignment during user creation)
   if (!(await isAdminUser(env, session))) {
+    const callerRaw = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
     const delegateSvcs = await getSessionDelegateServices(env, session);
-    if (!delegateSvcs.length) return json({ error: 'Admin required' }, 403);
+    if (!delegateSvcs.length && !callerRaw?.sysPerms?.addUser) return json({ error: 'Admin required' }, 403);
   }
   const ids = await env.DASHBOARD_KV.get('policy_groups', 'json') || [];
   const groups = [];
@@ -1038,8 +1066,9 @@ async function handleListUserGroups(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await isAdminUser(env, session))) {
+    const callerRaw = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
     const delegateSvcs = await getSessionDelegateServices(env, session);
-    if (!delegateSvcs.length) return json({ error: 'Admin required' }, 403);
+    if (!delegateSvcs.length && !callerRaw?.sysPerms?.addUser) return json({ error: 'Admin required' }, 403);
   }
   const ids = await env.DASHBOARD_KV.get('user_groups', 'json') || [];
   const groups = [];
@@ -1164,6 +1193,8 @@ async function handleUpdateUserGroups(request, env, username) {
   if (username === 'admin') return json({ error: 'Không thể sửa admin' }, 400);
   const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
   if (!user) return json({ error: 'User not found' }, 404);
+  // Block delegated users from modifying admin users' groups
+  if (!isAdmin && user.role === 'admin') return json({ error: 'Không thể sửa nhóm của tài khoản admin' }, 403);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   if (isAdmin) {
     // Admin can assign any group
@@ -2352,6 +2383,7 @@ a:hover{background:#4f46e5}</style></head>
     groups: isAdmin ? [] : effPerms.groups,
     isAdmin,
     canManagePerms: isAdmin ? [] : (effPerms.canManagePerms || []),
+    sysPerms: isAdmin ? { addUser: true, systemConfig: true } : (effPerms.sysPerms || {}),
     dashboardTitle: dashTitle,
     authMethod: session.authMethod || 'local',
     mfaEnabled: !!(effPerms.mfaEnabled),
@@ -4423,7 +4455,11 @@ async function handlePurgeAuditLog(request, env) {
 
 async function handleGetSystemConfig(request, env) {
   const session = await getSession(request, env);
-  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  if (!session) return json({ error: 'Session expired' }, 401);
+  if (!(await isAdminUser(env, session))) {
+    const callerRaw = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
+    if (!callerRaw?.sysPerms?.systemConfig) return json({ error: 'Admin required' }, 403);
+  }
   const cfg = await env.DASHBOARD_KV.get('system_config', 'json') || {};
   return json({
     // ── Existing ──
@@ -4472,7 +4508,10 @@ async function handleGetSystemConfig(request, env) {
 async function handleSaveSystemConfig(request, env, ctx) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Session expired' }, 401);
-  if (!(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  if (!(await isAdminUser(env, session))) {
+    const callerRaw = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
+    if (!callerRaw?.sysPerms?.systemConfig) return json({ error: 'Admin required' }, 403);
+  }
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const cfg = await env.DASHBOARD_KV.get('system_config', 'json') || {};
@@ -5788,6 +5827,8 @@ export default {
     if (userPerm) return handleUpdatePermissions(request, env, decodeURIComponent(userPerm[1]));
     const userManagePerms = p.match(/^\/api\/admin\/users\/([^/]+)\/manage-perms$/);
     if (userManagePerms) return handleSetManagePerms(request, env, decodeURIComponent(userManagePerms[1]));
+    const userSysPerms = p.match(/^\/api\/admin\/users\/([^/]+)\/sys-perms$/);
+    if (userSysPerms && request.method === 'PUT') return handleSetSysPerms(request, env, decodeURIComponent(userSysPerms[1]));
     const userGrp = p.match(/^\/api\/admin\/users\/([^/]+)\/groups$/);
     if (userGrp) return handleUpdateUserGroups(request, env, decodeURIComponent(userGrp[1]));
     const userPnl = p.match(/^\/api\/admin\/users\/([^/]+)\/panels$/);
