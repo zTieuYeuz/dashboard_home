@@ -1492,30 +1492,32 @@ function saveUser() {
 
   if (editingUsername) {
     // Update: change password (nếu local & có nhập) + groups + role + microsoft email + login time
-    var tasks = [];
+    // Run sequentially (not parallel) to prevent read-modify-write race on the same KV user key.
+    // e.g. login-time update must NOT overwrite the role change committed by the groups/role update.
+    var taskFns = [];
     if (!isAzure && password) {
-      tasks.push(fetch('/api/admin/users/'+encodeURIComponent(editingUsername),{
+      taskFns.push(function(){return fetch('/api/admin/users/'+encodeURIComponent(editingUsername),{
         method:'PUT',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({password:password})
-      }).then(function(r){return r.json();}));
+      }).then(function(r){return r.json();});});
     }
-    tasks.push(fetch('/api/admin/users/'+encodeURIComponent(editingUsername)+'/groups',{
+    taskFns.push(function(){return fetch('/api/admin/users/'+encodeURIComponent(editingUsername)+'/groups',{
       method:'PUT',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({groups:groups, role:role})
-    }).then(function(r){return r.json();}));
+    }).then(function(r){return r.json();});});
     // Save Microsoft email (link hoặc unlink)
     var currentMsEmail = (allUsers.find(function(u){return u.username===editingUsername;})||{}).microsoftEmail||'';
     var newMsEmail = isAzure ? msEmail : '';
     if (newMsEmail !== (currentMsEmail||'').toLowerCase()) {
-      tasks.push(fetch('/api/admin/users/'+encodeURIComponent(editingUsername)+'/microsoft-email',{
+      taskFns.push(function(){return fetch('/api/admin/users/'+encodeURIComponent(editingUsername)+'/microsoft-email',{
         method:'PUT',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({microsoftEmail: newMsEmail || null})
-      }).then(function(r){return r.json();}));
+      }).then(function(r){return r.json();});});
     }
-    // Save login time restriction
+    // Save login time restriction — must run AFTER groups/role to avoid overwriting role change
     var ltCb = document.getElementById('um-login-time-enabled');
     if (ltCb) {
-      tasks.push(fetch('/api/admin/users/'+encodeURIComponent(editingUsername)+'/login-time',{
+      taskFns.push(function(){return fetch('/api/admin/users/'+encodeURIComponent(editingUsername)+'/login-time',{
         method:'PUT',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           loginTimeEnabled: ltCb.checked,
@@ -1523,10 +1525,12 @@ function saveUser() {
           loginTimeEnd:     document.getElementById('um-lt-end').value   || '23:00',
           loginTimeZone:    document.getElementById('um-lt-tz').value    || 'Asia/Ho_Chi_Minh',
         })
-      }).then(function(r){return r.json();}));
+      }).then(function(r){return r.json();});});
     }
 
-    Promise.all(tasks).then(function(results){
+    taskFns.reduce(function(chain, fn){
+      return chain.then(function(results){ return fn().then(function(r){ results.push(r); return results; }); });
+    }, Promise.resolve([])).then(function(results){
       btn.disabled=false; btn.textContent='Lưu thay đổi';
       var hasErr = results.find(function(r){return r && r.error;});
       if (hasErr) { errEl.textContent=hasErr.error; errEl.classList.add('show'); return; }
