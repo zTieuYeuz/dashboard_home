@@ -529,11 +529,9 @@ async function handleCreateUser(request, env) {
     if (!session) return json({ error: 'Unauthorized' }, 401);
     const isAdmin = await isAdminUser(env, session);
     if (!isAdmin) {
-      // Allow delegated managers or users with sysPerms.addUser to create users
+      // Only sysPerms.addUser grants user creation — service delegation (canManagePerms) does NOT
       const callerRaw = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
-      const delegateSvcs = await getSessionDelegateServices(env, session);
-      const canAddUser = (callerRaw?.sysPerms?.addUser === true) || delegateSvcs.length > 0;
-      if (!canAddUser) return json({ error: 'Admin required' }, 403);
+      if (!callerRaw?.sysPerms?.addUser) return json({ error: 'Admin required' }, 403);
     }
     if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
     let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
