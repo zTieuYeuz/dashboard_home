@@ -172,6 +172,14 @@ select.inp{cursor:pointer}
 .cam-check-label{display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 12px;border:1px solid var(--border);border-radius:20px;cursor:pointer;background:var(--surface);transition:all .15s;white-space:nowrap}
 .cam-check-label:has(input:checked){border-color:var(--warn);background:color-mix(in oklch,var(--warn) 10%,transparent);color:var(--warn)}
 .cam-check-label input{width:13px;height:13px;accent-color:var(--warn);cursor:pointer}
+
+/* ── Camera Home hierarchical sub-section ── */
+.cam-home-sub{border-left:2px solid var(--border-soft);margin:0 0 0 2.25rem;padding:.375rem 0 .375rem .75rem;display:flex;flex-direction:column;gap:0}
+.cam-home-sub-row{padding:.25rem 0}
+.cam-home-sub-label{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:500;padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer;transition:all .15s;user-select:none}
+.cam-home-sub-label:has(input:checked){border-color:var(--accent);background:color-mix(in oklch,var(--accent) 9%,transparent);color:var(--accent)}
+.cam-home-sub-label input{accent-color:var(--accent);width:13px;height:13px;cursor:pointer}
+.cam-home-sub .cam-grid{padding-left:1rem}
 .dlg-group{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px}
 .dlg-group-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:var(--surface);cursor:pointer;user-select:none;font-size:12px;font-weight:600;gap:8px}
 .dlg-group-hdr:hover{background:var(--surface-2)}
@@ -1054,7 +1062,7 @@ var DELEGATE_SVC_LABELS = {
   /* ── Service Home ── */
   'esxi':'VMware ESXi','n8n':'n8n Automation','casaos':'CasaOS',
   '9router':'9Router','fortigate':'FortiGate','asus':'ASUS Router',
-  'ssh':'SSH Terminal','uptime-kuma':'Uptime Kuma','camera':'Camera Home',
+  'ssh':'SSH Terminal','uptime-kuma':'Uptime Kuma','camera':'Camera Home · Live','camera_playback':'Camera Home · Playback','camera_download':'Camera Home · Tải video',
   /* ── Service Movi ── */
   'meraki':'Meraki Network','topology':'Movi Map Network',
   'fortigate-movi':'FortiGate Movi','camera-movi':'Camera Movi',
@@ -1065,7 +1073,7 @@ var DELEGATE_SVC_LABELS = {
   'tool-movi-fg-policy-lan':'Tool: FG Policy LAN','tool-movi-fg-policy-wifi':'Tool: FG Policy WiFi',
   'ssh-movi':'Termix Movi',
 };
-var _DELEGATE_HOME = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera'];
+var _DELEGATE_HOME = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','camera_playback','camera_download'];
 var _DELEGATE_MOVI = ['meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
 /* tool-movi sub-keys — needed to restore parent group visibility in delegate filter */
 var _TOOL_MOVI_SUB = ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'];
@@ -1218,7 +1226,7 @@ var SERVICE_HOME_PAGES = [
   {id:'fortigate',   name:'FortiGate',      icon:'🛡', perms:['none','read','write']},
   {id:'asus',        name:'ASUS Router',    icon:'📡', perms:['none','read','write']},
   {id:'uptime-kuma', name:'Uptime Kuma',    icon:'📊', perms:['none','read']},
-  {id:'camera',      name:'Camera Home',    icon:'📷', perms:['none','read'], hasCameras:true, camClass:'home-cam-cb'}
+  {type:'camera-home-group', id:'camera-home-group', icon:'📷', name:'Camera Home'}
 ];
 
 var SERVICE_MOVI_PAGES = [
@@ -2716,6 +2724,67 @@ function buildServiceSection(title, pages, permissions, panels, cameras, pfx, se
       return;
     }
 
+    // ── Camera Home hierarchical group ──
+    if (page.type === 'camera-home-group') {
+      var hasAccess = (permissions['camera']||'none')!=='none'||
+                      (permissions['camera_playback']||'none')!=='none'||
+                      (permissions['camera_download']||'none')!=='none';
+
+      // Main row
+      var chgRow = document.createElement('div');
+      chgRow.className = 'perm-row';
+      chgRow.id = pfx+'-row-camera-home-group';
+      var chgRadios = '<label class="perm-radio-label"><input type="radio" name="'+pfx+'-perm-camera-home-group" value="none"'+(hasAccess?'':' checked')+' onchange="onCamHomeChange(\''+pfx+'\')"> Không truy cập</label>'
+        +'<label class="perm-radio-label"><input type="radio" name="'+pfx+'-perm-camera-home-group" value="access"'+(hasAccess?' checked':'')+' onchange="onCamHomeChange(\''+pfx+'\')"> Truy cập</label>';
+      chgRow.innerHTML = '<span class="perm-row-icon">📷</span><span class="perm-row-name">Camera Home</span><div class="perm-radios">'+chgRadios+'</div>';
+      body.appendChild(chgRow);
+
+      // Sub-section
+      var subSec = document.createElement('div');
+      subSec.className = 'cam-home-sub';
+      subSec.id = pfx+'-cam-home-sub';
+      subSec.style.display = hasAccess ? '' : 'none';
+
+      // 1. Quyền xem
+      var viewChecked = (permissions['camera']||'none') !== 'none';
+      var viewRow = document.createElement('div');
+      viewRow.className = 'cam-home-sub-row';
+      viewRow.innerHTML = '<label class="cam-home-sub-label"><input type="checkbox" id="'+pfx+'-camhome-view"'+(viewChecked?' checked':'')+' onchange="onCamHomeViewChange(\''+pfx+'\')"> 👁 Quyền xem (chọn camera)</label>';
+      subSec.appendChild(viewRow);
+
+      // Camera grid
+      var camSec2 = document.createElement('div');
+      camSec2.className = 'cam-grid';
+      camSec2.id = pfx+'-cams-camera';
+      camSec2.style.display = viewChecked ? '' : 'none';
+      allCameras.forEach(function(cam){
+        var checked2 = cameras.indexOf(cam.id) >= 0;
+        var lbl2 = document.createElement('label');
+        lbl2.className = 'cam-check-label';
+        lbl2.innerHTML = '<input type="checkbox" class="home-cam-cb" value="'+esc(cam.id)+'"'+(checked2?' checked':'')+'>📷 '+esc(cam.name||cam.id);
+        camSec2.appendChild(lbl2);
+      });
+      if (!allCameras.length) { camSec2.innerHTML = '<span style="font-size:12px;color:var(--muted);padding:.25rem 0">Chưa có dữ liệu camera</span>'; }
+      subSec.appendChild(camSec2);
+
+      // 2. Quyền Playback
+      var pbChecked = (permissions['camera_playback']||'none') !== 'none';
+      var pbRow = document.createElement('div');
+      pbRow.className = 'cam-home-sub-row';
+      pbRow.innerHTML = '<label class="cam-home-sub-label"><input type="checkbox" id="'+pfx+'-camhome-playback"'+(pbChecked?' checked':'')+'>  📼 Quyền Playback (xem lại ghi hình)</label>';
+      subSec.appendChild(pbRow);
+
+      // 3. Quyền Tải video
+      var dlChecked = (permissions['camera_download']||'none') !== 'none';
+      var dlRow = document.createElement('div');
+      dlRow.className = 'cam-home-sub-row';
+      dlRow.innerHTML = '<label class="cam-home-sub-label"><input type="checkbox" id="'+pfx+'-camhome-download"'+(dlChecked?' checked':'')+'>  ⬇ Quyền Tải video</label>';
+      subSec.appendChild(dlRow);
+
+      body.appendChild(subSec);
+      return;
+    }
+
     // For tool-group: parent perm is computed from sub-tools (any tool = write → parent = write)
     var perm = page.tools
       ? (page.tools.some(function(t){return (permissions[t.id]||'none')!=='none';}) ? 'write' : 'none')
@@ -2862,6 +2931,18 @@ function onPanelVisChange(pfx, panelId) {
   }
 }
 
+function onCamHomeChange(pfx) {
+  var radio = document.querySelector('input[name="'+pfx+'-perm-camera-home-group"]:checked');
+  var sub = document.getElementById(pfx+'-cam-home-sub');
+  if (sub) sub.style.display = (radio && radio.value !== 'none') ? '' : 'none';
+}
+
+function onCamHomeViewChange(pfx) {
+  var cb = document.getElementById(pfx+'-camhome-view');
+  var camSec = document.getElementById(pfx+'-cams-camera');
+  if (camSec) camSec.style.display = (cb && cb.checked) ? '' : 'none';
+}
+
 /* ── Collect permissions from the editor ──
    pfx = 'usr' for user editor, 'grp' for group editor.
    Camera queries are SCOPED to their own container (not document-wide) to prevent
@@ -2883,6 +2964,24 @@ function collectPermissions(pfx) {
 
   // Service Home
   SERVICE_HOME_PAGES.forEach(function(page){
+    if (page.type === 'camera-home-group') {
+      var mainR = document.querySelector('input[name="'+pfx+'-perm-camera-home-group"]:checked');
+      if (!mainR || mainR.value === 'none') {
+        permissions['camera'] = 'none';
+        permissions['camera_playback'] = 'none';
+        permissions['camera_download'] = 'none';
+      } else {
+        var viewCb = document.getElementById(pfx+'-camhome-view');
+        permissions['camera'] = (viewCb && viewCb.checked) ? 'read' : 'none';
+        if (permissions['camera'] !== 'none') { collectCamsFrom(pfx+'-cams-camera'); }
+        var pbCb = document.getElementById(pfx+'-camhome-playback');
+        permissions['camera_playback'] = (pbCb && pbCb.checked) ? 'read' : 'none';
+        var dlCb = document.getElementById(pfx+'-camhome-download');
+        permissions['camera_download'] = (dlCb && dlCb.checked) ? 'read' : 'none';
+      }
+      return;
+    }
+    if (page.type === 'group-header') return;
     var radio = document.querySelector('input[name="'+pfx+'-perm-'+page.id+'"]:checked');
     permissions[page.id] = radio ? radio.value : 'none';
     if (page.hasCameras && permissions[page.id] !== 'none') {

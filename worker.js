@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════ */
 const SESSION_COOKIE    = 'dh_session';
 const SESSION_TTL       = 60 * 60 * 8;      // default fallback only — runtime reads from KV system_config
-const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
+const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','camera_playback','camera_download','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
 
 /* Idle-timer script injected into every authenticated HTML page.
    T = idle timeout ms, W = warning threshold ms (must be < T) */
@@ -4359,6 +4359,17 @@ async function handleCamHomeEmbed(request, env) {
   const subPath = reqUrl.pathname.replace('/cam-home', '') || '/';
   const target  = `${camUrl}${subPath}${reqUrl.search}`;
 
+  // ── Granular camera permission checks ──
+  const isRecPath = /^\/api\/[^/]+\/(recordings|start\/|clip\.mp4)/.test(subPath);
+  const isDownload = reqUrl.searchParams.get('dl') === '1';
+  if (isDownload) {
+    if (!(await hasPerm(env, session, 'camera_download')))
+      return new Response('Forbidden', { status: 403 });
+  } else if (isRecPath) {
+    if (!(await hasPerm(env, session, 'camera_playback')))
+      return new Response('Forbidden', { status: 403 });
+  }
+
   // ── WebSocket proxy (MSE streaming) ──
   // CF Workers fetch does NOT support wss:// — keep target as https://, Workers handles the upgrade
   if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
@@ -4390,13 +4401,28 @@ async function handleCamHomeEmbed(request, env) {
   }
 
   // ── HTTP proxy ──
+  const fwdHeaders = { ...authHeaders };
+  const rangeHdr = request.headers.get('Range');
+  if (rangeHdr) fwdHeaders['Range'] = rangeHdr;
   const upstream = await fetch(target, {
     method:  request.method,
-    headers: authHeaders,
+    headers: fwdHeaders,
     ...(request.method !== 'GET' && request.method !== 'HEAD' ? { body: request.body } : {}),
   });
 
   const ct = upstream.headers.get('Content-Type') || 'application/octet-stream';
+
+  // For binary/video responses, pass through with relevant headers preserved
+  if (!ct.includes('text/html')) {
+    const respHeaders = { 'Content-Type': ct, 'Cache-Control': 'no-cache' };
+    const contentRange = upstream.headers.get('Content-Range');
+    const contentLength = upstream.headers.get('Content-Length');
+    const acceptRanges = upstream.headers.get('Accept-Ranges');
+    if (contentRange) respHeaders['Content-Range'] = contentRange;
+    if (contentLength) respHeaders['Content-Length'] = contentLength;
+    if (acceptRanges) respHeaders['Accept-Ranges'] = acceptRanges;
+    return new Response(upstream.body, { status: upstream.status, headers: respHeaders });
+  }
 
   // Patch go2rtc's HTML: redirect all API/WS calls through /cam-home/
   if (ct.includes('text/html')) {
@@ -4447,11 +4473,6 @@ async function handleCamHomeEmbed(request, env) {
       headers: { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' },
     });
   }
-
-  return new Response(upstream.body, {
-    status: upstream.status,
-    headers: { 'Content-Type': ct, 'Cache-Control': 'no-cache' },
-  });
 }
 
 /* ── Camera Movi — Full Reverse Proxy (HTTP + WebSocket) ── */
