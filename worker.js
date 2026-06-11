@@ -73,6 +73,22 @@ return `<script>(function(){
 /* ── Strip BOM + trim any env/config string value ── */
 function cleanEnv(v) { return (v || '').replace(/^﻿/, '').trim(); }
 
+/* ── Short-TTL cache for system_config (read on nearly every request) ──
+   Returns the config object, or {} on absence/error (matches the old
+   `... || {}` semantics). Writers call _invalidateCfgCache() for instant
+   effect; other readers see changes within CFG_CACHE_TTL_MS. */
+let _cfgCache = null; // { cfg, exp }
+const CFG_CACHE_TTL_MS = 8000;
+function _invalidateCfgCache() { _cfgCache = null; }
+async function _getCfg(env) {
+  if (_cfgCache && _cfgCache.exp > Date.now()) return _cfgCache.cfg;
+  let cfg;
+  try { cfg = await env.DASHBOARD_KV.get('system_config', 'json'); } catch (_) { cfg = null; }
+  cfg = cfg || {};
+  _cfgCache = { cfg, exp: Date.now() + CFG_CACHE_TTL_MS };
+  return cfg;
+}
+
 /* ── IP CIDR whitelist matching ── */
 function _ipToInt(ip) {
   const parts = (ip || '').split('.');
@@ -99,7 +115,7 @@ function checkIpWhitelist(ip, list) {
 function notifyEmail(env, ctx, event, data) {
   const work = async () => {
     try {
-      const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
+      const cfg = await _getCfg(env);
       if (!cfg.emailEnabled) return;
       const wh = cleanEnv(cfg.emailWebhook);
       if (!wh) return;
@@ -248,7 +264,7 @@ async function handleLogin(request, env, ctx) {
   }
 
   // Load system config once for all security checks
-  const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
+  const cfg = await _getCfg(env);
 
   // ── 1. IP Whitelist check ──
   const ipWhitelist = Array.isArray(cfg.ipWhitelist) ? cfg.ipWhitelist.filter(s => s && s.trim()) : [];
@@ -289,7 +305,13 @@ async function handleLogin(request, env, ctx) {
     }
   }
 
-  // ── 4b. Per-user login time restriction ──
+  // ── 4b. Blocked-by-admin check ──
+  if (user && user.blocked) {
+    await logActivity(env, { action: 'login_blocked_user', username, ip, success: false, detail: 'Account blocked by admin' });
+    return json({ error: 'Tài khoản đã bị chặn bởi quản trị viên. Vui lòng liên hệ admin để được hỗ trợ.' }, 403);
+  }
+
+  // ── 4c. Per-user login time restriction ──
   if (user && user.loginTimeEnabled) {
     const tz = user.loginTimeZone || 'Asia/Ho_Chi_Minh';
     const nowStr = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', timeZone: tz });
@@ -423,7 +445,7 @@ async function handleSessionRefresh(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'No session' }, 401);
   const token = session.token;
-  const refreshCfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(()=>({})) || {};
+  const refreshCfg = await _getCfg(env);
   const refreshTtl = Math.max(1, refreshCfg.sessionTtlHours ?? 8) * 3600;
   const newExpires = Date.now() + refreshTtl * 1000;
   // Re-read role from KV so role changes take effect without full re-login
@@ -442,6 +464,7 @@ async function handleSessionRefresh(request, env) {
 
 /** Xóa tất cả session KV của một user (dùng khi delete / demote / đổi password) */
 async function invalidateUserSessions(env, username) {
+  _invalidateEffCache(username);  // also drop cached effective permissions
   try {
     const listed = await env.DASHBOARD_KV.list({ prefix: 'session:' });
     await Promise.all(listed.keys.map(async k => {
@@ -483,6 +506,9 @@ async function handleListUsers(request, env) {
       canManagePerms:   d.canManagePerms || [],
       sysPerms:         sanitizeSysPerms(d.sysPerms || {}),
       locked:           !!d.locked,
+      blocked:          !!d.blocked,
+      blockedAt:        d.blockedAt || null,
+      blockedBy:        d.blockedBy || null,
       loginAttempts:    d.loginAttempts || 0,
       lockedAt:         d.lockedAt || null,
       pwChangedAt:      d.pwChangedAt || null,
@@ -499,8 +525,10 @@ async function handleListUsers(request, env) {
   // Non-admin: check if they have delegation rights or sysPerms.addUser
   const callerUser = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
   const canManage = (callerUser && Array.isArray(callerUser.canManagePerms)) ? callerUser.canManagePerms.filter(s => ALL_SERVICES.includes(s)) : [];
-  const hasSysAddUser = !!(callerUser?.sysPerms?.addUser);
-  if (!canManage.length && !hasSysAddUser) return json({ error: 'Admin required' }, 403);
+  const hasSysAddUser    = !!(callerUser?.sysPerms?.addUser);
+  const hasSysResetMfa   = !!(callerUser?.sysPerms?.resetMfa);
+  const hasSysBlockUser  = !!(callerUser?.sysPerms?.blockUser);
+  if (!canManage.length && !hasSysAddUser && !hasSysResetMfa && !hasSysBlockUser) return json({ error: 'Admin required' }, 403);
 
   // Return filtered list: basic info + only the managed service permissions
   const users = [];
@@ -518,6 +546,10 @@ async function handleListUsers(request, env) {
       cameras:     [],
       groups:      d.groups || [],
       userGroups:  d.userGroups || [],
+      mfaEnabled:  !!d.mfaEnabled,
+      blocked:     !!d.blocked,
+      blockedAt:   d.blockedAt || null,
+      blockedBy:   d.blockedBy || null,
     });
   }
   return json({ users, delegateMode: true, canManagePerms: canManage, sysPerms: sanitizeSysPerms(callerUser?.sysPerms || {}) });
@@ -542,7 +574,7 @@ async function handleCreateUser(request, env) {
     const [existing, curList, createCfg] = await Promise.all([
       env.DASHBOARD_KV.get(`user:${username}`),
       env.DASHBOARD_KV.get('userlist', 'json'),
-      env.DASHBOARD_KV.get('system_config', 'json').catch(()=>({}))
+      _getCfg(env)
     ]);
     if (existing) return json({ error: 'User đã tồn tại' }, 409);
     const list = curList || ['admin'];
@@ -593,6 +625,7 @@ async function handleLinkMicrosoftEmail(request, env, username) {
   if (email) user.microsoftEmail = email;
   else delete user.microsoftEmail;
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  _invalidateEffCache(username);
   await logActivity(env, { action: 'link_microsoft_email', username: session.username, success: true,
     detail: email ? `Linked ${username} → ${email}` : `Unlinked ${username}` });
   return json({ success: true, username, microsoftEmail: email || null });
@@ -611,6 +644,7 @@ async function handleUpdatePermissions(request, env, username) {
     // Admin: full control over all permissions
     user.permissions = sanitizePermissions(body.permissions || {});
     await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+    _invalidateEffCache(username);
     return json({ success: true, username, permissions: user.permissions });
   }
 
@@ -629,6 +663,7 @@ async function handleUpdatePermissions(request, env, username) {
     if (newPerms[svc] !== undefined) user.permissions[svc] = newPerms[svc];
   }
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  _invalidateEffCache(username);
   await logActivity(env, { action: 'delegate-update-perm', username: session.username, success: true, detail: `Updated perms for ${username} (managed services: ${canManage.join(', ')})` });
   return json({ success: true, username, permissions: user.permissions });
 }
@@ -646,6 +681,7 @@ async function handleSetManagePerms(request, env, username) {
     : [];
   user.canManagePerms = canManagePerms;
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  _invalidateEffCache(username);
   await logActivity(env, { action: 'delegate-set-manage-perms', username: session.username, success: true, detail: `canManagePerms for ${username}: [${canManagePerms.join(', ')}]` });
   return json({ success: true, username, canManagePerms });
 }
@@ -659,6 +695,7 @@ async function handleSetSysPerms(request, env, username) {
   if (!user) return json({ error: 'User not found' }, 404);
   user.sysPerms = sanitizeSysPerms(body.sysPerms || {});
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  _invalidateEffCache(username);
   await logActivity(env, { action: 'set-sys-perms', username: session.username, success: true, detail: `sysPerms for ${username}: ${JSON.stringify(user.sysPerms)}` });
   return json({ success: true, username, sysPerms: user.sysPerms });
 }
@@ -687,6 +724,61 @@ async function handleUnlockUser(request, env, username) {
   await logActivity(env, { action: 'user-unlock', username: session.username,
     ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Unlocked: ${username}` });
   return json({ success: true });
+}
+
+/* ── Admin reset MFA for a user (unblocks lost-authenticator lockout) ──
+   Clears the secret + recovery codes and forces a fresh MFA setup on next login. */
+async function handleAdminResetMfa(request, env, username) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const isAdmin = await isAdminUser(env, session);
+  const callerRaw = isAdmin ? null : await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
+  if (!isAdmin && !callerRaw?.sysPerms?.resetMfa) return json({ error: 'Admin required' }, 403);
+  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+  // Non-admin with resetMfa perm cannot touch admin accounts
+  if (!isAdmin && (user.role === 'admin' || username === 'admin')) return json({ error: 'Không thể reset MFA tài khoản admin' }, 403);
+  user.mfaEnabled   = false;
+  user.mfaSecret    = null;
+  user.mfaRecovery  = [];
+  user.mustSetupMfa = true;   // force re-enrol on next login (local accounts require MFA)
+  await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  _invalidateEffCache(username);
+  await invalidateUserSessions(env, username);  // kick existing sessions
+  await logActivity(env, { action: 'admin-reset-mfa', username: session.username,
+    ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Reset MFA for: ${username}` });
+  return json({ success: true });
+}
+
+async function handleBlockUser(request, env, username) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const isAdmin = await isAdminUser(env, session);
+  const callerRaw = isAdmin ? null : await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
+  if (!isAdmin && !callerRaw?.sysPerms?.blockUser) return json({ error: 'Admin required' }, 403);
+  if (username === 'admin') return json({ error: 'Không thể chặn tài khoản admin gốc' }, 400);
+  if (username === session.username) return json({ error: 'Không thể tự chặn tài khoản của mình' }, 400);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+  // Non-admin with blockUser perm cannot block admin accounts
+  if (!isAdmin && user.role === 'admin') return json({ error: 'Không thể chặn tài khoản admin' }, 403);
+  const block = !!body.blocked;
+  user.blocked = block;
+  if (block) {
+    user.blockedAt = Date.now();
+    user.blockedBy = session.username;
+  } else {
+    delete user.blockedAt;
+    delete user.blockedBy;
+  }
+  await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  _invalidateEffCache(username);
+  if (block) await invalidateUserSessions(env, username);
+  const ip = request.headers.get('CF-Connecting-IP') || '?';
+  await logActivity(env, { action: block ? 'user-blocked' : 'user-unblocked', username: session.username,
+    ip, success: true, detail: `${block ? 'Blocked' : 'Unblocked'} user: ${username}` });
+  return json({ success: true, blocked: block });
 }
 
 async function handleSaveUserLoginTime(request, env, username) {
@@ -721,6 +813,147 @@ async function handleForceLogoutAll(request, env, ctx) {
   await logActivity(env, { action: 'force-logout-all', username: session.username, ip, success: true, detail: `Kicked ${kicked} sessions` });
   notifyEmail(env, ctx, 'force_logout_all', { admin: session.username, kicked, ip });
   return json({ success: true, kicked });
+}
+
+/* ── List active sessions (admin) ──
+   Returns an opaque sid = first 16 hex of SHA-256(token) instead of the raw
+   token, so the session cookie value is never exposed to the client. */
+async function handleListSessions(request, env) {
+  const session = await getSession(request, env);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  const listed = await env.DASHBOARD_KV.list({ prefix: 'session:' });
+  const now = Date.now();
+  const curSid = await _sha256Hex(session.token);
+  const rows = await Promise.all(listed.keys.map(async k => {
+    const s = await env.DASHBOARD_KV.get(k.name, 'json');
+    if (!s || (s.expires && now > s.expires)) return null;
+    const token = k.name.slice('session:'.length);
+    const sid = (await _sha256Hex(token)).slice(0, 16);
+    return {
+      sid,
+      username:   s.username || '?',
+      ip:         s.boundIp || '?',
+      authMethod: s.authMethod || 'local',
+      createdAt:  s.createdAt || null,
+      expires:    s.expires || null,
+      current:    (await _sha256Hex(token)) === curSid,
+    };
+  }));
+  const sessions = rows.filter(Boolean).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  return json({ sessions, total: sessions.length });
+}
+
+/* ── Kick one session by opaque sid (admin) ── */
+async function handleKickSession(request, env, sid) {
+  const session = await getSession(request, env);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  if (!/^[a-f0-9]{16}$/.test(sid || '')) return json({ error: 'sid không hợp lệ' }, 400);
+  const listed = await env.DASHBOARD_KV.list({ prefix: 'session:' });
+  let kicked = null;
+  for (const k of listed.keys) {
+    const token = k.name.slice('session:'.length);
+    if ((await _sha256Hex(token)).slice(0, 16) === sid) {
+      const s = await env.DASHBOARD_KV.get(k.name, 'json').catch(() => null);
+      await env.DASHBOARD_KV.delete(k.name);
+      kicked = s && s.username ? s.username : '?';
+      break;
+    }
+  }
+  if (kicked === null) return json({ error: 'Session không tồn tại (có thể đã hết hạn)' }, 404);
+  await logActivity(env, { action: 'session-kick', username: session.username,
+    ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Kicked session of ${kicked}` });
+  return json({ success: true, kicked });
+}
+
+/* ── Backup: export all config as a JSON file (admin) ──
+   ⚠ Includes password hashes + MFA secrets — treat the file as a secret. */
+async function handleBackup(request, env) {
+  const session = await getSession(request, env);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  const userlist = await env.DASHBOARD_KV.get('userlist', 'json') || [];
+  const users = {};
+  await Promise.all(userlist.map(async u => { users[u] = await env.DASHBOARD_KV.get(`user:${u}`, 'json'); }));
+  const policyGroupIds = await env.DASHBOARD_KV.get('policy_groups', 'json') || [];
+  const policyGroups = {};
+  await Promise.all(policyGroupIds.map(async id => { policyGroups[id] = await env.DASHBOARD_KV.get(`policy_group:${id}`, 'json'); }));
+  const userGroupIds = await env.DASHBOARD_KV.get('user_groups', 'json') || [];
+  const userGroups = {};
+  await Promise.all(userGroupIds.map(async id => { userGroups[id] = await env.DASHBOARD_KV.get(`user_group:${id}`, 'json'); }));
+  const backup = {
+    _meta: { version: 1, exportedAt: new Date().toISOString(), exportedBy: session.username },
+    userlist, users,
+    policyGroupIds, policyGroups,
+    userGroupIds, userGroups,
+    systemConfig:      await env.DASHBOARD_KV.get('system_config', 'json'),
+    cameraList:        await env.DASHBOARD_KV.get('camera_list', 'json'),
+    cameraListMovi:    await env.DASHBOARD_KV.get('camera_list_movi', 'json'),
+    cameraAliasesMovi: await env.DASHBOARD_KV.get('camera_aliases_movi', 'json'),
+  };
+  await logActivity(env, { action: 'config-backup', username: session.username,
+    ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Exported ${userlist.length} users` });
+  const fname = 'dashboard-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+  return new Response(JSON.stringify(backup, null, 2), {
+    headers: { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="${fname}"`, 'Cache-Control': 'no-store' },
+  });
+}
+
+/* ── Restore config from a backup file (admin) ──
+   Validates shape + guarantees at least one admin survives, then overwrites KV. */
+async function handleRestore(request, env) {
+  const session = await getSession(request, env);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: 'File backup không phải JSON hợp lệ' }, 400); }
+  if (!body || typeof body !== 'object' || !body._meta || !Array.isArray(body.userlist) || typeof body.users !== 'object' || !body.users) {
+    return json({ error: 'File backup không đúng định dạng (thiếu _meta / userlist / users)' }, 400);
+  }
+  if (body.confirm !== true) return json({ error: 'Cần xác nhận trước khi khôi phục' }, 400);
+  // Safety: at least one admin-role account must exist after restore (avoid lockout)
+  const hasAdmin = body.userlist.some(u => { const o = body.users[u]; return o && o.role === 'admin'; });
+  if (!hasAdmin) return json({ error: 'File backup không có tài khoản admin nào — từ chối để tránh khóa cứng hệ thống.' }, 400);
+
+  // Validate each user object minimally
+  for (const u of body.userlist) {
+    const o = body.users[u];
+    if (!o || typeof o !== 'object' || typeof o.password !== 'string') {
+      return json({ error: `User "${u}" trong backup thiếu trường password — file hỏng.` }, 400);
+    }
+  }
+
+  // Remove users that are no longer in the backup (and their sessions)
+  const currentList = await env.DASHBOARD_KV.get('userlist', 'json') || [];
+  const newSet = new Set(body.userlist);
+  for (const u of currentList) {
+    if (!newSet.has(u)) {
+      await invalidateUserSessions(env, u);
+      await env.DASHBOARD_KV.delete(`user:${u}`).catch(() => {});
+    }
+  }
+  // Write users + list
+  for (const u of body.userlist) await env.DASHBOARD_KV.put(`user:${u}`, JSON.stringify(body.users[u]));
+  await env.DASHBOARD_KV.put('userlist', JSON.stringify(body.userlist));
+
+  // Policy groups
+  if (Array.isArray(body.policyGroupIds) && body.policyGroups) {
+    await env.DASHBOARD_KV.put('policy_groups', JSON.stringify(body.policyGroupIds));
+    for (const id of body.policyGroupIds) if (body.policyGroups[id]) await env.DASHBOARD_KV.put(`policy_group:${id}`, JSON.stringify(body.policyGroups[id]));
+  }
+  // User groups
+  if (Array.isArray(body.userGroupIds) && body.userGroups) {
+    await env.DASHBOARD_KV.put('user_groups', JSON.stringify(body.userGroupIds));
+    for (const id of body.userGroupIds) if (body.userGroups[id]) await env.DASHBOARD_KV.put(`user_group:${id}`, JSON.stringify(body.userGroups[id]));
+  }
+  // System config + cameras
+  if (body.systemConfig)      await env.DASHBOARD_KV.put('system_config', JSON.stringify(body.systemConfig));
+  if (body.cameraList)        await env.DASHBOARD_KV.put('camera_list', JSON.stringify(body.cameraList));
+  if (body.cameraListMovi)    await env.DASHBOARD_KV.put('camera_list_movi', JSON.stringify(body.cameraListMovi));
+  if (body.cameraAliasesMovi) await env.DASHBOARD_KV.put('camera_aliases_movi', JSON.stringify(body.cameraAliasesMovi));
+
+  _effCache.clear();        // drop all cached permissions
+  _invalidateCfgCache();    // drop cached system config
+  await logActivity(env, { action: 'config-restore', username: session.username,
+    ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Restored ${body.userlist.length} users from backup (${body._meta.exportedAt || '?'})` });
+  return json({ success: true, users: body.userlist.length });
 }
 
 async function handleTestEmail(request, env) {
@@ -758,7 +991,7 @@ async function handleChangePw(request, env, username, ctx) {
   if (!session) return json({ error: 'Not authenticated' }, 401);
   if (!(await isAdminUser(env, session)) && session.username !== username) return json({ error: 'Forbidden' }, 403);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  const pwCfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(()=>({})) || {};
+  const pwCfg = await _getCfg(env);
   const pwMin = Math.max(4, pwCfg.pwMinLength ?? 6);
   if (!body?.password || body.password.length < pwMin) return json({ error: `Password quá ngắn (tối thiểu ${pwMin} ký tự)` }, 400);
   const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
@@ -829,7 +1062,20 @@ async function isAdminUser(env, session) {
   return !!(eff && eff.role === 'admin');
 }
 
+/* ── Short-TTL cache for effective permissions (hot path) ──
+   computeEffectivePermissions reads user + multiple groups from KV and runs on
+   EVERY authenticated page load and API permission check. Caching collapses the
+   duplicate reads that happen within a single request (isAdminUser + hasPerm)
+   and across rapid successive requests. User-level changes call
+   _invalidateEffCache(username) for instant effect; group/policy-group edits
+   rely on the short TTL (changes apply within EFF_CACHE_TTL_MS). */
+const _effCache = new Map(); // username -> { eff, exp }
+const EFF_CACHE_TTL_MS = 8000;
+function _invalidateEffCache(username) { if (username) _effCache.delete(username); }
+
 async function computeEffectivePermissions(env, username) {
+  const _c = _effCache.get(username);
+  if (_c && _c.exp > Date.now()) return _c.eff;
   const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
   if (!user) return null;
   const eff = {
@@ -873,6 +1119,12 @@ async function computeEffectivePermissions(env, username) {
     }
   }
 
+  _effCache.set(username, { eff, exp: Date.now() + EFF_CACHE_TTL_MS });
+  // Bound memory: purge expired entries when the map grows large
+  if (_effCache.size > 200) {
+    const now = Date.now();
+    for (const [k, v] of _effCache) if (v.exp <= now) _effCache.delete(k);
+  }
   return eff;
 }
 
@@ -918,6 +1170,8 @@ function sanitizeSysPerms(raw) {
   const out = {};
   if (raw.addUser === true) out.addUser = true;
   if (raw.systemConfig === true) out.systemConfig = true;
+  if (raw.resetMfa === true) out.resetMfa = true;
+  if (raw.blockUser === true) out.blockUser = true;
   return out;
 }
 function sanitizePanels(raw) {
@@ -1048,6 +1302,7 @@ async function handleDeleteGroup(request, env, groupId) {
     await Promise.all(allUsers.map((user, i) => {
       if (!user || !user.groups || !user.groups.includes(groupId)) return Promise.resolve();
       user.groups = user.groups.filter(g => g !== groupId);
+      _invalidateEffCache(userlist[i]);
       return env.DASHBOARD_KV.put(`user:${userlist[i]}`, JSON.stringify(user));
     }));
   }
@@ -1141,6 +1396,7 @@ async function handleUpdateUserGroup(request, env, groupId) {
     if (u) {
       u.userGroups = [...new Set([...(u.userGroups || []), groupId])];
       await env.DASHBOARD_KV.put(`user:${uname}`, JSON.stringify(u));
+      _invalidateEffCache(uname);
     }
   }
   for (const uname of removed) {
@@ -1148,6 +1404,7 @@ async function handleUpdateUserGroup(request, env, groupId) {
     if (u) {
       u.userGroups = (u.userGroups || []).filter(g => g !== groupId);
       await env.DASHBOARD_KV.put(`user:${uname}`, JSON.stringify(u));
+      _invalidateEffCache(uname);
     }
   }
 
@@ -1167,6 +1424,7 @@ async function handleDeleteUserGroup(request, env, groupId) {
     if (u) {
       u.userGroups = (u.userGroups || []).filter(g => g !== groupId);
       await env.DASHBOARD_KV.put(`user:${uname}`, JSON.stringify(u));
+      _invalidateEffCache(uname);
     }
   }
   await env.DASHBOARD_KV.delete(`user_group:${groupId}`);
@@ -1229,6 +1487,7 @@ async function handleUpdateUserGroups(request, env, username) {
     if (allowed.includes(body.role)) user.role = body.role;
   }
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  _invalidateEffCache(username);
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
   // If role changed, invalidate existing sessions so change takes effect immediately
   if (body.role !== undefined && body.role !== oldRole) {
@@ -1253,6 +1512,7 @@ async function handleUpdateUserPanels(request, env, username) {
   user.panels  = sanitizePanels(body.panels || {});
   user.cameras = Array.isArray(body.cameras) ? body.cameras : (user.cameras || []);
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  _invalidateEffCache(username);
   return json({ success: true, username, permissions: user.permissions, panels: user.panels, cameras: user.cameras });
 }
 
@@ -1378,7 +1638,47 @@ async function verifyTotp(secret, code) {
   return false;
 }
 
+/* ── MFA recovery codes (one-time backup codes) ──
+   Plaintext shown to user ONCE at setup; only SHA-256 hashes stored.
+   Used to log in when the authenticator device is lost. */
+function _genRecoveryCodes(n) {
+  const out = [];
+  for (let i = 0; i < (n || 8); i++) {
+    const s = b32Encode(crypto.getRandomValues(new Uint8Array(5))).slice(0, 8);
+    out.push(s.slice(0, 4) + '-' + s.slice(4, 8));
+  }
+  return out;
+}
+function _normRecovery(code) { return String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+async function _hashRecovery(code) { return _sha256Hex('rc:' + _normRecovery(code)); }
+async function _genRecoveryHashes(codes) { return Promise.all(codes.map(_hashRecovery)); }
+/** If `code` matches an unused recovery hash, consume it (mutates user.mfaRecovery) and return true. */
+async function tryConsumeRecovery(user, code) {
+  if (!user || !Array.isArray(user.mfaRecovery) || !user.mfaRecovery.length) return false;
+  const norm = _normRecovery(code);
+  if (norm.length < 6) return false;            // TOTP is 6 digits; recovery codes are 8 base32 chars
+  const h = await _hashRecovery(code);
+  const idx = user.mfaRecovery.findIndex(x => _constEq(x, h));
+  if (idx < 0) return false;
+  user.mfaRecovery.splice(idx, 1);              // single-use: remove on success
+  return true;
+}
+
 /* ── MFA API handlers ── */
+
+// Generate QR code server-side so the browser never needs to reach external services.
+// Worker egress always works; browser network may block external QR APIs (VPN, firewall).
+async function _fetchQrDataUrl(otpauth) {
+  try {
+    const url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(otpauth)}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return `data:image/png;base64,${btoa(bin)}`;
+  } catch (_) { return null; }
+}
 
 async function handleMfaSetup(request, env) {
   const session = await getSession(request, env);
@@ -1388,7 +1688,8 @@ async function handleMfaSetup(request, env) {
   const label   = encodeURIComponent(`HomeLab:${session.username}`);
   const issuer  = encodeURIComponent('HomeLab Dashboard');
   const otpauth = `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
-  return json({ secret, otpauth });
+  const qrDataUrl = await _fetchQrDataUrl(otpauth);
+  return json({ secret, otpauth, qrDataUrl });
 }
 
 async function handleMfaEnable(request, env) {
@@ -1415,8 +1716,12 @@ async function handleMfaEnable(request, env) {
 
   user.mfaEnabled = true;
   user.mfaSecret  = secret;
+  // Generate fresh one-time recovery codes (replace any previous set)
+  const recoveryCodes = _genRecoveryCodes(8);
+  user.mfaRecovery = await _genRecoveryHashes(recoveryCodes);
   await env.DASHBOARD_KV.put(`user:${session.username}`, JSON.stringify(user));
-  return json({ success: true });
+  _invalidateEffCache(session.username);
+  return json({ success: true, recoveryCodes });
 }
 
 async function handleMfaDisable(request, env) {
@@ -1447,6 +1752,7 @@ async function handleMfaDisable(request, env) {
   user.mfaEnabled = false;
   user.mfaSecret  = null;
   await env.DASHBOARD_KV.put(`user:${session.username}`, JSON.stringify(user));
+  _invalidateEffCache(session.username);
   const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
   await logActivity(env, { action: 'mfa_disabled', username: session.username, ip, success: true, detail: 'SAML user disabled MFA' });
   return json({ success: true });
@@ -1478,15 +1784,22 @@ async function handleMfaVerify(request, env) {
   }
   const user = await env.DASHBOARD_KV.get(`user:${temp.username}`, 'json');
   if (!user || !user.mfaEnabled) return json({ error: 'Lỗi xác thực MFA' }, 400);
-  if (!(await verifyTotp(user.mfaSecret, code))) {
+  let mfaOk = await verifyTotp(user.mfaSecret, code);
+  let usedRecovery = false;
+  if (!mfaOk && await tryConsumeRecovery(user, code)) {
+    mfaOk = true; usedRecovery = true;
+    await env.DASHBOARD_KV.put(`user:${temp.username}`, JSON.stringify(user)); // persist consumed code
+  }
+  if (!mfaOk) {
     await rlBump(env, `mfa:${tempToken}`, 360);
     await logActivity(env, { action: 'mfa_fail', username: temp?.username, ip, success: false, detail: 'Wrong OTP' });
     return json({ error: 'Mã OTP không đúng' }, 400);
   }
   await rlClear(env, `mfa:${tempToken}`);
   await env.DASHBOARD_KV.delete(`mfa_temp:${tempToken}`).catch(() => {});
+  if (usedRecovery) await logActivity(env, { action: 'mfa_recovery_used', username: temp.username, ip, success: true, detail: `Recovery code used · ${(user.mfaRecovery||[]).length} còn lại` });
   // Create full session — use dynamic TTL from system_config
-  const mfaCfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(()=>({})) || {};
+  const mfaCfg = await _getCfg(env);
   const mfaSessionTtl = Math.max(1, mfaCfg.sessionTtlHours ?? 8) * 3600;
   const token = crypto.randomUUID();
   await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
@@ -1591,13 +1904,21 @@ async function handleMicrosoftCallback(request, env, ctx) {
   // Validate basic claims
   if (idPayload.exp && Math.floor(Date.now() / 1000) > idPayload.exp) return fail('Token Microsoft đã hết hạn');
   if (idPayload.aud && idPayload.aud !== clientId) return fail('Token không hợp lệ (aud mismatch)');
+  // Issuer must be a Microsoft v2.0 endpoint (rejects tokens minted elsewhere)
+  if (!/^https:\/\/login\.microsoftonline\.com\/[^/]+\/v2\.0$/.test(idPayload.iss || ''))
+    return fail('Token không hợp lệ (iss không phải Microsoft)');
+  // For a single-tenant config (tenantId is a GUID), the token's tenant (tid)
+  // must match — blocks valid tokens issued for a different Azure tenant.
+  const _isGuidTenant = /^[0-9a-f-]{36}$/i.test(tenantId);
+  if (_isGuidTenant && idPayload.tid && idPayload.tid !== tenantId)
+    return fail('Token không hợp lệ (tenant mismatch)');
 
   // Extract email — Microsoft có thể trả về các field khác nhau tùy tenant
   const msEmail = (idPayload.preferred_username || idPayload.email || idPayload.unique_name || '').toLowerCase().trim();
   if (!msEmail) return fail('Không lấy được email từ tài khoản Microsoft');
 
   const ip  = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
-  const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
+  const cfg = await _getCfg(env);
 
   // Kiểm tra domain được phép (nếu có cấu hình SAML_AZURE_ALLOWED_DOMAIN)
   const allowedDomain = cleanEnv(env.SAML_AZURE_ALLOWED_DOMAIN).toLowerCase();
@@ -1649,6 +1970,7 @@ async function handleMicrosoftCallback(request, env, ctx) {
   }
 
   if (matchedUser.locked) return fail('Tài khoản bị khóa. Vui lòng liên hệ admin.');
+  if (matchedUser.blocked) return fail('Tài khoản đã bị chặn bởi quản trị viên. Vui lòng liên hệ admin.');
 
   // ── MFA check for SSO users: if MFA enabled, require TOTP before creating session ──
   if (matchedUser.mfaEnabled && matchedUser.mfaSecret) {
@@ -1666,30 +1988,55 @@ async function handleMicrosoftCallback(request, env, ctx) {
 .box{text-align:center;width:320px;padding:0 16px}
 .icon{font-size:40px;margin-bottom:12px}
 h3{margin:0 0 6px;font-size:16px;font-weight:600}
-p{color:#a1a1aa;font-size:13px;margin:0 0 20px;line-height:1.5}
-input{width:100%;padding:12px;background:#18181b;border:1px solid #3f3f46;border-radius:8px;color:#f4f4f5;font-size:22px;letter-spacing:6px;text-align:center;box-sizing:border-box;outline:none}
-input:focus{border-color:#2563eb}
+p{color:#a1a1aa;font-size:13px;margin:0 0 14px;line-height:1.5}
+.inp-otp{width:100%;padding:12px;background:#18181b;border:1px solid #3f3f46;border-radius:8px;color:#f4f4f5;font-size:22px;letter-spacing:6px;text-align:center;box-sizing:border-box;outline:none}
+.inp-rc{width:100%;padding:12px;background:#18181b;border:1px solid #3f3f46;border-radius:8px;color:#f4f4f5;font-size:18px;letter-spacing:3px;text-align:center;box-sizing:border-box;outline:none;font-family:monospace}
+.inp-otp:focus,.inp-rc:focus{border-color:#2563eb}
 .btn{width:100%;padding:11px;margin-top:12px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
 .btn:hover{background:#1d4ed8}.btn:disabled{opacity:.5;cursor:not-allowed}
 .err{color:#ef4444;font-size:13px;margin-top:10px;min-height:18px}
+.toggle-rc{display:block;margin-top:12px;color:#71717a;font-size:12px;text-decoration:none;cursor:pointer}
+.toggle-rc:hover{color:#a1a1aa}
 </style></head><body><div class="box">
 <div class="icon">🔐</div>
 <h3>Xác minh hai bước</h3>
-<p>Đăng nhập Microsoft thành công.<br>Nhập mã 6 số từ ứng dụng authenticator.</p>
-<input type="text" id="otp" maxlength="6" inputmode="numeric" pattern="[0-9]*" placeholder="000000" autocomplete="one-time-code" autofocus>
+<p id="sub">Đăng nhập Microsoft thành công.<br>Nhập mã 6 số từ ứng dụng authenticator.</p>
+<div id="otp-group"><input type="text" id="otp" class="inp-otp" maxlength="6" inputmode="numeric" pattern="[0-9]*" placeholder="000000" autocomplete="one-time-code" autofocus></div>
+<div id="rc-group" style="display:none"><input type="text" id="rc" class="inp-rc" maxlength="9" placeholder="XXXX-XXXX" autocomplete="off" autocapitalize="characters"></div>
 <div class="err" id="err"></div>
 <button class="btn" id="btn" onclick="doVerify()">🔑 Xác minh</button>
+<a class="toggle-rc" id="toggle" onclick="toggleRC()">🔑 Dùng mã khôi phục</a>
 </div><script>
 var T='${t}';
-var inp=document.getElementById('otp');
+var useRC=false;
+var otpInp=document.getElementById('otp');
+var rcInp=document.getElementById('rc');
 var btn=document.getElementById('btn');
 var err=document.getElementById('err');
-inp.addEventListener('input',function(){this.value=this.value.replace(/\\D/g,'');});
-inp.addEventListener('keydown',function(e){if(e.key==='Enter')doVerify();});
-function doVerify(){
-  var code=inp.value.replace(/\\D/g,'');
+otpInp.addEventListener('input',function(){this.value=this.value.replace(/\\D/g,'');if(this.value.length===6)doVerify();});
+otpInp.addEventListener('keydown',function(e){if(e.key==='Enter')doVerify();});
+rcInp.addEventListener('input',function(){var p=this.selectionStart;this.value=this.value.toUpperCase();this.setSelectionRange(p,p);});
+rcInp.addEventListener('keydown',function(e){if(e.key==='Enter')doVerify();});
+function toggleRC(){
+  useRC=!useRC;
   err.textContent='';
-  if(code.length!==6){err.textContent='Nhập đủ 6 số';return;}
+  document.getElementById('otp-group').style.display=useRC?'none':'';
+  document.getElementById('rc-group').style.display=useRC?'':'none';
+  document.getElementById('toggle').textContent=useRC?'← Dùng mã OTP':'🔑 Dùng mã khôi phục';
+  document.getElementById('sub').textContent=useRC?'Nhập một trong các mã khôi phục (XXXX-XXXX) đã lưu khi kích hoạt MFA.':'Đăng nhập Microsoft thành công. Nhập mã 6 số từ ứng dụng authenticator.';
+  if(useRC){rcInp.value='';setTimeout(function(){rcInp.focus();},60);}
+  else{otpInp.value='';setTimeout(function(){otpInp.focus();},60);}
+}
+function doVerify(){
+  err.textContent='';
+  var code;
+  if(useRC){
+    code=rcInp.value.trim().toUpperCase();
+    if(!code){err.textContent='Vui lòng nhập mã khôi phục';return;}
+  }else{
+    code=otpInp.value.replace(/\\D/g,'');
+    if(code.length!==6){err.textContent='Nhập đủ 6 số';return;}
+  }
   btn.disabled=true;btn.textContent='⏳ Đang xác minh...';
   fetch('/auth/microsoft/mfa',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tempToken:T,code:code})})
   .then(function(r){return r.json();})
@@ -1700,9 +2047,9 @@ function doVerify(){
       window.close();
       setTimeout(function(){if(!window.closed){window.location.href='/';}},1500);
     }else{
-      err.textContent=d.error||'Sai mã OTP';
+      err.textContent=d.error||(useRC?'Mã khôi phục không đúng hoặc đã dùng':'Sai mã OTP');
       btn.disabled=false;btn.textContent='🔑 Xác minh';
-      inp.value='';inp.focus();
+      if(useRC){rcInp.value='';rcInp.focus();}else{otpInp.value='';otpInp.focus();}
     }
   }).catch(function(){
     err.textContent='Lỗi kết nối. Vui lòng thử lại.';
@@ -1807,7 +2154,13 @@ async function handleMicrosoftMfaVerify(request, env, ctx) {
   const user = await env.DASHBOARD_KV.get(`user:${temp.username}`, 'json');
   if (!user || !user.mfaEnabled || !user.mfaSecret) return json({ error: 'Lỗi xác thực MFA' }, 400);
 
-  if (!(await verifyTotp(user.mfaSecret, String(code)))) {
+  let mfaOk = await verifyTotp(user.mfaSecret, String(code));
+  let usedRecovery = false;
+  if (!mfaOk && await tryConsumeRecovery(user, code)) {
+    mfaOk = true; usedRecovery = true;
+    await env.DASHBOARD_KV.put(`user:${temp.username}`, JSON.stringify(user));
+  }
+  if (!mfaOk) {
     await rlBump(env, `ms_mfa:${tempToken}`, 360);
     await logActivity(env, { action: 'mfa_fail', username: temp.username, ip, success: false, detail: 'Wrong OTP (SSO)' });
     return json({ error: 'Mã OTP không đúng' }, 400);
@@ -1816,8 +2169,9 @@ async function handleMicrosoftMfaVerify(request, env, ctx) {
   // OTP correct — clean up temp + create full session
   await rlClear(env, `ms_mfa:${tempToken}`);
   await env.DASHBOARD_KV.delete(`ms_mfa_temp:${tempToken}`).catch(() => {});
+  if (usedRecovery) await logActivity(env, { action: 'mfa_recovery_used', username: temp.username, ip, success: true, detail: `Recovery code used (SSO) · ${(user.mfaRecovery||[]).length} còn lại` });
 
-  const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
+  const cfg = await _getCfg(env);
   const sessionTtl = Math.max(1, cfg.sessionTtlHours ?? 8) * 3600;
   const token = crypto.randomUUID();
   const canManagePerms = (user.canManagePerms || []).filter(s => ALL_SERVICES.includes(s));
@@ -1846,8 +2200,8 @@ async function handleMicrosoftMfaVerify(request, env, ctx) {
 
 /* ── Setup Flow Handlers (first-login: change password + MFA setup) ── */
 
-async function _createSessionAfterSetup(username, user, env, boundIp) {
-  const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})) || {};
+async function _createSessionAfterSetup(username, user, env, boundIp, extra) {
+  const cfg = await _getCfg(env);
   const sessionTtl = Math.max(1, cfg.sessionTtlHours ?? 8) * 3600;
   const token = crypto.randomUUID();
   await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
@@ -1861,7 +2215,7 @@ async function _createSessionAfterSetup(username, user, env, boundIp) {
   const h = new Headers({ 'Content-Type': 'application/json' });
   h.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
   h.append('Set-Cookie', `dh_user=${userInfo}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionTtl}`);
-  return new Response(JSON.stringify({ success: true, role: user.role }), { status: 200, headers: h });
+  return new Response(JSON.stringify({ success: true, role: user.role, ...(extra || {}) }), { status: 200, headers: h });
 }
 
 async function _getSetupTemp(env, setupToken) {
@@ -1883,7 +2237,7 @@ async function handleSetupChangePassword(request, env) {
   const temp = await _getSetupTemp(env, setupToken);
   if (!temp) return json({ error: 'Phiên thiết lập đã hết hạn. Vui lòng đăng nhập lại.' }, 401);
   if (!temp.mustChangePassword) return json({ error: 'Không cần đổi mật khẩu' }, 400);
-  const setupPwCfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(()=>({})) || {};
+  const setupPwCfg = await _getCfg(env);
   const setupPwMin = Math.max(8, setupPwCfg.pwMinLength ?? 8);
   if (newPassword.length < setupPwMin) return json({ error: `Mật khẩu tối thiểu ${setupPwMin} ký tự` }, 400);
   const user = await env.DASHBOARD_KV.get(`user:${temp.username}`, 'json');
@@ -1910,8 +2264,9 @@ async function handleSetupMfaInit(request, env) {
   const label   = encodeURIComponent(`HomeLab:${temp.username}`);
   const issuer  = encodeURIComponent('HomeLab Dashboard');
   const otpauth = `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
+  const qrDataUrl = await _fetchQrDataUrl(otpauth);
   await env.DASHBOARD_KV.put(`setup_mfa_secret:${setupToken}`, secret, { expirationTtl: 600 });
-  return json({ secret, otpauth });
+  return json({ secret, otpauth, qrDataUrl });
 }
 
 async function handleSetupMfaComplete(request, env) {
@@ -1946,12 +2301,15 @@ async function handleSetupMfaComplete(request, env) {
   user.mfaEnabled   = true;
   user.mfaSecret    = secret;
   user.mustSetupMfa = false;
+  const recoveryCodes = _genRecoveryCodes(8);
+  user.mfaRecovery = await _genRecoveryHashes(recoveryCodes);
   await env.DASHBOARD_KV.put(`user:${temp.username}`, JSON.stringify(user));
+  _invalidateEffCache(temp.username);
   await env.DASHBOARD_KV.delete(`setup_temp:${setupToken}`).catch(() => {});
   await env.DASHBOARD_KV.delete(`setup_mfa_secret:${setupToken}`).catch(() => {});
   await env.DASHBOARD_KV.delete(rlKey).catch(() => {});  // clean up on success
   await logActivity(env, { action: 'setup_mfa_complete', username: temp.username, ip, success: true });
-  return await _createSessionAfterSetup(temp.username, user, env, ip);
+  return await _createSessionAfterSetup(temp.username, user, env, ip, { recoveryCodes });
 }
 
 /* Shared "Wayfinding" quick-switcher — injected into every authenticated page.
@@ -2231,6 +2589,29 @@ const PANEL_REFRESH = `<style>
  var n=0,iv=setInterval(function(){wire();if(++n>20)clearInterval(iv);},500);
 })();</script>`;
 
+/* ── Mobile responsive: device detect + stylesheet injection ──
+   Read-only header check, chỉ toggle CSS attribute — không đụng auth/session.
+   CF-Device-Type chỉ có khi Cloudflare bật Cache-by-Device-Type; fallback UA.
+   iPad hiện đại báo UA Macintosh → coi như desktop (màn hình lớn, hợp lý). */
+function isMobileRequest(request) {
+  const cfDev = (request.headers.get('CF-Device-Type') || '').toLowerCase();
+  if (cfDev === 'mobile' || cfDev === 'tablet') return true;
+  if (cfDev === 'desktop') return false;
+  const ua = request.headers.get('User-Agent') || '';
+  return /iPhone|iPod|Android.*Mobile|Mobile.*Android|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+}
+
+/* Inject <link mobile.css> cuối <head> (sau inline <style> của page để
+   thắng specificity tie) + gắn data-mobile="1" vào <html> nếu device mobile */
+function applyMobilePatch(html, isMobile) {
+  const link = '<link rel="stylesheet" href="/mobile.css">';
+  html = /<\/head>/i.test(html)
+    ? html.replace(/<\/head>/i, link + '\n</head>')
+    : link + html;
+  if (isMobile) html = html.replace(/<html(\s|>)/i, '<html data-mobile="1"$1');
+  return html;
+}
+
 async function injectUser(request, env) {
   const session = await getSession(request, env);
   const url = new URL(request.url);
@@ -2239,9 +2620,9 @@ async function injectUser(request, env) {
   // Login page: redirect if already logged in; otherwise serve with optional banner + inject idle time
   if (isLoginPage) {
     if (session) return Response.redirect(new URL('/', request.url).toString(), 302);
-    const cfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(()=>({})) || {};
+    const cfg = await _getCfg(env);
     const bannerMsg = (cfg.loginBannerMsg || '').trim();
-    const idleMin   = Math.max(5, cfg.idleTimeoutMin ?? 30);
+    const idleMin   = Math.max(30, cfg.idleTimeoutMin ?? 60);
     // Background CSS
     let bgCss = '';
     if (cfg.loginBgType === 'color' && cfg.loginBgValue) {
@@ -2255,11 +2636,12 @@ async function injectUser(request, env) {
         bgCss = `<style>body{background:url('${safeUrl}') center/cover no-repeat fixed!important;background-color:#09090b!important}</style>`;
       }
     }
-    const needsPatch = bannerMsg || idleMin !== 30 || bgCss;
+    const needsPatch = bannerMsg || idleMin !== 60 || bgCss;
     const loginUrl  = new URL(request.url);
     const cleanReq  = new Request(loginUrl.origin + loginUrl.pathname, { method: 'GET', headers: { 'Accept': 'text/html' } });
     const loginRes  = await env.ASSETS.fetch(cleanReq);
     let loginHtml = await loginRes.text();
+    loginHtml = applyMobilePatch(loginHtml, isMobileRequest(request));
     if (!needsPatch) {
       return new Response(loginHtml, { headers: {
         'content-type': 'text/html;charset=utf-8',
@@ -2267,7 +2649,7 @@ async function injectUser(request, env) {
         'x-frame-options': 'DENY',
         'x-content-type-options': 'nosniff',
         'referrer-policy': 'strict-origin-when-cross-origin',
-        'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; frame-src https://challenges.cloudflare.com; object-src 'none'; frame-ancestors 'none'",
+        'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src https://challenges.cloudflare.com; object-src 'none'; frame-ancestors 'none'",
       } });
     }
     // Patch idle notice text with actual configured idle timeout
@@ -2287,7 +2669,7 @@ async function injectUser(request, env) {
       'x-frame-options': 'DENY',
       'x-content-type-options': 'nosniff',
       'referrer-policy': 'strict-origin-when-cross-origin',
-      'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; frame-src https://challenges.cloudflare.com; object-src 'none'; frame-ancestors 'none'",
+      'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src https://challenges.cloudflare.com; object-src 'none'; frame-ancestors 'none'",
     } });
   }
 
@@ -2303,7 +2685,7 @@ async function injectUser(request, env) {
   if (!res.ok || (!ct.includes('text/html') && !ct.includes('application/octet-stream'))) return res;
   const html = await res.text();
   // Always compute from KV so role changes + group assignments take effect immediately
-  const sysCfgPromise = env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({}));
+  const sysCfgPromise = _getCfg(env);
   let effPerms = { role: session.role || 'user', permissions: {}, panels: {}, cameras: [], groups: [] };
   const computed = await computeEffectivePermissions(env, session.username);
   if (computed) effPerms = computed;
@@ -2368,7 +2750,7 @@ a:hover{background:#4f46e5}</style></head>
     }
   }
 
-  const idleMin = Math.max(5, sysCfg.idleTimeoutMin ?? 30);
+  const idleMin = Math.max(30, sysCfg.idleTimeoutMin ?? 60);
   const idleMs  = idleMin * 60 * 1000;
   const warnMs  = Math.max(60_000, idleMs - 5 * 60 * 1000);
   const dashTitle = (sysCfg.dashboardTitle || '').trim();
@@ -2450,9 +2832,10 @@ a:hover{background:#4f46e5}</style></head>
 })();<\/script>`;
   // Head: user + idle scripts.  Body end: the Wayfinding switcher as static
   // markup (DOM-ready, immune to the page's own client-side re-rendering).
-  let newHtml = /<\/head>/i.test(html)
-    ? html.replace(/<\/head>/i, userScript + '\n</head>')
-    : html.replace(/<body/i, userScript + '\n<body');
+  const htmlPatched = applyMobilePatch(html, isMobileRequest(request));
+  let newHtml = /<\/head>/i.test(htmlPatched)
+    ? htmlPatched.replace(/<\/head>/i, userScript + '\n</head>')
+    : htmlPatched.replace(/<body/i, userScript + '\n<body');
   const bodyEnd = WAYFIND_NAV + DATA_REFRESH + PANEL_REFRESH;
   newHtml = /<\/body>/i.test(newHtml)
     ? newHtml.replace(/<\/body>/i, bodyEnd + '\n</body>')
@@ -3486,7 +3869,7 @@ async function logActivity(env, { action, username, ip, success, detail }) {
   try {
     const [log, cfg] = await Promise.all([
       env.DASHBOARD_KV.get('activity_log', 'json').then(v => v || []),
-      env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})).then(v => v || {}),
+      _getCfg(env),
     ]);
     const retDays = Math.max(7, cfg.auditRetentionDays ?? 30);
     const cutoff  = Date.now() - retDays * 24 * 60 * 60 * 1000;
@@ -4426,7 +4809,7 @@ async function handleGetActivity(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   const [log, cfg, eff] = await Promise.all([
     env.DASHBOARD_KV.get('activity_log', 'json').then(v => v || []),
-    env.DASHBOARD_KV.get('system_config', 'json').catch(() => ({})).then(v => v || {}),
+    _getCfg(env),
     session.role !== 'admin' ? computeEffectivePermissions(env, session.username) : Promise.resolve(null),
   ]);
   const retDays = Math.max(7, cfg.auditRetentionDays ?? 30);
@@ -4440,7 +4823,7 @@ async function handleGetActivity(request, env) {
 async function handlePurgeAuditLog(request, env) {
   const session = await getSession(request, env);
   if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
-  const purgeCfg = await env.DASHBOARD_KV.get('system_config', 'json').catch(()=>({})) || {};
+  const purgeCfg = await _getCfg(env);
   const retentionDays = Math.max(1, purgeCfg.auditRetentionDays ?? 30);
   const log = await env.DASHBOARD_KV.get('activity_log', 'json') || [];
   const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
@@ -4462,7 +4845,7 @@ async function handleGetSystemConfig(request, env) {
   return json({
     // ── Existing ──
     sessionTtlHours:      cfg.sessionTtlHours ?? 8,
-    idleTimeoutMin:       cfg.idleTimeoutMin ?? 30,
+    idleTimeoutMin:       cfg.idleTimeoutMin ?? 60,
     maxUsers:             cfg.maxUsers ?? 50,
     defaultRole:          cfg.defaultRole ?? 'user',
     loginBannerMsg:       cfg.loginBannerMsg ?? '',
@@ -4515,7 +4898,7 @@ async function handleSaveSystemConfig(request, env, ctx) {
   const cfg = await env.DASHBOARD_KV.get('system_config', 'json') || {};
   // ── Existing fields ──
   if (body.sessionTtlHours !== undefined)   cfg.sessionTtlHours   = Math.min(24, Math.max(1, Number(body.sessionTtlHours) || 8));
-  if (body.idleTimeoutMin !== undefined)    cfg.idleTimeoutMin    = Math.min(120, Math.max(5, Number(body.idleTimeoutMin) || 30));
+  if (body.idleTimeoutMin !== undefined)    cfg.idleTimeoutMin    = Math.min(720, Math.max(30, Number(body.idleTimeoutMin) || 60));
   if (body.maxUsers !== undefined)          cfg.maxUsers          = Math.min(200, Math.max(1, Number(body.maxUsers) || 50));
   if (body.defaultRole !== undefined && ['user', 'admin'].includes(body.defaultRole)) cfg.defaultRole = body.defaultRole;
   if (body.loginBannerMsg !== undefined)    cfg.loginBannerMsg    = String(body.loginBannerMsg).slice(0, 200);
@@ -4557,6 +4940,7 @@ async function handleSaveSystemConfig(request, env, ctx) {
   cfg.updatedAt = Date.now();
   cfg.updatedBy = session.username;
   await env.DASHBOARD_KV.put('system_config', JSON.stringify(cfg));
+  _invalidateCfgCache();  // drop cached config so the change applies immediately
   await logActivity(env, { action: 'system-config-update', username: session.username, ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: 'System config updated' });
   return json({ success: true, config: cfg });
 }
@@ -5835,6 +6219,10 @@ export default {
     if (userMsLink && request.method === 'PUT') return handleLinkMicrosoftEmail(request, env, decodeURIComponent(userMsLink[1]));
     const userUnlock = p.match(/^\/api\/admin\/users\/([^/]+)\/unlock$/);
     if (userUnlock && request.method === 'POST') return handleUnlockUser(request, env, decodeURIComponent(userUnlock[1]));
+    const userResetMfa = p.match(/^\/api\/admin\/users\/([^/]+)\/reset-mfa$/);
+    if (userResetMfa && request.method === 'POST') return handleAdminResetMfa(request, env, decodeURIComponent(userResetMfa[1]));
+    const userBlock = p.match(/^\/api\/admin\/users\/([^/]+)\/block$/);
+    if (userBlock && request.method === 'POST') return handleBlockUser(request, env, decodeURIComponent(userBlock[1]));
     const userLoginTime = p.match(/^\/api\/admin\/users\/([^/]+)\/login-time$/);
     if (userLoginTime && request.method === 'PUT') return handleSaveUserLoginTime(request, env, decodeURIComponent(userLoginTime[1]));
     const userDel  = p.match(/^\/api\/admin\/users\/([^/]+)$/);
@@ -5844,6 +6232,11 @@ export default {
     }
     if (p === '/api/admin/force-logout-all' && request.method === 'POST') return handleForceLogoutAll(request, env, ctx);
     if (p === '/api/admin/test-email' && request.method === 'POST') return handleTestEmail(request, env);
+    if (p === '/api/admin/sessions' && request.method === 'GET') return handleListSessions(request, env);
+    const sessKick = p.match(/^\/api\/admin\/sessions\/([a-f0-9]{16})$/);
+    if (sessKick && request.method === 'DELETE') return handleKickSession(request, env, sessKick[1]);
+    if (p === '/api/admin/backup' && request.method === 'GET') return handleBackup(request, env);
+    if (p === '/api/admin/restore' && request.method === 'POST') return handleRestore(request, env);
 
     // ── Policy Groups API ──
     if (p === '/api/admin/groups') {
