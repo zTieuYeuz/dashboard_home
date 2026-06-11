@@ -1,0 +1,154 @@
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — shared stylesheet
+   Được worker.js inject vào mọi trang (sau inline <style> của page
+   nên thắng các rule cùng specificity). Chỉ chứa layout/visual fix,
+   không đụng logic. 2 cơ chế:
+     1. @media (max-width)  → responsive theo kích thước màn hình
+     2. [data-mobile="1"]   → device thật (CF-Device-Type / UA) do
+                              worker detect server-side: touch target,
+                              chống iOS zoom… không áp cho desktop hẹp
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ───────────────────────────────────────────────────────────────
+   1. TOPBAR — mọi trang (brand + topnav + clock + user-chip)
+   Mobile: grid 2 hàng — hàng 1: brand | actions, hàng 2: topnav
+   full-width cuộn ngang. Giữ nguyên mọi chức năng, không ẩn nav.
+   ─────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .topbar {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    height: auto !important;
+    min-height: 48px;
+    padding: 8px 12px !important;
+    row-gap: 6px;
+  }
+  .topbar-left { display: contents !important; }
+  .brand { grid-column: 1; grid-row: 1; min-width: 0; }
+  .brand-sub { display: none; }
+  .brand-name, .brand-main { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar-right { grid-column: 2; grid-row: 1; gap: 6px !important; flex-shrink: 0; }
+  .topnav, .topbar-nav {
+    grid-column: 1 / -1; grid-row: 2;
+    display: flex !important;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 4px;
+    padding-bottom: 1px;
+  }
+  .topnav::-webkit-scrollbar, .topbar-nav::-webkit-scrollbar { display: none; }
+  .topnav-item, .topbar-nav > a { white-space: nowrap; flex-shrink: 0; padding: 7px 12px; }
+  /* index.html có rule cũ ẩn nav item thứ 3+ ở 640px — nav giờ cuộn ngang
+     nên hiện lại tất cả (trừ #settings-link vốn ẩn bằng inline style,
+     worker tự bật khi user có quyền) */
+  .topnav-item:nth-child(n+3) { display: inline-block !important; }
+  .topnav-item[style*="display:none"], .topnav-item[style*="display: none"] { display: none !important; }
+  /* Clock + auto-refresh indicator: thông tin phụ, ẩn để nhường chỗ */
+  .clock, .auto-indicator { display: none !important; }
+  /* User chip: giữ avatar + nút logout, ẩn username + tag cho gọn */
+  .user-chip { padding: 4px !important; gap: 4px; }
+  .user-chip > span:not(.user-avatar) { display: none; }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   2. LAYOUT CHUNG — page containers, grids, panels
+   ─────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Chặn tràn ngang toàn trang — bảng rộng cuộn trong container riêng */
+  html, body { max-width: 100vw; overflow-x: hidden; }
+
+  .page, .container, .main { padding-left: 12px !important; padding-right: 12px !important; }
+  .main { padding-top: 14px !important; }
+  .container { padding-top: 1rem !important; }
+
+  /* Mọi body-grid nhiều cột → 1 cột */
+  .body-grid { grid-template-columns: 1fr !important; }
+  .two-col { grid-template-columns: 1fr !important; }
+
+  /* Stats row: 2 cột trên mobile */
+  .stats-row { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* Panel/card chứa bảng rộng → cuộn ngang bên trong */
+  .panel-body, .card-flush, .tbl-wrap, .modal-body {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  table { max-width: 100%; }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   3. INDEX.HTML — hero, KPI
+   ─────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .hero-title { font-size: 21px !important; }
+  .hero-head { flex-direction: column; align-items: stretch !important; gap: 14px !important; }
+  .hero-meta { min-width: 0 !important; }
+  .kpi { padding: 13px 14px !important; }
+  .kpi-value { font-size: 22px !important; }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   4. MODALS — căn giữa, không tràn màn hình nhỏ
+   ─────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .modal, .modal-box {
+    width: auto !important;
+    max-width: calc(100vw - 24px) !important;
+    max-height: 88vh;
+    overflow-y: auto;
+    margin: 12px;
+  }
+  .modal-btns, .modal-footer { flex-wrap: wrap; }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   5. LOGIN PAGE — màn hình rất nhỏ (iPhone SE…)
+   ─────────────────────────────────────────────────────────────── */
+@media (max-width: 420px) {
+  body > .card { margin: 12px; }
+  .card { padding: 1.75rem 1.25rem !important; }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   6. DEVICE THẬT LÀ MOBILE/TABLET (server-side detect)
+   Touch target + chống iOS Safari auto-zoom khi focus input
+   ─────────────────────────────────────────────────────────────── */
+[data-mobile="1"] input,
+[data-mobile="1"] select,
+[data-mobile="1"] textarea {
+  font-size: 16px !important; /* <16px → iOS zoom khi focus */
+}
+[data-mobile="1"] .input-otp { font-size: 22px !important; }
+
+@media (max-width: 768px) {
+  /* Touch target tối thiểu ~40px cho nút thao tác chính */
+  [data-mobile="1"] .btn,
+  [data-mobile="1"] .tbtn,
+  [data-mobile="1"] button[type="submit"] {
+    min-height: 38px;
+  }
+  [data-mobile="1"] .panel-header { padding-top: 11px; padding-bottom: 11px; }
+
+  /* Wayfinding FAB: to hơn, dễ bấm */
+  [data-mobile="1"] #wf-fab {
+    width: 46px !important;
+    height: 46px !important;
+    right: 14px !important;
+    bottom: 18px !important;
+  }
+  [data-mobile="1"] #wf-fab .wf-dot { width: 11px; height: 11px; }
+  /* Panel switcher: chiếm gần full màn hình, search không bị iOS zoom */
+  [data-mobile="1"] #wf-panel { margin-top: 5vh !important; width: 94vw !important; }
+  [data-mobile="1"] #wf-search { font-size: 16px !important; }
+  [data-mobile="1"] #wf-list { max-height: 64vh !important; }
+  /* Footer phím tắt ↑↓/Enter — vô nghĩa trên touch */
+  [data-mobile="1"] #wf-foot { display: none !important; }
+  /* Hint bong bóng nhắc phím "/" — vô nghĩa trên touch */
+  [data-mobile="1"] #wf-hint { display: none !important; }
+
+  /* MFA-warning badge (SAML user chưa bật MFA): không che FAB */
+  [data-mobile="1"] #_mfaw { max-width: calc(100vw - 90px) !important; }
+}
