@@ -50,7 +50,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="sub" id="login-sub">Nhập thông tin để truy cập dashboard</div>
     <!-- Idle-logout notice (shown when ?reason=idle) -->
     <div id="idle-notice" style="display:none;margin-bottom:1.25rem;padding:10px 14px;border-radius:10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);font-size:13px;color:#fbbf24;line-height:1.5;text-align:center">
-      ⏱ Phiên làm việc đã hết hạn do không có hoạt động trong <strong>30 phút</strong>.<br>Vui lòng đăng nhập lại.
+      ⏱ Phiên làm việc đã hết hạn do không có hoạt động trong <strong>60 phút</strong>.<br>Vui lòng đăng nhập lại.
     </div>
     <!-- SSO error notice (shown when ?sso_error=...) -->
     <div id="sso-err-notice" class="sso-err"></div>
@@ -84,16 +84,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div id="step-mfa" style="display:none">
     <div class="mfa-icon">🔐</div>
     <div class="title">Xác thực hai bước</div>
-    <div class="sub">Mở Microsoft Authenticator hoặc Google Authenticator, nhập mã 6 chữ số.</div>
-    <div class="form-group" style="margin-top:1.5rem">
+    <div class="sub" id="mfa-sub-text">Mở Microsoft Authenticator hoặc Google Authenticator, nhập mã 6 chữ số.</div>
+    <div class="form-group" style="margin-top:1.5rem" id="mfa-otp-group">
       <label class="label" style="text-align:center;display:block">Mã xác thực (OTP)</label>
       <input class="input input-otp" id="mfa-code" type="text" inputmode="numeric"
              maxlength="6" placeholder="000000" autocomplete="one-time-code"/>
     </div>
+    <div class="form-group" style="margin-top:1.5rem;display:none" id="mfa-recovery-group">
+      <label class="label" style="text-align:center;display:block">Mã khôi phục</label>
+      <input class="input" id="mfa-recovery-code" type="text" inputmode="text"
+             maxlength="9" placeholder="XXXX-XXXX" autocomplete="off" autocapitalize="characters"
+             style="letter-spacing:2px;text-align:center;font-family:monospace;font-size:20px"/>
+    </div>
     <button class="btn" id="mfaBtn" onclick="doMfaVerify()">Xác nhận →</button>
     <button class="btn-ghost" onclick="backToLogin()">← Đăng nhập lại</button>
     <div class="err" id="mfaErr"></div>
-    <div class="mfa-hint">Mã hết hạn sau 30 giây. Nếu sai, hãy đợi mã mới.</div>
+    <div class="mfa-hint" id="mfa-hint-text">Mã hết hạn sau 30 giây. Nếu sai, hãy đợi mã mới.</div>
+    <div style="margin-top:10px;text-align:center">
+      <a href="#" id="mfa-toggle-recovery" onclick="toggleMfaRecovery(event)"
+         style="color:#71717a;font-size:12px;text-decoration:none;cursor:pointer">🔑 Dùng mã khôi phục</a>
+    </div>
   </div>
 
   <!-- ── Step 3: First-login — Đổi mật khẩu ── -->
@@ -148,10 +158,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <script>
-var _tempToken  = null;
-var _setupToken = null;
-var _msPopup    = null;
-var _msTimer    = null;
+var _tempToken       = null;
+var _setupToken      = null;
+var _msPopup         = null;
+var _msTimer         = null;
+var _mfaUseRecovery  = false;
 
 // Nhận postMessage từ popup callback — khi Microsoft auth thành công (fallback)
 window.addEventListener('message', function(e) {
@@ -356,8 +367,13 @@ async function doSetupMfaInit() {
       if (res.status === 401) { setTimeout(backToLogin, 1500); return; }
       return;
     }
-    var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=0&data=' + encodeURIComponent(data.otpauth);
-    document.getElementById('setup-mfa-qr').src = qrUrl;
+    var qrImg = document.getElementById('setup-mfa-qr');
+    if (data.qrDataUrl) {
+      qrImg.src = data.qrDataUrl;
+    } else {
+      // Fallback: browser tries external service directly
+      qrImg.src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=0&data=' + encodeURIComponent(data.otpauth);
+    }
     document.getElementById('setup-mfa-secret').textContent = data.secret;
     document.getElementById('setup-mfa-s1').style.display = '';
     document.getElementById('setup-mfa-s2').style.display = 'none';
@@ -398,6 +414,7 @@ async function doSetupMfaComplete() {
     });
     var data = await res.json();
     if (res.ok && data.success) {
+      if (data.recoveryCodes && data.recoveryCodes.length) { showSetupRecoveryCodes(data.recoveryCodes); return; }
       window.location.href = '/';
     } else if (res.status === 401) {
       err.textContent = data.error || 'Phiên hết hạn. Vui lòng đăng nhập lại.';
@@ -417,12 +434,68 @@ async function doSetupMfaComplete() {
   }
 }
 
+/* Hiển thị recovery codes một lần sau khi thiết lập MFA lần đầu (dùng DOM API, không innerHTML) */
+function showSetupRecoveryCodes(codes) {
+  var ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#18181b;border:1px solid #27272a;border-radius:16px;padding:26px;max-width:400px;width:100%;text-align:center';
+  var icon = document.createElement('div'); icon.textContent='🔐'; icon.style.cssText='font-size:34px;margin-bottom:8px';
+  var ttl = document.createElement('div'); ttl.textContent='Mã khôi phục MFA'; ttl.style.cssText='font-size:17px;font-weight:700;margin-bottom:6px;color:#f4f4f5';
+  var warn = document.createElement('div'); warn.textContent='⚠️ Lưu các mã này nơi an toàn — mỗi mã dùng 1 lần để đăng nhập khi mất điện thoại. Sẽ không hiển thị lại.'; warn.style.cssText='font-size:12px;color:#fbbf24;line-height:1.6;margin-bottom:16px';
+  var grid = document.createElement('div'); grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px';
+  codes.forEach(function(c){ var d=document.createElement('div'); d.textContent=c; d.style.cssText='font-family:monospace;font-size:15px;font-weight:600;letter-spacing:1px;padding:8px;background:#09090b;border:1px solid #27272a;border-radius:6px'; grid.appendChild(d); });
+  var btns = document.createElement('div'); btns.style.cssText='display:flex;gap:10px;justify-content:center';
+  var dl = document.createElement('button'); dl.className='btn-ghost'; dl.textContent='⬇ Tải .txt'; dl.style.width='auto';
+  dl.onclick=function(){ var b=new Blob([codes.join('\n')],{type:'text/plain'}); var u=URL.createObjectURL(b); var a=document.createElement('a'); a.href=u; a.download='mfa-recovery-codes.txt'; a.click(); URL.revokeObjectURL(u); };
+  var go = document.createElement('button'); go.className='btn'; go.textContent='Đã lưu, vào dashboard →'; go.style.width='auto';
+  go.onclick=function(){ window.location.href='/'; };
+  btns.appendChild(dl); btns.appendChild(go);
+  box.appendChild(icon); box.appendChild(ttl); box.appendChild(warn); box.appendChild(grid); box.appendChild(btns);
+  ov.appendChild(box); document.body.appendChild(ov);
+}
+
+/* ── Toggle recovery code mode ── */
+function toggleMfaRecovery(e) {
+  e.preventDefault();
+  _mfaUseRecovery = !_mfaUseRecovery;
+  var otpGroup      = document.getElementById('mfa-otp-group');
+  var rcGroup       = document.getElementById('mfa-recovery-group');
+  var toggleLink    = document.getElementById('mfa-toggle-recovery');
+  var subText       = document.getElementById('mfa-sub-text');
+  var hintText      = document.getElementById('mfa-hint-text');
+  document.getElementById('mfaErr').classList.remove('show');
+  if (_mfaUseRecovery) {
+    otpGroup.style.display   = 'none';
+    rcGroup.style.display    = '';
+    toggleLink.textContent   = '← Dùng mã OTP';
+    subText.textContent      = 'Nhập một trong các mã khôi phục (định dạng XXXX-XXXX) đã lưu khi kích hoạt MFA.';
+    hintText.textContent     = 'Mỗi mã khôi phục chỉ dùng được một lần.';
+    document.getElementById('mfa-recovery-code').value = '';
+    setTimeout(function(){ document.getElementById('mfa-recovery-code').focus(); }, 60);
+  } else {
+    rcGroup.style.display    = 'none';
+    otpGroup.style.display   = '';
+    toggleLink.textContent   = '🔑 Dùng mã khôi phục';
+    subText.textContent      = 'Mở Microsoft Authenticator hoặc Google Authenticator, nhập mã 6 chữ số.';
+    hintText.textContent     = 'Mã hết hạn sau 30 giây. Nếu sai, hãy đợi mã mới.';
+    document.getElementById('mfa-code').value = '';
+    setTimeout(function(){ document.getElementById('mfa-code').focus(); }, 60);
+  }
+}
+
 /* ── Existing MFA verify ── */
 async function doMfaVerify() {
-  var code = document.getElementById('mfa-code').value.trim();
-  var err  = document.getElementById('mfaErr');
-  var btn  = document.getElementById('mfaBtn');
-  if (!/^\d{6}$/.test(code)) { err.textContent = 'Mã OTP phải có đúng 6 chữ số'; err.classList.add('show'); return; }
+  var err = document.getElementById('mfaErr');
+  var btn = document.getElementById('mfaBtn');
+  var code;
+  if (_mfaUseRecovery) {
+    code = document.getElementById('mfa-recovery-code').value.trim().toUpperCase();
+    if (!code) { err.textContent = 'Vui lòng nhập mã khôi phục'; err.classList.add('show'); return; }
+  } else {
+    code = document.getElementById('mfa-code').value.trim();
+    if (!/^\d{6}$/.test(code)) { err.textContent = 'Mã OTP phải có đúng 6 chữ số'; err.classList.add('show'); return; }
+  }
   err.classList.remove('show');
   btn.disabled = true; btn.textContent = 'Đang xác thực...';
   try {
@@ -439,10 +512,15 @@ async function doMfaVerify() {
       err.classList.add('show');
       setTimeout(backToLogin, 2500);
     } else {
-      err.textContent = data.error || 'Mã OTP không đúng';
+      err.textContent = data.error || (_mfaUseRecovery ? 'Mã khôi phục không đúng hoặc đã dùng' : 'Mã OTP không đúng');
       err.classList.add('show');
-      document.getElementById('mfa-code').value = '';
-      document.getElementById('mfa-code').focus();
+      if (_mfaUseRecovery) {
+        document.getElementById('mfa-recovery-code').value = '';
+        document.getElementById('mfa-recovery-code').focus();
+      } else {
+        document.getElementById('mfa-code').value = '';
+        document.getElementById('mfa-code').focus();
+      }
     }
   } catch(ex) {
     err.textContent = 'Lỗi kết nối: ' + ex.message;
@@ -454,6 +532,15 @@ async function doMfaVerify() {
 
 function backToLogin() {
   _tempToken = null; _setupToken = null;
+  // Reset recovery mode
+  if (_mfaUseRecovery) {
+    _mfaUseRecovery = false;
+    document.getElementById('mfa-recovery-group').style.display = 'none';
+    document.getElementById('mfa-otp-group').style.display = '';
+    document.getElementById('mfa-toggle-recovery').textContent = '🔑 Dùng mã khôi phục';
+    document.getElementById('mfa-sub-text').textContent = 'Mở Microsoft Authenticator hoặc Google Authenticator, nhập mã 6 chữ số.';
+    document.getElementById('mfa-hint-text').textContent = 'Mã hết hạn sau 30 giây. Nếu sai, hãy đợi mã mới.';
+  }
   _showStep('step-login');
   document.getElementById('errMsg').classList.remove('show');
   document.getElementById('mfa-code').value = '';
@@ -478,6 +565,18 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   });
+  // Recovery code input: auto-uppercase + Enter to submit
+  var rcEl = document.getElementById('mfa-recovery-code');
+  if (rcEl) {
+    rcEl.addEventListener('input', function() {
+      var pos = this.selectionStart;
+      this.value = this.value.toUpperCase();
+      this.setSelectionRange(pos, pos);
+    });
+    rcEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') doMfaVerify();
+    });
+  }
   // Enter on change-password fields
   ['new-pw','confirm-pw'].forEach(function(id) {
     var el = document.getElementById(id);

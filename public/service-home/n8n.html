@@ -390,6 +390,10 @@ function setFilter(type, val, btn) {
 }
 
 /* ── Helpers ── */
+/* XSS guards: esc() for HTML text, escJs() for values placed inside a
+   single-quoted JS string in an inline onclick handler. */
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function escJs(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/</g,'\\x3c').replace(/\r?\n/g,' '); }
 function timeAgo(iso) {
   if (!iso) return '—';
   var diff = Date.now() - new Date(iso).getTime();
@@ -450,7 +454,7 @@ function renderWorkflows() {
     return '<div class="wf-item" onclick="showWfDetail(\''+w.id+'\')">'
       +'<div class="wf-dot '+cls+'"></div>'
       +'<div class="wf-info">'
-        +'<div class="wf-name">'+w.name+'</div>'
+        +'<div class="wf-name">'+esc(w.name)+'</div>'
         +'<div class="wf-meta">'+lrHtml+'<span>'+timeAgo(w.updatedAt)+'</span>'+(w.triggerCount?'<span>'+w.triggerCount+' trigger</span>':'')+'</div>'
       +'</div>'
       +'<span class="id-badge">#'+w.id.slice(0,8)+'</span>'
@@ -471,7 +475,7 @@ function showWfDetail(id) {
   document.getElementById('wfDetail').innerHTML =
     '<div style="padding:1rem;text-align:left">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
-      +'<div style="font-size:14px;font-weight:600">'+w.name+'</div>'
+      +'<div style="font-size:14px;font-weight:600">'+esc(w.name)+'</div>'
       +'<a href="'+wfUrl+'" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent)">↗ Mở</a>'
     +'</div>'
     +'<div class="drawer-meta" style="margin-bottom:12px">'
@@ -482,12 +486,12 @@ function showWfDetail(id) {
       +(lr?'<div class="meta-item"><div class="meta-label">Last run</div><div class="meta-value '+(lr.status==='success'?'green':'red')+'">'+lr.status+'</div></div>':'')
       +(lr?'<div class="meta-item"><div class="meta-label">Khi</div><div class="meta-value">'+timeAgo(lr.startedAt)+'</div></div>':'')
     +'</div>'
-    +(w.tags&&w.tags.length?'<div style="margin-bottom:10px">'+w.tags.map(function(t){ return '<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--purple-dim);color:var(--purple);margin-right:4px">'+t+'</span>'; }).join('')+'</div>':'')
+    +(w.tags&&w.tags.length?'<div style="margin-bottom:10px">'+w.tags.map(function(t){ return '<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--purple-dim);color:var(--purple);margin-right:4px">'+esc(t)+'</span>'; }).join('')+'</div>':'')
     +(relExec.length?'<div style="font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Lịch sử gần nhất</div>'
       +relExec.map(function(e){
         var st=e.status==='failed'?'error':e.status;
         var d=dur(e.startedAt,e.stoppedAt);
-        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer" onclick="openDrawer(\''+e.id+'\',\''+e.workflowId+'\',\''+e.workflowName+'\')">'
+        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer" onclick="openDrawer(\''+escJs(e.id)+'\',\''+escJs(e.workflowId)+'\',\''+escJs(e.workflowName)+'\')">'
           +'<span class="ex-status '+st+'">'+e.status+'</span>'
           +'<span style="color:var(--muted)">'+timeAgo(e.startedAt)+'</span>'
           +(d?'<span style="color:var(--muted)">'+d+'</span>':'')
@@ -530,10 +534,10 @@ function renderExecutions() {
     var d = dur(e.startedAt,e.stoppedAt);
     var border = st==='error'?'is-error':st==='running'?'is-running':'';
     var clickable = (st==='error'||true); // all clickable
-    return '<div class="ex-item '+border+'" onclick="openDrawer(\''+e.id+'\',\''+e.workflowId+'\',\''+e.workflowName+'\')">'
+    return '<div class="ex-item '+border+'" onclick="openDrawer(\''+escJs(e.id)+'\',\''+escJs(e.workflowId)+'\',\''+escJs(e.workflowName)+'\')">'
       +'<div class="ex-icon '+st+'">'+icon+'</div>'
       +'<div class="ex-info">'
-        +'<div class="ex-name">'+e.workflowName+'</div>'
+        +'<div class="ex-name">'+esc(e.workflowName)+'</div>'
         +'<div class="ex-meta">'
           +'<span class="id-badge">#'+e.id+'</span>'
           +'<span>'+timeAgo(e.startedAt)+'</span>'
@@ -608,7 +612,7 @@ function openDrawer(execId, wfId, wfName) {
       var openUrl = N8N_URL+'/workflow/'+wfId+'/executions/'+execId;
       var dHtml = '<div class="drawer-section">'
         +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
-          +'<span style="font-size:13px;font-weight:600">'+wfName+'</span>'
+          +'<span style="font-size:13px;font-weight:600">'+esc(wfName)+'</span>'
           +'<a href="'+openUrl+'" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent)">↗ Mở trong n8n</a>'
         +'</div>'
         +'<div class="drawer-meta">'
@@ -616,7 +620,7 @@ function openDrawer(execId, wfId, wfName) {
           +'<div class="meta-item"><div class="meta-label">Mode</div><div class="meta-value">'+(d.mode||'—')+'</div></div>'
           +'<div class="meta-item"><div class="meta-label">Bắt đầu</div><div class="meta-value">'+timeAgo(d.startedAt)+'</div></div>'
           +'<div class="meta-item"><div class="meta-label">Thời gian</div><div class="meta-value">'+( dur(d.startedAt,d.stoppedAt)||'—')+'</div></div>'
-          +(d.lastNodeExecuted?'<div class="meta-item" style="grid-column:span 2"><div class="meta-label">Node cuối</div><div class="meta-value">'+d.lastNodeExecuted+'</div></div>':'')
+          +(d.lastNodeExecuted?'<div class="meta-item" style="grid-column:span 2"><div class="meta-label">Node cuối</div><div class="meta-value">'+esc(d.lastNodeExecuted)+'</div></div>':'')
         +'</div>'
       +'</div>';
 
@@ -624,9 +628,9 @@ function openDrawer(execId, wfId, wfName) {
         dHtml += '<div class="drawer-section">'
           +'<div class="drawer-section-title">⚠ Chi tiết lỗi</div>'
           +'<div class="error-box">'
-            +'<div class="error-msg">'+d.error.message+'</div>'
-            +(d.error.description?'<div class="error-desc">'+d.error.description+'</div>':'')
-            +(d.error.stack?'<div class="error-stack">'+d.error.stack+'</div>':'')
+            +'<div class="error-msg">'+esc(d.error.message)+'</div>'
+            +(d.error.description?'<div class="error-desc">'+esc(d.error.description)+'</div>':'')
+            +(d.error.stack?'<div class="error-stack">'+esc(d.error.stack)+'</div>':'')
           +'</div>'
         +'</div>';
       } else {
