@@ -195,15 +195,17 @@ function getSessionToken(request) {
 async function getSession(request, env) {
   const token = getSessionToken(request);
   if (!token) return null;
+  const cached = _sessionCache.get(token);
+  if (cached && cached.exp > Date.now()) return cached.session;
   const session = await env.DASHBOARD_KV.get(`session:${token}`, 'json');
   if (!session || Date.now() > session.expires) {
     if (session) await env.DASHBOARD_KV.delete(`session:${token}`).catch(() => {});
+    _sessionCache.delete(token);
     return null;
   }
-  // Session-IP binding: log IP change but do NOT invalidate session
-  // (strict binding causes false logouts on dynamic IPs / CGNAT / mobile)
-  // boundIp is kept in session data for audit purposes only.
-  return { ...session, token };
+  const result = { ...session, token };
+  _sessionCache.set(token, { session: result, exp: Date.now() + SESSION_CACHE_TTL_MS });
+  return result;
 }
 
 /* ── Brute-force throttle (KV-backed, best-effort) ── */
@@ -465,6 +467,10 @@ async function handleSessionRefresh(request, env) {
 /** Xóa tất cả session KV của một user (dùng khi delete / demote / đổi password) */
 async function invalidateUserSessions(env, username) {
   _invalidateEffCache(username);  // also drop cached effective permissions
+  // also evict any in-memory session cache entries for this user
+  for (const [tok, entry] of _sessionCache) {
+    if (entry.session && entry.session.username === username) _sessionCache.delete(tok);
+  }
   try {
     const listed = await env.DASHBOARD_KV.list({ prefix: 'session:' });
     await Promise.all(listed.keys.map(async k => {
@@ -479,7 +485,7 @@ async function handleLogout(request, env) {
   const logUser = session?.username || 'unknown';
   const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
   const token = getSessionToken(request);
-  if (token) await env.DASHBOARD_KV.delete(`session:${token}`).catch(() => {});
+  if (token) { _invalidateSessionCache(token); await env.DASHBOARD_KV.delete(`session:${token}`).catch(() => {}); }
   await logActivity(env, { action: 'logout', username: logUser, ip, success: true });
   const h = new Headers({ 'Content-Type': 'application/json' });
   h.append('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`);
@@ -1072,6 +1078,22 @@ async function isAdminUser(env, session) {
 const _effCache = new Map(); // username -> { eff, exp }
 const EFF_CACHE_TTL_MS = 8000;
 function _invalidateEffCache(username) { if (username) _effCache.delete(username); }
+
+/* ── Short-TTL in-memory session cache (hot path) ──
+   getSession does a KV read on EVERY authenticated request, including per-frame
+   camera snapshot fetches. This cache collapses those reads so the KV is hit at
+   most once per SESSION_CACHE_TTL_MS per token. Logout and invalidateUserSessions
+   call _invalidateSessionCache for instant effect. */
+const _sessionCache = new Map(); // token -> { session, exp }
+const SESSION_CACHE_TTL_MS = 30_000;
+function _invalidateSessionCache(token) { if (token) _sessionCache.delete(token); }
+
+/* ── Worker-level JPEG cache for latest.jpg snapshot polling ──
+   3 parallel browser workers × N cameras = N×3 requests/sec to Frigate.
+   This cache lets only 1 request per 250ms per camera reach Frigate;
+   the other workers get an instant in-memory response. */
+const _snapJpgCache = new Map(); // subPath → { bytes: Uint8Array, ct: string, exp: number }
+const SNAP_JPG_TTL_MS = 250;
 
 async function computeEffectivePermissions(env, username) {
   const _c = _effCache.get(username);
@@ -2860,6 +2882,7 @@ a:hover{background:#4f46e5}</style></head>
         // Google Fonts stylesheet
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
         "img-src 'self' data: https:; " +
+        "media-src 'self' blob:; " +
         // [M4] Whitelist only known domains instead of broad 'https: wss:'
         // Covers: all homelab subdomains + movi-finance API/WebSocket
         "connect-src 'self' https://*.home-server.id.vn wss://*.home-server.id.vn https://*.movi-finance.com wss://*.movi-finance.com https://speed.cloudflare.com; " +
@@ -4360,8 +4383,10 @@ async function handleCamHomeEmbed(request, env) {
   const target  = `${camUrl}${subPath}${reqUrl.search}`;
 
   // ── Granular camera permission checks ──
-  const isRecPath = /^\/api\/[^/]+\/(recordings|start\/|clip\.mp4)/.test(subPath);
+  // Recordings = python API paths + nginx-vod HLS paths (/vod/... serves master.m3u8/segments)
+  const isRecPath = /^\/(?:api\/(?:[^/]+\/(?:recordings|start\/|clip\.mp4)|vod\/)|vod\/)/.test(subPath);
   const isDownload = reqUrl.searchParams.get('dl') === '1';
+  const isLatestJpg = request.method === 'GET' && /^\/api\/[^/]+\/latest\.jpg$/.test(subPath);
   if (isDownload) {
     if (!(await hasPerm(env, session, 'camera_download')))
       return new Response('Forbidden', { status: 403 });
@@ -4370,19 +4395,22 @@ async function handleCamHomeEmbed(request, env) {
       return new Response('Forbidden', { status: 403 });
   }
 
+  // ── JPEG cache: serve cached frame if within TTL (collapses N-worker burst) ──
+  if (isLatestJpg) {
+    const _hit = _snapJpgCache.get(subPath);
+    if (_hit && _hit.exp > Date.now()) {
+      return new Response(_hit.bytes, { status: 200, headers: { 'Content-Type': _hit.ct, 'Cache-Control': 'no-cache' } });
+    }
+  }
+
   // ── WebSocket proxy (MSE streaming) ──
-  // CF Workers fetch does NOT support wss:// — keep target as https://, Workers handles the upgrade
+  // CF Workers: pass only Upgrade header — Connection/Sec-WebSocket-* are managed internally.
+  // Do NOT call upstream.accept() — fetch().webSocket is already established.
   if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
     let upstreamResp;
     try {
       upstreamResp = await fetch(target, {
-        headers: {
-          ...authHeaders,
-          'Upgrade':               'websocket',
-          'Connection':            'Upgrade',
-          'Sec-WebSocket-Version': '13',
-          'Sec-WebSocket-Key':     'dGhlIHNhbXBsZSBub25jZQ==',
-        },
+        headers: { ...authHeaders, 'Upgrade': 'websocket' },
       });
     } catch(e) {
       return new Response('WebSocket upstream error: ' + e.message, { status: 502 });
@@ -4392,7 +4420,7 @@ async function handleCamHomeEmbed(request, env) {
 
     const { 0: client, 1: server } = new WebSocketPair();
     server.accept();
-    upstream.accept();
+    // upstream from fetch() is already established — do NOT call upstream.accept()
     server.addEventListener('message',   ({ data }) => { try { upstream.send(data); } catch(_) {} });
     upstream.addEventListener('message', ({ data }) => { try { server.send(data);   } catch(_) {} });
     server.addEventListener('close',   ({ code, reason }) => { try { upstream.close(code, reason); } catch(_) {} });
@@ -4414,6 +4442,12 @@ async function handleCamHomeEmbed(request, env) {
 
   // For binary/video responses, pass through with relevant headers preserved
   if (!ct.includes('text/html')) {
+    if (isLatestJpg && upstream.status === 200) {
+      const bytes = new Uint8Array(await upstream.arrayBuffer());
+      _snapJpgCache.set(subPath, { bytes, ct, exp: Date.now() + SNAP_JPG_TTL_MS });
+      if (_snapJpgCache.size > 64) for (const [k, v] of _snapJpgCache) if (v.exp < Date.now()) _snapJpgCache.delete(k);
+      return new Response(bytes, { status: 200, headers: { 'Content-Type': ct, 'Cache-Control': 'no-cache' } });
+    }
     const respHeaders = { 'Content-Type': ct, 'Cache-Control': 'no-cache' };
     const contentRange = upstream.headers.get('Content-Range');
     const contentLength = upstream.headers.get('Content-Length');
@@ -4425,17 +4459,30 @@ async function handleCamHomeEmbed(request, env) {
   }
 
   // Patch go2rtc's HTML: redirect all API/WS calls through /cam-home/
+  // Frigate embeds go2rtc under /live/ (nginx strips prefix before proxying to go2rtc:1984).
+  // go2rtc's stream.html uses /api/ws for WebSocket — when served from Frigate that must
+  // be /live/api/ws. We detect /api/* paths and prepend /live/ automatically.
   if (ct.includes('text/html')) {
     let html = await upstream.text();
+
+    // ── Server-side: rewrite absolute paths in HTML attributes ──
+    // go2rtc (Vite build) embeds <script src="/assets/..."> and <link href="/assets/...">
+    // which the browser resolves against OUR Worker origin → 404.
+    // We must rewrite them to /cam-home/live/assets/... so the Worker proxies to Frigate → go2rtc.
+    html = html.replace(/(\s(?:src|href|action)=["'])(\/(?!cam-home\/)[^"']*)(["'])/gi,
+      (_, attr, path, q) => `${attr}/cam-home/live${path}${q}`
+    );
+
     const patch = `<script>
 (function(){
   var PRX='/cam-home';
   var CAM='camera.home-server.id.vn';
+  function _rw(u){return(u.indexOf('/api/')===0)?'/live'+u:u;}
   function rwHTTP(u){
     if(typeof u!=='string'||!u)return u;
     if(u.indexOf('https://'+CAM)===0)return PRX+u.slice(('https://'+CAM).length);
     if(u.indexOf('http://'+CAM)===0)return PRX+u.slice(('http://'+CAM).length);
-    if(u.charAt(0)==='/'&&u.indexOf('/cam-home')!==0)return PRX+u;
+    if(u.charAt(0)==='/'&&u.indexOf(PRX)!==0)return PRX+_rw(u);
     return u;
   }
   function rwWS(u){
@@ -4443,7 +4490,7 @@ async function handleCamHomeEmbed(request, env) {
     var h=window.location.host;
     if(u.indexOf('wss://'+CAM)===0)return 'wss://'+h+PRX+u.slice(('wss://'+CAM).length);
     if(u.indexOf('ws://'+CAM)===0)return 'wss://'+h+PRX+u.slice(('ws://'+CAM).length);
-    if(u.charAt(0)==='/'&&u.indexOf('/cam-home')!==0)return 'wss://'+h+PRX+u;
+    if(u.charAt(0)==='/'&&u.indexOf(PRX)!==0)return 'wss://'+h+PRX+_rw(u);
     return u;
   }
   var _W=window.WebSocket;
@@ -4473,6 +4520,121 @@ async function handleCamHomeEmbed(request, env) {
       headers: { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' },
     });
   }
+}
+
+/* ── Camera Home Live — go2rtc Reverse Proxy (WebSocket MSE + HTTP) ── */
+async function handleCamLiveEmbed(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return new Response('Unauthorized', { status: 401 });
+  if (!(await hasPerm(env, session, 'camera'))) return new Response('Forbidden', { status: 403 });
+
+  const camLiveUrl = 'https://camera-home-live.home-server.id.vn';
+  const cfId       = cleanEnv(env.HOME_CAM_CF_CLIENT_ID);
+  const cfSecret   = cleanEnv(env.HOME_CAM_CF_CLIENT_SECRET);
+  const g2User     = cleanEnv(env.HOME_GO2RTC_USER);
+  const g2Pass     = cleanEnv(env.HOME_GO2RTC_PASS);
+  const authHeaders = {
+    'CF-Access-Client-Id':     cfId,
+    'CF-Access-Client-Secret': cfSecret,
+    ...(g2User ? { 'Authorization': 'Basic ' + btoa(unescape(encodeURIComponent(`${g2User}:${g2Pass}`))) } : {}),
+  };
+
+  const reqUrl  = new URL(request.url);
+  const subPath = reqUrl.pathname.replace('/cam-live', '') || '/';
+  const target  = `${camLiveUrl}${subPath}${reqUrl.search}`;
+
+  // WebSocket proxy for go2rtc MSE streaming — match camera-movi's proven header set
+  if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+    let upstreamResp;
+    try {
+      upstreamResp = await fetch(target, {
+        headers: {
+          ...authHeaders,
+          'Upgrade':               'websocket',
+          'Connection':            'Upgrade',
+          'Sec-WebSocket-Version': '13',
+          'Sec-WebSocket-Key':     'dGhlIHNhbXBsZSBub25jZQ==',
+        },
+      });
+    } catch(e) {
+      return new Response('WebSocket upstream error: ' + e.message, { status: 502 });
+    }
+    const upstream = upstreamResp.webSocket;
+    if (!upstream) return new Response('WebSocket upstream failed (status ' + upstreamResp.status + ')', { status: 502 });
+
+    const { 0: client, 1: server } = new WebSocketPair();
+    server.accept();
+    upstream.accept();
+    server.addEventListener('message',   ({ data }) => { try { upstream.send(data); } catch(_) {} });
+    upstream.addEventListener('message', ({ data }) => { try { server.send(data);   } catch(_) {} });
+    server.addEventListener('close',   ({ code, reason }) => { try { upstream.close(code, reason); } catch(_) {} });
+    upstream.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason);   } catch(_) {} });
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // HTTP proxy — for HTML (go2rtc stream.html + Vite shell), inject URL-rewriting JS
+  const upstream = await fetch(target, {
+    method:  request.method,
+    headers: authHeaders,
+    ...(request.method !== 'GET' && request.method !== 'HEAD' ? { body: request.body } : {}),
+  });
+  const ct = upstream.headers.get('Content-Type') || 'application/octet-stream';
+
+  if (ct.includes('text/html')) {
+    let html = await upstream.text();
+    // Rewrite absolute Vite asset paths so browser fetches them through /cam-live/
+    html = html.replace(/(\s(?:src|href|action)=["'])(\/(?!cam-live\/)[^"']*)(["'])/gi,
+      (_, attr, path, q) => `${attr}/cam-live${path}${q}`
+    );
+    const patch = `<script>
+(function(){
+  var PRX='/cam-live';
+  var CAM='camera-home-live.home-server.id.vn';
+  function rwHTTP(u){
+    if(typeof u!=='string'||!u)return u;
+    if(u.indexOf('https://'+CAM)===0)return PRX+u.slice(('https://'+CAM).length);
+    if(u.indexOf('http://'+CAM)===0)return PRX+u.slice(('http://'+CAM).length);
+    if(u.charAt(0)==='/'&&u.indexOf(PRX)!==0)return PRX+u;
+    return u;
+  }
+  function rwWS(u){
+    if(typeof u!=='string'||!u)return u;
+    var h=window.location.host;
+    if(u.indexOf('wss://'+CAM)===0)return 'wss://'+h+PRX+u.slice(('wss://'+CAM).length);
+    if(u.indexOf('ws://'+CAM)===0)return 'wss://'+h+PRX+u.slice(('ws://'+CAM).length);
+    if(u.charAt(0)==='/'&&u.indexOf(PRX)!==0)return 'wss://'+h+PRX+u;
+    return u;
+  }
+  var _W=window.WebSocket;
+  window.WebSocket=function(u,p){u=rwWS(u);return p?new _W(u,p):new _W(u);};
+  window.WebSocket.prototype=_W.prototype;
+  window.WebSocket.CONNECTING=_W.CONNECTING;window.WebSocket.OPEN=_W.OPEN;
+  window.WebSocket.CLOSING=_W.CLOSING;window.WebSocket.CLOSED=_W.CLOSED;
+  var _F=window.fetch;
+  window.fetch=function(u,o){
+    if(typeof u==='string')u=rwHTTP(u);
+    else if(u instanceof Request)u=new Request(rwHTTP(u.url),u);
+    return _F.call(this,u,o);
+  };
+  var _xo=window.XMLHttpRequest.prototype.open;
+  window.XMLHttpRequest.prototype.open=function(m,u){
+    var a=[].slice.call(arguments);
+    if(typeof a[1]==='string')a[1]=rwHTTP(a[1]);
+    return _xo.apply(this,a);
+  };
+})();
+<\/script>`;
+    html = html.includes('</head>') ? html.replace('</head>', patch + '</head>') : patch + html;
+    return new Response(html, {
+      status: upstream.status,
+      headers: { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' },
+    });
+  }
+
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: { 'Content-Type': ct, 'Cache-Control': 'no-cache' },
+  });
 }
 
 /* ── Camera Movi — Full Reverse Proxy (HTTP + WebSocket) ── */
@@ -6325,6 +6487,7 @@ export default {
     if (p === '/api/admin/camera-aliases-movi' && m === 'GET')  return handleGetCameraAliases(request, env);
     if (p === '/api/admin/camera-aliases-movi' && m === 'PUT')  return handleSaveCameraAlias(request, env);
     if (p.startsWith('/cam-home/'))              return handleCamHomeEmbed(request, env);
+    if (p.startsWith('/cam-live/'))              return handleCamLiveEmbed(request, env);
     if (p.startsWith('/cam-embed/'))             return handleCamEmbed(request, env);
     // ── Termix Movi proxy ──
     if (p.startsWith('/proxy/termix-movi'))      return handleTermixMoviProxy(request, env);
