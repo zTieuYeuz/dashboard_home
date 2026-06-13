@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RustDesk Remote</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root,[data-theme="dark"]{
+  --bg:oklch(0.18 0.012 250);--surface:oklch(0.22 0.012 250);--surface-2:oklch(0.26 0.012 250);
+  --card:oklch(0.21 0.012 250);--border:oklch(0.31 0.012 250);--border-soft:oklch(0.27 0.012 250);
+  --text:oklch(0.96 0.005 250);--text-2:oklch(0.86 0.008 250);--muted:oklch(0.62 0.012 250);
+  --accent:oklch(0.72 0.18 290);--ok:oklch(0.74 0.16 155);--warn:oklch(0.78 0.16 70);--bad:oklch(0.68 0.20 25);
+  --font-sans:'IBM Plex Sans',system-ui,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  --radius:12px;--radius-sm:8px;
+}
+[data-theme="light"]{
+  --bg:oklch(0.985 0.003 250);--surface:oklch(1 0 0);--surface-2:oklch(0.965 0.005 250);
+  --card:oklch(1 0 0);--border:oklch(0.91 0.008 250);--border-soft:oklch(0.94 0.008 250);
+  --text:oklch(0.22 0.015 250);--text-2:oklch(0.36 0.015 250);--muted:oklch(0.55 0.012 250);
+  --accent:oklch(0.55 0.18 290);--ok:oklch(0.52 0.15 155);--warn:oklch(0.62 0.16 70);--bad:oklch(0.55 0.20 25);
+}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:52px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;backdrop-filter:blur(12px)}
+.topbar-left{display:flex;align-items:center;gap:28px}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:30px;height:30px;display:grid;place-items:center;background:var(--accent);color:var(--bg);border-radius:var(--radius-sm)}
+.brand-name{font-weight:600;font-size:14px;line-height:1.1}
+.brand-sub{font-size:11px;color:var(--muted);margin-top:1px}
+.topnav{display:flex;gap:2px}
+.topnav-item{font-size:13px;font-weight:500;color:var(--muted);padding:6px 12px;border-radius:var(--radius-sm);transition:all .12s}
+.topnav-item:hover,.topnav-item.active{color:var(--text);background:var(--surface-2)}
+.clock{font-family:var(--font-mono);font-size:13px;color:var(--text-2);padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm)}
+.tbtn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);transition:all .12s;cursor:pointer;font-family:var(--font-sans)}
+.tbtn:hover{color:var(--text);border-color:var(--muted)}
+.tbtn.ghost{background:transparent;border-color:transparent}
+.theme-toggle{width:32px;height:32px;display:grid;place-items:center;padding:0;border:1px solid var(--border);background:var(--surface-2);border-radius:var(--radius-sm);cursor:pointer;color:var(--text-2)}
+.theme-toggle:hover{color:var(--text)}
+
+.container{max-width:1400px;margin:0 auto;padding:1.5rem}
+.error-banner{background:var(--bad);color:#fff;padding:10px 16px;border-radius:var(--radius-sm);margin-bottom:1rem;font-size:13px}
+
+.info-note{display:flex;gap:10px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:1.25rem;font-size:12.5px;color:var(--text-2);line-height:1.6}
+.info-note .ico{font-size:16px;flex-shrink:0}
+.info-note strong{color:var(--text)}
+
+.stats-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:1rem}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem;display:flex;flex-direction:column;gap:4px;position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.stat-card.total::before{background:linear-gradient(90deg,var(--accent),transparent)}
+.stat-card.online::before{background:linear-gradient(90deg,var(--ok),transparent)}
+.stat-card.offline::before{background:linear-gradient(90deg,var(--muted),transparent)}
+.stat-card.groups::before{background:linear-gradient(90deg,var(--warn),transparent)}
+.stat-card.users::before{background:linear-gradient(90deg,var(--accent),transparent)}
+.stat-card.conn::before{background:linear-gradient(90deg,var(--ok),transparent)}
+.stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.stat-value{font-size:24px;font-weight:600;font-family:var(--font-mono)}
+.stat-value.accent{color:var(--accent)}
+.stat-value.ok{color:var(--ok)}
+.stat-sub{font-size:11px;color:var(--muted)}
+
+.os-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.25rem}
+.os-chip{display:flex;align-items:center;gap:6px;font-size:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:4px 12px;color:var(--text-2)}
+.os-chip b{color:var(--text);font-family:var(--font-mono)}
+
+.section-title{font-size:13px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em;margin:1.5rem 0 .75rem;display:flex;align-items:center;gap:8px}
+
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap}
+.search-inp{flex:1;min-width:200px;padding:8px 12px;font-size:13px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font-sans)}
+.search-inp:focus{outline:none;border-color:var(--accent)}
+.filter-chips{display:flex;gap:4px}
+.chip{padding:6px 12px;font-size:12.5px;font-weight:500;border:1px solid var(--border);background:var(--surface-2);color:var(--muted);border-radius:20px;cursor:pointer;transition:all .12s}
+.chip:hover{color:var(--text)}
+.chip.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+
+.dev-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px}
+.dev-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:10px;transition:all .15s;position:relative}
+.dev-card.online{cursor:pointer}
+.dev-card.online:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.dev-card.offline{opacity:.62}
+.dev-head{display:flex;align-items:center;gap:10px}
+.dev-os{width:38px;height:38px;flex-shrink:0;display:grid;place-items:center;background:var(--surface-2);border-radius:var(--radius-sm);font-size:20px}
+.dev-title{flex:1;min-width:0}
+.dev-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dev-user{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.dev-status{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;flex-shrink:0;font-family:var(--font-mono)}
+.dot{width:8px;height:8px;border-radius:50%}
+.dot.on{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.dot.off{background:var(--muted)}
+.dev-meta{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--muted);font-family:var(--font-mono)}
+.dev-meta .row{display:flex;justify-content:space-between;gap:8px}
+.dev-meta .row span:last-child{color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62%;text-align:right}
+.dev-foot{display:flex;align-items:center;gap:8px;margin-top:2px}
+.dev-id{font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--accent);letter-spacing:.5px;flex:1}
+.dev-act{display:flex;gap:6px;flex-wrap:wrap}
+.act-btn{padding:6px 10px;font-size:12px;font-weight:600;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);cursor:pointer;font-family:var(--font-sans);transition:all .12s}
+.act-btn:hover{color:var(--text);border-color:var(--muted)}
+.act-btn.primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.act-btn.primary:hover{filter:brightness(1.1)}
+.act-btn:disabled{opacity:.4;cursor:not-allowed}
+
+.empty{grid-column:1/-1;text-align:center;padding:3rem 1rem;color:var(--muted);font-size:13px}
+.grp-label{grid-column:1/-1;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:8px 0 2px;padding-top:6px}
+
+/* ── Connection log table ── */
+.log-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.log-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.log-table th{text-align:left;padding:10px 14px;background:var(--surface);color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)}
+.log-table td{padding:9px 14px;border-bottom:1px solid var(--border-soft);color:var(--text-2)}
+.log-table tr:last-child td{border-bottom:none}
+.log-table tr:hover td{background:var(--surface)}
+.log-mono{font-family:var(--font-mono);color:var(--text)}
+.log-arrow{color:var(--accent);margin:0 6px}
+.log-badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;font-family:var(--font-mono)}
+.log-badge.sess{background:color-mix(in oklch,var(--ok) 14%,transparent);color:var(--ok)}
+.log-badge.try{background:color-mix(in oklch,var(--muted) 18%,transparent);color:var(--muted)}
+.log-empty{padding:2rem;text-align:center;color:var(--muted);font-size:13px}
+
+/* ── Detail modal ── */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);z-index:300;display:none;align-items:center;justify-content:center;padding:1rem}
+.modal-ov.show{display:flex}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:520px;max-height:85vh;overflow:auto;box-shadow:0 12px 48px rgba(0,0,0,.4)}
+.modal-head{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--card)}
+.modal-head .m-os{width:40px;height:40px;display:grid;place-items:center;background:var(--surface-2);border-radius:var(--radius-sm);font-size:22px}
+.modal-head .m-t{flex:1;min-width:0}
+.modal-head .m-name{font-size:16px;font-weight:600}
+.modal-head .m-sub{font-size:12px;color:var(--muted)}
+.modal-head .m-close{width:30px;height:30px;border:none;background:var(--surface-2);color:var(--muted);border-radius:6px;cursor:pointer;font-size:15px}
+.modal-head .m-close:hover{color:var(--text)}
+.modal-body{padding:14px 18px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border-soft);font-size:13px}
+.kv:last-child{border-bottom:none}
+.kv .k{color:var(--muted)}
+.kv .v{color:var(--text);font-family:var(--font-mono);text-align:right;word-break:break-all}
+.modal-foot{display:flex;gap:8px;padding:14px 18px;border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--card)}
+.modal-foot .act-btn{flex:1;text-align:center;padding:9px}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:var(--bg);padding:10px 18px;border-radius:20px;font-size:13px;font-weight:500;z-index:400;opacity:0;transition:all .25s;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+
+@media(max-width:900px){.stats-row{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){
+  .topbar{height:auto;flex-wrap:wrap;padding:.625rem .75rem;gap:6px}
+  .topbar-left,.topbar-right{width:100%}
+  .topbar-right{overflow-x:auto;flex-wrap:nowrap}
+  .stats-row{grid-template-columns:repeat(2,1fr)}
+  .container{padding:.75rem}
+  .log-table th:nth-child(4),.log-table td:nth-child(4){display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+      </div>
+      <div><div class="brand-name">Dashboard SYSTEM</div><div class="brand-sub" id="hdr-sub">RustDesk Remote</div></div>
+    </div>
+    <nav class="topnav">
+      <a class="topnav-item" href="/">Overview</a>
+      <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
+      <a class="topnav-item" id="settings-link" href="/settings.html" style="display:none">⚙ Settings</a>
+    </nav>
+  </div>
+  <div class="topbar-right">
+    <span style="font-family:var(--font-mono);font-size:12px;color:var(--muted)" id="last-update"></span>
+    <span style="font-family:var(--font-mono);font-size:12px;color:var(--muted)" id="next-refresh"></span>
+    <button class="tbtn ghost" onclick="manualRefresh()">↻ Làm mới</button>
+    <a class="tbtn" href="https://rustdesk.home-server.id.vn/_admin/" target="_blank">🔗 Mở Admin</a>
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="error-banner" id="error-banner" style="display:none"></div>
+
+  <div class="info-note">
+    <span class="ico">💡</span>
+    <div>Nhấp <strong>Kết nối</strong> để mở app RustDesk trên máy bạn và remote vào máy đó. Cần đã cài <strong>RustDesk client</strong> trên máy đang dùng. Máy phải đang <strong style="color:var(--ok)">online</strong> mới remote được. Nhấp <strong>ℹ Chi tiết</strong> để xem đầy đủ thông tin máy.</div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card total">
+      <div class="stat-label">Tổng máy</div>
+      <div class="stat-value accent" id="s-total">—</div>
+      <div class="stat-sub">đã đăng ký</div>
+    </div>
+    <div class="stat-card online">
+      <div class="stat-label">Online</div>
+      <div class="stat-value ok" id="s-online">—</div>
+      <div class="stat-sub">sẵn sàng remote</div>
+    </div>
+    <div class="stat-card offline">
+      <div class="stat-label">Offline</div>
+      <div class="stat-value" id="s-offline">—</div>
+      <div class="stat-sub">đang tắt</div>
+    </div>
+    <div class="stat-card groups">
+      <div class="stat-label">Nhóm</div>
+      <div class="stat-value" id="s-groups">—</div>
+      <div class="stat-sub">phòng ban</div>
+    </div>
+    <div class="stat-card users">
+      <div class="stat-label">Tài khoản</div>
+      <div class="stat-value" id="s-users">—</div>
+      <div class="stat-sub">user RustDesk</div>
+    </div>
+    <div class="stat-card conn">
+      <div class="stat-label">Phiên hôm nay</div>
+      <div class="stat-value" id="s-conn">—</div>
+      <div class="stat-sub">lượt remote</div>
+    </div>
+  </div>
+
+  <div class="os-row" id="os-row"></div>
+
+  <div class="section-title">🖥 Danh sách máy</div>
+  <div class="toolbar">
+    <input class="search-inp" id="search" placeholder="🔍 Tìm theo tên máy, người dùng, ID, IP, nhóm..." oninput="render()"/>
+    <div class="filter-chips">
+      <div class="chip active" data-f="all" onclick="setFilter('all')">Tất cả</div>
+      <div class="chip" data-f="online" onclick="setFilter('online')">🟢 Online</div>
+      <div class="chip" data-f="offline" onclick="setFilter('offline')">⚪ Offline</div>
+    </div>
+  </div>
+
+  <div class="dev-grid" id="dev-grid">
+    <div class="empty">Đang tải danh sách máy...</div>
+  </div>
+
+  <div class="section-title">📋 Lịch sử kết nối <span id="conn-count" style="font-weight:400;text-transform:none;color:var(--muted);font-size:12px">· gần đây nhất</span></div>
+  <div class="log-wrap">
+    <table class="log-table">
+      <thead><tr>
+        <th>Người điều khiển</th><th>Máy đích</th><th>Thời gian</th><th>IP nguồn</th><th>Thời lượng</th><th>Loại</th>
+      </tr></thead>
+      <tbody id="log-body"><tr><td colspan="6" class="log-empty">Đang tải...</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="section-title">📁 Lịch sử truyền file <span id="file-count" style="font-weight:400;text-transform:none;color:var(--muted);font-size:12px"></span></div>
+  <div class="log-wrap">
+    <table class="log-table">
+      <thead><tr>
+        <th>Người gửi</th><th>Máy đích</th><th>Nội dung</th><th>Số lượng</th><th>Thời gian</th><th>IP</th>
+      </tr></thead>
+      <tbody id="file-body"><tr><td colspan="6" class="log-empty">Đang tải...</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="section-title">🔐 Lịch sử đăng nhập Admin <span id="login-count" style="font-weight:400;text-transform:none;color:var(--muted);font-size:12px"></span></div>
+  <div class="log-wrap">
+    <table class="log-table">
+      <thead><tr>
+        <th>Thời gian</th><th>IP</th><th>Client</th><th>Kiểu</th><th>Nền tảng</th>
+      </tr></thead>
+      <tbody id="loginlog-body"><tr><td colspan="5" class="log-empty">Đang tải...</td></tr></tbody>
+    </table>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ── Detail modal ── -->
+<div class="modal-ov" id="modal-ov" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="m-os" id="m-os">💻</div>
+      <div class="m-t"><div class="m-name" id="m-name">—</div><div class="m-sub" id="m-sub">—</div></div>
+      <button class="m-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="m-body"></div>
+    <div class="modal-foot">
+      <button class="act-btn" onclick="copyId(_modalId)">📋 Copy ID</button>
+      <button class="act-btn primary" id="m-connect" onclick="connect(_modalId)">🖥 Kết nối</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){function _readUserCookie(){try{var m=document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/);return m?JSON.parse(decodeURIComponent(m[1])):null;}catch(e){return null;}}var U=window.__USER__||_readUserCookie()||{role:'user',permissions:{},isAdmin:false};var perm=U.isAdmin?'read':(U.permissions&&U.permissions['rustdesk']||'none');if(perm==='none'){document.addEventListener('DOMContentLoaded',function(){var pg=document.querySelector('.container')||document.body;pg.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:12px;color:#71717a"><div style="font-size:48px">🔒</div><div style="font-size:17px;font-weight:600;color:#f4f4f5">Không có quyền truy cập</div><div style="font-size:13px">Trang RustDesk yêu cầu quyền truy cập.<br>Liên hệ admin để được cấp quyền.</div><a href="/" style="margin-top:8px;font-size:13px;color:#3b82f6;text-decoration:none">← Về trang chủ</a></div>';});}})();
+
+var _devices = [];
+var _connections = [];
+var _logins = [];
+var _files = [];
+var _filter = 'all';
+var _modalId = null;
+var REFRESH_SEC = 20;
+var _nextIn = REFRESH_SEC;
+
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function set(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
+function hide(id){var e=document.getElementById(id);if(e)e.style.display='none';}
+function showErr(m){var e=document.getElementById('error-banner');if(e){e.textContent='⚠ '+m;e.style.display='block';}}
+
+function osIcon(os){
+  os=(os||'').toLowerCase();
+  if(os.indexOf('windows')>=0)return '🪟';
+  if(os.indexOf('mac')>=0||os.indexOf('darwin')>=0)return '🍎';
+  if(os.indexOf('android')>=0)return '🤖';
+  if(os.indexOf('linux')>=0||os.indexOf('ubuntu')>=0||os.indexOf('debian')>=0)return '🐧';
+  return '💻';
+}
+function osShort(os){
+  if(!os)return '';
+  var parts=os.split('/');
+  var s=(parts.length>1?parts[1]:parts[0]).trim();
+  s=s.replace(/\s*-\s*\d+\s*\(\d+\)\s*$/,'').trim();
+  return s;
+}
+function timeAgo(ts){
+  if(!ts)return 'chưa rõ';
+  var diff=Math.floor(Date.now()/1000)-ts;
+  if(diff<60)return 'vừa xong';
+  if(diff<3600)return Math.floor(diff/60)+' phút trước';
+  if(diff<86400)return Math.floor(diff/3600)+' giờ trước';
+  return Math.floor(diff/86400)+' ngày trước';
+}
+function fmtDur(sec){
+  if(!sec||sec<=0)return '—';
+  if(sec<60)return sec+'s';
+  if(sec<3600)return Math.floor(sec/60)+'m '+(sec%60)+'s';
+  return Math.floor(sec/3600)+'h '+Math.floor((sec%3600)/60)+'m';
+}
+
+async function loadDevices(){
+  set('last-update','Đang tải...');
+  hide('error-banner');
+  try{
+    var res=await fetch('/api/rustdesk');
+    var data=await res.json();
+    if(data.error){showErr(data.error);set('last-update','lỗi');return;}
+    _devices=data.devices||[];
+    _connections=data.connections||[];
+    _logins=data.logins||[];
+    _files=data.fileTransfers||[];
+    set('last-update','Cập nhật '+new Date().toLocaleTimeString('vi-VN',{hour12:false}));
+    renderStats(data.stats||{});
+    render();
+    renderLog();
+    var ct=(data.stats||{}).connTotal;
+    set('conn-count', ct!=null?('· '+ct+' lượt'):'· gần đây nhất');
+    renderFiles(data.stats||{});
+    renderLogins(data.stats||{});
+  }catch(e){
+    showErr('Không tải được dữ liệu: '+e.message);
+    set('last-update','lỗi');
+  }
+}
+
+function renderStats(st){
+  set('s-total', st.total!=null?st.total:_devices.length);
+  set('s-online', st.online!=null?st.online:'—');
+  set('s-offline', st.offline!=null?st.offline:'—');
+  set('s-groups', st.groups!=null?st.groups:'—');
+  set('s-users', st.users!=null?st.users:'—');
+  set('s-conn', st.connToday!=null?st.connToday:'—');
+  var os=st.os||{};
+  var icons={'Windows':'🪟','macOS':'🍎','Linux':'🐧','Android':'🤖','Khác':'💻'};
+  var html=Object.keys(os).map(function(k){
+    return '<div class="os-chip">'+(icons[k]||'💻')+' '+esc(k)+' <b>'+os[k]+'</b></div>';
+  }).join('');
+  document.getElementById('os-row').innerHTML=html;
+}
+
+function setFilter(f){
+  _filter=f;
+  document.querySelectorAll('.chip').forEach(function(c){c.classList.toggle('active',c.dataset.f===f);});
+  render();
+}
+
+function render(){
+  var grid=document.getElementById('dev-grid');
+  var q=(document.getElementById('search').value||'').trim().toLowerCase();
+  var list=_devices.filter(function(d){
+    if(_filter==='online'&&!d.online)return false;
+    if(_filter==='offline'&&d.online)return false;
+    if(q){
+      var hay=(d.hostname+' '+d.alias+' '+d.username+' '+d.id+' '+d.group+' '+d.lastIp+' '+d.os).toLowerCase();
+      if(hay.indexOf(q)<0)return false;
+    }
+    return true;
+  });
+  list.sort(function(a,b){
+    if(a.online!==b.online)return a.online?-1:1;
+    return (a.alias||a.hostname).localeCompare(b.alias||b.hostname);
+  });
+  if(!list.length){grid.innerHTML='<div class="empty">Không có máy nào khớp.</div>';return;}
+
+  var byGroup={};
+  list.forEach(function(d){var g=d.group||'Chưa phân nhóm';(byGroup[g]=byGroup[g]||[]).push(d);});
+  var html='';
+  Object.keys(byGroup).sort().forEach(function(g){
+    html+='<div class="grp-label">'+esc(g)+' · '+byGroup[g].length+'</div>';
+    byGroup[g].forEach(function(d){html+=card(d);});
+  });
+  grid.innerHTML=html;
+}
+
+function card(d){
+  var name=d.alias||d.hostname||d.id;
+  return '<div class="dev-card'+(d.online?' online':' offline')+'"'+(d.online?' onclick="connect(\''+esc(d.id)+'\')"':'')+'>'
+    +'<div class="dev-head">'
+      +'<div class="dev-os">'+osIcon(d.os)+'</div>'
+      +'<div class="dev-title">'
+        +'<div class="dev-name">'+esc(name)+'</div>'
+        +'<div class="dev-user">'+esc(d.username||'—')+(d.os?' · '+esc(osShort(d.os)):'')+'</div>'
+      +'</div>'
+      +'<div class="dev-status">'+(d.online
+        ? '<span class="dot on"></span><span style="color:var(--ok)">ONLINE</span>'
+        : '<span class="dot off"></span><span style="color:var(--muted)">OFFLINE</span>')+'</div>'
+    +'</div>'
+    +'<div class="dev-meta">'
+      +(d.cpu?'<div class="row"><span>CPU</span><span title="'+esc(d.cpu)+'">'+esc(cpuShort(d.cpu))+'</span></div>':'')
+      +(d.memory?'<div class="row"><span>RAM</span><span>'+esc(d.memory)+'</span></div>':'')
+      +(d.lastIp?'<div class="row"><span>IP</span><span>'+esc(d.lastIp)+'</span></div>':'')
+      +'<div class="row"><span>Lần cuối</span><span>'+esc(timeAgo(d.lastOnline))+'</span></div>'
+    +'</div>'
+    +'<div class="dev-foot" onclick="event.stopPropagation()">'
+      +'<span class="dev-id">'+esc(d.id)+'</span>'
+      +'<div class="dev-act">'
+        +'<button class="act-btn" onclick="openDetail(\''+esc(d.id)+'\')">ℹ Chi tiết</button>'
+        +'<button class="act-btn" onclick="copyId(\''+esc(d.id)+'\')">📋</button>'
+        +'<button class="act-btn primary" '+(d.online?'':'disabled ')+'onclick="connect(\''+esc(d.id)+'\')">🖥 Kết nối</button>'
+      +'</div>'
+    +'</div>'
+  +'</div>';
+}
+
+function cpuShort(cpu){
+  /* "Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz, 2.14GHz, 22/22 cores" → "Xeon E5-2696 v4 · 22 cores" */
+  if(!cpu)return '';
+  var cores='';var cm=/(\d+)\/\d+\s*cores/.exec(cpu);if(cm)cores=' · '+cm[1]+' cores';
+  var s=cpu.replace(/\(R\)|\(TM\)|CPU|Intel|AMD|@.*$/g,'').trim().replace(/\s+/g,' ');
+  if(s.length>26)s=s.slice(0,26)+'…';
+  return s+cores;
+}
+
+function renderLog(){
+  var body=document.getElementById('log-body');
+  if(!_connections.length){body.innerHTML='<tr><td colspan="6" class="log-empty">Chưa có lịch sử kết nối.</td></tr>';return;}
+  body.innerHTML=_connections.map(function(c){
+    var from=c.fromName||c.fromPeer||'<span style="color:var(--muted)">— (ẩn danh)</span>';
+    return '<tr>'
+      +'<td>'+ (c.fromName||c.fromPeer?('<span class="log-mono">'+esc(c.fromName||c.fromPeer)+'</span>'):'<span style="color:var(--muted)">—</span>') +'</td>'
+      +'<td><span class="log-mono">'+esc(c.toName||c.toPeer)+'</span></td>'
+      +'<td>'+esc(c.startStr)+'</td>'
+      +'<td><span class="log-mono">'+esc(c.ip||'—')+'</span></td>'
+      +'<td>'+fmtDur(c.duration)+'</td>'
+      +'<td>'+(c.hasSession?'<span class="log-badge sess">remote</span>':'<span class="log-badge try">thử</span>')+'</td>'
+    +'</tr>';
+  }).join('');
+}
+
+function renderFiles(st){
+  set('file-count', (st.fileTotal!=null?'· '+st.fileTotal+' lượt':''));
+  var body=document.getElementById('file-body');
+  if(!_files.length){body.innerHTML='<tr><td colspan="6" class="log-empty">Chưa có lượt truyền file nào.</td></tr>';return;}
+  body.innerHTML=_files.map(function(f){
+    var dir = f.type===1 ? '⬇ nhận' : '⬆ gửi';
+    var content = (f.isFile?'📄 ':'📁 ')+(f.path||f.info||'—');
+    return '<tr>'
+      +'<td>'+(f.fromName||f.fromPeer?('<span class="log-mono">'+esc(f.fromName||f.fromPeer)+'</span>'):'<span style="color:var(--muted)">—</span>')+'</td>'
+      +'<td><span class="log-mono">'+esc(f.toName||f.toPeer)+'</span></td>'
+      +'<td title="'+esc(f.path||f.info||'')+'">'+esc(content.length>40?content.slice(0,40)+'…':content)+'</td>'
+      +'<td>'+dir+(f.num?' · '+f.num:'')+'</td>'
+      +'<td>'+esc(f.at)+'</td>'
+      +'<td><span class="log-mono">'+esc(f.ip||'—')+'</span></td>'
+    +'</tr>';
+  }).join('');
+}
+
+function renderLogins(st){
+  set('login-count', (st.loginTotal!=null?'· '+st.loginTotal+' lượt':''));
+  var body=document.getElementById('loginlog-body');
+  if(!_logins.length){body.innerHTML='<tr><td colspan="5" class="log-empty">Chưa có lịch sử đăng nhập.</td></tr>';return;}
+  body.innerHTML=_logins.map(function(l){
+    return '<tr>'
+      +'<td>'+esc(l.at)+'</td>'
+      +'<td><span class="log-mono">'+esc(l.ip||'—')+'</span></td>'
+      +'<td>'+esc(l.client||'—')+'</td>'
+      +'<td>'+esc(l.type||'—')+'</td>'
+      +'<td>'+esc(l.platform||'—')+'</td>'
+    +'</tr>';
+  }).join('');
+}
+
+function connect(id){
+  window.location.href='rustdesk://'+id;
+  toast('Đang mở RustDesk → '+id+' ...');
+}
+function copyId(id){
+  navigator.clipboard.writeText(id).then(function(){toast('Đã copy ID: '+id);},function(){toast('Không copy được');});
+}
+
+function openDetail(id){
+  var d=_devices.find(function(x){return x.id===id;});
+  if(!d)return;
+  _modalId=id;
+  document.getElementById('m-os').textContent=osIcon(d.os);
+  document.getElementById('m-name').textContent=d.alias||d.hostname||d.id;
+  document.getElementById('m-sub').textContent=(d.online?'🟢 Online':'⚪ Offline')+' · '+(d.group||'Chưa phân nhóm');
+  var rows=[
+    ['ID', d.id],
+    ['Tên máy (hostname)', d.hostname],
+    ['Tên hiển thị (alias)', d.alias||'—'],
+    ['Người dùng Windows', d.username||'—'],
+    ['Hệ điều hành', d.os||'—'],
+    ['CPU', d.cpu||'—'],
+    ['RAM', d.memory||'—'],
+    ['Phiên bản RustDesk', d.version||'—'],
+    ['IP lần cuối', d.lastIp||'—'],
+    ['Nhóm', d.group||'—'],
+    ['Online lần cuối', timeAgo(d.lastOnline)],
+    ['Lần đầu thấy', d.firstSeen||'—'],
+  ];
+  document.getElementById('m-body').innerHTML=rows.map(function(r){
+    return '<div class="kv"><span class="k">'+esc(r[0])+'</span><span class="v">'+esc(r[1])+'</span></div>';
+  }).join('');
+  var cbtn=document.getElementById('m-connect');
+  cbtn.disabled=!d.online;
+  document.getElementById('modal-ov').classList.add('show');
+}
+function closeModal(){document.getElementById('modal-ov').classList.remove('show');}
+
+var _toastT=null;
+function toast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  if(_toastT)clearTimeout(_toastT);
+  _toastT=setTimeout(function(){t.classList.remove('show');},2200);
+}
+
+function manualRefresh(){_nextIn=REFRESH_SEC;loadDevices();}
+
+setInterval(function(){
+  _nextIn--;
+  if(_nextIn<=0){_nextIn=REFRESH_SEC;loadDevices();}
+  var m=Math.floor(_nextIn/60),s=_nextIn%60;
+  var el=document.getElementById('next-refresh');
+  if(el)el.textContent='· refresh '+m+':'+String(s).padStart(2,'0');
+},1000);
+
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal();});
+
+loadDevices();
+
+(function(){
+  var saved=null;try{saved=localStorage.getItem('dh_theme')}catch(e){}
+  if(saved==='light')document.documentElement.dataset.theme='light';
+  document.getElementById('themeToggle').addEventListener('click',function(){
+    var next=document.documentElement.dataset.theme==='light'?'dark':'light';
+    document.documentElement.dataset.theme=next;
+    try{localStorage.setItem('dh_theme',next)}catch(e){}
+  });
+  setInterval(function(){var c=document.getElementById('clock');if(c)c.textContent=new Date().toLocaleTimeString('vi-VN',{hour12:false});},1000);
+})();
+</script>
+</body>
+</html>
