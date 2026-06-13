@@ -48,13 +48,16 @@ a{color:inherit;text-decoration:none}
 .shortcut-item kbd{display:inline-block;font-size:10px;padding:1px 5px;border-radius:4px;background:var(--surface-2);border:1px solid var(--border-soft);color:var(--text);font-family:var(--font-mono);line-height:1.4}
 .shortcut-sep{color:var(--border);font-size:14px;flex-shrink:0;margin:0 1px}
 .theme-toggle{width:30px;height:30px;display:grid;place-items:center;padding:0}
-.iframe-wrap{flex:1;position:relative;display:flex;flex-direction:column;overflow:hidden}
-iframe{width:100%;flex:1;border:none;display:block;background:#000}
-.blocked{display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;text-align:center;padding:2rem}
-.blocked .icon{font-size:48px}
-.blocked h2{font-size:18px;font-weight:600}
-.blocked p{font-size:13px;color:var(--muted);max-width:400px;line-height:1.6}
-.blocked .btn-primary{font-size:13px;padding:8px 20px;border-radius:8px;background:var(--accent);color:oklch(0.18 0.012 250);border:none;cursor:pointer;font-weight:600;text-decoration:none;display:inline-block}
+.launch-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:2rem}
+.launch-card{max-width:480px;width:100%;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:2.5rem 2rem;text-align:center;display:flex;flex-direction:column;align-items:center;gap:14px}
+.launch-icon{width:72px;height:72px;display:grid;place-items:center;background:var(--surface-2);border-radius:18px;color:var(--accent)}
+.launch-title{font-size:20px;font-weight:600}
+.launch-desc{font-size:13.5px;color:var(--muted);line-height:1.7;max-width:400px}
+.launch-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:600;padding:13px 28px;border-radius:10px;background:var(--accent);color:oklch(0.18 0.012 250);border:none;cursor:pointer;text-decoration:none;transition:filter .15s;margin-top:4px;width:100%;max-width:300px}
+.launch-btn:hover{filter:brightness(1.1)}
+.launch-btn.sub{background:var(--surface-2);color:var(--text-2);border:1px solid var(--border);font-size:13px;padding:9px 20px;font-weight:500}
+.launch-btn.sub:hover{filter:none;color:var(--text);border-color:var(--muted)}
+.launch-note{font-size:11.5px;color:var(--muted);background:var(--surface-2);border:1px solid var(--border-soft);border-radius:8px;padding:8px 12px;line-height:1.6;margin-top:6px}
 </style>
 </head>
 <body>
@@ -72,84 +75,43 @@ iframe{width:100%;flex:1;border:none;display:block;background:#000}
       <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
       <a class="topnav-item" id="settings-link" href="/settings.html" style="display:none">⚙ Settings</a>
     </nav>
-    <div class="shortcuts">
-      <div class="shortcut-item"><kbd>LShift</kbd><kbd>LShift</kbd><span>Palette</span></div>
-      <span class="shortcut-sep">|</span>
-      <div class="shortcut-item"><kbd>Ctrl</kbd><kbd>Ins</kbd><span>Copy</span></div>
-      <span class="shortcut-sep">|</span>
-      <div class="shortcut-item"><kbd>Shift</kbd><kbd>Ins</kbd><span>Paste</span></div>
-      <span class="shortcut-sep">|</span>
-      <div class="shortcut-item"><kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>T</kbd><span>Pop out</span></div>
-    </div>
   </div>
   <div class="topbar-right">
-    <button class="btn ghost" onclick="openPopup()">⛶ Pop out</button>
-    <a href="https://termix.home-server.id.vn" target="_blank"><button class="btn accent">🔗 Mở Termix</button></a>
     <button class="btn ghost theme-toggle" id="themeToggle" title="Toggle theme">
       <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"/></svg>
     </button>
   </div>
 </header>
 
-<div class="iframe-wrap">
-  <iframe
-    id="termix-frame"
-    src="https://termix.home-server.id.vn"
-    allow="clipboard-read; clipboard-write"
-    sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation"
-    title="Termix SSH Terminal"
-  ></iframe>
-
-  <!-- Fallback nếu iframe bị block -->
-  <div class="blocked" id="blocked-msg">
-    <div class="icon">🔒</div>
-    <h2>Không thể nhúng Termix</h2>
-    <p>Termix đang block iframe embedding. Anh có thể mở trực tiếp trong tab mới.</p>
-    <a href="https://termix.home-server.id.vn" target="_blank" class="btn-primary">Mở Termix →</a>
+<div class="launch-wrap">
+  <div class="launch-card">
+    <div class="launch-icon">
+      <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M6 8l2 2-2 2M11 12h4" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="launch-title">Termix SSH Terminal</div>
+    <div class="launch-desc">Web SSH terminal cho toàn bộ server — truy cập <strong>qua dashboard</strong> (proxy + session dashboard kiểm soát, không vào Termix trực tiếp được).</div>
+    <a class="launch-btn" href="/proxy/termix-home/" target="_blank" rel="noopener">🖥 Mở Termix SSH →</a>
+    <button class="launch-btn sub" onclick="openPopup()">⛶ Mở trong cửa sổ riêng</button>
+    <div class="launch-note">💡 Termix mở ở tab/cửa sổ riêng <strong>qua dashboard</strong> (đường <code>/proxy/termix-home</code>). Phải mở ở cấp trang đầy đủ (không nhúng iframe) vì Termix yêu cầu vậy để đăng nhập hoạt động đúng — nhưng vẫn đi qua dashboard nên bảo mật vẫn đảm bảo.</div>
   </div>
 </div>
 
 <script>
 (function(){function _readUserCookie(){try{var m=document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/);return m?JSON.parse(decodeURIComponent(m[1])):null;}catch(e){return null;}}var U=window.__USER__||_readUserCookie()||{role:'user',permissions:{},isAdmin:false};var perm=U.isAdmin?'write':(U.permissions&&U.permissions['ssh']||'none');if(perm==='none'){document.addEventListener('DOMContentLoaded',function(){var pg=document.querySelector('.page')||document.body;pg.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:12px;color:#71717a"><div style="font-size:48px">🔒</div><div style="font-size:17px;font-weight:600;color:#f4f4f5">Không có quyền truy cập</div><div style="font-size:13px">Trang SSH Terminal yêu cầu quyền truy cập.<br>Liên hệ admin để được cấp quyền.</div><a href="/" style="margin-top:8px;font-size:13px;color:#3b82f6;text-decoration:none">← Về trang chủ</a></div>';});}})();
-const TERMIX_BASE = 'https://termix.home-server.id.vn';
+// Mở Termix QUA PROXY DASHBOARD (/proxy/termix-home) ở tab/cửa sổ riêng (top-level).
+// Top-level → window.self===window.top → Termix KHÔNG bị nhận nhầm là Electron webview → auth web chạy.
+// Vẫn đi qua dashboard (proxy + session) nên không ai vào Termix trực tiếp được.
+const TERMIX_PROXY = '/proxy/termix-home/';
 
 function openPopup() {
-  window.open(TERMIX_BASE, 'termix-popup',
-    'width=1200,height=800,menubar=no,toolbar=no,location=no,status=no');
+  window.open(TERMIX_PROXY, 'termix-popup',
+    'width=1280,height=860,menubar=no,toolbar=no,location=no,status=no');
 }
 
-// Detect if iframe was blocked (X-Frame-Options / CSP)
-const frame = document.getElementById('termix-frame');
-let loaded = false;
-
-frame.addEventListener('load', function() {
-  loaded = true;
-  // Try to detect blank/error page
-  try {
-    const doc = frame.contentDocument || frame.contentWindow?.document;
-    if (doc && (doc.body?.innerHTML === '' || doc.title === 'about:blank')) {
-      showBlocked();
-    }
-  } catch(e) {
-    // Cross-origin = frame loaded OK (expected for external sites)
-  }
-});
-
-// If no load event in 10s, assume blocked
-setTimeout(function() {
-  if (!loaded) showBlocked();
-}, 10000);
-
-function showBlocked() {
-  document.getElementById('termix-frame').style.display = 'none';
-  document.getElementById('blocked-msg').style.display = 'flex';
-}
-
-// Handle keyboard shortcuts
+// Ctrl+Shift+T = mở tab mới
 document.addEventListener('keydown', function(e) {
-  // Ctrl+Shift+T = open in new tab
   if (e.ctrlKey && e.shiftKey && e.key === 'T') {
-    window.open(TERMIX_BASE, '_blank');
+    window.open(TERMIX_PROXY, '_blank');
   }
 });
 
