@@ -550,12 +550,15 @@ function toast(msg){
 function manualRefresh(){_nextIn=REFRESH_SEC;loadDevices();}
 
 setInterval(function(){
+  if(document.hidden)return; /* tạm dừng polling khi tab ẩn — tiết kiệm tài nguyên, không đổi UX khi xem */
   _nextIn--;
   if(_nextIn<=0){_nextIn=REFRESH_SEC;loadDevices();}
   var m=Math.floor(_nextIn/60),s=_nextIn%60;
   var el=document.getElementById('next-refresh');
   if(el)el.textContent='· refresh '+m+':'+String(s).padStart(2,'0');
 },1000);
+/* tab hiện lại → refresh ngay cho dữ liệu mới */
+document.addEventListener('visibilitychange',function(){ if(!document.hidden){_nextIn=0;} });
 
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal();});
 

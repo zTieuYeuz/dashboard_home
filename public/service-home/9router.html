@@ -382,6 +382,8 @@ function prefixColor(prefix) {
   return '';
 }
 
+/* [security] escape HTML — chặn XSS từ tên/email tài khoản, thông báo lỗi (dữ liệu từ provider/9router) */
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function fmtNum(n) {
   if (!n && n!==0) return '—';
   if (n >= 1e9) return (n/1e9).toFixed(2)+'B';
@@ -448,11 +450,11 @@ function renderConnections() {
     return '<div class="conn-item">'
       +'<div class="conn-avatar">'+providerIcon(c.provider)+'</div>'
       +'<div class="conn-info">'
-        +'<div class="conn-name">'+(c.name||c.email||c.provider)+'</div>'
+        +'<div class="conn-name">'+esc(c.name||c.email||c.provider)+'</div>'
         +'<div class="conn-meta">'
-          +'<span style="font-weight:500;color:var(--text)">'+c.provider+'</span>'
-          +(c.authType?'<span>'+c.authType+'</span>':'')
-          +(c.email&&c.email!==c.name?'<span>'+c.email+'</span>':'')
+          +'<span style="font-weight:500;color:var(--text)">'+esc(c.provider)+'</span>'
+          +(c.authType?'<span>'+esc(c.authType)+'</span>':'')
+          +(c.email&&c.email!==c.name?'<span>'+esc(c.email)+'</span>':'')
           +(c.lastUsedAt?'<span>Used '+timeAgo(c.lastUsedAt)+' ago</span>':'')
           +(c.backoffLevel?'<span style="color:var(--amber)">Backoff Lv'+c.backoffLevel+'</span>':'')
         +'</div>'
@@ -460,7 +462,7 @@ function renderConnections() {
           +locks.map(function(l){
             return '<span class="lock-chip">🔒 '+l.model+' ('+untilLabel(l.until)+')</span>';
           }).join('')+'</div>':'')
-        +(c.lastError?'<div style="font-size:10px;color:var(--red);margin-top:3px">'+c.lastError+'</div>':'')
+        +(c.lastError?'<div style="font-size:10px;color:var(--red);margin-top:3px">'+esc(c.lastError)+'</div>':'')
       +'</div>'
       +'<span class="conn-status '+sc+'">'+scLabel+'</span>'
     +'</div>';
@@ -480,7 +482,7 @@ function renderCombos() {
       +'<div class="combo-top">'
         +'<div style="font-size:20px">🔗</div>'
         +'<div>'
-          +'<div class="combo-name">'+(c.name||c.id)+'</div>'
+          +'<div class="combo-name">'+esc(c.name||c.id)+'</div>'
           +'<div style="font-size:11px;color:var(--muted)">'+models.length+' models</div>'
         +'</div>'
       +'</div>'
@@ -579,8 +581,8 @@ function renderQuota() {
       +'<div class="quota-card-head">'
         +'<div style="font-size:20px">'+providerIcon(c.provider)+'</div>'
         +'<div>'
-          +'<div class="quota-card-name">'+c.provider+' — '+(c.name||c.email||'Account')+'</div>'
-          +'<div class="quota-card-email">'+(c.email||'')
+          +'<div class="quota-card-name">'+esc(c.provider)+' — '+esc(c.name||c.email||'Account')+'</div>'
+          +'<div class="quota-card-email">'+esc(c.email||'')
             +(lockedCount?'<span style="margin-left:6px;color:var(--red)">'+lockedCount+' locked</span>':'')
           +'</div>'
         +'</div>'
