@@ -2414,6 +2414,7 @@ const WAYFIND_NAV = `<style>
   {i:'\\u26A1',n:'n8n Automation',d:'Workflow & bot automation',h:'/service-home/n8n.html',p:'n8n'},
   {i:'\\uD83D\\uDCF7',n:'Camera',d:'Hệ thống camera · go2rtc',h:'/service-home/hikvision.html',p:'camera'},
   {i:'\\uD83D\\uDDA7',n:'SSH Terminal',d:'Web SSH · Termix',h:'/service-home/ssh.html',p:'ssh'},
+  {i:'\\uD83D\\uDDA5',n:'RustDesk',d:'Remote desktop · máy nhân viên',h:'/service-home/rustdesk.html',p:'rustdesk'},
   {i:'\\uD83D\\uDDA7',n:'Termix Movi',d:'SSH Movi · token auth',h:'/service-movi/ssh-movi.html',p:'ssh-movi'},
   {i:'\\uD83D\\uDD16',n:'Bookmarks',d:'Liên kết nhanh',h:'/bookmarks.html',p:null}
  ];
@@ -2510,6 +2511,7 @@ const DATA_REFRESH = `<style>
   '/service-home/fortigate.html':['load'],'/service-home/vmware-home.html':['loadData'],'/service-home/casaos.html':['loadData'],
   '/service-home/asus.html':['load'],'/service-home/9router.html':['loadData'],'/service-home/n8n.html':['loadData'],
   '/service-home/hikvision.html':['loadState'],'/service-home/ssh.html':['loadData'],
+  '/service-home/rustdesk.html':['loadDevices'],
   '/bookmarks.html':['loadData'],'/settings.html':['loadSettings']};
  var path=location.pathname.replace(/\\/index\\.html$/,'/');
  var fns=MAP[path]||MAP[location.pathname];
@@ -2752,6 +2754,7 @@ a:hover{background:#4f46e5}</style></head>
       '/service-home/n8n.html': 'n8n',
       '/service-home/hikvision.html': 'camera',
       '/service-home/ssh.html': 'ssh',
+      '/service-home/rustdesk.html': 'rustdesk',
       // '/settings.html' intentionally NOT gated — all authenticated users can access own profile/MFA settings
       '/policy.html': '_mgmt',
     };
@@ -2907,11 +2910,13 @@ const SERVICES = [
   { id: 'fortigate',   name: 'FortiGate',      checkUrl: null },
   { id: 'asus',        name: 'ASUS Router',    checkUrl: null },
   { id: 'camera',      name: 'Camera',         checkUrl: 'https://camera.home-server.id.vn' },
+  { id: 'rustdesk',    name: 'RustDesk',       checkUrl: 'https://rustdesk.home-server.id.vn' },
 ];
 
 const N8N_BASE        = 'https://n8n-home.home-server.id.vn/api/v1';
 const MOVI_N8N_BASE   = 'https://n8n.movi-finance.com/api/v1';
 const NINEROUTER_BASE = 'https://9router.home-server.id.vn';
+const RUSTDESK_BASE   = 'https://rustdesk.home-server.id.vn';
 
 /* ── Movi n8n webhook basic-auth (credentials from Cloudflare secrets) ──
    Set via:  wrangler secret put MOVI_N8N_USER  /  MOVI_N8N_PASS
@@ -5300,6 +5305,178 @@ async function handleCasaOS(env) {
 }
 
 /* ═══════════════════════════════════════════════
+   RustDesk — self-hosted (lejianwen/rustdesk-api)
+   Login lấy token (cache KV 1h), liệt kê peers + groups.
+   Token header = "api-token" (KHÔNG phải Authorization: Bearer)
+   ═══════════════════════════════════════════════ */
+async function rustdeskToken(env) {
+  const cached = await env.DASHBOARD_KV.get('rustdesk_token');
+  if (cached) return cached;
+  const user = cleanEnv(env.RUSTDESK_ADMIN_USER);
+  const pass = cleanEnv(env.RUSTDESK_ADMIN_PASS);
+  if (!user || !pass) throw new Error('RUSTDESK_ADMIN_USER / RUSTDESK_ADMIN_PASS chưa cấu hình');
+  const r = await fetch(`${RUSTDESK_BASE}/api/admin/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: user, password: pass }),
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!r.ok) throw new Error(`RustDesk login failed: ${r.status}`);
+  const d = await r.json();
+  const token = d?.data?.token;
+  if (!token) throw new Error('Không nhận được token từ RustDesk');
+  await env.DASHBOARD_KV.put('rustdesk_token', token, { expirationTtl: 3600 });
+  return token;
+}
+
+async function handleRustdesk(env) {
+  let token;
+  try { token = await rustdeskToken(env); }
+  catch (e) { return json({ error: e.message }, 502); }
+
+  const api = async (path) => {
+    const call = (tk) => fetch(`${RUSTDESK_BASE}${path}`, {
+      headers: { 'api-token': tk },
+      signal: AbortSignal.timeout(20000),
+    });
+    let r = await call(token);
+    if (r.status === 401 || r.status === 403) {
+      // token hết hạn → xóa cache, login lại 1 lần
+      await env.DASHBOARD_KV.delete('rustdesk_token');
+      try { token = await rustdeskToken(env); } catch { return null; }
+      r = await call(token);
+    }
+    return r.ok ? r.json() : null;
+  };
+
+  const [peerRaw, groupRaw, connRaw, userRaw, loginRaw, fileRaw] = await Promise.all([
+    api('/api/admin/peer/list?page=1&page_size=200'),
+    api('/api/admin/group/list?page=1&page_size=100'),
+    api('/api/admin/audit_conn/list?page=1&page_size=60'),
+    api('/api/admin/user/list?page=1&page_size=1'),
+    api('/api/admin/login_log/list?page=1&page_size=30'),
+    api('/api/admin/audit_file/list?page=1&page_size=40'),
+  ]);
+
+  if (!peerRaw) return json({ error: 'Không lấy được danh sách máy từ RustDesk' }, 502);
+
+  const groups = {};
+  (groupRaw?.data?.list || []).forEach(g => { groups[g.id] = g.name; });
+
+  const now = Math.floor(Date.now() / 1000);
+  const rawPeers = peerRaw?.data?.list || [];
+
+  // map peer_id → tên hiển thị để dịch connection log
+  const peerName = {};
+  rawPeers.forEach(p => { peerName[p.id] = p.alias || p.hostname || p.id; });
+
+  const devices = rawPeers.map(p => ({
+    id:         p.id,
+    hostname:   p.hostname || p.id,
+    alias:      p.alias || '',
+    username:   p.username || '',
+    os:         p.os || '',
+    cpu:        (p.cpu || '').replace(/\s+/g, ' ').trim(),
+    memory:     p.memory || '',
+    version:    p.version || '',
+    lastOnline: p.last_online_time || 0,
+    lastIp:     p.last_online_ip || '',
+    firstSeen:  p.created_at || '',
+    group:      groups[p.group_id] || '',
+    online:     p.last_online_time ? (now - p.last_online_time) < 60 : false,
+  }));
+
+  // ── Connection log: chuẩn hoá + dịch peer_id sang tên ──
+  const _toEpoch = (s) => {
+    if (!s) return 0;
+    // "2026-06-13 12:15:49" (server giờ Asia/Shanghai) → epoch xấp xỉ để tính thời lượng
+    const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(s);
+    if (!m) return 0;
+    return Math.floor(Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]) / 1000);
+  };
+  const connections = (connRaw?.data?.list || []).map(c => {
+    const start = _toEpoch(c.created_at);
+    const end = c.close_time || 0;
+    let dur = (end && start && end > start) ? (end - start) : 0;
+    if (dur > 86400 * 7) dur = 0; // bỏ giá trị vô lý
+    return {
+      id:        c.id,
+      toPeer:    c.peer_id || '',
+      toName:    peerName[c.peer_id] || c.peer_id || '',
+      fromPeer:  c.from_peer || '',
+      fromName:  c.from_name || (c.from_peer ? (peerName[c.from_peer] || c.from_peer) : ''),
+      ip:        c.ip || '',
+      startStr:  c.created_at || '',
+      duration:  dur,
+      hasSession: c.session_id && c.session_id !== '0',
+    };
+  });
+
+  // ── Login log (đăng nhập admin panel) ──
+  const logins = (loginRaw?.data?.list || []).map(l => ({
+    id:       l.id,
+    client:   l.client || '',
+    type:     l.type || '',
+    ip:       l.ip || '',
+    platform: l.platform || '',
+    deviceId: l.device_id || '',
+    at:       l.created_at || '',
+  }));
+
+  // ── File transfer log ──
+  const fileTransfers = (fileRaw?.data?.list || []).map(f => ({
+    id:       f.id,
+    toPeer:   f.peer_id || '',
+    toName:   peerName[f.peer_id] || f.peer_id || '',
+    fromPeer: f.from_peer || '',
+    fromName: f.from_name || (f.from_peer ? (peerName[f.from_peer] || f.from_peer) : ''),
+    ip:       f.ip || '',
+    isFile:   !!f.is_file,
+    path:     f.path || '',
+    info:     f.info || '',
+    num:      f.num || 0,
+    type:     f.type,          // hướng truyền (gửi/nhận)
+    at:       f.created_at || '',
+  }));
+
+  const onlineCount = devices.filter(d => d.online).length;
+  const grpSet = {}; devices.forEach(d => { if (d.group) grpSet[d.group] = 1; });
+  // số phiên remote thật trong hôm nay (theo ngày server)
+  const todayStr = (connRaw?.data?.list || [])[0]?.created_at?.slice(0, 10) || '';
+  const connToday = connections.filter(c => c.hasSession && c.startStr.slice(0, 10) === todayStr).length;
+
+  const osCount = {};
+  devices.forEach(d => {
+    const o = (d.os || '').toLowerCase();
+    const k = o.indexOf('windows') >= 0 ? 'Windows'
+            : (o.indexOf('mac') >= 0 || o.indexOf('darwin') >= 0) ? 'macOS'
+            : o.indexOf('android') >= 0 ? 'Android'
+            : (o.indexOf('linux') >= 0) ? 'Linux' : 'Khác';
+    osCount[k] = (osCount[k] || 0) + 1;
+  });
+
+  return json({
+    devices,
+    connections,
+    logins,
+    fileTransfers,
+    stats: {
+      total:    devices.length,
+      online:   onlineCount,
+      offline:  devices.length - onlineCount,
+      groups:   Object.keys(grpSet).length,
+      users:    userRaw?.data?.total || 0,
+      connToday,
+      connTotal: connRaw?.data?.total || connections.length,
+      fileTotal: fileRaw?.data?.total || 0,
+      loginTotal: loginRaw?.data?.total || 0,
+      os:       osCount,
+    },
+    fetchedAt: now,
+  });
+}
+
+/* ═══════════════════════════════════════════════
    VMware Home — via n8n webhook (SOAP handled by n8n)
    ═══════════════════════════════════════════════ */
 async function handleVmwareHome(env) {
@@ -6651,6 +6828,12 @@ export default {
       if (!_s) return json({ error: 'Unauthorized' }, 401);
       if (!(await hasPerm(env, _s, 'casaos'))) return json({ error: 'Không có quyền truy cập CasaOS' }, 403);
       return handleCasaOS(env);
+    }
+    if (p === '/api/rustdesk') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'rustdesk'))) return json({ error: 'Không có quyền truy cập RustDesk' }, 403);
+      return handleRustdesk(env);
     }
     if (p === '/api/fortigate') {
       const _s = await getSession(request, env);
