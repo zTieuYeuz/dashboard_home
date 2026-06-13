@@ -6187,20 +6187,22 @@ async function handleSshMoviVerify(request, env) {
    Yêu cầu: dashboard session + quyền ssh-movi.
    ═══════════════════════════════════════════════ */
 
-async function handleTermixMoviProxy(request, env) {
+async function handleTermixProxy(request, env, opts) {
   // Auth check
   const session = await getSession(request, env);
   if (!session) return new Response('Chưa đăng nhập — vui lòng đăng nhập lại', { status: 401 });
-  if (!(await hasPerm(env, session, 'ssh-movi')))
-    return new Response('Không có quyền truy cập Termix Movi', { status: 403 });
+  if (!(await hasPerm(env, session, opts.perm)))
+    return new Response('Không có quyền truy cập ' + opts.label, { status: 403 });
 
-  const termixOrigin = (cleanEnv(env.TERMIX_MOVI_URL) || 'https://termix-movi.home-server.id.vn').replace(/\/$/, '');
-  const clientId     = cleanEnv(env.TERMIX_MOVI_CF_CLIENT_ID);
-  const clientSecret = cleanEnv(env.TERMIX_MOVI_CF_CLIENT_SECRET);
+  const termixOrigin = opts.origin.replace(/\/$/, '');
+  const originHost   = new URL(termixOrigin).hostname;
+  const BASE         = opts.base;
+  const clientId     = opts.cfId;
+  const clientSecret = opts.cfSecret;
 
-  // Build target URL (strip /proxy/termix-movi prefix)
+  // Build target URL (strip proxy prefix)
   const reqUrl  = new URL(request.url);
-  const subPath = reqUrl.pathname.replace('/proxy/termix-movi', '') || '/';
+  const subPath = reqUrl.pathname.slice(BASE.length) || '/';
   const target  = `${termixOrigin}${subPath}${reqUrl.search}`;
 
   // Upstream auth headers
@@ -6211,8 +6213,7 @@ async function handleTermixMoviProxy(request, env) {
     upHeaders.set('CF-Access-Client-Secret', clientSecret);
   }
   // Shared secret header — nginx validates này để block direct browser access
-  const moviSecret = cleanEnv(env.TERMIX_MOVI_SECRET);
-  if (moviSecret) upHeaders.set('X-Proxy-Token', moviSecret);
+  if (opts.secret) upHeaders.set('X-Proxy-Token', opts.secret);
 
   // X-Forwarded-Host: needed so Termix generates + stores redirect_uri = https://<dashboard>/users/oidc/callback
   // for BOTH the authorization URL AND the code→token exchange (both must use the same redirect_uri).
@@ -6316,18 +6317,18 @@ async function handleTermixMoviProxy(request, env) {
     const _reqOri = new URL(request.url).origin;
     let   _newLoc = _loc;
 
-    if (_loc.startsWith('https://termix-movi.home-server.id.vn')) {
+    if (_loc.startsWith(termixOrigin)) {
       // Absolute Termix URL → proxy path
-      _newLoc = '/proxy/termix-movi' + _loc.slice('https://termix-movi.home-server.id.vn'.length);
+      _newLoc = BASE + _loc.slice(termixOrigin.length);
     } else if (_loc === _reqOri + '/' || _loc === _reqOri) {
       // Termix redirected to our dashboard root — redirect to Termix app root through proxy
-      _newLoc = '/proxy/termix-movi/';
+      _newLoc = BASE + '/';
     } else if (_loc.startsWith(_reqOri + '/') && !_loc.startsWith(_reqOri + '/proxy/')) {
       // Termix redirected to our dashboard domain for a non-proxy path — redirect to proxy root
-      _newLoc = '/proxy/termix-movi/';
-    } else if (_loc.startsWith('/') && !_loc.startsWith('/proxy/termix-movi') && !_loc.startsWith('//')) {
+      _newLoc = BASE + '/';
+    } else if (_loc.startsWith('/') && !_loc.startsWith(BASE) && !_loc.startsWith('//')) {
       // Root-relative → prefix with proxy path
-      _newLoc = '/proxy/termix-movi' + _loc;
+      _newLoc = BASE + _loc;
     }
     // else: already absolute external URL — pass through as-is
 
@@ -6335,7 +6336,7 @@ async function handleTermixMoviProxy(request, env) {
     const _setSCR  = typeof upstream.headers.getAll === 'function'
       ? upstream.headers.getAll('set-cookie')
       : (upstream.headers.get('set-cookie') ? [upstream.headers.get('set-cookie')] : []);
-    for (const _sc of _setSCR) _rhRedir.append('Set-Cookie', _rewriteTermixCookie(_sc));
+    for (const _sc of _setSCR) _rhRedir.append('Set-Cookie', _rewriteTermixCookie(_sc, BASE));
     return new Response(null, { status: upstream.status, headers: _rhRedir });
   }
 
@@ -6348,7 +6349,7 @@ async function handleTermixMoviProxy(request, env) {
       const setSC4 = typeof upstream.headers.getAll === 'function'
         ? upstream.headers.getAll('set-cookie')
         : (upstream.headers.get('set-cookie') ? [upstream.headers.get('set-cookie')] : []);
-      for (const sc of setSC4) rh4.append('Set-Cookie', _rewriteTermixCookie(sc));
+      for (const sc of setSC4) rh4.append('Set-Cookie', _rewriteTermixCookie(sc, BASE));
       return new Response(upstream.body, { status: upstream.status, headers: rh4 });
     }
     // 5xx: show visible error page for diagnosability
@@ -6372,11 +6373,18 @@ async function handleTermixMoviProxy(request, env) {
   const setSC = typeof upstream.headers.getAll === 'function'
     ? upstream.headers.getAll('set-cookie')
     : (upstream.headers.get('set-cookie') ? [upstream.headers.get('set-cookie')] : []);
-  for (const sc of setSC) rh.append('Set-Cookie', _rewriteTermixCookie(sc));
+  for (const sc of setSC) rh.append('Set-Cookie', _rewriteTermixCookie(sc, BASE));
 
   // HTML — inject JS to rewrite WebSocket/fetch/XHR URLs to proxy path
   if (ct.includes('text/html')) {
     let html = await upstream.text();
+    // [Termix subpath] Termix hỗ trợ chạy dưới subpath qua window.__TERMIX_BASE_PATH__.
+    // Set nó = BASE để Termix tự gọi mọi API/route đúng path proxy (same-origin → cookie chạy).
+    // Đây là cơ chế chính thức của Termix-SSH, robust hơn rewrite URL.
+    if (opts.baseInject !== false) {
+      html = html.replace(/window\.__TERMIX_BASE_PATH__\s*=\s*["'][^"']*["']/,
+        'window.__TERMIX_BASE_PATH__ = "' + BASE + '"');
+    }
     // [H2 fix] Extract JWT from HttpOnly cookie for safe server-side injection.
     // The JWT cookie is HttpOnly so JS cannot read it via document.cookie.
     // Instead we extract it here and inject as a scoped JS variable.
@@ -6387,27 +6395,42 @@ async function handleTermixMoviProxy(request, env) {
     // NOTE: NO new RegExp() here — use indexOf/slice only to avoid escaping issues
     const patch = `<script>
 (function(){
-  var B='/proxy/termix-movi';
-  var O='termix-movi.home-server.id.vn';
+  var B='${BASE}';
+  var O='${originHost}';
   var __JWT='${_jwtVal.replace(/'/g, "\\'")}'; // server-injected, HttpOnly safe
+  // [Termix webview fix] Termix coi MỌI iframe (window.self!==window.top) là Electron webview
+  // → dùng auth model native + kẹt "Redirecting to app...". Ép window.top===window.self để
+  // Termix nghĩ nó chạy top-level → dùng auth web cookie bình thường. PHẢI chạy trước bundle Termix.
+  try{
+    Object.defineProperty(window,'top',{get:function(){return window.self;},configurable:true});
+    console.log('[proxy-patcher] window.top override OK (self===top)');
+  }catch(e){ console.warn('[proxy-patcher] window.top override failed',e); }
+  try{ window.IS_ELECTRON_WEBVIEW=false; }catch(e){}
+  var WSMODE='${opts.wsMode || 'direct'}';
   console.log('[proxy-patcher] loaded B='+B);
+  function _stripB(p){ return (p.indexOf(B)===0)?(p.slice(B.length)||'/'):p; }
   function rw(u,isWS){
     if(typeof u!=='string'||!u)return u;
-    // http(s)://termix-movi... -> /proxy/termix-movi/...  (HTTP only, not WS)
+    // http(s)://<origin>... -> /proxy/.../...  (HTTP only, not WS)
     if(u.indexOf('http')===0&&u.indexOf(O)!==-1){
       return u.replace('https://'+O,B).replace('http://'+O,B);
     }
-    // WebSocket absolute URLs: DIRECT to termix-movi (bypass CF Worker — CF Worker cannot proxy WS to CF Tunnel)
+    // WebSocket. WSMODE='proxy' → giữ WS tới dashboard/proxy (worker proxy + thêm CF token).
+    //           WSMODE='direct' → DIRECT tới origin thật (strip base), browser tự nối (Movi).
     if(u.indexOf('wss://')===0||u.indexOf('ws://')===0){
+      if(WSMODE==='proxy') return u; // Termix đã dựng URL có base path → tới dashboard/proxy → worker
       if(u.indexOf(O)!==-1)return u;
       var si=u.indexOf('/',u.indexOf('//')+2);
       var path=si===-1?'/':u.slice(si);
-      return 'wss://'+O+path;
+      return 'wss://'+O+_stripB(path);
     }
-    // Root-relative path: WS → direct to termix-movi; HTTP → through proxy
-    if(u.charAt(0)==='/'&&u.slice(0,B.length)!==B&&u.slice(0,2)!=='//'){
-      if(isWS) return 'wss://'+O+u;
-      return B+u;
+    // Root-relative path
+    if(u.charAt(0)==='/'&&u.slice(0,2)!=='//'){
+      if(isWS){
+        if(WSMODE==='proxy') return (u.slice(0,B.length)===B)?u:(B+u); // đảm bảo có prefix proxy
+        return 'wss://'+O+_stripB(u); // direct tới origin
+      }
+      if(u.slice(0,B.length)!==B) return B+u;
     }
     return u;
   }
@@ -6449,11 +6472,28 @@ async function handleTermixMoviProxy(request, env) {
     var _xs=XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.send=function(){
       var self=this;
-      if(self._proxyUrl&&self._proxyUrl.indexOf('/users/login')!==-1){
+      var _u=self._proxyUrl||'';
+      // TOTP verify thành công = login HOÀN TẤT (cho cả user bật 2FA)
+      if(_u.indexOf('/users/totp/verify-login')!==-1){
         self.addEventListener('load',function(){
           if(self.status>=200&&self.status<300){
-            console.log('[proxy-patcher] login 200 -> loginRedirect in 800ms');
-            setTimeout(function(){_fireLoginRedirect('login-ok');},800);
+            console.log('[proxy-patcher] totp verify 200 -> loginRedirect in 800ms');
+            setTimeout(function(){_fireLoginRedirect('totp-ok');},800);
+          }
+        });
+      } else if(_u.indexOf('/users/login')!==-1){
+        self.addEventListener('load',function(){
+          if(self.status>=200&&self.status<300){
+            // Nếu response báo cần 2FA (requires_totp/temp_token) → KHÔNG reload, để user nhập mã
+            var _b='';
+            try{ _b=self.responseText||''; }catch(e){ try{ _b=JSON.stringify(self.response||''); }catch(e2){} }
+            var _needTotp=_b.indexOf('requires_totp')!==-1||_b.indexOf('temp_token')!==-1;
+            if(_needTotp){
+              console.log('[proxy-patcher] login 200 nhưng cần 2FA -> CHỜ nhập mã, không reload');
+            } else {
+              console.log('[proxy-patcher] login 200 (no 2FA) -> loginRedirect in 800ms');
+              setTimeout(function(){_fireLoginRedirect('login-ok');},800);
+            }
           }
         });
       }
@@ -6515,15 +6555,51 @@ async function handleTermixMoviProxy(request, env) {
 
 // Rewrite Set-Cookie from Termix backend: remove Domain, set Path to proxy prefix
 // KEEP HttpOnly (H2 fix) — JWT is injected server-side for WS auth, not via document.cookie
-function _rewriteTermixCookie(sc) {
+function _rewriteTermixCookie(sc, base) {
   sc = sc.replace(/;\s*Domain=[^;]*/gi, '');
   // HttpOnly is preserved — prevents XSS from stealing Termix JWT
   if (/;\s*Path=\//i.test(sc)) {
-    sc = sc.replace(/;\s*Path=\//i, '; Path=/proxy/termix-movi/');
+    sc = sc.replace(/;\s*Path=\//i, '; Path=' + base + '/');
   } else if (!/;\s*Path=/i.test(sc)) {
-    sc += '; Path=/proxy/termix-movi/';
+    sc += '; Path=' + base + '/';
   }
+  // Iframe embedding: SameSite=Lax KHÔNG được gửi khi reload iframe (sub-frame) bằng script
+  // → ép SameSite=None + Secure để cookie session được gửi trong iframe (sau verify 2FA reload)
+  if (/;\s*SameSite=/i.test(sc)) {
+    sc = sc.replace(/;\s*SameSite=(Lax|Strict|None)/i, '; SameSite=None');
+  } else {
+    sc += '; SameSite=None';
+  }
+  if (!/;\s*Secure/i.test(sc)) sc += '; Secure';
   return sc;
+}
+
+// Termix Movi — reverse proxy wrapper (CF Access service token + shared secret)
+function handleTermixMoviProxy(request, env) {
+  return handleTermixProxy(request, env, {
+    origin:   cleanEnv(env.TERMIX_MOVI_URL) || 'https://termix-movi.home-server.id.vn',
+    base:     '/proxy/termix-movi',
+    perm:     'ssh-movi',
+    label:    'Termix Movi',
+    cfId:     cleanEnv(env.TERMIX_MOVI_CF_CLIENT_ID),
+    cfSecret: cleanEnv(env.TERMIX_MOVI_CF_CLIENT_SECRET),
+    secret:   cleanEnv(env.TERMIX_MOVI_SECRET),
+  });
+}
+
+// Termix Home — reverse proxy wrapper (mở top-level tab qua dashboard proxy)
+// wsMode='proxy': WS đi QUA worker (worker thêm CF service token) → bật được CF Access cho termix.home
+function handleTermixHomeProxy(request, env) {
+  return handleTermixProxy(request, env, {
+    origin:   cleanEnv(env.TERMIX_HOME_URL) || 'https://termix.home-server.id.vn',
+    base:     '/proxy/termix-home',
+    perm:     'ssh',
+    label:    'Termix Home',
+    cfId:     cleanEnv(env.TERMIX_HOME_CF_CLIENT_ID),
+    cfSecret: cleanEnv(env.TERMIX_HOME_CF_CLIENT_SECRET),
+    secret:   cleanEnv(env.TERMIX_HOME_SECRET),
+    wsMode:   'proxy',
+  });
 }
 
 export default {
@@ -6668,6 +6744,8 @@ export default {
     if (p.startsWith('/cam-embed/'))             return handleCamEmbed(request, env);
     // ── Termix Movi proxy ──
     if (p.startsWith('/proxy/termix-movi'))      return handleTermixMoviProxy(request, env);
+    // ── Termix Home proxy (same-origin → OIDC login works in iframe) ──
+    if (p.startsWith('/proxy/termix-home'))      return handleTermixHomeProxy(request, env);
     // ── SSH Movi token endpoint ──
     if (p === '/api/ssh-movi/token')  return handleSshMoviToken(request, env);
     // Note: /api/ssh-movi/verify is handled at the top of the router (before session middleware)
