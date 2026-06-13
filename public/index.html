@@ -687,6 +687,7 @@ var ALL_SERVICES_DEF = [
   { id:'fortigate',   name:'FortiGate',       icon:'🛡', desc:'Firewall · security gateway',                  url:'http://192.168.110.1',                       local:true,  detailPage:'/service-home/fortigate.html' },
   { id:'asus',        name:'ASUS Router',     icon:'📡', desc:'ASUS · home network',                          url:'http://192.168.10.1:8443',                   local:true,  detailPage:'/service-home/asus.html' },
   { id:'camera',      name:'Camera',          icon:'📷', desc:'Camera system · go2rtc WebRTC',                url:'https://camera.home-server.id.vn',           local:false, detailPage:'/service-home/hikvision.html', newTab:true },
+  { id:'rustdesk',    name:'RustDesk',        icon:'🖥', desc:'Remote desktop · máy nhân viên',               url:'https://rustdesk.home-server.id.vn/_admin/', local:false, detailPage:'/service-home/rustdesk.html' },
   { id:'meraki',        name:'Meraki-Network',  icon:'🌐', desc:'Cisco Meraki · client monitor',                url:'https://dashboard.meraki.com',               local:false, detailPage:'/service-movi/meraki.html',        noCheck:true },
   { id:'movi',          name:'Movi Map Network',icon:'🗺', desc:'Network topology · wiring · L3',               url:'/service-movi/topology.html',                local:false, detailPage:'/service-movi/topology.html',       noCheck:true },
   { id:'fortigate-movi',name:'FortiGate Movi',  icon:'🔥', desc:'Firewall Movi-HO-200F · SD-WAN Bandwidth',    url:'https://192.168.140.254:4434',               local:true,  detailPage:'/service-movi/fortigate-movi.html', noCheck:true },
@@ -701,7 +702,7 @@ var ALL_SERVICES_DEF = [
 /* Categories (matches original SERVICE_CATEGORIES) */
 var SERVICE_CATEGORIES = [
   { id:'home', icon:'🏠', name:'Service Home', desc:'Hạ tầng & hệ thống · home-server.id.vn', accent:'var(--accent)',
-    serviceIds: ['esxi','n8n','casaos','9router','uptime-kuma','ssh','fortigate','asus','camera'] },
+    serviceIds: ['esxi','n8n','casaos','9router','uptime-kuma','ssh','fortigate','asus','camera','rustdesk'] },
   { id:'movi', icon:'🎬', name:'Service Movi', desc:'Văn phòng Movi · Meraki & Topology',    accent:'var(--violet)',
     serviceIds: ['meraki','movi','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi','ssh-movi'] },
 ];
