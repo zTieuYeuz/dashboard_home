@@ -257,7 +257,7 @@ a{color:inherit;text-decoration:none}
 <div class="page hidden" id="panel-rec">
   <div class="rec-controls">
     <label>Camera</label>
-    <select class="rec-select" id="rec-cam-sel" onchange="fetchRecordingSummary()"></select>
+    <select class="rec-select" id="rec-cam-sel" onchange="onRecCamChange()"></select>
     <label>Ngày</label>
     <div class="cam-dp-wrap" id="cam-dp-wrap">
       <button class="cam-dp-btn" id="cam-dp-btn" onclick="toggleDp(event)">
@@ -691,6 +691,7 @@ function _probeRtt(cam) {
 function _startRttProbes() {
   if (_rttProbeTimer) return;
   var probe = function() {
+    if (document.hidden) return; /* tạm dừng đo RTT khi tab ẩn — tiết kiệm tài nguyên */
     CAMERAS.forEach(function(c) {
       if (c.src && state[c.id]) _probeRtt(c);
     });
@@ -898,6 +899,20 @@ document.addEventListener('click',function(e){
     if(popup)popup.classList.add('hidden');
   }
 });
+
+/* Đổi camera trong dropdown → reset video + timeline cũ (tránh video camera cũ còn hiển thị
+   gây hiểu nhầm "tải nhầm camera"), rồi tải lịch ghi hình của camera mới */
+function onRecCamChange(){
+  resetPlayer();
+  recSegments=[]; recCamSrc=null; recDayStart=null;
+  selRangeStart=null; selRangeEnd=null; _vodSegs=[];
+  var bar=document.getElementById('tl-bar');
+  if(bar)bar.innerHTML='<div class="tl-empty">Chọn ngày để xem timeline</div>';
+  var rt=document.getElementById('tl-range-text'); if(rt)rt.textContent='Kéo timeline hoặc nhập giờ';
+  var fb=document.getElementById('tl-from-inp'); if(fb)fb.value='';
+  var tb=document.getElementById('tl-to-inp'); if(tb)tb.value='';
+  fetchRecordingSummary();
+}
 
 function fetchRecordingSummary(){
   var camSrc=document.getElementById('rec-cam-sel').value;

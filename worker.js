@@ -2892,7 +2892,7 @@ a:hover{background:#4f46e5}</style></head>
         // Google Fonts files + data URIs
         "font-src 'self' data: https://fonts.gstatic.com; " +
         // Allow camera (go2rtc), SSH terminal (termix) iframes, and Microsoft OIDC silent renewal
-        "frame-src 'self' https://camera.home-server.id.vn https://termix.home-server.id.vn https://termix-movi.home-server.id.vn https://cam.movi-finance.com https://termix.movi-finance.com https://login.microsoftonline.com; " +
+        "frame-src 'self' https://camera.home-server.id.vn https://termix-movi.home-server.id.vn https://cam.movi-finance.com https://termix.movi-finance.com https://login.microsoftonline.com; " +
         "object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
     }
   });
@@ -6466,7 +6466,15 @@ async function handleTermixProxy(request, env, opts) {
   // Don gian: sau POST /users/login -> 200 -> fire loginRedirect sau 800ms
   function _fireLoginRedirect(src){
     console.log('[proxy-patcher] loginRedirect from:',src);
-    try{window.parent.postMessage({_termixProxy:true,type:'loginRedirect'},'*');}catch(e){}
+    try{
+      if(window.parent && window.parent!==window){
+        // chạy trong iframe → báo parent reload iframe
+        window.parent.postMessage({_termixProxy:true,type:'loginRedirect'},'*');
+      } else {
+        // chạy top-level (tab riêng) → tự reload để lấy jwt cookie mới (cần cho __JWT inject + token WS)
+        setTimeout(function(){location.reload();},250);
+      }
+    }catch(e){ try{location.reload();}catch(e2){} }
   }
   try{
     var _xs=XMLHttpRequest.prototype.send;
@@ -6598,7 +6606,7 @@ function handleTermixHomeProxy(request, env) {
     cfId:     cleanEnv(env.TERMIX_HOME_CF_CLIENT_ID),
     cfSecret: cleanEnv(env.TERMIX_HOME_CF_CLIENT_SECRET),
     secret:   cleanEnv(env.TERMIX_HOME_SECRET),
-    wsMode:   'proxy',
+    wsMode:   'direct',  // WS đi thẳng tới termix.home (+?token=jwt) — CF Worker không proxy WS qua CF Tunnel được
   });
 }
 
