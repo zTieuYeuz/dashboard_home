@@ -887,7 +887,7 @@ select.inp{cursor:pointer}
       <div class="form-grid">
         <div class="form-row">
           <label class="lbl">Username</label>
-          <input class="inp" id="um-username" placeholder="VD: long.vd" autocomplete="off"/>
+          <input class="inp" id="um-username" placeholder="VD: long.vd" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" oninput="this.value=this.value.toLowerCase()"/>
           <div class="form-help">3-64 ký tự: a-z 0-9 . @ _ -</div>
         </div>
         <div class="form-row">
@@ -901,6 +901,13 @@ select.inp{cursor:pointer}
       <div class="form-row">
         <label class="lbl" id="um-pw-label">Mật khẩu</label>
         <input class="inp" id="um-password" type="password" placeholder="Tối thiểu 6 ký tự" autocomplete="new-password"/>
+      </div>
+      <div class="form-row" id="um-mfa-row">
+        <label class="lbl">Bảo mật MFA</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:2px">
+          <input type="checkbox" id="um-require-mfa" checked style="width:15px;height:15px;accent-color:var(--accent)"/>
+          <span id="um-mfa-label" style="font-size:12px;color:var(--text-2)">Bắt buộc cài MFA lần đầu đăng nhập</span>
+        </label>
       </div>
       <div class="form-row" id="um-groups-row">
         <label class="lbl">Policy Groups</label>
@@ -968,6 +975,24 @@ select.inp{cursor:pointer}
           </select>
         </div>
         <div class="form-help">Ngoài khung giờ này, user sẽ bị từ chối đăng nhập.</div>
+      </div>
+    </div>
+
+    <!-- Session Duration (edit mode only) -->
+    <div id="um-session-ttl-section" style="display:none;margin-top:4px">
+      <div style="height:1px;background:var(--border);margin-bottom:12px"></div>
+      <div class="form-row">
+        <label class="lbl">⏱ Thời hạn session</label>
+        <select class="inp" id="um-session-ttl" style="max-width:220px">
+          <option value="0">Theo global (mặc định)</option>
+          <option value="8">8 giờ</option>
+          <option value="24">24 giờ (1 ngày)</option>
+          <option value="72">3 ngày</option>
+          <option value="168">7 ngày</option>
+          <option value="360">15 ngày</option>
+          <option value="720">30 ngày</option>
+        </select>
+        <div class="form-help">Sau khoảng thời gian này user phải đăng nhập lại. "Theo global" dùng cấu hình chung của hệ thống.</div>
       </div>
     </div>
 
@@ -1062,7 +1087,7 @@ var DELEGATE_SVC_LABELS = {
   /* ── Service Home ── */
   'esxi':'VMware ESXi','n8n':'n8n Automation','casaos':'CasaOS',
   '9router':'9Router','fortigate':'FortiGate','asus':'ASUS Router',
-  'ssh':'SSH Terminal','uptime-kuma':'Uptime Kuma','camera':'Camera Home · Live','camera_playback':'Camera Home · Playback','camera_download':'Camera Home · Tải video','rustdesk':'RustDesk Remote',
+  'ssh':'SSH Terminal','uptime-kuma':'Uptime Kuma','camera':'Camera Home · Live','camera_playback':'Camera Home · Playback','camera_download':'Camera Home · Tải video','app_camera':'Camera Home · Mở thẳng camera khi login','camera_autoopen':'Camera Home · Tự động mở tất cả camera','rustdesk':'RustDesk Remote',
   /* ── Service Movi ── */
   'meraki':'Meraki Network','topology':'Movi Map Network',
   'fortigate-movi':'FortiGate Movi','camera-movi':'Camera Movi',
@@ -1073,7 +1098,7 @@ var DELEGATE_SVC_LABELS = {
   'tool-movi-fg-policy-lan':'Tool: FG Policy LAN','tool-movi-fg-policy-wifi':'Tool: FG Policy WiFi',
   'ssh-movi':'Termix Movi',
 };
-var _DELEGATE_HOME = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','camera_playback','camera_download','rustdesk'];
+var _DELEGATE_HOME = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk'];
 var _DELEGATE_MOVI = ['meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
 /* tool-movi sub-keys — needed to restore parent group visibility in delegate filter */
 var _TOOL_MOVI_SUB = ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'];
@@ -1510,12 +1535,17 @@ function openAddUser() {
   document.getElementById('user-modal-title').textContent = '+ Thêm User Mới';
   document.getElementById('user-modal-save').textContent = 'Tạo user';
   document.getElementById('um-login-time-section').style.display = 'none';
+  document.getElementById('um-session-ttl-section').style.display = 'none';
   // Reset local block
   document.getElementById('um-username').value = '';
   document.getElementById('um-username').disabled = false;
   document.getElementById('um-password').value = '';
   document.getElementById('um-pw-label').textContent = 'Mật khẩu';
   document.getElementById('um-role').value = 'user';
+  // MFA toggle — chỉ hiện khi tạo mới, mặc định bật
+  var mfaRow = document.getElementById('um-mfa-row');
+  if (mfaRow) mfaRow.style.display = '';
+  document.getElementById('um-require-mfa').checked = true;
   // Reset azure block
   document.getElementById('um-ms-email').value = '';
   document.getElementById('um-username-az').value = '';
@@ -1537,6 +1567,9 @@ function openEditUser(username) {
   document.getElementById('user-modal-title').textContent = '✏ Sửa User: ' + username;
   document.getElementById('user-modal-save').textContent = 'Lưu thay đổi';
   document.getElementById('user-modal-err').classList.remove('show');
+  // Ẩn MFA toggle khi edit (chỉ áp dụng lúc tạo mới)
+  var mfaRowEdit = document.getElementById('um-mfa-row');
+  if (mfaRowEdit) mfaRowEdit.style.display = 'none';
 
   var loginType = u.microsoftEmail ? 'azure' : 'local';
   document.getElementById('um-login-type').value = loginType;
@@ -1567,6 +1600,17 @@ function openEditUser(username) {
     document.getElementById('um-username-az').value = username;
     document.getElementById('um-role-az').value = u.role || 'user';
     renderGroupCheckboxes('um-groups-list-az', u.groups||[]);
+  }
+
+  // ── Session TTL (edit mode only) ──
+  var stSection = document.getElementById('um-session-ttl-section');
+  if (stSection) {
+    stSection.style.display = '';
+    var stSel = document.getElementById('um-session-ttl');
+    var stVal = u.sessionTtlHours || 0;
+    // Pick nearest option
+    var stOpts = [0,8,24,72,168,360,720];
+    stSel.value = stOpts.includes(stVal) ? stVal : 0;
   }
 
   // ── Login time restriction (edit mode only) ──
@@ -1626,7 +1670,7 @@ function saveUser() {
                msEmail.split('@')[0].toLowerCase().replace(/[^a-z0-9_\-]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'') || 'azuser';
     password = '';
   } else {
-    username = editingUsername || document.getElementById('um-username').value.trim();
+    username = editingUsername || document.getElementById('um-username').value.trim().toLowerCase();
     password = document.getElementById('um-password').value;
     role     = document.getElementById('um-role').value;
     groups   = Array.from(document.getElementById('um-groups-list').querySelectorAll('.um-group-cb:checked')).map(function(cb){return cb.value;});
@@ -1677,6 +1721,14 @@ function saveUser() {
         })
       }).then(function(r){return r.json();});});
     }
+    // Save session TTL per-user
+    var stSel = document.getElementById('um-session-ttl');
+    if (stSel) {
+      taskFns.push(function(){return fetch('/api/admin/users/'+encodeURIComponent(editingUsername)+'/session-ttl',{
+        method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ sessionTtlHours: Number(stSel.value) })
+      }).then(function(r){return r.json();});});
+    }
 
     taskFns.reduce(function(chain, fn){
       return chain.then(function(results){ return fn().then(function(r){ results.push(r); return results; }); });
@@ -1693,7 +1745,8 @@ function saveUser() {
     });
   } else {
     // Tạo user mới
-    var createBody = {username: username, password: password || crypto.randomUUID(), groups: groups};
+    var requireMfa = !isAzure ? document.getElementById('um-require-mfa').checked : true;
+    var createBody = {username: username, password: password || crypto.randomUUID(), groups: groups, requireMfa: requireMfa};
     if (!_delegateMode) { createBody.role = role; }
     fetch('/api/admin/users',{
       method:'POST',headers:{'Content-Type':'application/json'},
@@ -2729,7 +2782,9 @@ function buildServiceSection(title, pages, permissions, panels, cameras, pfx, se
     if (page.type === 'camera-home-group') {
       var hasAccess = (permissions['camera']||'none')!=='none'||
                       (permissions['camera_playback']||'none')!=='none'||
-                      (permissions['camera_download']||'none')!=='none';
+                      (permissions['camera_download']||'none')!=='none'||
+                      (permissions['app_camera']||'none')!=='none'||
+                      (permissions['camera_autoopen']||'none')!=='none';
 
       // Main row
       var chgRow = document.createElement('div');
@@ -2784,6 +2839,20 @@ function buildServiceSection(title, pages, permissions, panels, cameras, pfx, se
       dlRow.className = 'cam-home-sub-row';
       dlRow.innerHTML = '<label class="cam-home-sub-label"><input type="checkbox" id="'+pfx+'-camhome-download"'+(dlChecked?' checked':'')+'>  ⬇ Quyền Tải video</label>';
       subSec.appendChild(dlRow);
+
+      // 4. App Camera — auto-redirect vào trang camera khi đăng nhập
+      var appCamChecked = (permissions['app_camera']||'none') !== 'none';
+      var appCamRow = document.createElement('div');
+      appCamRow.className = 'cam-home-sub-row';
+      appCamRow.innerHTML = '<label class="cam-home-sub-label"><input type="checkbox" id="'+pfx+'-camhome-app-camera"'+(appCamChecked?' checked':'')+'>  📲 Mở thẳng camera khi đăng nhập</label>';
+      subSec.appendChild(appCamRow);
+
+      // 5. Auto-open — tự động bật tất cả camera khi vào trang
+      var autoOpenChecked = (permissions['camera_autoopen']||'none') !== 'none';
+      var autoOpenRow = document.createElement('div');
+      autoOpenRow.className = 'cam-home-sub-row';
+      autoOpenRow.innerHTML = '<label class="cam-home-sub-label"><input type="checkbox" id="'+pfx+'-camhome-autoopen"'+(autoOpenChecked?' checked':'')+'>  ▶️ Tự động mở tất cả camera khi vào trang</label>';
+      subSec.appendChild(autoOpenRow);
 
       body.appendChild(subSec);
       return;
@@ -2974,6 +3043,8 @@ function collectPermissions(pfx) {
         permissions['camera'] = 'none';
         permissions['camera_playback'] = 'none';
         permissions['camera_download'] = 'none';
+        permissions['app_camera'] = 'none';
+        permissions['camera_autoopen'] = 'none';
       } else {
         var viewCb = document.getElementById(pfx+'-camhome-view');
         permissions['camera'] = (viewCb && viewCb.checked) ? 'read' : 'none';
@@ -2982,6 +3053,10 @@ function collectPermissions(pfx) {
         permissions['camera_playback'] = (pbCb && pbCb.checked) ? 'read' : 'none';
         var dlCb = document.getElementById(pfx+'-camhome-download');
         permissions['camera_download'] = (dlCb && dlCb.checked) ? 'read' : 'none';
+        var appCamCb = document.getElementById(pfx+'-camhome-app-camera');
+        permissions['app_camera'] = (appCamCb && appCamCb.checked) ? 'read' : 'none';
+        var autoOpenCb = document.getElementById(pfx+'-camhome-autoopen');
+        permissions['camera_autoopen'] = (autoOpenCb && autoOpenCb.checked) ? 'read' : 'none';
       }
       return;
     }

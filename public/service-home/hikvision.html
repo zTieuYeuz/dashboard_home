@@ -169,39 +169,67 @@ a{color:inherit;text-decoration:none}
 .cam-frame:hover .cam-actions{opacity:1;pointer-events:auto}
 .cam-act-btn{width:30px;height:30px;border-radius:7px;background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.18);color:#fff;display:grid;place-items:center;cursor:pointer;font-size:15px;transition:background .15s;backdrop-filter:blur(6px);padding:0;line-height:1}
 .cam-act-btn:hover{background:rgba(0,0,0,.88)}
-.cam-act-btn.hd-btn{font-size:10px;font-weight:700;width:auto;padding:0 7px;letter-spacing:.3px}
-.cam-act-btn.hd-btn.hd-active{background:rgba(251,191,36,.85);border-color:rgba(251,191,36,.6);color:#000}
-
-/* ── Performance diagnostics panel ── */
-.perf-panel{position:fixed;top:60px;right:16px;width:420px;max-width:calc(100vw - 32px);background:var(--card);border:1px solid var(--border);border-radius:var(--radius);z-index:300;box-shadow:0 8px 32px rgba(0,0,0,.35);overflow:hidden}
-.perf-panel-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border)}
-.perf-panel-title{font-size:13px;font-weight:600}
-.perf-panel-close{width:28px;height:28px;display:grid;place-items:center;color:var(--muted);cursor:pointer;border-radius:6px;border:none;background:none}
-.perf-panel-close:hover{color:var(--text);background:var(--surface-2)}
-.perf-panel-body{padding:12px 14px;font-size:12px;font-family:var(--font-mono)}
-.perf-row{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:6px;margin-bottom:3px}
-.perf-row:nth-child(odd){background:var(--surface)}
-.perf-row-name{color:var(--text-2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.perf-val{font-weight:600;min-width:70px;text-align:right}
-.perf-val.ok{color:var(--ok)}
-.perf-val.warn{color:var(--warn)}
-.perf-val.bad{color:var(--bad)}
-.perf-sep{border:none;border-top:1px solid var(--border-soft);margin:8px 0}
-.perf-ram{display:flex;gap:12px;padding:6px 8px;background:var(--surface);border-radius:6px;margin-bottom:8px;font-size:11px}
-.perf-ram span{color:var(--muted)}
-.perf-ram strong{color:var(--text)}
+/* CSS pseudo-fullscreen (mobile / iOS where requestFullscreen on a div is unsupported) */
+.cam-frame.cam-frame-fs{position:fixed;inset:0;width:100vw;height:100vh;padding-top:0;z-index:99999;background:#000;border-radius:0}
+.cam-frame.cam-frame-fs .cam-actions{opacity:1;pointer-events:auto}
+.cam-frame.cam-frame-fs .cam-act-btn{width:40px;height:40px;font-size:19px}
+body.cam-fs-lock{overflow:hidden}
+/* ── Topbar override (beats global /mobile.css grid via higher specificity + !important).
+   The camera page has many buttons in .topbar-right; mobile.css's grid puts brand|actions
+   on one row → they overlap. Force 2 stacked rows:
+     Row 1: [brand]  ............  [nav links, scroll]
+     Row 2: [Live · Playback · Bật/Tắt tất cả · 📊 …  scroll]
+   Breakpoint matches mobile.css (768px) so there is no uncovered range. ── */
+@media(max-width:768px){
+  body .topbar{display:flex !important;flex-direction:column !important;align-items:stretch !important;height:auto !important;min-height:0 !important;padding:0 !important;row-gap:0 !important}
+  body .topbar-left{display:flex !important;flex-direction:row;align-items:center;flex-wrap:nowrap;gap:8px;padding:.5rem .75rem;border-bottom:1px solid var(--border-soft)}
+  body .brand{display:flex !important;flex-shrink:0;gap:8px;min-width:0}
+  body .brand-mark{width:26px;height:26px}
+  body .brand-name{font-size:12px;white-space:nowrap}
+  body .brand-sub{display:none}
+  body .topnav{flex:1 1 auto;width:auto !important;display:flex !important;flex-wrap:nowrap;overflow-x:auto;gap:0;justify-content:flex-end;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  body .topnav::-webkit-scrollbar{display:none}
+  body .topnav-item{font-size:11.5px;padding:5px 9px;flex-shrink:0;white-space:nowrap}
+  body .topbar-right{display:flex !important;flex-wrap:nowrap;overflow-x:auto;gap:5px;padding:.4rem .75rem .5rem;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  body .topbar-right::-webkit-scrollbar{display:none}
+  body .topbar-right .btn{flex-shrink:0;white-space:nowrap;font-size:12px;padding:5px 10px}
+}
 
 @media(max-width:700px){
-  .topbar{height:auto;flex-wrap:wrap;padding:.625rem .75rem;gap:6px}
-  .topbar-left{width:100%;gap:8px}
-  .brand-name{font-size:13px}
-  .brand-sub{display:none}
-  .topbar-right{width:100%;overflow-x:auto;flex-wrap:nowrap;gap:6px;padding-bottom:2px;scrollbar-width:none}
-  .topbar-right::-webkit-scrollbar{display:none}
-  .btn{flex-shrink:0;white-space:nowrap}
+  /* No hover on touch → keep camera action buttons (fullscreen) always visible */
+  .cam-actions{opacity:1;pointer-events:auto}
+  .cam-act-btn{width:34px;height:34px;font-size:16px}
+  /* NOTE: topbar layout is handled in the @media(max-width:768px) block above so it can
+     override the global /mobile.css grid (which loads later with !important). */
+
+  /* ── Page & grid ── */
   .page{padding:.75rem}
   .cam-grid{grid-template-columns:1fr !important}
-  .bottom-bar{flex-direction:column;align-items:flex-start;gap:10px}
+  .bottom-bar{flex-direction:column;align-items:flex-start;gap:8px}
+  .bottom-bar .legend{gap:10px}
+  .bar-info,.hint-desktop{display:none}
+
+  /* ── Recording controls ── */
+  .rec-controls{flex-direction:column;align-items:stretch;gap:8px}
+  .rec-controls label{font-size:11px}
+  .rec-select{width:100%}
+  .cam-dp-wrap{width:100%}
+  .cam-dp-btn{width:100%;justify-content:space-between}
+  .cam-dp-popup{left:0;right:auto;width:calc(100vw - 1.5rem);max-width:none}
+  .rec-load-btn{width:100%;padding:8px}
+
+  /* ── Timeline ── */
+  .timeline-hours{height:80px;touch-action:none}
+  .tl-range-bar{gap:6px}
+  .tl-time-label{font-size:11px}
+  .tl-time-input{flex:1;width:auto;min-width:0}
+  .tl-range-sep{display:none}
+  .tl-range-text{width:100%;font-size:11px;text-align:center;order:10}
+  .tl-play-btn,.tl-dl-btn{flex:1;justify-content:center;text-align:center}
+
+  /* ── Video player ── */
+  .rec-speed-row{gap:4px;flex-wrap:wrap}
+  .rec-speed-btn{padding:4px 10px;font-size:11px}
 }
 </style>
 </head>
@@ -227,7 +255,6 @@ a{color:inherit;text-decoration:none}
     <button class="btn" id="tab-rec-btn" onclick="switchTab('rec')">📼 Playback</button>
     <button class="btn ghost" id="ctrl-all-on" onclick="setAll(true)">Bật tất cả</button>
     <button class="btn ghost" id="ctrl-all-off" onclick="setAll(false)">Tắt tất cả</button>
-    <button class="btn ghost" id="perf-btn" onclick="togglePerfPanel()" title="Diagnostics">📊</button>
     <div class="clock" id="clock">--:--:--</div>
     <button class="btn ghost theme-toggle" id="themeToggle" title="Toggle theme">
       <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"/></svg>
@@ -241,7 +268,7 @@ a{color:inherit;text-decoration:none}
   <div class="bottom-bar">
     <div class="bar-info">Stream qua <strong>Frigate NVR</strong> → go2rtc → Cloudflare Tunnel → Dashboard · Độ trễ ~1–3s</div>
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-      <div style="font-size:11px;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 10px;white-space:nowrap">
+      <div class="hint-desktop" style="font-size:11px;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 10px;white-space:nowrap">
         💡 Click ảnh → Xem full · Hover → <strong style="color:var(--text)">✏ Đổi tên</strong>
       </div>
       <div class="legend">
@@ -322,15 +349,6 @@ a{color:inherit;text-decoration:none}
 </div>
 
 
-<!-- ── Performance diagnostics panel ── -->
-<div class="perf-panel hidden" id="perf-panel">
-  <div class="perf-panel-head">
-    <span class="perf-panel-title">📊 Diagnostics · Camera Latency</span>
-    <button class="perf-panel-close" onclick="togglePerfPanel()">✕</button>
-  </div>
-  <div class="perf-panel-body" id="perf-panel-body">Đang tải…</div>
-</div>
-
 <script>
 /* ── Auth ── */
 function _readUserCookie(){
@@ -346,9 +364,9 @@ if(typeof window.__USER__==='undefined'){
 var USER = (typeof window.__USER__ !== 'undefined') ? window.__USER__ : {};
 var CAN_PLAYBACK = USER.isAdmin || (USER.permissions||{})['camera_playback'] === 'read';
 var CAN_DOWNLOAD = USER.isAdmin || (USER.permissions||{})['camera_download'] === 'read';
+var CAN_AUTOOPEN = (USER.permissions||{})['camera_autoopen'] === 'read';
 var CAMERAS = [];
 var currentTab = 'live';
-var snapTimers = {};
 
 /* ── Tab: persisted state / names ── */
 const LS_STATE = 'cam_state_v1';
@@ -401,7 +419,8 @@ function initCameras() {
       });
 
       CAMERAS.forEach(function(c) {
-        state[c.id] = false; /* always start OFF */
+        /* auto-open all configured cameras if user has the camera_autoopen permission */
+        state[c.id] = CAN_AUTOOPEN && c.src !== null;
       });
 
       render();
@@ -448,13 +467,11 @@ function render(){
     } else if (isOn) {
       /* go2rtc iframe — same pattern as camera-movi. go2rtc's stream.html handles
          WebRTC/MSE/HLS/MJPEG negotiation natively inside the iframe. */
-      var isHD = !!_hdMode[c.id];
       frameContent = '<iframe id="cam-iframe-'+c.id+'" allow="autoplay" allowfullscreen></iframe>'
         +'<div class="cam-actions">'
-        +'<button class="cam-act-btn hd-btn'+(isHD?' hd-active':'')+'" id="hd-btn-'+c.id+'" onclick="toggleHD(\''+c.id+'\')" title="Chuyển HD / SD">HD</button>'
         +'<button class="cam-act-btn" onclick="camFullscreen(\''+c.id+'\')" title="Phóng lớn">⛶</button>'
         +'</div>'
-        +'<div class="live-badge">● '+(isHD?'LIVE HD':'LIVE')+'</div>';
+        +'<div class="live-badge">● LIVE</div>';
     } else {
       /* Paused: show last snapshot underneath + always-visible overlay */
       var snapUrl='/cam-home/api/'+encodeURIComponent(c.src)+'/latest.jpg';
@@ -489,10 +506,26 @@ function saveEdit(id){
   var inp=document.getElementById('edit-input-'+id);
   if(!inp)return;
   var val=inp.value.trim();
-  if(val) names[id]=val; else delete names[id];
-  saveNames(names);
-  editingId=null;
-  render();
+  if(!val){ cancelEdit(); return; }
+  if(USER.isAdmin){
+    // Lưu lên server → đồng bộ tất cả thiết bị
+    fetch('/api/admin/cameras/'+encodeURIComponent(id)+'/rename',{
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:val})
+    }).then(function(r){return r.json();}).then(function(d){
+      if(!d.error){
+        var cam=CAMERAS.find(function(c){return c.id===id;});
+        if(cam) cam.name=val; // cập nhật in-memory ngay, không cần reload
+        delete names[id];     // xóa override localStorage cũ
+        saveNames(names);
+      }
+      editingId=null; render();
+    }).catch(function(){ editingId=null; render(); });
+  } else {
+    // Non-admin: chỉ lưu localStorage (tên riêng của device này)
+    names[id]=val; saveNames(names);
+    editingId=null; render();
+  }
 }
 function handleEditKey(e,id){
   if(e.key==='Enter'){e.preventDefault();saveEdit(id);}
@@ -519,93 +552,24 @@ function updateBadge(){
   document.getElementById('status-badge').textContent=on.length+'/'+CAMERAS.length+' live';
 }
 
-/* ── Smooth snapshot refresh: preload-then-swap, per-camera chained requests ── */
-var snapTimers = {};
-
-/* ── Perf tracking (last 10 samples per camera) ── */
-var _perf = {};  // { camId: { samples: [ms,...], errors: 0, lastFrame: ts } }
-function _perfRecord(id, ms) {
-  if (!_perf[id]) _perf[id] = { samples: [], errors: 0, lastFrame: 0 };
-  var p = _perf[id];
-  p.samples.push(ms);
-  if (p.samples.length > 10) p.samples.shift();
-  p.lastFrame = Date.now();
-}
-function _perfError(id) {
-  if (!_perf[id]) _perf[id] = { samples: [], errors: 0, lastFrame: 0 };
-  _perf[id].errors++;
-}
-
-/* N parallel workers per camera, staggered by STAGGER_MS.
-   With latency=249ms and 3 workers staggered 83ms apart:
-   effective display rate ≈ 1000/83 ≈ 12fps despite the round-trip. */
-var SNAP_WORKERS = 3;
-var SNAP_STAGGER = 67; // ms between worker starts
-var _snapActive = {}; // camId → true/false
-
-function _snapWorker(cam, wid) {
-  if (!_snapActive[cam.id]) return; // stopped
-  var t0 = Date.now();
-  var preload = new Image();
-  preload.onload = function() {
-    if (!_snapActive[cam.id]) return;
-    _perfRecord(cam.id, Date.now() - t0);
-    var swap = function() {
-      if (!_snapActive[cam.id]) return;
-      var el = document.getElementById('snap-' + cam.id);
-      if (el) el.src = preload.src;
-      _snapWorker(cam, wid);
-    };
-    // decode() off main thread — prevents jank on JPEG swap
-    if (preload.decode) { preload.decode().then(swap, swap); } else { swap(); }
-  };
-  preload.onerror = function() {
-    if (!_snapActive[cam.id]) return;
-    _perfError(cam.id);
-    setTimeout(function() { _snapWorker(cam, wid); }, 2000);
-  };
-  preload.src = '/cam-home/api/' + encodeURIComponent(cam.src) + '/latest.jpg?t=' + Date.now();
-}
-
-function _startSnapForCam(cam) {
-  if (_snapActive[cam.id]) return; // already running
-  _snapActive[cam.id] = true;
-  for (var i = 0; i < SNAP_WORKERS; i++) {
-    (function(wid){ setTimeout(function(){ _snapWorker(cam, wid); }, wid * SNAP_STAGGER); })(i);
-  }
-}
-
-function _stopSnapForCam(id) {
-  delete _snapActive[id];
-  if (snapTimers[id]) { clearTimeout(snapTimers[id]); delete snapTimers[id]; }
-}
-
 /* ── iframe stream management (go2rtc stream.html in iframe — same pattern as camera-movi) ── */
 
-var _CAM_MODE = 'webrtc,mse,hls,mjpeg';
-var _hdMode = {}; /* camId → true when viewing HD stream */
+/* Mode negotiation:
+   - PC: ưu tiên WebRTC (độ trễ thấp khi cùng LAN), fallback MSE/HLS/MJPEG.
+   - Điện thoại: BỎ WebRTC — vì qua mạng di động WebRTC luôn bắt tay thất bại rồi mới
+     timeout (~vài giây) mới chịu rớt về MSE → load chậm. Đi thẳng MSE cho nhanh + ổn định. */
+var _IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia('(max-width:700px)').matches);
+var _CAM_MODE = _IS_MOBILE ? 'mse,hls,mjpeg' : 'webrtc,mse,hls,mjpeg';
 
-function toggleHD(id) {
-  _hdMode[id] = !_hdMode[id];
-  var c = CAMERAS.find(function(x){ return x.id === id; });
-  if (!c || !c.src) return;
-  var streamSrc = _hdMode[id] ? c.src + '_hd' : c.src;
-  var ifr = document.getElementById('cam-iframe-' + id);
-  if (ifr) ifr.src = '/cam-live/stream.html?src=' + encodeURIComponent(streamSrc) + '&mode=' + _CAM_MODE;
-  var btn = document.getElementById('hd-btn-' + id);
-  if (btn) btn.classList.toggle('hd-active', !!_hdMode[id]);
-  var badge = document.querySelector('#cell-' + id + ' .live-badge');
-  if (badge) badge.textContent = _hdMode[id] ? '● LIVE HD' : '● LIVE';
-}
-
+/* Bật/tắt iframe stream theo state — chỉ load camera đang ON ở tab Live, còn lại
+   trả về about:blank để giải phóng tài nguyên (nhẹ máy, ổn định hơn). */
 function syncSnapChains() {
   CAMERAS.forEach(function(c) {
     if (!c.src) return;
     var ifr = document.getElementById('cam-iframe-' + c.id);
     if (!ifr) return;
     if (state[c.id] && currentTab === 'live') {
-      var streamSrc = (_hdMode[c.id] ? c.src + '_hd' : c.src);
-      var wantSrc = '/cam-live/stream.html?src=' + encodeURIComponent(streamSrc) + '&mode=' + _CAM_MODE;
+      var wantSrc = '/cam-live/stream.html?src=' + encodeURIComponent(c.src) + '&mode=' + _CAM_MODE;
       if (ifr.getAttribute('src') !== wantSrc) ifr.src = wantSrc;
     } else {
       if (ifr.src && ifr.src !== 'about:blank') ifr.src = 'about:blank';
@@ -613,183 +577,26 @@ function syncSnapChains() {
   });
 }
 
-function startSnapRefresh() { syncSnapChains(); } // kept for compatibility
-
 /* ── Camera action buttons ── */
 function camFullscreen(camId) {
   var frame = document.querySelector('#cell-' + camId + ' .cam-frame');
   if (!frame) return;
-  if (frame.requestFullscreen) frame.requestFullscreen();
-  else if (frame.webkitRequestFullscreen) frame.webkitRequestFullscreen();
-}
-
-var _pipVid = null;
-var _pipTimer = null;
-function camPiP(camId) {
-  if (!document.pictureInPictureEnabled) { alert('Trình duyệt không hỗ trợ Picture in Picture'); return; }
-
-  // Clean up previous PiP if any
-  if (_pipTimer) { clearInterval(_pipTimer); _pipTimer = null; }
-  if (_pipVid && document.body.contains(_pipVid)) document.body.removeChild(_pipVid);
-
-  var el = document.getElementById('snap-' + camId);
-  if (!el) return;
-
-  // Stream mode: native PiP on the live <video> element
-  if (el.tagName === 'VIDEO' && el.requestPictureInPicture) {
-    el.requestPictureInPicture().catch(function(e) { alert('PiP lỗi: ' + e.message); });
+  // Already in CSS-overlay fullscreen → exit
+  if (frame.classList.contains('cam-frame-fs')) { _camCssFs(frame, false); return; }
+  // Native Fullscreen API (PC + Android Chrome). On iPhone, requestFullscreen on a
+  // <div> is unsupported → fall through to the CSS overlay so it works everywhere.
+  if (frame.requestFullscreen) {
+    var p = frame.requestFullscreen();
+    if (p && p.catch) p.catch(function(){ _camCssFs(frame, true); });
     return;
   }
-
-  // Snapshot mode: canvas-based PiP
-  var snapImg = el;
-  var canvas = document.createElement('canvas');
-  canvas.width = snapImg.naturalWidth || 1280;
-  canvas.height = snapImg.naturalHeight || 720;
-  var ctx = canvas.getContext('2d');
-  try { ctx.drawImage(snapImg, 0, 0, canvas.width, canvas.height); } catch(e){}
-
-  var vid = document.createElement('video');
-  vid.srcObject = canvas.captureStream(0); // 0 = manual frame timing
-  vid.muted = true;
-  vid.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:.01';
-  document.body.appendChild(vid);
-  _pipVid = vid;
-
-  _pipTimer = setInterval(function() {
-    if (!document.pictureInPictureElement) { clearInterval(_pipTimer); _pipTimer = null; return; }
-    var el = document.getElementById('snap-' + camId);
-    if (el) { try { ctx.drawImage(el, 0, 0, canvas.width, canvas.height); } catch(e){} }
-  }, 250);
-
-  vid.play()
-    .then(function(){ return vid.requestPictureInPicture(); })
-    .then(function(pw){
-      pw.addEventListener('pagehide', function(){
-        clearInterval(_pipTimer); _pipTimer = null;
-        if (document.body.contains(vid)) document.body.removeChild(vid);
-      });
-    })
-    .catch(function(){
-      clearInterval(_pipTimer); _pipTimer = null;
-      if (document.body.contains(vid)) document.body.removeChild(vid);
-    });
+  if (frame.webkitRequestFullscreen) { try { frame.webkitRequestFullscreen(); return; } catch(e) {} }
+  // iOS / fallback: CSS pseudo-fullscreen overlay
+  _camCssFs(frame, true);
 }
-
-/* ── Performance diagnostics panel ── */
-var _perfPanelTimer = null;
-var _rttProbeTimer = null;
-
-function _probeRtt(cam) {
-  var t0 = Date.now();
-  var img = new Image();
-  img.onload = function() { _perfRecord(cam.id, Date.now() - t0); };
-  img.onerror = function() { _perfError(cam.id); };
-  img.src = '/cam-home/api/' + encodeURIComponent(cam.src) + '/latest.jpg?t=' + t0;
-}
-
-function _startRttProbes() {
-  if (_rttProbeTimer) return;
-  var probe = function() {
-    if (document.hidden) return; /* tạm dừng đo RTT khi tab ẩn — tiết kiệm tài nguyên */
-    CAMERAS.forEach(function(c) {
-      if (c.src && state[c.id]) _probeRtt(c);
-    });
-  };
-  probe();
-  _rttProbeTimer = setInterval(probe, 5000);
-}
-
-function _stopRttProbes() {
-  if (_rttProbeTimer) { clearInterval(_rttProbeTimer); _rttProbeTimer = null; }
-}
-
-function togglePerfPanel() {
-  var p = document.getElementById('perf-panel');
-  var isOpen = !p.classList.contains('hidden');
-  if (isOpen) {
-    p.classList.add('hidden');
-    if (_perfPanelTimer) { clearInterval(_perfPanelTimer); _perfPanelTimer = null; }
-    _stopRttProbes();
-  } else {
-    p.classList.remove('hidden');
-    _startRttProbes();
-    _renderPerfPanel();
-    _perfPanelTimer = setInterval(_renderPerfPanel, 2000);
-  }
-}
-
-function _renderPerfPanel() {
-  var body = document.getElementById('perf-panel-body');
-  if (!body) return;
-  var html = '';
-
-  // RAM (Chrome/Edge only)
-  var mem = (performance && performance.memory);
-  if (mem) {
-    var used = Math.round(mem.usedJSHeapSize / 1048576);
-    var total = Math.round(mem.totalJSHeapSize / 1048576);
-    var limit = Math.round(mem.jsHeapSizeLimit / 1048576);
-    var pct = Math.round(used / limit * 100);
-    var cls = pct > 75 ? 'bad' : pct > 50 ? 'warn' : 'ok';
-    html += '<div class="perf-ram">'
-      + '<span>RAM dùng: <strong class="'+cls+'">'+used+' MB</strong></span>'
-      + '<span>Heap: <strong>'+total+' MB</strong></span>'
-      + '<span>Giới hạn: <strong>'+limit+' MB</strong></span>'
-      + '</div>';
-  }
-
-  // Active iframes
-  var configuredCams = CAMERAS.filter(function(c){ return c.src; });
-  var activeCams = configuredCams.filter(function(c){ return state[c.id]; });
-  var active = activeCams.length;
-  html += '<div class="perf-row"><span class="perf-row-name">Đang stream</span>'
-    + '<span class="perf-val '+(active>0?'ok':'warn')+'">'+active+' / '+configuredCams.length+' cam</span></div>';
-
-  // iframe protocol per camera
-  activeCams.forEach(function(c) {
-    var ifr = document.getElementById('cam-iframe-' + c.id);
-    var proto = '—';
-    if (ifr && ifr.src && ifr.src !== 'about:blank') proto = 'WebRTC/RTC';
-    html += '<div class="perf-row" style="padding-left:18px">'
-      + '<span class="perf-row-name" style="font-size:11px">↳ ' + (displayName(c)||c.id) + '</span>'
-      + '<span class="perf-val ok" style="font-size:11px">' + proto + '</span>'
-      + '</div>';
-  });
-
-  html += '<hr class="perf-sep">';
-
-  // CF Tunnel RTT per camera
-  html += '<div class="perf-row"><span class="perf-row-name" style="font-weight:600">CF Tunnel RTT</span></div>';
-  if (!activeCams.length) {
-    html += '<div style="color:var(--muted);padding:4px 8px;font-size:11px">Không có camera nào đang bật.</div>';
-  } else {
-    activeCams.forEach(function(c) {
-      var p = _perf[c.id];
-      var name = displayName(c) || c.id;
-      var latStr = 'đang đo…', cls = '', errStr = '';
-      if (p && p.samples.length > 0) {
-        var avg = Math.round(p.samples.reduce(function(a,b){return a+b;},0) / p.samples.length);
-        latStr = avg + ' ms';
-        cls = avg > 1500 ? 'bad' : avg > 600 ? 'warn' : 'ok';
-      }
-      if (p && p.errors > 0) errStr = ' <span style="color:var(--warn)">⚠'+p.errors+' err</span>';
-      html += '<div class="perf-row">'
-        + '<span class="perf-row-name">📡 ' + name + '</span>'
-        + '<span class="perf-val '+cls+'">' + latStr + errStr + '</span>'
-        + '</div>';
-    });
-  }
-
-  html += '<hr class="perf-sep">';
-  html += '<div style="font-size:10px;color:var(--muted);padding:2px 8px">'
-    + 'RTT = thời gian tải 1 frame snapshot qua CF Tunnel · '
-    + '<span style="color:var(--ok)">OK &lt;600ms</span>'
-    + ' · <span style="color:var(--warn)">Chậm 600–1500ms</span>'
-    + ' · <span style="color:var(--bad)">Lag &gt;1500ms</span>'
-    + ' · Live stream qua go2rtc WebRTC/MSE/HLS</div>';
-
-  body.innerHTML = html;
+function _camCssFs(frame, on) {
+  frame.classList.toggle('cam-frame-fs', on);
+  document.body.classList.toggle('cam-fs-lock', on);
 }
 
 /* ── Recordings ── */
@@ -1255,7 +1062,22 @@ function _startVod(st,et,seekTs){
       video.removeEventListener('loadedmetadata',onMeta);
       begin();
     });
-    video.onerror=function(){video.onerror=null;_playMp4(st,et,seekSec);};
+    video.onerror=function(){
+      video.onerror=null;
+      /* If range spans a gap (multiple segments), Safari native HLS may fail on EXT-X-DISCONTINUITY.
+         Retry with the single contiguous sub-range that contains seekTs. */
+      if(_vodSegs.length>1){
+        var seg=null;
+        for(var i=0;i<_vodSegs.length;i++){
+          if(_vodSegs[i].end>seekTs){seg=_vodSegs[i];break;}
+        }
+        if(seg){
+          var fSt=Math.max(seg.start,st), fEt=Math.min(seg.end,et);
+          if(fEt-fSt>5){_startVod(fSt,fEt,seekTs);return;}
+        }
+      }
+      _playMp4(st,et,seekSec);
+    };
     return;
   }
 
@@ -1445,6 +1267,119 @@ function escHtml(s){
   });
 })();
 
+/* ── Timeline touch events (mobile) ── mirrors the mouse drag-select above ── */
+(function(){
+  var _touchDownX=0;
+  function getBarPctTouch(touch){
+    var bar=document.getElementById('tl-bar');
+    if(!bar)return 0;
+    var rect=bar.getBoundingClientRect();
+    return Math.max(0,Math.min(1,(touch.clientX-rect.left)/rect.width));
+  }
+  function barContains(touch){
+    var bar=document.getElementById('tl-bar');
+    if(!bar)return false;
+    var rect=bar.getBoundingClientRect();
+    return touch.clientX>=rect.left&&touch.clientX<=rect.right&&touch.clientY>=rect.top&&touch.clientY<=rect.bottom;
+  }
+  document.addEventListener('touchstart',function(e){
+    if(!recDayStart)return;
+    var t=e.touches[0];
+    if(!barContains(t))return;
+    if(e.target&&e.target.id==='tl-ph-handle')return;
+    e.preventDefault();
+    tlDragging=true;
+    _touchDownX=t.clientX;
+    var pct=getBarPctTouch(t);
+    selRangeStart=recDayStart+pct*86400;
+    selRangeEnd=selRangeStart;
+    updateRangeOverlay();
+  },{passive:false});
+  document.addEventListener('touchmove',function(e){
+    if(!tlDragging||!recDayStart)return;
+    e.preventDefault();
+    var t=e.touches[0];
+    selRangeEnd=recDayStart+getBarPctTouch(t)*86400;
+    updateRangeOverlay();
+  },{passive:false});
+  document.addEventListener('touchend',function(e){
+    if(!tlDragging)return;
+    tlDragging=false;
+    if(!recDayStart)return;
+    var t=e.changedTouches[0];
+    selRangeEnd=recDayStart+getBarPctTouch(t)*86400;
+    var isDrag=Math.abs(t.clientX-_touchDownX)>8;
+    if(!isDrag){
+      var clickTs=selRangeStart;
+      var video=document.getElementById('rec-video');
+      if(_playClipStart!==null&&_playClipEnd!==null&&
+         clickTs>=_playClipStart&&clickTs<=_playClipEnd&&
+         video&&video.readyState>=2){
+        video.currentTime=_wallToVideo(clickTs);
+        video.play().catch(function(){});
+      } else {
+        playFromTime(clickTs);
+      }
+    } else {
+      if(selRangeEnd<selRangeStart){var tmp=selRangeStart;selRangeStart=selRangeEnd;selRangeEnd=tmp;}
+      if(selRangeEnd-selRangeStart<5)selRangeEnd=selRangeStart+30;
+      updateRangeOverlay();
+      syncTimeInputs();
+      updateRangeInfo();
+      playSelectedRange();
+    }
+  });
+})();
+
+/* ── Playhead touch drag (mobile) ── */
+(function(){
+  var _phTouchDrag=false;
+  document.addEventListener('touchstart',function(e){
+    if(!e.target||e.target.id!=='tl-ph-handle')return;
+    if(!recDayStart)return;
+    e.preventDefault();
+    _phTouchDrag=true;
+    var tip=document.getElementById('tl-ph-tip');
+    if(tip)tip.style.display='block';
+  },{passive:false});
+  document.addEventListener('touchmove',function(e){
+    if(!_phTouchDrag||!recDayStart)return;
+    e.preventDefault();
+    var t=e.touches[0];
+    var bar=document.getElementById('tl-bar');
+    var ph=document.getElementById('tl-playhead');
+    var tip=document.getElementById('tl-ph-tip');
+    if(!bar||!ph)return;
+    var rect=bar.getBoundingClientRect();
+    var pct=Math.max(0,Math.min(1,(t.clientX-rect.left)/rect.width));
+    var ts=recDayStart+pct*86400;
+    ph.style.left=(pct*100).toFixed(3)+'%';
+    if(tip)tip.textContent=fmtTime(ts);
+  },{passive:false});
+  document.addEventListener('touchend',function(e){
+    if(!_phTouchDrag)return;
+    _phTouchDrag=false;
+    var tip=document.getElementById('tl-ph-tip');
+    if(tip)tip.style.display='none';
+    if(!recDayStart)return;
+    var t=e.changedTouches[0];
+    var bar=document.getElementById('tl-bar');
+    if(!bar)return;
+    var rect=bar.getBoundingClientRect();
+    var pct=Math.max(0,Math.min(1,(t.clientX-rect.left)/rect.width));
+    var ts=recDayStart+pct*86400;
+    var video=document.getElementById('rec-video');
+    if(_playClipStart!==null&&_playClipEnd!==null&&
+       ts>=_playClipStart&&ts<=_playClipEnd&&
+       video&&video.readyState>=2){
+      video.currentTime=_wallToVideo(ts);
+      video.play().catch(function(){});
+    } else {
+      playFromTime(ts);
+    }
+  });
+})();
+
 /* ── Playhead drag-to-seek ── */
 (function(){
   var _phDrag=false;
@@ -1500,7 +1435,7 @@ if(!CAN_PLAYBACK){
 }
 switchTab('live');
 initCameras();
-startSnapRefresh();
+syncSnapChains();
 
 /* ── Idle keepalive ── */
 setInterval(function(){
@@ -1511,6 +1446,19 @@ setInterval(function(){
 /* ── beforeunload: tắt tất cả iframe khi rời trang ── */
 window.addEventListener('beforeunload',function(){
   setAll(false);
+});
+
+/* ── Tạm dừng stream khi tab ẩn / khoá máy / chuyển app — tiết kiệm pin + CPU +
+   băng thông, tránh kết nối treo. Giữ nguyên state ON/OFF; khi quay lại tự phát tiếp. ── */
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden){
+    CAMERAS.forEach(function(c){
+      var ifr=document.getElementById('cam-iframe-'+c.id);
+      if(ifr&&ifr.src&&ifr.src!=='about:blank')ifr.src='about:blank';
+    });
+  }else{
+    syncSnapChains(); /* phát lại các camera đang ON */
+  }
 });
 
 /* ── Theme ── */
