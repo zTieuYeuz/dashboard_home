@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════ */
 const SESSION_COOKIE    = 'dh_session';
 const SESSION_TTL       = 60 * 60 * 8;      // default fallback only — runtime reads from KV system_config
-const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','camera_playback','camera_download','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
+const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
 
 /* Idle-timer script injected into every authenticated HTML page.
    T = idle timeout ms, W = warning threshold ms (must be < T) */
@@ -239,7 +239,10 @@ async function handleLogin(request, env, ctx) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   await ensureAdmin(env);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  const { username, password } = body || {};
+  const { password } = body || {};
+  // Username is case-insensitive — always normalize to lowercase (mobile keyboards
+  // auto-capitalize the first letter, which would otherwise break login).
+  const username = (body && body.username ? String(body.username) : '').toLowerCase().trim();
   if (!username || !password) return json({ error: 'Thiếu username hoặc password' }, 400);
   const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
 
@@ -397,7 +400,7 @@ async function handleLogin(request, env, ctx) {
     return json({ mfaRequired: true, tempToken });
   }
 
-  const sessionTtl = Math.max(1, cfg.sessionTtlHours ?? 8) * 3600;
+  const sessionTtl = Math.max(1, (user.sessionTtlHours || cfg.sessionTtlHours || 8)) * 3600;
 
   // ── 6. Max concurrent sessions enforcement ──
   const maxSessions = cfg.maxConcurrentSessions ?? 0;
@@ -448,11 +451,11 @@ async function handleSessionRefresh(request, env) {
   if (!session) return json({ error: 'No session' }, 401);
   const token = session.token;
   const refreshCfg = await _getCfg(env);
-  const refreshTtl = Math.max(1, refreshCfg.sessionTtlHours ?? 8) * 3600;
-  const newExpires = Date.now() + refreshTtl * 1000;
   // Re-read role from KV so role changes take effect without full re-login
   const refreshUser = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
   const freshRole = (refreshUser && refreshUser.role) || session.role;
+  const refreshTtl = Math.max(1, ((refreshUser && refreshUser.sessionTtlHours) || refreshCfg.sessionTtlHours || 8)) * 3600;
+  const newExpires = Date.now() + refreshTtl * 1000;
   await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
     username: session.username, role: freshRole,
     permissions: session.permissions || {},
@@ -462,6 +465,19 @@ async function handleSessionRefresh(request, env) {
   const h = new Headers({ 'Content-Type': 'application/json' });
   h.append('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${refreshTtl}`);
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: h });
+}
+
+async function handleAuthMe(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'No session' }, 401);
+  // Use computeEffectivePermissions so policy-group permissions (Role Manager) are included,
+  // not just the direct user.permissions stored in the session at login time.
+  const eff = await computeEffectivePermissions(env, session.username);
+  return json({
+    username: session.username,
+    role: eff ? eff.role : session.role,
+    permissions: eff ? eff.permissions : (session.permissions || {}),
+  });
 }
 
 /** Xóa tất cả session KV của một user (dùng khi delete / demote / đổi password) */
@@ -522,6 +538,7 @@ async function handleListUsers(request, env) {
       loginTimeStart:   d.loginTimeStart || '06:00',
       loginTimeEnd:     d.loginTimeEnd   || '23:00',
       loginTimeZone:    d.loginTimeZone  || 'Asia/Ho_Chi_Minh',
+      sessionTtlHours:  d.sessionTtlHours || 0,
       microsoftEmail:   d.microsoftEmail || null,
       mfaEnabled:       !!d.mfaEnabled,
     })).filter(Boolean);
@@ -573,9 +590,11 @@ async function handleCreateUser(request, env) {
     }
     if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
     let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-    const { username, password } = body || {};
+    const { password } = body || {};
+    // Usernames are always stored lowercase so login is case-insensitive.
+    const username = (body && body.username ? String(body.username) : '').toLowerCase().trim();
     if (!username || !password) return json({ error: 'Thiếu username hoặc password' }, 400);
-    if (!/^[a-zA-Z0-9_.@-]{3,64}$/.test(username)) return json({ error: 'Username không hợp lệ (3-64 ký tự, a-z 0-9 . @ _ -)' }, 400);
+    if (!/^[a-z0-9_.@-]{3,64}$/.test(username)) return json({ error: 'Username không hợp lệ (3-64 ký tự, a-z 0-9 . @ _ -)' }, 400);
     // Parallel: check existence, load userlist, load config — all needed before creating
     const [existing, curList, createCfg] = await Promise.all([
       env.DASHBOARD_KV.get(`user:${username}`),
@@ -594,10 +613,11 @@ async function handleCreateUser(request, env) {
     const role = allowedRoles.includes(body?.role) ? body.role : 'user';
     // Delegated managers can assign policy groups (same as admin)
     const groups = Array.isArray(body?.groups) ? body.groups : [];
+    const requireMfa = body?.requireMfa !== false; // mặc định true, false chỉ khi truyền rõ requireMfa:false
     await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify({
       password: hashed, role, groups, userGroups: [], permissions: {}, panels: {}, cameras: [], created: Date.now(),
-      mustChangePassword: true,  // Force password change on first login
-      mustSetupMfa: true,        // Force MFA setup on first login
+      mustChangePassword: true,   // Force password change on first login
+      mustSetupMfa: requireMfa,   // Admin có thể tắt MFA khi tạo viewer accounts
     }));
     if (!list.includes(username)) { list.push(username); await env.DASHBOARD_KV.put('userlist', JSON.stringify(list)); }
     if (!isAdmin) await logActivity(env, { action: 'delegate-create-user', username: session.username, success: true, detail: `Created user: ${username}` });
@@ -801,6 +821,26 @@ async function handleSaveUserLoginTime(request, env, username) {
   await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
   await logActivity(env, { action: 'user-update-login-time', username: session.username,
     ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Login time set for: ${username}` });
+  return json({ success: true });
+}
+
+async function handleSaveUserSessionTtl(request, env, username) {
+  const session = await getSession(request, env);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+  const hours = Number(body.sessionTtlHours);
+  if (isNaN(hours) || hours < 0) return json({ error: 'Giá trị không hợp lệ' }, 400);
+  if (hours === 0) {
+    delete user.sessionTtlHours; // 0 = dùng global default
+  } else {
+    user.sessionTtlHours = Math.min(Math.floor(hours), 720); // tối đa 30 ngày
+  }
+  await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  await logActivity(env, { action: 'user-update-session-ttl', username: session.username,
+    ip: request.headers.get('CF-Connecting-IP') || '?', success: true,
+    detail: `Session TTL = ${hours || 'global'} for: ${username}` });
   return json({ success: true });
 }
 
@@ -1609,6 +1649,22 @@ async function handleCameraList(request, env) {
   return json({ error: 'Method not allowed' }, 405);
 }
 
+async function handleCameraRename(request, env, camId) {
+  const session = await getSession(request, env);
+  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const name = (body.name || '').trim();
+  if (!name || name.length > 40) return json({ error: 'Tên không hợp lệ (tối đa 40 ký tự)' }, 400);
+  const list = await env.DASHBOARD_KV.get('camera_list', 'json') || DEFAULT_CAMERAS;
+  const cam = list.find(c => c.id === camId);
+  if (!cam) return json({ error: 'Camera not found' }, 404);
+  cam.name = name;
+  await env.DASHBOARD_KV.put('camera_list', JSON.stringify(list));
+  await logActivity(env, { action: 'camera-rename', username: session.username,
+    ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Camera "${camId}" → "${name}"` });
+  return json({ success: true });
+}
+
 /* ═══════════════════════════════════════════════
    TOTP / MFA — RFC 6238 (SHA-1, 30s window, 6 digits)
    Compatible with Microsoft Authenticator, Google Authenticator
@@ -1822,7 +1878,7 @@ async function handleMfaVerify(request, env) {
   if (usedRecovery) await logActivity(env, { action: 'mfa_recovery_used', username: temp.username, ip, success: true, detail: `Recovery code used · ${(user.mfaRecovery||[]).length} còn lại` });
   // Create full session — use dynamic TTL from system_config
   const mfaCfg = await _getCfg(env);
-  const mfaSessionTtl = Math.max(1, mfaCfg.sessionTtlHours ?? 8) * 3600;
+  const mfaSessionTtl = Math.max(1, (user.sessionTtlHours || mfaCfg.sessionTtlHours || 8)) * 3600;
   const token = crypto.randomUUID();
   await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
     username: temp.username, role: user.role, permissions: user.permissions || {},
@@ -2082,7 +2138,7 @@ function doVerify(){
     return new Response(mfaHtml, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   }
 
-  const sessionTtl    = Math.max(1, cfg.sessionTtlHours ?? 8) * 3600;
+  const sessionTtl    = Math.max(1, (matchedUser.sessionTtlHours || cfg.sessionTtlHours || 8)) * 3600;
   const token         = crypto.randomUUID();
   const canManagePerms = (matchedUser.canManagePerms || []).filter(s => ALL_SERVICES.includes(s));
 
@@ -2194,7 +2250,7 @@ async function handleMicrosoftMfaVerify(request, env, ctx) {
   if (usedRecovery) await logActivity(env, { action: 'mfa_recovery_used', username: temp.username, ip, success: true, detail: `Recovery code used (SSO) · ${(user.mfaRecovery||[]).length} còn lại` });
 
   const cfg = await _getCfg(env);
-  const sessionTtl = Math.max(1, cfg.sessionTtlHours ?? 8) * 3600;
+  const sessionTtl = Math.max(1, (user.sessionTtlHours || cfg.sessionTtlHours || 8)) * 3600;
   const token = crypto.randomUUID();
   const canManagePerms = (user.canManagePerms || []).filter(s => ALL_SERVICES.includes(s));
 
@@ -2224,7 +2280,7 @@ async function handleMicrosoftMfaVerify(request, env, ctx) {
 
 async function _createSessionAfterSetup(username, user, env, boundIp, extra) {
   const cfg = await _getCfg(env);
-  const sessionTtl = Math.max(1, cfg.sessionTtlHours ?? 8) * 3600;
+  const sessionTtl = Math.max(1, (user.sessionTtlHours || cfg.sessionTtlHours || 8)) * 3600;
   const token = crypto.randomUUID();
   await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
     username, role: user.role, permissions: user.permissions || {},
@@ -2732,6 +2788,16 @@ a:hover{background:#4f46e5}</style></head>
     return new Response(maintHtml, { status: 503, headers: { 'content-type':'text/html;charset=utf-8','cache-control':'no-store','retry-after':'3600' } });
   }
 
+  // ── App Camera: auto-redirect to camera page on dashboard root ──
+  // Users granted the 'app_camera' permission land directly on the camera home
+  // page instead of the main dashboard. Server-side so it works regardless of
+  // which login path was used (password, MFA, Microsoft SSO).
+  if (!isAdmin && (url.pathname === '/' || url.pathname === '/index.html')) {
+    if ((effPerms.permissions['app_camera'] || 'none') !== 'none') {
+      return Response.redirect(new URL('/service-home/hikvision.html', request.url).toString(), 302);
+    }
+  }
+
   // ── Server-side page permission gate ──
   // Admins bypass all checks. Non-admin users are redirected to home
   // if they try to access a page they don't have permission for.
@@ -2752,7 +2818,7 @@ a:hover{background:#4f46e5}</style></head>
       '/service-home/asus.html': 'asus',
       '/service-home/9router.html': '9router',
       '/service-home/n8n.html': 'n8n',
-      '/service-home/hikvision.html': 'camera',
+      '/service-home/hikvision.html': ['camera','camera_playback','camera_download','app_camera','camera_autoopen'],
       '/service-home/ssh.html': 'ssh',
       '/service-home/rustdesk.html': 'rustdesk',
       // '/settings.html' intentionally NOT gated — all authenticated users can access own profile/MFA settings
@@ -4627,6 +4693,22 @@ async function handleCamLiveEmbed(request, env) {
     if(typeof a[1]==='string')a[1]=rwHTTP(a[1]);
     return _xo.apply(this,a);
   };
+  /* ── Mobile autoplay fix: force muted + playsinline + autoplay so the browser
+     doesn't show a big centre play-button overlay (it blocks autoplay otherwise). ── */
+  function _fixVid(v){
+    try{
+      v.muted=true; v.defaultMuted=true; v.setAttribute('muted','');
+      v.playsInline=true; v.setAttribute('playsinline',''); v.setAttribute('webkit-playsinline','');
+      v.autoplay=true; v.setAttribute('autoplay','');
+      v.controls=false;
+      var p=v.play(); if(p&&p.catch)p.catch(function(){});
+    }catch(e){}
+  }
+  function _scanVids(){ try{ document.querySelectorAll('video').forEach(_fixVid); }catch(e){} }
+  try{ new MutationObserver(_scanVids).observe(document.documentElement,{childList:true,subtree:true}); }catch(e){}
+  document.addEventListener('DOMContentLoaded',_scanVids);
+  window.addEventListener('load',_scanVids);
+  setInterval(_scanVids,1000);
 })();
 <\/script>`;
     html = html.includes('</head>') ? html.replace('</head>', patch + '</head>') : patch + html;
@@ -6666,6 +6748,7 @@ export default {
     if (p === '/api/auth/login')                   return handleLogin(request, env, ctx);
     if (p === '/api/auth/logout')                  return handleLogout(request, env);
     if (p === '/api/auth/refresh')                 return handleSessionRefresh(request, env);
+    if (p === '/api/auth/me')                      return handleAuthMe(request, env);
     if (p === '/api/auth/mfa/verify')              return handleMfaVerify(request, env);
 
     // ── Microsoft OIDC SSO (public — no session required) ──
@@ -6709,6 +6792,8 @@ export default {
     if (userBlock && request.method === 'POST') return handleBlockUser(request, env, decodeURIComponent(userBlock[1]));
     const userLoginTime = p.match(/^\/api\/admin\/users\/([^/]+)\/login-time$/);
     if (userLoginTime && request.method === 'PUT') return handleSaveUserLoginTime(request, env, decodeURIComponent(userLoginTime[1]));
+    const userSessionTtl = p.match(/^\/api\/admin\/users\/([^/]+)\/session-ttl$/);
+    if (userSessionTtl && request.method === 'PUT') return handleSaveUserSessionTtl(request, env, decodeURIComponent(userSessionTtl[1]));
     const userDel  = p.match(/^\/api\/admin\/users\/([^/]+)$/);
     if (userDel) {
       if (request.method === 'DELETE') return handleDeleteUser(request, env, decodeURIComponent(userDel[1]));
@@ -6748,6 +6833,8 @@ export default {
     // ── Camera list API ──
     if (p === '/api/admin/cameras') return handleCameraList(request, env);
     if (p === '/api/admin/cameras/movi') return handleMoviCameraList(request, env);
+    const camRename = p.match(/^\/api\/admin\/cameras\/([^/]+)\/rename$/);
+    if (camRename && request.method === 'PATCH') return handleCameraRename(request, env, decodeURIComponent(camRename[1]));
 
     // ── Policy Groups API alias (settings.html uses /api/policy/groups) ──
     if (p === '/api/policy/groups') {
