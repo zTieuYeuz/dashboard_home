@@ -5921,6 +5921,22 @@ async function handleAsusWebhook(env) {
   }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 }
 
+async function handleAsusClients(env) {
+  const n8nUser = cleanEnv(env.HOME_N8N_USER);
+  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
+  const hdrs = { 'Content-Type': 'application/json' };
+  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
+  const whClients = cleanEnv(env.HOME_WH_ASUS_CLIENTS);
+  if (!whClients) return json({ error: 'HOME_WH_ASUS_CLIENTS not configured' }, 500);
+  try {
+    const r = await fetch(whClients, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(15000) });
+    const d = r.ok ? await r.json() : null;
+    return new Response(JSON.stringify({ clients: d?.clients || [], stats: d?.stats || {} }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+  } catch (e) {
+    return json({ error: e.message }, 500);
+  }
+}
+
 async function handleAsusBw(env) {
   const n8nUser = cleanEnv(env.HOME_N8N_USER);
   const n8nPass = cleanEnv(env.HOME_N8N_PASS);
@@ -6974,6 +6990,12 @@ export default {
       if (!_s) return json({ error: 'Unauthorized' }, 401);
       if (!(await hasPerm(env, _s, 'asus'))) return json({ error: 'Không có quyền truy cập ASUS Router' }, 403);
       return handleAsusBw(env);
+    }
+    if (p === '/api/asus/clients') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'asus'))) return json({ error: 'Không có quyền truy cập ASUS Router' }, 403);
+      return handleAsusClients(env);
     }
     if (p === '/api/asus/reboot') {
       const _s = await getSession(request, env);
