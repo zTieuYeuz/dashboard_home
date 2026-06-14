@@ -2684,10 +2684,16 @@ function isMobileRequest(request) {
 /* Inject <link mobile.css> cuối <head> (sau inline <style> của page để
    thắng specificity tie) + gắn data-mobile="1" vào <html> nếu device mobile */
 function applyMobilePatch(html, isMobile) {
-  const link = '<link rel="stylesheet" href="/mobile.css">';
+  // mobile.css + PWA meta: cho phép mở từ "Add to Home Screen" ở chế độ standalone
+  // (toàn màn hình, KHÔNG có thanh địa chỉ Safari). Thiếu các thẻ này thì iOS mở
+  // shortcut như một tab Safari bình thường (có thanh URL + toolbar dưới).
+  const head = '<link rel="stylesheet" href="/mobile.css">'
+    + '<meta name="apple-mobile-web-app-capable" content="yes">'
+    + '<meta name="mobile-web-app-capable" content="yes">'
+    + '<meta name="apple-mobile-web-app-status-bar-style" content="black">';
   html = /<\/head>/i.test(html)
-    ? html.replace(/<\/head>/i, link + '\n</head>')
-    : link + html;
+    ? html.replace(/<\/head>/i, head + '\n</head>')
+    : head + html;
   if (isMobile) html = html.replace(/<html(\s|>)/i, '<html data-mobile="1"$1');
   return html;
 }
