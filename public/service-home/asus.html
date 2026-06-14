@@ -357,6 +357,8 @@ html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);mi
     <div class="fw-header" onclick="toggleFw('panel-clients')">
       <span class="fw-title">🖥 Connected Devices</span>
       <span class="fw-badge" id="clients-badge">—</span>
+      <button class="tbtn ghost" id="clients-refresh-btn" onclick="event.stopPropagation();loadClients()" style="padding:2px 8px;font-size:11px;height:22px;margin-left:4px" title="Refresh device list">↻</button>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)" id="clients-update"></span>
       <span class="chevron">▼</span>
     </div>
     <div class="fw-body" id="clients-body">
@@ -748,16 +750,35 @@ const __USER__=window.__USER__||_readUserCookie()||{role:'user',permissions:{},i
 const __PERM__=__USER__.isAdmin?'write':(__USER__.permissions['asus']||'read');
 
 /* ── Polling ── */
-let _pollTimer=null,_bwTimer=null;
+let _pollTimer=null,_bwTimer=null,_clientsTimer=null;
 function startPolling(){
   if(_pollTimer)clearInterval(_pollTimer);
-  _pollTimer=setInterval(load,600000); // 10 phút — full refresh
+  _pollTimer=setInterval(load,600000);      // 10 phút — full refresh
   if(_bwTimer)clearInterval(_bwTimer);
-  _bwTimer=setInterval(loadBW,30000);  // 30s — bandwidth only
+  _bwTimer=setInterval(loadBW,30000);       // 30s — bandwidth only
+  if(_clientsTimer)clearInterval(_clientsTimer);
+  _clientsTimer=setInterval(loadClients,120000); // 2 phút — devices only
 }
 function stopPolling(){
   if(_pollTimer){clearInterval(_pollTimer);_pollTimer=null;}
   if(_bwTimer){clearInterval(_bwTimer);_bwTimer=null;}
+  if(_clientsTimer){clearInterval(_clientsTimer);_clientsTimer=null;}
+}
+
+/* ── Load Clients only ── */
+async function loadClients(){
+  const btn=document.getElementById('clients-refresh-btn');
+  if(btn){btn.innerHTML='<span class="spin">↻</span>';btn.disabled=true;}
+  try{
+    const r=await fetch('/api/asus/clients');
+    const d=await r.json();
+    if(!d.error){
+      renderClients(d.clients,d.stats);
+      document.getElementById('clients-update').textContent='↻ '+new Date().toLocaleTimeString('vi-VN');
+    }
+  }catch(e){}finally{
+    if(btn){btn.innerHTML='↻';btn.disabled=false;}
+  }
 }
 
 /* ── Load BW only ── */
