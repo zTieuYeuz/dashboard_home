@@ -6237,11 +6237,12 @@ async function handleTermixProxy(request, env, opts) {
 
   // ── WebSocket proxy ──
   if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
-    const wsTarget = target.replace(/^https/, 'wss').replace(/^http(?!s)/, 'ws');
-    upHeaders.set('Upgrade',               'websocket');
-    upHeaders.set('Connection',            'Upgrade');
-    upHeaders.set('Sec-WebSocket-Version', request.headers.get('Sec-WebSocket-Version') || '13');
-    // Set Origin to the Termix origin so Guacamole accepts the connection
+    // CF Workers: fetch the https:// target with only Upgrade header — Connection/Sec-WebSocket-*
+    // are managed internally by Workers (giống camera proxy đã chạy ổn). KHÔNG dùng wss:// scheme
+    // và KHÔNG tự set Connection/Sec-WebSocket-Version → nếu không, response.webSocket = null.
+    const wsTarget = target;
+    upHeaders.set('Upgrade', 'websocket');
+    // Set Origin to the Termix origin so Guacamole accepts the connection (chống cross-origin reject)
     upHeaders.set('Origin', termixOrigin);
     // Forward subprotocol (required for Guacamole: 'guacamole')
     const swp = request.headers.get('Sec-WebSocket-Protocol');
@@ -6317,6 +6318,20 @@ async function handleTermixProxy(request, env, opts) {
     const _reqOri = new URL(request.url).origin;
     let   _newLoc = _loc;
 
+    // [Defensive] Nếu upstream redirect tới CF Access login (cloudflareaccess.com) → service token
+    // KHÔNG hợp lệ/thiếu. KHÔNG đẩy redirect này về browser (sẽ lạc sang CF Access của upstream).
+    // Báo lỗi rõ để dễ sửa (thường do thiếu secret service token trên worker).
+    if (/cloudflareaccess\.com/i.test(_loc)) {
+      return new Response(
+        `<html><body style="font:14px system-ui;padding:2rem;background:#1a1a2e;color:#e0e0e0">
+          <h2 style="color:#ff6b6b">⚠ ${_escHtml(opts.label)} — Service token không hợp lệ</h2>
+          <p>Worker proxy tới <code>${_escHtml(originHost)}</code> nhưng bị CF Access chặn (thiếu/sai service token).</p>
+          <p style="color:#888">Kiểm tra secret CF Access service token của worker (vd: TERMIX_HOME_CF_CLIENT_ID / _SECRET) đã set đúng trên môi trường này chưa.</p>
+        </body></html>`,
+        { status: 502, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' } }
+      );
+    }
+
     if (_loc.startsWith(termixOrigin)) {
       // Absolute Termix URL → proxy path
       _newLoc = BASE + _loc.slice(termixOrigin.length);
@@ -6385,6 +6400,10 @@ async function handleTermixProxy(request, env, opts) {
       html = html.replace(/window\.__TERMIX_BASE_PATH__\s*=\s*["'][^"']*["']/,
         'window.__TERMIX_BASE_PATH__ = "' + BASE + '"');
     }
+    // [CF Access fix] Vite thêm crossorigin vào <script>/<link> asset → trình duyệt tải KHÔNG kèm cookie
+    // → CF Access (trên domain dashboard) chặn asset → CORS fail. Strip crossorigin để asset tải
+    // same-origin CÓ cookie → CF Access cho qua. (asset cùng origin nên không cần crossorigin)
+    html = html.replace(/\s+crossorigin(=("[^"]*"|'[^']*'|\S+))?/gi, '');
     // [H2 fix] Extract JWT from HttpOnly cookie for safe server-side injection.
     // The JWT cookie is HttpOnly so JS cannot read it via document.cookie.
     // Instead we extract it here and inject as a scoped JS variable.
@@ -6418,15 +6437,19 @@ async function handleTermixProxy(request, env, opts) {
     // WebSocket. WSMODE='proxy' → giữ WS tới dashboard/proxy (worker proxy + thêm CF token).
     //           WSMODE='direct' → DIRECT tới origin thật (strip base), browser tự nối (Movi).
     if(u.indexOf('wss://')===0||u.indexOf('ws://')===0){
-      if(WSMODE==='proxy') return u; // Termix đã dựng URL có base path → tới dashboard/proxy → worker
-      if(u.indexOf(O)!==-1)return u;
       var si=u.indexOf('/',u.indexOf('//')+2);
       var path=si===-1?'/':u.slice(si);
+      // guac WS PHẢI đi qua proxy (bất kể WSMODE): guacamole-lite check Origin → worker set
+      // Origin=termix.home (+ CF token) thì guac mới accept. Direct sẽ bị reject vì cross-origin.
+      if(_stripB(path).indexOf('/guacamole/websocket')===0) return u.slice(0,si)+B+_stripB(path);
+      if(WSMODE==='proxy') return u; // Termix đã dựng URL có base path → tới dashboard/proxy → worker
+      if(u.indexOf(O)!==-1)return u;
       return 'wss://'+O+_stripB(path);
     }
     // Root-relative path
     if(u.charAt(0)==='/'&&u.slice(0,2)!=='//'){
       if(isWS){
+        if(_stripB(u).indexOf('/guacamole/websocket')===0) return B+_stripB(u); // guac → qua proxy
         if(WSMODE==='proxy') return (u.slice(0,B.length)===B)?u:(B+u); // đảm bảo có prefix proxy
         return 'wss://'+O+_stripB(u); // direct tới origin
       }
@@ -6437,6 +6460,7 @@ async function handleTermixProxy(request, env, opts) {
   var _W=window.WebSocket;
   window.WebSocket=function(u,p){
     var r=rw(u,true);
+    r=r.replace(/[?&]undefined$/,''); // strip ?undefined appended by Termix new version bug
     // For SSH websocket: append JWT as ?token= so verifyClient can auth
     // [H2 fix] JWT is injected server-side (__JWT), NOT read from document.cookie (HttpOnly)
     if(r.indexOf('/ssh/websocket')!==-1){

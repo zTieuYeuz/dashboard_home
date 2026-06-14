@@ -89,18 +89,18 @@ a{color:inherit;text-decoration:none}
       <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M6 8l2 2-2 2M11 12h4" stroke-linejoin="round"/></svg>
     </div>
     <div class="launch-title">Termix SSH Terminal</div>
-    <div class="launch-desc">Web SSH terminal cho toàn bộ server — truy cập <strong>qua dashboard</strong> (proxy + session dashboard kiểm soát, không vào Termix trực tiếp được).</div>
+    <div class="launch-desc">Web SSH terminal cho toàn bộ server — truy cập <strong>qua dashboard</strong> (session dashboard kiểm soát, không cần MFA lần 2, người ngoài không vào được).</div>
     <a class="launch-btn" href="/proxy/termix-home/" target="_blank" rel="noopener">🖥 Mở Termix SSH →</a>
     <button class="launch-btn sub" onclick="openPopup()">⛶ Mở trong cửa sổ riêng</button>
-    <div class="launch-note">💡 Termix mở ở tab/cửa sổ riêng <strong>qua dashboard</strong> (đường <code>/proxy/termix-home</code>). Phải mở ở cấp trang đầy đủ (không nhúng iframe) vì Termix yêu cầu vậy để đăng nhập hoạt động đúng — nhưng vẫn đi qua dashboard nên bảo mật vẫn đảm bảo.</div>
+    <div class="launch-note">💡 Termix mở ở tab/cửa sổ riêng <strong>qua dashboard</strong> (<code>/proxy/termix-home</code>). Đã đăng nhập dashboard rồi thì vào thẳng, không hỏi MFA lại.</div>
   </div>
 </div>
 
 <script>
 (function(){function _readUserCookie(){try{var m=document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/);return m?JSON.parse(decodeURIComponent(m[1])):null;}catch(e){return null;}}var U=window.__USER__||_readUserCookie()||{role:'user',permissions:{},isAdmin:false};var perm=U.isAdmin?'write':(U.permissions&&U.permissions['ssh']||'none');if(perm==='none'){document.addEventListener('DOMContentLoaded',function(){var pg=document.querySelector('.page')||document.body;pg.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:12px;color:#71717a"><div style="font-size:48px">🔒</div><div style="font-size:17px;font-weight:600;color:#f4f4f5">Không có quyền truy cập</div><div style="font-size:13px">Trang SSH Terminal yêu cầu quyền truy cập.<br>Liên hệ admin để được cấp quyền.</div><a href="/" style="margin-top:8px;font-size:13px;color:#3b82f6;text-decoration:none">← Về trang chủ</a></div>';});}})();
-// Mở Termix QUA PROXY DASHBOARD (/proxy/termix-home) ở tab/cửa sổ riêng (top-level).
-// Top-level → window.self===window.top → Termix KHÔNG bị nhận nhầm là Electron webview → auth web chạy.
-// Vẫn đi qua dashboard (proxy + session) nên không ai vào Termix trực tiếp được.
+// Mở Termix QUA PROXY DASHBOARD (/proxy/termix-home), tab riêng (top-level → không bị webview).
+// Đường /proxy/termix-home được CF Access BYPASS (không hỏi email-MFA), worker tự gác bằng
+// session dashboard → vào thẳng không MFA lần 2, người ngoài không có session → bị chặn.
 const TERMIX_PROXY = '/proxy/termix-home/';
 
 function openPopup() {
