@@ -68,7 +68,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <form onsubmit="doLogin(event)">
       <div class="form-group">
         <label class="label">Tên đăng nhập</label>
-        <input class="input" id="username" type="text" autocomplete="username" placeholder="admin" required autofocus/>
+        <input class="input" id="username" type="text" autocomplete="username" placeholder="admin" required autofocus autocapitalize="none" autocorrect="off" spellcheck="false" oninput="this.value=this.value.toLowerCase()"/>
       </div>
       <div class="form-group">
         <label class="label">Mật khẩu</label>
@@ -164,6 +164,20 @@ var _msPopup         = null;
 var _msTimer         = null;
 var _mfaUseRecovery  = false;
 
+async function loginRedirect() {
+  try {
+    var r = await fetch('/api/auth/me');
+    if (r.ok) {
+      var d = await r.json();
+      if (d.permissions && d.permissions['app_camera'] === 'read') {
+        window.location.href = '/service-home/hikvision.html';
+        return;
+      }
+    }
+  } catch(e) {}
+  window.location.href = '/';
+}
+
 // Nhận postMessage từ popup callback — khi Microsoft auth thành công (fallback)
 window.addEventListener('message', function(e) {
   if (e.origin !== window.location.origin) return;
@@ -172,7 +186,7 @@ window.addEventListener('message', function(e) {
   if (_msTimer) { clearInterval(_msTimer); _msTimer = null; }
   try { if (_msPopup && !_msPopup.closed) { _msPopup.close(); } } catch(ex) {}
   _msPopup = null;
-  window.location.href = '/';
+  loginRedirect();
 }, false);
 
 // BroadcastChannel — primary mechanism (works even when COOP nullifies window.opener)
@@ -184,7 +198,7 @@ try {
     if (_msTimer) { clearInterval(_msTimer); _msTimer = null; }
     try { if (_msPopup && !_msPopup.closed) { _msPopup.close(); } } catch(ex) {}
     _msPopup = null;
-    window.location.href = '/';
+    loginRedirect();
   };
 } catch(e) {}
 
@@ -235,7 +249,7 @@ function doMicrosoftLogin() {
 
     if (done) {
       clearInterval(_msTimer); _msTimer = null;
-      window.location.href = '/';
+      loginRedirect();
     }
   }, 500);
 }
@@ -277,7 +291,7 @@ async function doLogin(e) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username: document.getElementById('username').value.trim(),
+        username: document.getElementById('username').value.trim().toLowerCase(),
         password: document.getElementById('password').value,
         cfTurnstileToken: cfToken,
       })
@@ -300,7 +314,7 @@ async function doLogin(e) {
       document.getElementById('mfaErr').classList.remove('show');
       setTimeout(function(){ document.getElementById('mfa-code').focus(); }, 80);
     } else if (res.ok && data.success) {
-      window.location.href = '/';
+      loginRedirect();
     } else {
       err.textContent = data.error || 'Đăng nhập thất bại';
       err.classList.add('show');
@@ -337,7 +351,7 @@ async function doChangePassword() {
       _showStep('step-setup-mfa');
       doSetupMfaInit();
     } else if (res.ok && data.success) {
-      window.location.href = '/';
+      loginRedirect();
     } else if (res.status === 401) {
       err.textContent = data.error || 'Phiên hết hạn. Vui lòng đăng nhập lại.';
       err.classList.add('show');
@@ -415,7 +429,7 @@ async function doSetupMfaComplete() {
     var data = await res.json();
     if (res.ok && data.success) {
       if (data.recoveryCodes && data.recoveryCodes.length) { showSetupRecoveryCodes(data.recoveryCodes); return; }
-      window.location.href = '/';
+      loginRedirect();
     } else if (res.status === 401) {
       err.textContent = data.error || 'Phiên hết hạn. Vui lòng đăng nhập lại.';
       err.classList.add('show');
@@ -449,7 +463,7 @@ function showSetupRecoveryCodes(codes) {
   var dl = document.createElement('button'); dl.className='btn-ghost'; dl.textContent='⬇ Tải .txt'; dl.style.width='auto';
   dl.onclick=function(){ var b=new Blob([codes.join('\n')],{type:'text/plain'}); var u=URL.createObjectURL(b); var a=document.createElement('a'); a.href=u; a.download='mfa-recovery-codes.txt'; a.click(); URL.revokeObjectURL(u); };
   var go = document.createElement('button'); go.className='btn'; go.textContent='Đã lưu, vào dashboard →'; go.style.width='auto';
-  go.onclick=function(){ window.location.href='/'; };
+  go.onclick=function(){ loginRedirect(); };
   btns.appendChild(dl); btns.appendChild(go);
   box.appendChild(icon); box.appendChild(ttl); box.appendChild(warn); box.appendChild(grid); box.appendChild(btns);
   ov.appendChild(box); document.body.appendChild(ov);
@@ -506,7 +520,7 @@ async function doMfaVerify() {
     });
     var data = await res.json();
     if (res.ok && data.success) {
-      window.location.href = '/';
+      loginRedirect();
     } else if (res.status === 401) {
       err.textContent = data.error || 'Phiên hết hạn. Vui lòng đăng nhập lại.';
       err.classList.add('show');
