@@ -1439,6 +1439,12 @@ function renderUsers() {
     var emailSub = isMicrosoft
       ? '<div style="font-size:11px;color:#60a5fa;margin-top:2px;opacity:.85">'+esc(u.microsoftEmail)+'</div>'
       : '';
+    // Delegation badge: user được ủy quyền quản lý (service delegation hoặc quyền hệ thống)
+    var _sp = u.sysPerms || {};
+    var _isDelegated = ((u.canManagePerms||[]).length > 0) || _sp.addUser || _sp.systemConfig || _sp.resetMfa || _sp.blockUser;
+    var delegateBadge = (_isDelegated && !isRootAdmin)
+      ? '<span title="Được ủy quyền quản lý / quyền hệ thống" style="margin-left:6px;font-size:10px;padding:1px 7px;border-radius:10px;background:rgba(168,85,247,.15);color:#c084fc;border:1px solid rgba(168,85,247,.4)">🛡 Ủy quyền</span>'
+      : '';
     var unlockBtn = (_viewerIsAdmin && !isRootAdmin && u.locked)
       ? '<button class="btn btn-outline btn-sm" onclick="unlockUser(\''+esc(u.username)+'\')" style="color:var(--ok);border-color:color-mix(in oklch,var(--ok) 30%,transparent)">🔓 Mở khóa</button>'
       : '';
@@ -1465,7 +1471,7 @@ function renderUsers() {
         +'</div></td>';
     return '<tr>'
       +'<td><div class="user-avatar" style="width:32px;height:32px;font-size:13px;display:grid;place-items:center">'+esc((u.username||'?').charAt(0).toUpperCase())+'</div></td>'
-      +'<td><div><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span style="font-weight:600">'+esc(u.username)+'</span>'+(isRootAdmin?'<span class="chip chip-accent" style="font-size:10px">Super Admin</span>':'')+azureBadge+lockedBadge+blockedBadge+'</div>'+emailSub+'</div></td>'
+      +'<td><div><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span style="font-weight:600">'+esc(u.username)+'</span>'+(isRootAdmin?'<span class="chip chip-accent" style="font-size:10px">Super Admin</span>':'')+azureBadge+delegateBadge+lockedBadge+blockedBadge+'</div>'+emailSub+'</div></td>'
       +'<td>'+roleChip+'</td>'
       +'<td><div style="display:flex;flex-wrap:wrap;gap:4px">'+(allGroupChips||'<span style="color:var(--muted);font-size:12px">—</span>')+'</div></td>'
       +actionCell
