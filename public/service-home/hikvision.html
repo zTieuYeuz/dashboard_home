@@ -174,6 +174,40 @@ a{color:inherit;text-decoration:none}
 .cam-frame.cam-frame-fs .cam-actions{opacity:1;pointer-events:auto}
 .cam-frame.cam-frame-fs .cam-act-btn{width:40px;height:40px;font-size:19px}
 body.cam-fs-lock{overflow:hidden}
+/* ── AI Events tab ── */
+.ai-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.ai-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color .15s}
+.ai-card:hover{border-color:var(--accent)}
+.ai-noclip{cursor:default;opacity:.65}
+.ai-thumb{position:relative;width:100%;padding-top:56.25%;background:#000}
+.ai-thumb img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
+.ai-play{position:absolute;inset:0;display:grid;place-items:center;font-size:30px;color:#fff;background:rgba(0,0,0,.28);opacity:0;transition:opacity .15s}
+.ai-card:hover .ai-play{opacity:1}
+.ai-meta{padding:8px 10px}
+.ai-row{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px}
+.ai-label{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--surface-2);color:var(--text)}
+.ai-label.ai-person{background:rgba(239,68,68,.18);color:#f87171}
+.ai-label.ai-car,.ai-label.ai-truck{background:rgba(59,130,246,.18);color:#60a5fa}
+.ai-label.ai-motorcycle,.ai-label.ai-bicycle{background:rgba(168,85,247,.18);color:#c084fc}
+.ai-label.ai-dog,.ai-label.ai-cat{background:rgba(245,158,11,.18);color:#fbbf24}
+.ai-score{font-size:11px;color:var(--muted);font-family:var(--font-mono)}
+.ai-cam{font-size:12px;color:var(--text-2);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ai-time{font-size:11px;color:var(--muted);font-family:var(--font-mono)}
+.ai-empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:40px 16px;font-size:13px}
+.ai-modal{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.88);display:grid;place-items:center;padding:20px}
+.ai-modal video{max-width:100%;max-height:85vh;border-radius:8px;background:#000}
+.ai-modal-close{position:absolute;top:14px;right:18px;width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.14);border:none;color:#fff;font-size:22px;cursor:pointer;display:grid;place-items:center}
+.ai-modal-close:hover{background:rgba(255,255,255,.26)}
+/* Senior-friendly search: nút to, chữ rõ, dễ chạm */
+.ai-search{display:flex;flex-direction:column;gap:14px;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}
+.ai-fgroup{display:flex;flex-direction:column;gap:9px}
+.ai-flabel{font-size:16px;font-weight:700;color:var(--text)}
+.ai-chips{display:flex;flex-wrap:wrap;gap:9px}
+.ai-chip{font-size:15px;font-weight:600;padding:11px 18px;min-height:46px;border-radius:26px;border:2px solid var(--border);background:var(--surface-2);color:var(--text-2);cursor:pointer;transition:all .12s;line-height:1.1}
+.ai-chip:hover{border-color:var(--accent);color:var(--text)}
+.ai-chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ai-count{font-size:15px;font-weight:600;color:var(--text-2);margin-bottom:12px}
+
 /* ── Topbar override (beats global /mobile.css grid via higher specificity + !important).
    The camera page has many buttons in .topbar-right; mobile.css's grid puts brand|actions
    on one row → they overlap. Force 2 stacked rows:
@@ -199,6 +233,13 @@ body.cam-fs-lock{overflow:hidden}
   /* No hover on touch → keep camera action buttons (fullscreen) always visible */
   .cam-actions{opacity:1;pointer-events:auto}
   .cam-act-btn{width:34px;height:34px;font-size:16px}
+  /* AI events: 2 cột trên điện thoại + nút play luôn hiện (touch không hover) */
+  .ai-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .ai-play{opacity:1;background:rgba(0,0,0,.15);font-size:24px}
+  .ai-modal{padding:8px}
+  /* Search chip to hơn trên điện thoại cho người lớn tuổi dễ chạm */
+  .ai-chip{font-size:16px;padding:13px 20px;min-height:50px;flex:1 1 auto;justify-content:center;text-align:center}
+  .ai-flabel{font-size:17px}
   /* NOTE: topbar layout is handled in the @media(max-width:768px) block above so it can
      override the global /mobile.css grid (which loads later with !important). */
 
@@ -253,6 +294,7 @@ body.cam-fs-lock{overflow:hidden}
     <span class="btn ghost" id="status-badge" style="pointer-events:none;font-family:var(--font-mono);font-size:12px">—</span>
     <button class="btn" id="tab-live-btn" onclick="switchTab('live')">▶ Live</button>
     <button class="btn" id="tab-rec-btn" onclick="switchTab('rec')">📼 Playback</button>
+    <button class="btn" id="tab-ai-btn" onclick="switchTab('ai')">🤖 Sự kiện AI</button>
     <button class="btn ghost" id="ctrl-all-on" onclick="setAll(true)">Bật tất cả</button>
     <button class="btn ghost" id="ctrl-all-off" onclick="setAll(false)">Tắt tất cả</button>
     <div class="clock" id="clock">--:--:--</div>
@@ -348,6 +390,42 @@ body.cam-fs-lock{overflow:hidden}
   </div>
 </div>
 
+<!-- ── AI Events Panel (search dễ dùng cho người lớn tuổi) ── -->
+<div class="page hidden" id="panel-ai">
+  <div class="ai-search">
+    <div class="ai-fgroup">
+      <div class="ai-flabel">🕐 Xem lúc nào?</div>
+      <div class="ai-chips" id="ai-when">
+        <button class="ai-chip active" data-when="today" onclick="aiPick('ai-when',this)">Hôm nay</button>
+        <button class="ai-chip" data-when="yesterday" onclick="aiPick('ai-when',this)">Hôm qua</button>
+        <button class="ai-chip" data-when="7d" onclick="aiPick('ai-when',this)">7 ngày qua</button>
+        <button class="ai-chip" data-when="all" onclick="aiPick('ai-when',this)">Tất cả</button>
+      </div>
+    </div>
+    <div class="ai-fgroup">
+      <div class="ai-flabel">🔍 Tìm gì?</div>
+      <div class="ai-chips" id="ai-what">
+        <button class="ai-chip active" data-what="" onclick="aiPick('ai-what',this)">Tất cả</button>
+        <button class="ai-chip" data-what="person" onclick="aiPick('ai-what',this)">👤 Người</button>
+        <button class="ai-chip" data-what="car,truck,motorcycle,bicycle" onclick="aiPick('ai-what',this)">🚗 Xe cộ</button>
+        <button class="ai-chip" data-what="dog,cat" onclick="aiPick('ai-what',this)">🐕 Thú cưng</button>
+      </div>
+    </div>
+    <div class="ai-fgroup">
+      <div class="ai-flabel">📷 Camera nào?</div>
+      <div class="ai-chips" id="ai-where"></div>
+    </div>
+  </div>
+  <div class="ai-count" id="ai-count"></div>
+  <div class="ai-grid" id="ai-grid"></div>
+</div>
+
+<!-- ── AI Event clip modal ── -->
+<div class="ai-modal hidden" id="ai-modal" onclick="if(event.target===this)closeEventModal()">
+  <button class="ai-modal-close" onclick="closeEventModal()">✕</button>
+  <video id="ai-modal-video" controls playsinline></video>
+</div>
+
 
 <script>
 /* ── Auth ── */
@@ -388,14 +466,17 @@ function switchTab(tab){
   currentTab = tab;
   document.getElementById('panel-live').classList.toggle('hidden', tab!=='live');
   document.getElementById('panel-rec').classList.toggle('hidden', tab!=='rec');
+  var pai=document.getElementById('panel-ai'); if(pai) pai.classList.toggle('hidden', tab!=='ai');
   document.getElementById('ctrl-all-on').style.display = tab==='live' ? '' : 'none';
   document.getElementById('ctrl-all-off').style.display = tab==='live' ? '' : 'none';
   document.getElementById('tab-live-btn').classList.toggle('active', tab==='live');
   document.getElementById('tab-rec-btn').classList.toggle('active', tab==='rec');
+  var ab=document.getElementById('tab-ai-btn'); if(ab) ab.classList.toggle('active', tab==='ai');
 
   var badge=document.getElementById('status-badge');
   if(tab==='live') { badge.style.display=''; updateBadge(); syncSnapChains(); }
   else { badge.style.display='none'; syncSnapChains(); }
+  if(tab==='ai') loadAIEvents();
 }
 
 /* ── Load cameras ── */
@@ -621,6 +702,149 @@ function buildRecCamSelector(){
   buildHourLabels();
   initDp();
   fetchRecordingSummary();
+  buildAISelectors();
+}
+
+/* ── AI Events ── */
+var _aiEvents = [], _aiLoading = false;
+var _LABEL_VI = {person:'Người',car:'Xe hơi',truck:'Xe tải',motorcycle:'Xe máy',bicycle:'Xe đạp',dog:'Chó',cat:'Mèo',bird:'Chim'};
+
+function buildAISelectors(){
+  var w=document.getElementById('ai-where');
+  if(!w) return;
+  w.innerHTML='<button class="ai-chip active" data-where="" onclick="aiPick(\'ai-where\',this)">Tất cả</button>'
+    +CAMERAS.filter(function(c){return c.src!==null;}).map(function(c){
+      return '<button class="ai-chip" data-where="'+escHtml(c.src)+'" onclick="aiPick(\'ai-where\',this)">'+escHtml(displayName(c))+'</button>';
+    }).join('');
+}
+
+function _aiCamName(src){
+  var c=CAMERAS.find(function(x){return x.src===src;});
+  return c?displayName(c):src;
+}
+
+/* Chọn 1 nút trong nhóm → bỏ active các nút khác, rồi tải lại */
+function aiPick(groupId, btn){
+  var g=document.getElementById(groupId);
+  if(g){ Array.prototype.forEach.call(g.querySelectorAll('.ai-chip'),function(b){ b.classList.remove('active'); }); }
+  btn.classList.add('active');
+  loadAIEvents();
+}
+function _aiVal(groupId, attr){
+  var g=document.getElementById(groupId);
+  var b=g&&g.querySelector('.ai-chip.active');
+  return b?(b.getAttribute(attr)||''):'';
+}
+
+/* Giờ thân thiện: "Hôm nay 14:30", "Hôm qua 09:15", "13/06 22:40" */
+function _aiFriendlyTime(ts){
+  var d=new Date(ts*1000), now=new Date();
+  var hm=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+  function ymd(x){return x.getFullYear()+'-'+x.getMonth()+'-'+x.getDate();}
+  var yest=new Date(now.getFullYear(),now.getMonth(),now.getDate()-1);
+  if(ymd(d)===ymd(now)) return 'Hôm nay '+hm;
+  if(ymd(d)===ymd(yest)) return 'Hôm qua '+hm;
+  return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+' '+hm;
+}
+
+function loadAIEvents(){
+  if(_aiLoading) return;
+  var grid=document.getElementById('ai-grid');
+  if(!grid) return;
+  _aiLoading=true;
+  var cnt=document.getElementById('ai-count'); if(cnt) cnt.textContent='';
+  grid.innerHTML='<div class="ai-empty">Đang tìm…</div>';
+
+  var when=_aiVal('ai-when','data-when')||'today';
+  var what=_aiVal('ai-what','data-what');
+  var where=_aiVal('ai-where','data-where');
+  var cams=where || CAMERAS.filter(function(c){return c.src;}).map(function(c){return c.src;}).join(',');
+
+  var qs='limit=200&include_thumbnails=0';
+  if(cams) qs+='&cameras='+encodeURIComponent(cams);
+  if(what) qs+='&labels='+encodeURIComponent(what);
+  // Khoảng thời gian (giờ địa phương)
+  var now=new Date();
+  var start=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  if(when==='today'){ qs+='&after='+Math.floor(start.getTime()/1000); }
+  else if(when==='yesterday'){
+    var ys=new Date(now.getFullYear(),now.getMonth(),now.getDate()-1);
+    qs+='&after='+Math.floor(ys.getTime()/1000)+'&before='+Math.floor(start.getTime()/1000);
+  }
+  else if(when==='7d'){ qs+='&after='+Math.floor((now.getTime()/1000)-7*86400); }
+  // 'all' → không lọc thời gian
+
+  fetch('/cam-home/api/events?'+qs,{cache:'no-store'})
+    .then(function(r){ return r.ok?r.json():Promise.reject(r.status); })
+    .then(function(d){ _aiEvents=d||[]; renderAIEvents(); })
+    .catch(function(){ grid.innerHTML='<div class="ai-empty">Không tải được sự kiện AI 😕</div>'; })
+    .finally(function(){ _aiLoading=false; });
+}
+
+function renderAIEvents(){
+  var grid=document.getElementById('ai-grid');
+  if(!grid) return;
+  var cnt=document.getElementById('ai-count');
+  if(!_aiEvents.length){
+    if(cnt) cnt.textContent='';
+    grid.innerHTML='<div class="ai-empty">Không tìm thấy gì trong khoảng này 🙂<br>Thử chọn "7 ngày qua" hoặc "Tất cả".</div>';
+    return;
+  }
+  if(cnt) cnt.textContent='Tìm thấy '+_aiEvents.length+' sự kiện';
+  grid.innerHTML=_aiEvents.map(function(e){
+    var timeStr=_aiFriendlyTime(e.start_time);
+    var label=_LABEL_VI[e.label]||e.label;
+    var sc=(e.data&&e.data.top_score)||e.top_score||0;
+    var score=sc?Math.round(sc*100)+'%':'';
+    var thumb='/cam-home/api/events/'+encodeURIComponent(e.id)+'/thumbnail.jpg';
+    var canPlay=!!e.has_clip;
+    return '<div class="ai-card'+(canPlay?'':' ai-noclip')+'"'+(canPlay?' onclick="openEventClip(\''+e.id+'\')"':'')+'>'
+      +'<div class="ai-thumb"><img loading="lazy" src="'+thumb+'" alt="">'+(canPlay?'<div class="ai-play">▶</div>':'')+'</div>'
+      +'<div class="ai-meta">'
+        +'<div class="ai-row"><span class="ai-label ai-'+escHtml(e.label)+'">'+escHtml(label)+'</span>'+(score?'<span class="ai-score">'+score+'</span>':'')+'</div>'
+        +'<div class="ai-cam">📷 '+escHtml(_aiCamName(e.camera))+'</div>'
+        +'<div class="ai-time">'+timeStr+'</div>'
+      +'</div></div>';
+  }).join('');
+}
+
+var _aiHls=null;
+function _aiCleanupHls(){ if(_aiHls){ try{_aiHls.destroy();}catch(e){} _aiHls=null; } }
+
+function openEventClip(id){
+  var ev=_aiEvents.find(function(e){return String(e.id)===String(id);});
+  var ov=document.getElementById('ai-modal'), vid=document.getElementById('ai-modal-video');
+  if(!ov||!vid) return;
+  ov.classList.remove('hidden');
+  _aiCleanupHls();
+  /* Phát qua HLS (giống tab Playback) → chạy được trên điện thoại; MP4 clip.mp4
+     của Frigate hay lỗi trên iOS/Chrome mobile (moov atom cuối / audio lạ). */
+  if(ev && ev.camera && ev.start_time){
+    var st=Math.floor(ev.start_time)-1;                          // vào sớm 1s
+    var et=Math.ceil(ev.end_time||(ev.start_time+30))+1;         // event đang diễn ra → +30s
+    var hlsUrl='/cam-home/vod/'+encodeURIComponent(ev.camera)+'/start/'+st+'/end/'+et+'/master.m3u8';
+    if(vid.canPlayType('application/vnd.apple.mpegurl')){        // iOS/Safari: HLS native
+      vid.src=hlsUrl; vid.load(); vid.play().catch(function(){});
+      return;
+    }
+    if(window.Hls && Hls.isSupported()){                          // Chrome/Android: hls.js
+      _aiHls=new Hls({maxBufferLength:30});
+      _aiHls.loadSource(hlsUrl);
+      _aiHls.attachMedia(vid);
+      _aiHls.on(Hls.Events.MANIFEST_PARSED,function(){ vid.play().catch(function(){}); });
+      return;
+    }
+  }
+  /* Fallback cuối: MP4 clip (PC) */
+  vid.src='/cam-home/api/events/'+encodeURIComponent(id)+'/clip.mp4';
+  vid.play().catch(function(){});
+}
+function closeEventModal(){
+  var ov=document.getElementById('ai-modal'), vid=document.getElementById('ai-modal-video');
+  if(!ov||!vid) return;
+  _aiCleanupHls();
+  try{ vid.pause(); vid.removeAttribute('src'); vid.load(); }catch(e){}
+  ov.classList.add('hidden');
 }
 
 var availableDates=[];
@@ -1460,6 +1684,31 @@ document.addEventListener('visibilitychange',function(){
     syncSnapChains(); /* phát lại các camera đang ON */
   }
 });
+
+/* ── Watchdog: tự khôi phục stream bị treo ──
+   Player go2rtc trong iframe có lúc đứng hình mà không tự kết nối lại (hay gặp với
+   camera yếu/khác hãng như cam07). Cứ vài giây kiểm tra <video> trong từng iframe:
+   nếu currentTime không nhích trong >8s → coi như treo → nạp lại iframe để reconnect. */
+var _camWatch = {};
+function _resetWatch(id){ if(_camWatch[id]) _camWatch[id]={t:-1,since:Date.now(),n:0}; }
+setInterval(function(){
+  if(document.hidden || currentTab!=='live') return;
+  CAMERAS.forEach(function(c){
+    if(!c.src || !state[c.id]) { delete _camWatch[c.id]; return; }
+    var ifr=document.getElementById('cam-iframe-'+c.id);
+    if(!ifr || !ifr.src || ifr.src.indexOf('about:blank')!==-1){ delete _camWatch[c.id]; return; }
+    var vid=null;
+    try{ var d=ifr.contentDocument; vid=d&&d.querySelector('video'); }catch(e){ return; }
+    var w=_camWatch[c.id]||(_camWatch[c.id]={t:-1,since:Date.now(),n:0});
+    var t=(vid&&!isNaN(vid.currentTime))?vid.currentTime:0;
+    if(vid && t>w.t+0.05){           /* hình đang chạy → ok */
+      w.t=t; w.since=Date.now();
+    } else if(Date.now()-w.since>8000){ /* đứng hình >8s → nạp lại iframe */
+      ifr.src='/cam-live/stream.html?src='+encodeURIComponent(c.src)+'&mode='+_CAM_MODE+'&_r='+Date.now();
+      w.t=-1; w.since=Date.now(); w.n++;
+    }
+  });
+},3000);
 
 /* ── Theme ── */
 (function initTheme(){
