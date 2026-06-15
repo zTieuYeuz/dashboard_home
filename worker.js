@@ -2390,6 +2390,31 @@ async function handleSetupMfaComplete(request, env) {
   return await _createSessionAfterSetup(temp.username, user, env, ip, { recoveryCodes });
 }
 
+/* Shared dark/light theme toggle — injected into EVERY authenticated page so the
+   control is consistent everywhere. Hides any per-page #themeToggle (topbars vary
+   between pages) and shows one uniform floating button instead. Theme is stored in
+   localStorage 'dh_theme' and applied early (in <head>) to avoid flash. */
+const THEME_TOGGLE = `<style>
+#themeToggle{display:none!important}
+#__themeFab{position:fixed;left:16px;bottom:16px;z-index:2147483000;width:34px;height:34px;border-radius:50%;
+ border:1px solid rgba(255,255,255,.18);background:rgba(20,20,30,.72);color:#fff;font-size:16px;cursor:pointer;
+ display:grid;place-items:center;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:0 4px 16px rgba(0,0,0,.4);transition:all .15s;padding:0;line-height:1}
+#__themeFab:hover{border-color:#8fb3ff;box-shadow:0 6px 20px rgba(30,60,130,.5)}
+html[data-theme=light] #__themeFab{background:rgba(255,255,255,.88);color:#1a1a1a;border-color:rgba(0,0,0,.15)}
+@media(max-width:768px){#__themeFab{width:40px;height:40px;font-size:18px}}
+</style>
+<button id="__themeFab" type="button" title="Chế độ Sáng / Tối" aria-label="Chuyển Sáng/Tối"></button>
+<script>(function(){
+ if(window.__themeFabInit)return;window.__themeFabInit=1;
+ function cur(){return document.documentElement.dataset.theme==='light'?'light':'dark';}
+ function icon(){return cur()==='light'?'🌙':'☀️';}
+ var b=document.getElementById('__themeFab');
+ function paint(){if(b)b.textContent=icon();}
+ function toggle(){var n=cur()==='light'?'dark':'light';document.documentElement.dataset.theme=n;try{localStorage.setItem('dh_theme',n);}catch(e){}paint();}
+ if(b)b.addEventListener('click',toggle);
+ paint();
+})();<\/script>`;
+
 /* Shared "Wayfinding" quick-switcher — injected into every authenticated page.
    Lets users jump tool→tool and search without bouncing through the homepage.
    Self-contained, namespaced (wf-), never touches page/map code. */
@@ -2690,7 +2715,9 @@ function applyMobilePatch(html, isMobile) {
   const head = '<link rel="stylesheet" href="/mobile.css">'
     + '<meta name="apple-mobile-web-app-capable" content="yes">'
     + '<meta name="mobile-web-app-capable" content="yes">'
-    + '<meta name="apple-mobile-web-app-status-bar-style" content="black">';
+    + '<meta name="apple-mobile-web-app-status-bar-style" content="black">'
+    // Apply saved theme ASAP (before first paint) so there is no light/dark flash.
+    + '<script>try{var _t=localStorage.getItem("dh_theme");if(_t==="light"||_t==="dark")document.documentElement.dataset.theme=_t;}catch(e){}</' + 'script>';
   html = /<\/head>/i.test(html)
     ? html.replace(/<\/head>/i, head + '\n</head>')
     : head + html;
@@ -2933,7 +2960,7 @@ a:hover{background:#4f46e5}</style></head>
   let newHtml = /<\/head>/i.test(htmlPatched)
     ? htmlPatched.replace(/<\/head>/i, userScript + '\n</head>')
     : htmlPatched.replace(/<body/i, userScript + '\n<body');
-  const bodyEnd = WAYFIND_NAV + DATA_REFRESH + PANEL_REFRESH;
+  const bodyEnd = WAYFIND_NAV + THEME_TOGGLE + DATA_REFRESH + PANEL_REFRESH;
   newHtml = /<\/body>/i.test(newHtml)
     ? newHtml.replace(/<\/body>/i, bodyEnd + '\n</body>')
     : newHtml + bodyEnd;

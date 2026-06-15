@@ -29,3 +29,7 @@ wrangler.staging.toml
 
 # n8n workflow JSONs — chứa credentials ESXi, không commit
 n8n-workflows/
+frigate-config.yml
+frigate-config-ai.yml
+RUSTDESK-GUIDE.md
+
