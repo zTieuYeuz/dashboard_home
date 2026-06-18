@@ -80,6 +80,7 @@ a{color:inherit;text-decoration:none}
 .cam-frame iframe,.cam-frame img.cam-snap,.cam-frame video.cam-snap{position:absolute;top:0;left:0;width:100%;height:100%;border:none;object-fit:cover}
 .cam-frame img.cam-snap,.cam-frame video.cam-snap{background:#000;cursor:pointer}
 .live-badge{position:absolute;top:6px;left:8px;font-size:10px;font-weight:700;font-family:var(--font-mono);color:#fff;background:rgba(220,40,40,.82);padding:2px 7px;border-radius:20px;pointer-events:none;letter-spacing:.4px}
+.live-face-badge{position:absolute;bottom:8px;left:8px;font-size:12px;font-weight:600;color:#fff;background:rgba(0,0,0,.72);padding:3px 10px;border-radius:20px;pointer-events:none;backdrop-filter:blur(4px);border:1px solid rgba(74,222,128,.4);transition:opacity .3s}
 .cam-overlay{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
 .cam-overlay.paused{background:var(--bg)}
 .cam-overlay.unconfigured{background:var(--card)}
@@ -193,6 +194,31 @@ body.cam-fs-lock{overflow:hidden}
 .ai-score{font-size:11px;color:var(--muted);font-family:var(--font-mono)}
 .ai-cam{font-size:12px;color:var(--text-2);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ai-time{font-size:11px;color:var(--muted);font-family:var(--font-mono)}
+.ai-face-result{font-size:11px;color:var(--ok);font-weight:600;margin-bottom:3px;min-height:15px}
+.ai-face-result.stranger{color:var(--warn)}
+.ai-name-btn{font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:5px;background:var(--surface-2);color:var(--text-2);cursor:pointer;flex-shrink:0}
+.ai-name-btn:hover{border-color:var(--accent);color:var(--accent)}
+.face-modal{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.88);display:grid;place-items:center;padding:20px}
+.face-modal-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px}
+.face-modal-box h3{font-size:15px;font-weight:600}
+.face-modal-box img{width:100%;border-radius:8px;object-fit:cover;max-height:200px}
+.face-modal-input{padding:9px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);font:inherit;color:var(--text);font-size:14px;outline:none}
+.face-modal-input:focus{border-color:var(--accent)}
+.face-modal-status{font-size:12px;color:var(--muted);min-height:16px}
+.face-modal-actions{display:flex;gap:8px}
+.face-modal-actions .btn{flex:1;justify-content:center}
+.ai-subtabs{display:flex;gap:6px;margin-bottom:14px}
+.ai-subtab{font-size:13px;font-weight:500;padding:6px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);cursor:pointer;transition:all .12s}
+.ai-subtab.active{color:var(--accent);border-color:color-mix(in oklch,var(--accent) 40%,transparent);background:color-mix(in oklch,var(--accent) 10%,transparent)}
+.face-reg-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.face-reg-thumb{position:relative;width:100%;padding-top:56.25%;background:#000}
+.face-reg-thumb img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
+.face-reg-name{position:absolute;bottom:6px;left:8px;font-size:13px;font-weight:700;color:#fff;background:rgba(0,0,0,.7);padding:2px 8px;border-radius:20px}
+.face-reg-meta{padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.face-reg-actions{display:flex;gap:6px}
+.face-reg-btn{flex:1;font-size:12px;padding:5px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);cursor:pointer;transition:all .12s;text-align:center}
+.face-reg-btn:hover{border-color:var(--accent);color:var(--accent)}
+.face-reg-btn.del:hover{border-color:var(--bad);color:var(--bad)}
 .ai-empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:40px 16px;font-size:13px}
 .ai-modal{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.88);display:grid;place-items:center;padding:20px}
 .ai-modal video{max-width:100%;max-height:85vh;border-radius:8px;background:#000}
@@ -207,6 +233,23 @@ body.cam-fs-lock{overflow:hidden}
 .ai-chip:hover{border-color:var(--accent);color:var(--text)}
 .ai-chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .ai-count{font-size:15px;font-weight:600;color:var(--text-2);margin-bottom:12px}
+/* AI Calendar */
+.ai-cal-hdr{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.ai-cal-nav{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px;padding:5px 12px;cursor:pointer}
+.ai-cal-nav:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ai-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;max-width:320px}
+.ai-cal-dow{text-align:center;font-size:12px;font-weight:700;color:var(--text-2);padding:4px 0}
+.ai-cal-cell{position:relative;text-align:center;padding:6px 2px 10px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:var(--text);min-height:36px}
+.ai-cal-cell:hover{background:var(--surface-2)}
+.ai-cal-cell.today{color:var(--accent);border:2px solid var(--accent)}
+.ai-cal-cell.selected{background:var(--accent);color:#fff}
+.ai-cal-cell.empty{cursor:default}
+.ai-cal-cell.other-month{color:var(--text-2);opacity:.4;cursor:default}
+.ai-cal-dot{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.ai-cal-cell.selected .ai-cal-dot{background:#fff}
+.ai-cal-time{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;font-size:14px;color:var(--text-2)}
+.ai-cal-time input[type=time]{font-size:15px;padding:6px 10px;border-radius:8px;border:2px solid var(--border);background:var(--surface-2);color:var(--text);cursor:pointer}
+.ai-cal-time input[type=time]:focus{border-color:var(--accent);outline:none}
 
 /* ── Topbar override (beats global /mobile.css grid via higher specificity + !important).
    The camera page has many buttons in .topbar-right; mobile.css's grid puts brand|actions
@@ -392,6 +435,15 @@ body.cam-fs-lock{overflow:hidden}
 
 <!-- ── AI Events Panel (search dễ dùng cho người lớn tuổi) ── -->
 <div class="page hidden" id="panel-ai">
+  <div class="ai-subtabs">
+    <button class="ai-subtab active" id="aisub-events-btn" onclick="switchAiSub('events')">🤖 Sự kiện</button>
+    <button class="ai-subtab" id="aisub-face-btn" onclick="switchAiSub('face')">👤 Nhận Diện</button>
+  </div>
+  <div id="aisub-face" class="hidden">
+    <div class="ai-count" id="face-reg-count"></div>
+    <div class="ai-grid" id="face-reg-grid"></div>
+  </div>
+  <div id="aisub-events">
   <div class="ai-search">
     <div class="ai-fgroup">
       <div class="ai-flabel">🕐 Xem lúc nào?</div>
@@ -400,6 +452,25 @@ body.cam-fs-lock{overflow:hidden}
         <button class="ai-chip" data-when="yesterday" onclick="aiPick('ai-when',this)">Hôm qua</button>
         <button class="ai-chip" data-when="7d" onclick="aiPick('ai-when',this)">7 ngày qua</button>
         <button class="ai-chip" data-when="all" onclick="aiPick('ai-when',this)">Tất cả</button>
+        <button class="ai-chip" data-when="custom" onclick="aiPickCustomDate(this)">📅 Chọn ngày</button>
+      </div>
+      <div id="ai-date-row" style="display:none;margin-top:12px">
+        <!-- Calendar header -->
+        <div class="ai-cal-hdr">
+          <button class="ai-cal-nav" onclick="aiCalPrevMonth()">◀</button>
+          <span id="ai-cal-title" style="font-size:16px;font-weight:700;color:var(--text)"></span>
+          <button class="ai-cal-nav" onclick="aiCalNextMonth()">▶</button>
+        </div>
+        <!-- Day-of-week labels -->
+        <div class="ai-cal-grid" id="ai-cal-grid"></div>
+        <!-- Time range -->
+        <div class="ai-cal-time">
+          <span>Từ</span>
+          <input type="time" id="ai-time-from" value="00:00" onchange="aiCalTimeChanged()">
+          <span>đến</span>
+          <input type="time" id="ai-time-to" value="23:59" onchange="aiCalTimeChanged()">
+        </div>
+        <div id="ai-cal-selected-label" style="margin-top:6px;font-size:14px;color:var(--text-2)"></div>
       </div>
     </div>
     <div class="ai-fgroup">
@@ -415,15 +486,39 @@ body.cam-fs-lock{overflow:hidden}
       <div class="ai-flabel">📷 Camera nào?</div>
       <div class="ai-chips" id="ai-where"></div>
     </div>
+    <div class="ai-fgroup">
+      <div class="ai-flabel">📊 Hiển thị bao nhiêu?</div>
+      <div class="ai-chips" id="ai-limit">
+        <button class="ai-chip" data-limit="200" onclick="aiPick('ai-limit',this)">200</button>
+        <button class="ai-chip" data-limit="500" onclick="aiPick('ai-limit',this)">500</button>
+        <button class="ai-chip active" data-limit="1000" onclick="aiPick('ai-limit',this)">1000</button>
+        <button class="ai-chip" data-limit="9999" onclick="aiPick('ai-limit',this)">Tất cả</button>
+      </div>
+    </div>
   </div>
   <div class="ai-count" id="ai-count"></div>
   <div class="ai-grid" id="ai-grid"></div>
+  </div><!-- end aisub-events -->
 </div>
 
 <!-- ── AI Event clip modal ── -->
 <div class="ai-modal hidden" id="ai-modal" onclick="if(event.target===this)closeEventModal()">
   <button class="ai-modal-close" onclick="closeEventModal()">✕</button>
   <video id="ai-modal-video" controls playsinline></video>
+</div>
+
+<!-- ── Face Training modal ── -->
+<div class="face-modal hidden" id="face-modal" onclick="if(event.target===this)closeFaceModal()">
+  <div class="face-modal-box">
+    <h3>👤 Đặt tên khuôn mặt</h3>
+    <img id="face-modal-img" src="" alt="snapshot"/>
+    <input class="face-modal-input" id="face-modal-name" type="text" placeholder="Nhập tên (Ba, Mẹ, Anh...)" maxlength="40" onkeydown="if(event.key==='Enter')submitFaceTrain()"/>
+    <div class="face-modal-status" id="face-modal-status"></div>
+    <div class="face-modal-actions">
+      <button class="btn" onclick="closeFaceModal()">Hủy</button>
+      <button class="btn active" onclick="submitFaceTrain()">Lưu</button>
+    </div>
+  </div>
 </div>
 
 
@@ -474,8 +569,8 @@ function switchTab(tab){
   var ab=document.getElementById('tab-ai-btn'); if(ab) ab.classList.toggle('active', tab==='ai');
 
   var badge=document.getElementById('status-badge');
-  if(tab==='live') { badge.style.display=''; updateBadge(); syncSnapChains(); }
-  else { badge.style.display='none'; syncSnapChains(); }
+  if(tab==='live') { badge.style.display=''; updateBadge(); syncSnapChains(); startLiveRecognition(); }
+  else { badge.style.display='none'; syncSnapChains(); stopLiveRecognition(); }
   if(tab==='ai') loadAIEvents();
 }
 
@@ -552,7 +647,8 @@ function render(){
         +'<div class="cam-actions">'
         +'<button class="cam-act-btn" onclick="camFullscreen(\''+c.id+'\')" title="Phóng lớn">⛶</button>'
         +'</div>'
-        +'<div class="live-badge">● LIVE</div>';
+        +'<div class="live-badge">● LIVE</div>'
+        +'<div id="live-face-'+c.id+'" class="live-face-badge hidden"></div>';
     } else {
       /* Paused: show last snapshot underneath + always-visible overlay */
       var snapUrl='/cam-home/api/'+encodeURIComponent(c.src)+'/latest.jpg';
@@ -731,8 +827,98 @@ function aiPick(groupId, btn){
   var g=document.getElementById(groupId);
   if(g){ Array.prototype.forEach.call(g.querySelectorAll('.ai-chip'),function(b){ b.classList.remove('active'); }); }
   btn.classList.add('active');
+  // Ẩn date picker khi chọn chip khác trong ai-when
+  if(groupId==='ai-when') document.getElementById('ai-date-row').style.display='none';
   loadAIEvents();
 }
+
+/* ── AI Calendar ── */
+var _aiCalYear=0, _aiCalMonth=0, _aiCalSelected='', _aiCalDots={};
+var _MONTHS_VI=['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
+var _DOW_VI=['CN','T2','T3','T4','T5','T6','T7'];
+
+function aiPickCustomDate(btn){
+  var g=document.getElementById('ai-when');
+  if(g){ Array.prototype.forEach.call(g.querySelectorAll('.ai-chip'),function(b){ b.classList.remove('active'); }); }
+  btn.classList.add('active');
+  var row=document.getElementById('ai-date-row');
+  row.style.display='block';
+  if(!_aiCalYear){
+    var now=new Date();
+    _aiCalYear=now.getFullYear(); _aiCalMonth=now.getMonth();
+  }
+  aiCalFetchDotsAndRender();
+}
+
+function aiCalPrevMonth(){
+  _aiCalMonth--; if(_aiCalMonth<0){_aiCalMonth=11;_aiCalYear--;}
+  aiCalFetchDotsAndRender();
+}
+function aiCalNextMonth(){
+  _aiCalMonth++; if(_aiCalMonth>11){_aiCalMonth=0;_aiCalYear++;}
+  aiCalFetchDotsAndRender();
+}
+
+function aiCalFetchDotsAndRender(){
+  var key=_aiCalYear+'-'+_aiCalMonth;
+  if(_aiCalDots[key]!==undefined){ aiRenderCalendar(); return; }
+  // Fetch events cho tháng này để lấy ngày có sự kiện
+  var start=new Date(_aiCalYear,_aiCalMonth,1);
+  var end=new Date(_aiCalYear,_aiCalMonth+1,1);
+  var qs='limit=9999&include_thumbnails=0&after='+Math.floor(start/1000)+'&before='+Math.floor(end/1000);
+  fetch('/cam-home/api/events?'+qs,{cache:'no-store'})
+    .then(function(r){return r.ok?r.json():[];})
+    .then(function(evs){
+      var dots={};
+      (evs||[]).forEach(function(e){
+        var d=new Date(e.start_time*1000);
+        var dk=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+        dots[dk]=true;
+      });
+      _aiCalDots[key]=dots;
+      aiRenderCalendar();
+    })
+    .catch(function(){ _aiCalDots[key]={}; aiRenderCalendar(); });
+}
+
+function aiRenderCalendar(){
+  var title=document.getElementById('ai-cal-title');
+  if(title) title.textContent=_MONTHS_VI[_aiCalMonth]+' '+_aiCalYear;
+  var grid=document.getElementById('ai-cal-grid');
+  if(!grid) return;
+  var key=_aiCalYear+'-'+_aiCalMonth;
+  var dots=_aiCalDots[key]||{};
+  var now=new Date();
+  var todayStr=now.getFullYear()+'-'+(now.getMonth()+1)+'-'+now.getDate();
+  // Header days-of-week (bắt đầu CN)
+  var html=_DOW_VI.map(function(d){return '<div class="ai-cal-dow">'+d+'</div>';}).join('');
+  // Ngày đầu tháng bắt đầu thứ mấy (0=CN)
+  var firstDay=new Date(_aiCalYear,_aiCalMonth,1).getDay();
+  // Ô trống đầu tháng
+  for(var i=0;i<firstDay;i++) html+='<div class="ai-cal-cell empty"></div>';
+  // Các ngày trong tháng
+  var daysInMonth=new Date(_aiCalYear,_aiCalMonth+1,0).getDate();
+  for(var d=1;d<=daysInMonth;d++){
+    var dk=_aiCalYear+'-'+(_aiCalMonth+1)+'-'+d;
+    var cls='ai-cal-cell';
+    if(dk===todayStr) cls+=' today';
+    if(dk===_aiCalSelected) cls+=' selected';
+    var dot=dots[dk]?'<div class="ai-cal-dot"></div>':'';
+    var label=('0'+d).slice(-2)+'/'+('0'+(_aiCalMonth+1)).slice(-2)+'/'+_aiCalYear;
+    html+='<div class="'+cls+'" onclick="aiCalSelectDay(\''+dk+'\',\''+label+'\')" title="'+label+'">'+d+dot+'</div>';
+  }
+  grid.innerHTML=html;
+}
+
+function aiCalSelectDay(dk, label){
+  _aiCalSelected=dk;
+  aiRenderCalendar();
+  var lbl=document.getElementById('ai-cal-selected-label');
+  if(lbl) lbl.textContent='Đã chọn: '+label;
+  loadAIEvents();
+}
+
+function aiCalTimeChanged(){ if(_aiCalSelected) loadAIEvents(); }
 function _aiVal(groupId, attr){
   var g=document.getElementById(groupId);
   var b=g&&g.querySelector('.ai-chip.active');
@@ -762,8 +948,10 @@ function loadAIEvents(){
   var what=_aiVal('ai-what','data-what');
   var where=_aiVal('ai-where','data-where');
   var cams=where || CAMERAS.filter(function(c){return c.src;}).map(function(c){return c.src;}).join(',');
+  var limitVal=_aiVal('ai-limit','data-limit')||'1000';
+  var limit=parseInt(limitVal)||1000;
 
-  var qs='limit=200&include_thumbnails=0';
+  var qs='limit='+limit+'&include_thumbnails=0';
   if(cams) qs+='&cameras='+encodeURIComponent(cams);
   if(what) qs+='&labels='+encodeURIComponent(what);
   // Khoảng thời gian (giờ địa phương)
@@ -775,6 +963,17 @@ function loadAIEvents(){
     qs+='&after='+Math.floor(ys.getTime()/1000)+'&before='+Math.floor(start.getTime()/1000);
   }
   else if(when==='7d'){ qs+='&after='+Math.floor((now.getTime()/1000)-7*86400); }
+  else if(when==='custom'){
+    if(_aiCalSelected){
+      var parts=_aiCalSelected.split('-');
+      var yr=parseInt(parts[0]),mo=parseInt(parts[1])-1,dy=parseInt(parts[2]);
+      var fromT=(document.getElementById('ai-time-from').value||'00:00').split(':');
+      var toT=(document.getElementById('ai-time-to').value||'23:59').split(':');
+      var dpFrom=new Date(yr,mo,dy,parseInt(fromT[0]),parseInt(fromT[1]),0);
+      var dpTo=new Date(yr,mo,dy,parseInt(toT[0]),parseInt(toT[1]),59);
+      qs+='&after='+Math.floor(dpFrom.getTime()/1000)+'&before='+Math.floor(dpTo.getTime()/1000);
+    }
+  }
   // 'all' → không lọc thời gian
 
   fetch('/cam-home/api/events?'+qs,{cache:'no-store'})
@@ -801,14 +1000,25 @@ function renderAIEvents(){
     var score=sc?Math.round(sc*100)+'%':'';
     var thumb='/cam-home/api/events/'+encodeURIComponent(e.id)+'/thumbnail.jpg';
     var canPlay=!!e.has_clip;
+    var isPerson=e.label==='person';
+    var cached=_faceCache[e.id];
+    var faceHtml=cached?('<div class="ai-face-result'+(cached==='?'?' stranger':'')+'" id="ai-face-'+escHtml(e.id)+'">'+escHtml(cached==='?'?'Người lạ':cached)+'</div>'):'<div class="ai-face-result" id="ai-face-'+escHtml(e.id)+'"></div>';
     return '<div class="ai-card'+(canPlay?'':' ai-noclip')+'"'+(canPlay?' onclick="openEventClip(\''+e.id+'\')"':'')+'>'
       +'<div class="ai-thumb"><img loading="lazy" src="'+thumb+'" alt="">'+(canPlay?'<div class="ai-play">▶</div>':'')+'</div>'
       +'<div class="ai-meta">'
-        +'<div class="ai-row"><span class="ai-label ai-'+escHtml(e.label)+'">'+escHtml(label)+'</span>'+(score?'<span class="ai-score">'+score+'</span>':'')+'</div>'
+        +'<div class="ai-row"><span class="ai-label ai-'+escHtml(e.label)+'">'+escHtml(label)+'</span>'
+          +(score?'<span class="ai-score">'+score+'</span>':'')
+          +(isPerson?'<button class="ai-name-btn" onclick="event.stopPropagation();openFaceModal(\''+e.id+'\')">👤 Đặt tên</button>':'')
+        +'</div>'
+        +(isPerson?faceHtml:'')
         +'<div class="ai-cam">📷 '+escHtml(_aiCamName(e.camera))+'</div>'
         +'<div class="ai-time">'+timeStr+'</div>'
       +'</div></div>';
   }).join('');
+  // Tự động nhận diện khuôn mặt cho tất cả person events (bất đồng bộ)
+  _aiEvents.forEach(function(e){
+    if(e.label==='person' && _faceCache[e.id]===undefined) recognizeFace(e.id);
+  });
 }
 
 var _aiHls=null;
@@ -848,6 +1058,237 @@ function closeEventModal(){
   _aiCleanupHls();
   try{ vid.pause(); vid.removeAttribute('src'); vid.load(); }catch(e){}
   ov.classList.add('hidden');
+}
+
+/* ── Face Recognition & Training ── */
+var _faceCache = {}; // eventId → 'Tên (XX%)' | '?' (người lạ) | '' (ko thấy mặt) | undefined (chưa check)
+var _faceModalEventId = '';
+
+function recognizeFace(eventId){
+  _faceCache[eventId] = null; // đang xử lý
+  var snapUrl='/cam-home/api/events/'+encodeURIComponent(eventId)+'/snapshot.jpg';
+  fetch(snapUrl)
+    .then(function(r){ return r.ok?r.blob():Promise.reject(); })
+    .then(function(blob){
+      var fd=new FormData();
+      fd.append('image',blob,'snap.jpg');
+      fd.append('min_confidence','0.5');
+      return fetch('/cpai/v1/vision/face/recognize',{method:'POST',body:fd});
+    })
+    .then(function(r){ return r.ok?r.json():Promise.reject(); })
+    .then(function(data){
+      var name='';
+      if(data.success && data.predictions && data.predictions.length){
+        var best=data.predictions.reduce(function(a,b){ return b.confidence>a.confidence?b:a; });
+        if(best.userid && best.userid!=='anonymous'){
+          name=best.userid+' ('+Math.round(best.confidence*100)+'%)';
+        } else {
+          name='?'; // detect được mặt nhưng chưa biết là ai
+        }
+      }
+      _faceCache[eventId]=name||'';
+      _updateFaceEl(eventId, name);
+    })
+    .catch(function(){ _faceCache[eventId]=''; });
+}
+
+function _updateFaceEl(eventId, name){
+  var el=document.getElementById('ai-face-'+eventId);
+  if(!el) return;
+  if(name==='?'){ el.textContent='Người lạ'; el.className='ai-face-result stranger'; }
+  else if(name){ el.textContent=name; el.className='ai-face-result'; }
+  else { el.textContent=''; }
+}
+
+function openFaceModal(eventId){
+  _faceModalEventId=eventId;
+  var modal=document.getElementById('face-modal');
+  var img=document.getElementById('face-modal-img');
+  var status=document.getElementById('face-modal-status');
+  var inp=document.getElementById('face-modal-name');
+  if(!modal||!img) return;
+  img.src='/cam-home/api/events/'+encodeURIComponent(eventId)+'/snapshot.jpg';
+  inp.value='';
+  status.textContent='';
+  modal.classList.remove('hidden');
+  setTimeout(function(){ inp.focus(); }, 100);
+}
+
+function closeFaceModal(){
+  document.getElementById('face-modal').classList.add('hidden');
+  _faceModalEventId='';
+}
+
+function submitFaceTrain(){
+  var name=(document.getElementById('face-modal-name').value||'').trim();
+  var status=document.getElementById('face-modal-status');
+  if(!name){ status.textContent='Nhập tên trước!'; return; }
+  status.textContent='Đang đăng ký...';
+  var snapUrl='/cam-home/api/events/'+encodeURIComponent(_faceModalEventId)+'/snapshot.jpg';
+  fetch(snapUrl)
+    .then(function(r){ return r.ok?r.blob():Promise.reject('snap'); })
+    .then(function(blob){
+      var fd=new FormData();
+      fd.append('image',blob,'snap.jpg');
+      fd.append('userid',name);
+      return fetch('/cpai/v1/vision/face/register',{method:'POST',body:fd});
+    })
+    .then(function(r){ return r.ok?r.json():Promise.reject('api'); })
+    .then(function(data){
+      if(data.success){
+        status.textContent='Đã lưu "'+name+'"!';
+        var dn=name+' (100%)';
+        _faceCache[_faceModalEventId]=dn;
+        _updateFaceEl(_faceModalEventId, dn);
+        // Lưu vào registry
+        var ev=_aiEvents.find(function(e){ return String(e.id)===String(_faceModalEventId); });
+        _faceReg[_faceModalEventId]={
+          name:name,
+          cam:ev?_aiCamName(ev.camera):'',
+          time:ev?ev.start_time:0,
+          thumb:'/cam-home/api/events/'+encodeURIComponent(_faceModalEventId)+'/thumbnail.jpg'
+        };
+        _saveFaceReg();
+        setTimeout(closeFaceModal, 1200);
+      } else {
+        status.textContent='Không tìm thấy mặt trong ảnh này — thử ảnh khác';
+      }
+    })
+    .catch(function(){ status.textContent='Lỗi kết nối, thử lại sau'; });
+}
+
+/* ── Face Registry (localStorage) ── */
+var _faceReg={};
+function _loadFaceReg(){ try{ _faceReg=JSON.parse(localStorage.getItem('face_reg_v1')||'{}'); }catch(e){ _faceReg={}; } }
+function _saveFaceReg(){ localStorage.setItem('face_reg_v1', JSON.stringify(_faceReg)); }
+_loadFaceReg();
+
+function switchAiSub(sub){
+  document.getElementById('aisub-events').classList.toggle('hidden', sub!=='events');
+  document.getElementById('aisub-face').classList.toggle('hidden', sub!=='face');
+  document.getElementById('aisub-events-btn').classList.toggle('active', sub==='events');
+  document.getElementById('aisub-face-btn').classList.toggle('active', sub==='face');
+  if(sub==='face') renderFaceRegistry();
+}
+
+function renderFaceRegistry(){
+  var grid=document.getElementById('face-reg-grid');
+  var cnt=document.getElementById('face-reg-count');
+  var keys=Object.keys(_faceReg);
+  if(!keys.length){
+    if(cnt) cnt.textContent='';
+    grid.innerHTML='<div class="ai-empty">Chưa có khuôn mặt nào được đặt tên.<br>Vào tab Sự kiện → click 👤 Đặt tên để thêm.</div>';
+    return;
+  }
+  if(cnt) cnt.textContent=keys.length+' khuôn mặt đã lưu';
+  grid.innerHTML=keys.map(function(eid){
+    var r=_faceReg[eid];
+    var timeStr=r.time?_aiFriendlyTime(r.time):'';
+    return '<div class="face-reg-card">'
+      +'<div class="face-reg-thumb">'
+        +'<img loading="lazy" src="'+escHtml(r.thumb)+'" alt="">'
+        +'<div class="face-reg-name">👤 '+escHtml(r.name)+'</div>'
+      +'</div>'
+      +'<div class="face-reg-meta">'
+        +'<div class="ai-cam">📷 '+escHtml(r.cam||'')+'</div>'
+        +'<div class="ai-time">'+timeStr+'</div>'
+        +'<div class="face-reg-actions">'
+          +'<button class="face-reg-btn" onclick="openFaceRename(\''+escHtml(eid)+'\')">✏️ Đổi tên</button>'
+          +'<button class="face-reg-btn del" onclick="deleteFaceEntry(\''+escHtml(eid)+'\')">🗑️ Xóa</button>'
+        +'</div>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+}
+
+function deleteFaceEntry(eventId){
+  delete _faceReg[eventId];
+  delete _faceCache[eventId];
+  _saveFaceReg();
+  renderFaceRegistry();
+  _updateFaceEl(eventId,'');
+}
+
+function openFaceRename(eventId){
+  var r=_faceReg[eventId]; if(!r) return;
+  _faceModalEventId=eventId;
+  var modal=document.getElementById('face-modal');
+  document.getElementById('face-modal-img').src=r.thumb;
+  document.getElementById('face-modal-name').value=r.name;
+  document.getElementById('face-modal-status').textContent='';
+  modal.classList.remove('hidden');
+  setTimeout(function(){ document.getElementById('face-modal-name').focus(); },100);
+}
+
+/* ── Live Face Recognition — smart polling (5s, Frigate-first) ── */
+var _liveRecTimer=null;
+
+function startLiveRecognition(){
+  if(_liveRecTimer) return;
+  _liveRecTick();
+  _liveRecTimer=setInterval(_liveRecTick, 5000);
+}
+
+function stopLiveRecognition(){
+  if(_liveRecTimer){ clearInterval(_liveRecTimer); _liveRecTimer=null; }
+}
+
+function _liveRecTick(){
+  if(document.hidden) return;
+  var after=Math.floor(Date.now()/1000)-15;
+  // Bước 1: hỏi Frigate có ai xuất hiện trong 15s qua không (request nhẹ, ko ảnh)
+  fetch('/cam-home/api/events?limit=5&labels=person&after='+after+'&include_thumbnails=0',{cache:'no-store'})
+    .then(function(r){ return r.ok?r.json():[]; })
+    .then(function(evs){
+      // Tắt badge các camera không có người
+      var activeCams={};
+      (evs||[]).forEach(function(e){ activeCams[e.camera]=true; });
+      CAMERAS.forEach(function(c){
+        if(!activeCams[c.src]){
+          var el=document.getElementById('live-face-'+c.id);
+          if(el) el.classList.add('hidden');
+        }
+      });
+      if(!evs||!evs.length) return; // không ai → bỏ qua CPAI hoàn toàn
+      // Bước 2: chỉ gửi CPAI cho camera đang có người (stagger 400ms/cam)
+      var idx=0;
+      CAMERAS.forEach(function(c){
+        if(!state[c.id]||!c.src||!activeCams[c.src]) return;
+        setTimeout(function(){ _liveRecCam(c); }, idx*400);
+        idx++;
+      });
+    })
+    .catch(function(){});
+}
+
+function _liveRecCam(cam){
+  var snapUrl='/cam-home/api/'+encodeURIComponent(cam.src)+'/latest.jpg';
+  fetch(snapUrl,{cache:'no-store'})
+    .then(function(r){ return r.ok?r.blob():Promise.reject(); })
+    .then(function(blob){
+      var fd=new FormData();
+      fd.append('image',blob,'snap.jpg');
+      fd.append('min_confidence','0.5');
+      return fetch('/cpai/v1/vision/face/recognize',{method:'POST',body:fd});
+    })
+    .then(function(r){ return r.ok?r.json():Promise.reject(); })
+    .then(function(data){
+      var el=document.getElementById('live-face-'+cam.id);
+      if(!el) return;
+      if(data.success&&data.predictions&&data.predictions.length){
+        var best=data.predictions.reduce(function(a,b){ return b.confidence>a.confidence?b:a; });
+        if(best.userid&&best.userid!=='anonymous'){
+          el.textContent='👤 '+best.userid;
+          el.classList.remove('hidden');
+          return;
+        }
+      }
+      el.classList.add('hidden');
+    })
+    .catch(function(){
+      var el=document.getElementById('live-face-'+cam.id);
+      if(el) el.classList.add('hidden');
+    });
 }
 
 var availableDates=[];
