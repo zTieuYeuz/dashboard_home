@@ -489,9 +489,9 @@ body.cam-fs-lock{overflow:hidden}
     <div class="ai-fgroup">
       <div class="ai-flabel">📊 Hiển thị bao nhiêu?</div>
       <div class="ai-chips" id="ai-limit">
-        <button class="ai-chip" data-limit="200" onclick="aiPick('ai-limit',this)">200</button>
+        <button class="ai-chip active" data-limit="200" onclick="aiPick('ai-limit',this)">200</button>
         <button class="ai-chip" data-limit="500" onclick="aiPick('ai-limit',this)">500</button>
-        <button class="ai-chip active" data-limit="1000" onclick="aiPick('ai-limit',this)">1000</button>
+        <button class="ai-chip" data-limit="1000" onclick="aiPick('ai-limit',this)">1000</button>
         <button class="ai-chip" data-limit="9999" onclick="aiPick('ai-limit',this)">Tất cả</button>
       </div>
     </div>
@@ -947,12 +947,11 @@ function loadAIEvents(){
   var when=_aiVal('ai-when','data-when')||'today';
   var what=_aiVal('ai-what','data-what');
   var where=_aiVal('ai-where','data-where');
-  var cams=where || CAMERAS.filter(function(c){return c.src;}).map(function(c){return c.src;}).join(',');
-  var limitVal=_aiVal('ai-limit','data-limit')||'1000';
-  var limit=parseInt(limitVal)||1000;
+  var limitVal=_aiVal('ai-limit','data-limit')||'200';
+  var limit=parseInt(limitVal)||200;
 
-  var qs='limit='+limit+'&include_thumbnails=0';
-  if(cams) qs+='&cameras='+encodeURIComponent(cams);
+  // cameras= rỗng → Frigate trả tất cả; có giá trị → filter theo camera cụ thể
+  var qs='limit='+limit+'&include_thumbnails=0&cameras='+(where?encodeURIComponent(where):'');
   if(what) qs+='&labels='+encodeURIComponent(what);
   // Khoảng thời gian (giờ địa phương)
   var now=new Date();
