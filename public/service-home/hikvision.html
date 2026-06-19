@@ -941,6 +941,8 @@ function loadAIEvents(){
   var grid=document.getElementById('ai-grid');
   if(!grid) return;
   _aiLoading=true;
+  // Reset các entry null (đang xử lý dở) để cho phép retry khi load lại
+  Object.keys(_faceCache).forEach(function(k){ if(_faceCache[k]===null) delete _faceCache[k]; });
   var cnt=document.getElementById('ai-count'); if(cnt) cnt.textContent='';
   grid.innerHTML='<div class="ai-empty">Đang tìm…</div>';
 
@@ -950,8 +952,9 @@ function loadAIEvents(){
   var limitVal=_aiVal('ai-limit','data-limit')||'200';
   var limit=parseInt(limitVal)||200;
 
-  // cameras= rỗng → Frigate trả tất cả; có giá trị → filter theo camera cụ thể
-  var qs='limit='+limit+'&include_thumbnails=0&cameras='+(where?encodeURIComponent(where):'');
+  // Không truyền cameras khi chọn Tất cả → Frigate tự trả về tất cả camera
+  var qs='limit='+limit+'&include_thumbnails=0';
+  if(where) qs+='&cameras='+encodeURIComponent(where);
   if(what) qs+='&labels='+encodeURIComponent(what);
   // Khoảng thời gian (giờ địa phương)
   var now=new Date();
@@ -1001,7 +1004,12 @@ function renderAIEvents(){
     var canPlay=!!e.has_clip;
     var isPerson=e.label==='person';
     var cached=_faceCache[e.id];
-    var faceHtml=cached?('<div class="ai-face-result'+(cached==='?'?' stranger':'')+'" id="ai-face-'+escHtml(e.id)+'">'+escHtml(cached==='?'?'Người lạ':cached)+'</div>'):'<div class="ai-face-result" id="ai-face-'+escHtml(e.id)+'"></div>';
+    var faceHtml=(function(){
+      var txt=cached==='?'?'Người lạ':cached==='no_face'?'Không thấy mặt':(cached&&cached!==null?cached:'');
+      var cls='ai-face-result'+(cached==='?'?' stranger':'');
+      var sty=cached==='no_face'?' style="color:var(--muted)"':'';
+      return '<div class="'+cls+'" id="ai-face-'+escHtml(e.id)+'"'+sty+'>'+escHtml(txt)+'</div>';
+    })();
     return '<div class="ai-card'+(canPlay?'':' ai-noclip')+'"'+(canPlay?' onclick="openEventClip(\''+e.id+'\')"':'')+'>'
       +'<div class="ai-thumb"><img loading="lazy" src="'+thumb+'" alt="">'+(canPlay?'<div class="ai-play">▶</div>':'')+'</div>'
       +'<div class="ai-meta">'
@@ -1014,10 +1022,8 @@ function renderAIEvents(){
         +'<div class="ai-time">'+timeStr+'</div>'
       +'</div></div>';
   }).join('');
-  // Tự động nhận diện khuôn mặt cho tất cả person events (bất đồng bộ)
-  _aiEvents.forEach(function(e){
-    if(e.label==='person' && _faceCache[e.id]===undefined) recognizeFace(e.id);
-  });
+  // Xếp hàng nhận diện tất cả person events — tuần tự, xong cái này mới làm cái tiếp
+  _startFaceQueue(_aiEvents);
 }
 
 var _aiHls=null;
@@ -1060,11 +1066,28 @@ function closeEventModal(){
 }
 
 /* ── Face Recognition & Training ── */
-var _faceCache = {}; // eventId → 'Tên (XX%)' | '?' (người lạ) | '' (ko thấy mặt) | undefined (chưa check)
+var _faceCache = {}; // eventId → 'Tên (XX%)' | '?' (người lạ) | '' (ko thấy mặt) | null (đang xử lý) | undefined (chưa check)
 var _faceModalEventId = '';
 
-function recognizeFace(eventId){
-  _faceCache[eventId] = null; // đang xử lý
+/* ── Recognition queue — xử lý tuần tự, ngay khi CPAI xong cái trước ── */
+var _faceQueue = [], _faceRunning = false;
+function _startFaceQueue(events){
+  (events||[]).forEach(function(e){
+    if(e.label==='person' && _faceCache[e.id]===undefined && _faceQueue.indexOf(e.id)===-1)
+      _faceQueue.push(e.id);
+  });
+  if(_faceQueue.length && !_faceRunning) _nextFace();
+}
+function _nextFace(){
+  if(!_faceQueue.length){ _faceRunning=false; return; }
+  _faceRunning=true;
+  var id=_faceQueue.shift();
+  if(_faceCache[id]!==undefined){ _nextFace(); return; } // đã xử lý rồi → bỏ qua
+  _faceCache[id]=null; // in-progress
+  recognizeFace(id, _nextFace);
+}
+
+function recognizeFace(eventId, done){
   var snapUrl='/cam-home/api/events/'+encodeURIComponent(eventId)+'/snapshot.jpg';
   fetch(snapUrl)
     .then(function(r){ return r.ok?r.blob():Promise.reject(); })
@@ -1082,21 +1105,25 @@ function recognizeFace(eventId){
         if(best.userid && best.userid!=='anonymous'){
           name=best.userid+' ('+Math.round(best.confidence*100)+'%)';
         } else {
-          name='?'; // detect được mặt nhưng chưa biết là ai
+          name='?';
         }
+      } else {
+        name='no_face'; // CPAI không thấy mặt trong ảnh
       }
-      _faceCache[eventId]=name||'';
+      _faceCache[eventId]=name;
       _updateFaceEl(eventId, name);
     })
-    .catch(function(){ _faceCache[eventId]=''; });
+    .catch(function(){ _faceCache[eventId]=undefined; }) // lỗi → cho retry lần sau
+    .finally(function(){ if(done) done(); });
 }
 
 function _updateFaceEl(eventId, name){
   var el=document.getElementById('ai-face-'+eventId);
   if(!el) return;
   if(name==='?'){ el.textContent='Người lạ'; el.className='ai-face-result stranger'; }
-  else if(name){ el.textContent=name; el.className='ai-face-result'; }
-  else { el.textContent=''; }
+  else if(name==='no_face'){ el.textContent='Không thấy mặt'; el.className='ai-face-result'; el.style.color='var(--muted)'; }
+  else if(name){ el.textContent=name; el.className='ai-face-result'; el.style.color=''; }
+  else { el.textContent=''; el.style.color=''; }
 }
 
 function openFaceModal(eventId){
@@ -1110,19 +1137,22 @@ function openFaceModal(eventId){
   inp.value='';
   status.textContent='';
   modal.classList.remove('hidden');
+  stopLiveRecognition(); // tạm dừng polling để CPAI rảnh cho việc đăng ký
   setTimeout(function(){ inp.focus(); }, 100);
 }
 
 function closeFaceModal(){
   document.getElementById('face-modal').classList.add('hidden');
   _faceModalEventId='';
+  if(currentTab==='live') startLiveRecognition(); // resume polling khi đóng modal
 }
 
 function submitFaceTrain(){
   var name=(document.getElementById('face-modal-name').value||'').trim();
   var status=document.getElementById('face-modal-status');
   if(!name){ status.textContent='Nhập tên trước!'; return; }
-  status.textContent='Đang đăng ký...';
+  status.textContent='Đang đăng ký…';
+
   var snapUrl='/cam-home/api/events/'+encodeURIComponent(_faceModalEventId)+'/snapshot.jpg';
   fetch(snapUrl)
     .then(function(r){ return r.ok?r.blob():Promise.reject('snap'); })
@@ -1132,14 +1162,13 @@ function submitFaceTrain(){
       fd.append('userid',name);
       return fetch('/cpai/v1/vision/face/register',{method:'POST',body:fd});
     })
-    .then(function(r){ return r.ok?r.json():Promise.reject('api'); })
+    .then(function(r){ return r.ok?r.json():Promise.reject('http '+r.status); })
     .then(function(data){
       if(data.success){
         status.textContent='Đã lưu "'+name+'"!';
         var dn=name+' (100%)';
         _faceCache[_faceModalEventId]=dn;
         _updateFaceEl(_faceModalEventId, dn);
-        // Lưu vào registry
         var ev=_aiEvents.find(function(e){ return String(e.id)===String(_faceModalEventId); });
         _faceReg[_faceModalEventId]={
           name:name,
@@ -1150,10 +1179,12 @@ function submitFaceTrain(){
         _saveFaceReg();
         setTimeout(closeFaceModal, 1200);
       } else {
-        status.textContent='Không tìm thấy mặt trong ảnh này — thử ảnh khác';
+        status.textContent='Không nhận ra mặt — chọn ảnh khác nhìn thấy mặt rõ hơn';
       }
     })
-    .catch(function(){ status.textContent='Lỗi kết nối, thử lại sau'; });
+    .catch(function(){
+      status.textContent='Lỗi kết nối, thử lại';
+    });
 }
 
 /* ── Face Registry (localStorage) ── */
@@ -1201,11 +1232,22 @@ function renderFaceRegistry(){
 }
 
 function deleteFaceEntry(eventId){
+  var r=_faceReg[eventId];
+  var name=r?r.name:'';
+  // Xóa khỏi localStorage + UI trước (responsive)
   delete _faceReg[eventId];
   delete _faceCache[eventId];
   _saveFaceReg();
   renderFaceRegistry();
   _updateFaceEl(eventId,'');
+  // Xóa face embedding trên CPAI (nếu có tên)
+  if(name){
+    var fd=new FormData();
+    fd.append('userid', name);
+    fetch('/cpai/v1/vision/face/delete',{method:'POST',body:fd})
+      .then(function(r){ return r.json(); })
+      .catch(function(){});
+  }
 }
 
 function openFaceRename(eventId){
@@ -2121,7 +2163,10 @@ document.addEventListener('visibilitychange',function(){
   if(document.hidden){
     CAMERAS.forEach(function(c){
       var ifr=document.getElementById('cam-iframe-'+c.id);
-      if(ifr&&ifr.src&&ifr.src!=='about:blank')ifr.src='about:blank';
+      if(!ifr||!ifr.src||ifr.src==='about:blank')return;
+      /* Giữ iframe sống nếu video bên trong đang PiP — kill sẽ làm mất PiP */
+      try{ if(ifr.contentDocument&&ifr.contentDocument.pictureInPictureElement)return; }catch(e){}
+      ifr.src='about:blank';
     });
   }else{
     syncSnapChains(); /* phát lại các camera đang ON */
