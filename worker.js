@@ -4542,6 +4542,14 @@ async function handleCamHomeEmbed(request, env) {
     ...(request.method !== 'GET' && request.method !== 'HEAD' ? { body: request.body } : {}),
   });
 
+  // Detect CF Access redirect loop — service token rejected → upstream redirected to CF login
+  if (upstream.url && upstream.url.includes('cloudflareaccess.com')) {
+    return new Response(JSON.stringify({ error: 'camera_auth_failed' }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    });
+  }
+
   const ct = upstream.headers.get('Content-Type') || 'application/octet-stream';
 
   // For binary/video responses, pass through with relevant headers preserved
