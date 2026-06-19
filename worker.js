@@ -4757,6 +4757,57 @@ async function handleCamLiveEmbed(request, env) {
   });
 }
 
+/* ── Scrypted — Reverse Proxy (HTTP + WebSocket for engine.io) ── */
+async function handleScryptedEmbed(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return new Response('Unauthorized', { status: 401 });
+  if (!(await hasPerm(env, session, 'camera'))) return new Response('Forbidden', { status: 403 });
+
+  const scryptedUrl = 'https://scrypted.home-server.id.vn';
+  const cfId        = cleanEnv(env.HOME_CAM_CF_CLIENT_ID);
+  const cfSecret    = cleanEnv(env.HOME_CAM_CF_CLIENT_SECRET);
+
+  const reqUrl  = new URL(request.url);
+  const subPath = reqUrl.pathname.replace('/scrypted', '') || '/';
+  const target  = `${scryptedUrl}${subPath}${reqUrl.search}`;
+
+  // WebSocket (engine.io)
+  if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+    let upstreamResp;
+    try {
+      upstreamResp = await fetch(target, {
+        headers: { 'CF-Access-Client-Id': cfId, 'CF-Access-Client-Secret': cfSecret, 'Upgrade': 'websocket' },
+      });
+    } catch(e) {
+      return new Response('WebSocket upstream error: ' + e.message, { status: 502 });
+    }
+    const upstream = upstreamResp.webSocket;
+    if (!upstream) return new Response('WebSocket upstream failed (status ' + upstreamResp.status + ')', { status: 502 });
+    const { 0: client, 1: server } = new WebSocketPair();
+    server.accept();
+    server.addEventListener('message',   ({ data }) => { try { upstream.send(data); } catch(_) {} });
+    upstream.addEventListener('message', ({ data }) => { try { server.send(data);   } catch(_) {} });
+    server.addEventListener('close',   ({ code, reason }) => { try { upstream.close(code, reason); } catch(_) {} });
+    upstream.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason);   } catch(_) {} });
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // HTTP
+  const headers = new Headers(request.headers);
+  headers.set('CF-Access-Client-Id', cfId);
+  headers.set('CF-Access-Client-Secret', cfSecret);
+  headers.delete('host');
+  const upstream = await fetch(target, {
+    method:  request.method,
+    headers,
+    body:    ['GET','HEAD'].includes(request.method) ? undefined : request.body,
+  });
+  const respHeaders = new Headers(upstream.headers);
+  respHeaders.set('Access-Control-Allow-Origin', '*');
+  respHeaders.delete('content-encoding');
+  return new Response(upstream.body, { status: upstream.status, headers: respHeaders });
+}
+
 /* ── CodeProject.AI — Simple REST Reverse Proxy ── */
 async function handleCpaiEmbed(request, env) {
   const session = await getSession(request, env);
@@ -6939,6 +6990,7 @@ export default {
     if (p === '/api/admin/camera-aliases-movi' && m === 'GET')  return handleGetCameraAliases(request, env);
     if (p === '/api/admin/camera-aliases-movi' && m === 'PUT')  return handleSaveCameraAlias(request, env);
     if (p.startsWith('/cpai/'))                  return handleCpaiEmbed(request, env);
+if (p.startsWith('/scrypted/'))             return handleScryptedEmbed(request, env);
     if (p.startsWith('/cam-home/'))              return handleCamHomeEmbed(request, env);
     if (p.startsWith('/cam-live/'))              return handleCamLiveEmbed(request, env);
     if (p.startsWith('/cam-embed/'))             return handleCamEmbed(request, env);
