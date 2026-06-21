@@ -743,14 +743,25 @@ var _FROZEN_MS = _IS_MOBILE ? 8000 : 4000;
 
 /* Bật/tắt iframe stream theo state — chỉ load camera đang ON ở tab Live, còn lại
    trả về about:blank để giải phóng tài nguyên (nhẹ máy, ổn định hơn). */
+/* Stagger việc nạp iframe: mở 7 camera cùng lúc → tranh băng thông/CPU → mỗi cam
+   khởi động chậm. Giãn mỗi cam 350ms cho kết nối tuần tự → nhanh + ổn định hơn. */
 function syncSnapChains() {
+  var delay = 0;
   CAMERAS.forEach(function(c) {
     if (!c.src) return;
     var ifr = document.getElementById('cam-iframe-' + c.id);
     if (!ifr) return;
     if (state[c.id] && currentTab === 'live') {
       var wantSrc = '/cam-live/stream.html?src=' + encodeURIComponent(c.src) + '&mode=' + _CAM_MODE;
-      if (ifr.getAttribute('src') !== wantSrc) ifr.src = wantSrc;
+      if (ifr.getAttribute('src') !== wantSrc) {
+        (function(el, src, d){
+          setTimeout(function(){
+            /* re-check: tab/state có thể đã đổi trong lúc chờ */
+            if (state[c.id] && currentTab === 'live' && el.getAttribute('src') !== src) el.src = src;
+          }, d);
+        })(ifr, wantSrc, delay);
+        delay += 350;
+      }
     } else {
       if (ifr.src && ifr.src !== 'about:blank') ifr.src = 'about:blank';
     }
@@ -1278,7 +1289,7 @@ function _liveRecTick(){
   if(document.hidden) return;
   var after=Math.floor(Date.now()/1000)-15;
   // Bước 1: hỏi Frigate có ai xuất hiện trong 15s qua không (request nhẹ, ko ảnh)
-  fetch('/cam-home/api/events?limit=5&labels=person&after='+after+'&include_thumbnails=0',{cache:'no-store'})
+  fetch('/cam-home/api/events?limit=5&labels=person&after='+after+'&include_thumbnails=0',{cache:'no-store',signal:AbortSignal.timeout(8000)})
     .then(function(r){ return r.ok?r.json():[]; })
     .then(function(evs){
       // Tắt badge các camera không có người
@@ -1304,13 +1315,13 @@ function _liveRecTick(){
 
 function _liveRecCam(cam){
   var snapUrl='/cam-home/api/'+encodeURIComponent(cam.src)+'/latest.jpg';
-  fetch(snapUrl,{cache:'no-store'})
+  fetch(snapUrl,{cache:'no-store',signal:AbortSignal.timeout(8000)})
     .then(function(r){ return r.ok?r.blob():Promise.reject(); })
     .then(function(blob){
       var fd=new FormData();
       fd.append('image',blob,'snap.jpg');
       fd.append('min_confidence','0.5');
-      return fetch('/cpai/v1/vision/face/recognize',{method:'POST',body:fd});
+      return fetch('/cpai/v1/vision/face/recognize',{method:'POST',body:fd,signal:AbortSignal.timeout(12000)});
     })
     .then(function(r){ return r.ok?r.json():Promise.reject(); })
     .then(function(data){
@@ -2177,8 +2188,12 @@ document.addEventListener('visibilitychange',function(){
    Player go2rtc trong iframe có lúc đứng hình mà không tự kết nối lại (hay gặp với
    camera yếu/khác hãng như cam07). Cứ vài giây kiểm tra <video> trong từng iframe:
    nếu currentTime không nhích trong >8s → coi như treo → nạp lại iframe để reconnect. */
+/* Stream mới cần thời gian khởi động (transcode H265 như cam07 có thể ~10-15s mới
+   ra frame đầu). Cho ân hạn dài trước khi có frame đầu, threshold ngắn chỉ áp dụng
+   khi stream ĐÃ chạy rồi mới đứng → tránh reload oan gây churn. */
+var _START_GRACE_MS = 20000;
 var _camWatch = {};
-function _resetWatch(id){ if(_camWatch[id]) _camWatch[id]={t:-1,since:Date.now(),n:0,coolUntil:0}; }
+function _resetWatch(id){ if(_camWatch[id]) _camWatch[id]={t:-1,since:Date.now(),n:0,coolUntil:0,started:false}; }
 setInterval(function(){
   if(document.hidden || currentTab!=='live') return;
   CAMERAS.forEach(function(c){
@@ -2187,15 +2202,17 @@ setInterval(function(){
     if(!ifr || !ifr.src || ifr.src.indexOf('about:blank')!==-1){ delete _camWatch[c.id]; return; }
     var vid=null;
     try{ var d=ifr.contentDocument; vid=d&&d.querySelector('video'); }catch(e){ return; }
-    var w=_camWatch[c.id]||(_camWatch[c.id]={t:-1,since:Date.now(),n:0,coolUntil:0});
+    var w=_camWatch[c.id]||(_camWatch[c.id]={t:-1,since:Date.now(),n:0,coolUntil:0,started:false});
     var now=Date.now();
     if(now < w.coolUntil) return; /* đang trong cooldown sau lần reload trước */
     var t=(vid&&!isNaN(vid.currentTime))?vid.currentTime:0;
+    /* chưa ra frame đầu → ân hạn dài; đã chạy rồi mới đứng → threshold ngắn */
+    var threshold = w.started ? _FROZEN_MS : _START_GRACE_MS;
     if(vid && t>w.t+0.05){           /* hình đang chạy → ok */
-      w.t=t; w.since=now;
-    } else if(now-w.since>_FROZEN_MS){ /* đứng hình quá threshold → nạp lại iframe */
+      w.t=t; w.since=now; w.started=true;
+    } else if(now-w.since>threshold){ /* đứng hình quá threshold → nạp lại iframe */
       ifr.src='/cam-live/stream.html?src='+encodeURIComponent(c.src)+'&mode='+_CAM_MODE+'&_r='+now;
-      w.t=-1; w.since=now; w.n++;
+      w.t=-1; w.since=now; w.n++; w.started=false;
       w.coolUntil=now+25000; /* chờ 25s cho stream khởi động lại trước khi check tiếp */
     }
   });

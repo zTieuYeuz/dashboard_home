@@ -4537,8 +4537,9 @@ async function handleCamHomeEmbed(request, env) {
   const rangeHdr = request.headers.get('Range');
   if (rangeHdr) fwdHeaders['Range'] = rangeHdr;
   const upstream = await fetch(target, {
-    method:  request.method,
-    headers: fwdHeaders,
+    method:    request.method,
+    headers:   fwdHeaders,
+    redirect:  'follow',
     ...(request.method !== 'GET' && request.method !== 'HEAD' ? { body: request.body } : {}),
   });
 

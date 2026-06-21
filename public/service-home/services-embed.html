@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Internal Services — Dashboard SYSTEM</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root,[data-theme="dark"]{
+  --bg:oklch(0.18 0.012 250);--surface:oklch(0.22 0.012 250);--surface-2:oklch(0.26 0.012 250);
+  --card:oklch(0.21 0.012 250);--border:oklch(0.31 0.012 250);--border-soft:oklch(0.27 0.012 250);
+  --text:oklch(0.96 0.005 250);--text-2:oklch(0.86 0.008 250);--muted:oklch(0.62 0.012 250);
+  --accent:oklch(0.72 0.18 290);--ok:oklch(0.74 0.16 155);--warn:oklch(0.78 0.16 70);--bad:oklch(0.68 0.20 25);
+  --font-sans:'IBM Plex Sans',system-ui,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  --radius:12px;--radius-sm:8px;
+}
+[data-theme="light"]{
+  --bg:oklch(0.985 0.003 250);--surface:oklch(1 0 0);--surface-2:oklch(0.965 0.005 250);
+  --card:oklch(1 0 0);--border:oklch(0.91 0.008 250);--border-soft:oklch(0.94 0.008 250);
+  --text:oklch(0.22 0.015 250);--text-2:oklch(0.36 0.015 250);--muted:oklch(0.55 0.012 250);
+  --accent:oklch(0.55 0.18 290);--ok:oklch(0.52 0.15 155);--warn:oklch(0.62 0.16 70);--bad:oklch(0.55 0.20 25);
+}
+:root{--green:var(--ok);--red:var(--bad);--amber:var(--warn);}
+html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:100%;overflow:hidden;-webkit-font-smoothing:antialiased}
+
+/* ── Topbar ── */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:52px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
+.topbar-left{display:flex;align-items:center;gap:28px}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:30px;height:30px;display:grid;place-items:center;background:var(--accent);color:var(--bg);border-radius:var(--radius-sm)}
+.brand-name{font-weight:600;font-size:14px;line-height:1.1}
+.brand-sub{font-size:11px;color:var(--muted);margin-top:1px}
+.topnav{display:flex;gap:2px}
+.topnav-item{font-size:13px;font-weight:500;color:var(--muted);padding:6px 12px;border-radius:var(--radius-sm);transition:all .12s;text-decoration:none}
+.topnav-item:hover,.topnav-item.active{color:var(--text);background:var(--surface-2)}
+.clock{font-family:var(--font-mono);font-size:13px;color:var(--text-2);padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm)}
+.tbtn{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);transition:all .12s;cursor:pointer;font-family:var(--font-sans);text-decoration:none}
+.tbtn:hover{color:var(--text);border-color:var(--muted)}
+.tbtn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.tbtn.primary:hover{opacity:.88}
+.theme-toggle{width:32px;height:32px;display:grid;place-items:center;padding:0;border:1px solid var(--border);background:var(--surface-2);border-radius:var(--radius-sm);cursor:pointer;color:var(--text-2)}
+.theme-toggle:hover{color:var(--text)}
+
+/* ── Layout ── */
+.layout{display:flex;height:calc(100vh - 52px);overflow:hidden}
+
+/* ── Sidebar ── */
+.sidebar{width:240px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sb-search{padding:10px 12px;border-bottom:1px solid var(--border)}
+.sb-search-wrap{position:relative}
+.sb-search-input{width:100%;font-size:12px;padding:6px 10px 6px 28px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);outline:none;font-family:var(--font-sans);transition:border-color .15s}
+.sb-search-input:focus{border-color:var(--accent)}
+.sb-search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:11px;pointer-events:none}
+.sb-list{flex:1;overflow-y:auto;padding:6px 0 12px}
+.sb-group{margin-bottom:2px}
+.sb-group-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;padding:8px 14px 4px}
+.sb-item{display:flex;align-items:center;gap:9px;padding:7px 14px;font-size:13px;cursor:pointer;transition:background .1s;border-radius:7px;margin:0 6px;color:var(--text-2);user-select:none}
+.sb-item:hover{background:var(--surface-2);color:var(--text)}
+.sb-item.active{background:color-mix(in oklch,var(--accent) 15%,var(--bg));color:var(--accent);font-weight:500}
+.sb-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.sb-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--border);transition:background .3s}
+.sb-dot.online{background:var(--green)}
+.sb-dot.offline{background:var(--red)}
+.sb-dot.local{background:var(--amber)}
+@keyframes sbpulse{0%,100%{opacity:1}50%{opacity:.3}}
+.sb-dot.loading{animation:sbpulse .9s ease-in-out infinite}
+
+/* ── Main ── */
+.main{flex:1;overflow-y:auto}
+.main-inner{padding:1.25rem;max-width:1200px}
+
+/* ── Overview grid ── */
+.overview-head{margin-bottom:1.25rem}
+.overview-title{font-size:20px;font-weight:700;margin-bottom:4px}
+.overview-sub{font-size:13px;color:var(--muted)}
+.svc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(188px,1fr));gap:12px}
+.svc-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;transition:border-color .15s,transform .1s;display:flex;flex-direction:column;gap:8px}
+.svc-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.svc-card-icon{font-size:26px;line-height:1}
+.svc-card-name{font-size:13px;font-weight:600;line-height:1.2}
+.svc-card-url{font-size:10px;color:var(--muted);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.svc-card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:2px;gap:4px}
+
+/* ── Status badges ── */
+.st-badge{font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.st-badge.online{background:color-mix(in oklch,var(--ok) 15%,var(--bg));color:var(--ok)}
+.st-badge.offline{background:color-mix(in oklch,var(--bad) 15%,var(--bg));color:var(--bad)}
+.st-badge.local{background:color-mix(in oklch,var(--warn) 15%,var(--bg));color:var(--warn)}
+.st-badge.loading{background:var(--surface-2);color:var(--muted)}
+.cat-chip{font-size:10px;color:var(--muted);padding:2px 7px;border-radius:20px;background:var(--surface-2);border:1px solid var(--border-soft);white-space:nowrap}
+
+/* ── Detail header ── */
+.detail-hd{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem;display:flex;align-items:flex-start;gap:16px}
+.detail-icon{font-size:38px;line-height:1;flex-shrink:0;padding-top:2px}
+.detail-info{flex:1;min-width:0}
+.detail-name{font-size:20px;font-weight:700;line-height:1.15;margin-bottom:4px}
+.detail-desc{font-size:13px;color:var(--text-2);margin-bottom:8px}
+.detail-url-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.detail-url-text{font-size:11px;font-family:var(--font-mono);color:var(--muted)}
+.detail-actions{display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap}
+.tags-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem}
+
+/* ── Section title ── */
+.sec-title{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:.625rem}
+
+/* ── API cards ── */
+.api-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:1rem}
+.api-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.api-card-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;font-weight:600}
+.api-card-value{font-size:22px;font-weight:700;line-height:1;font-family:var(--font-mono)}
+.api-card-sub{font-size:10px;color:var(--muted);margin-top:3px}
+.c-green{color:var(--green)}.c-red{color:var(--red)}.c-amber{color:var(--amber)}.c-blue{color:var(--accent)}
+
+/* ── Info table ── */
+.info-tbl{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:1rem}
+.info-row{display:flex;align-items:center;padding:.625rem 1rem;border-bottom:1px solid var(--border-soft)}
+.info-row:last-child{border-bottom:none}
+.info-key{font-size:12px;color:var(--muted);width:140px;flex-shrink:0}
+.info-val{font-size:12px;font-weight:500;font-family:var(--font-mono);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+/* ── Embed ── */
+.embed-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:1rem}
+.embed-bar{display:flex;align-items:center;justify-content:space-between;padding:.625rem 1rem;border-bottom:1px solid var(--border);gap:8px}
+.embed-bar-label{font-size:12px;color:var(--text-2);font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.embed-iframe{width:100%;border:none;display:block}
+.embed-notice{padding:2.5rem 1.25rem;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
+.embed-notice-icon{font-size:36px;margin-bottom:10px}
+.embed-try-row{margin-top:.5rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+/* ── Misc ── */
+.spin{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:_spin .7s linear infinite;flex-shrink:0}
+@keyframes _spin{to{transform:rotate(360deg)}}
+.loading-row{display:flex;align-items:center;gap:8px;padding:1.25rem;color:var(--muted);font-size:13px}
+a{color:inherit;text-decoration:none}
+::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+@media(max-width:900px){
+  .sidebar{width:200px}
+  .detail-hd{flex-wrap:wrap}
+  .detail-actions{width:100%;justify-content:flex-start}
+}
+@media(max-width:620px){
+  .sidebar{display:none}
+  .svc-grid{grid-template-columns:1fr 1fr}
+  .main-inner{padding:.875rem}
+}
+@media(max-width:400px){
+  .svc-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+        </svg>
+      </div>
+      <div><div class="brand-name">Dashboard SYSTEM</div><div class="brand-sub">Internal Services</div></div>
+    </div>
+    <nav class="topnav">
+      <a class="topnav-item" href="/">Overview</a>
+      <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
+      <a class="topnav-item active" href="/service-home/services-embed.html">Services</a>
+      <a class="topnav-item" id="settings-link" href="/settings.html" style="display:none">⚙ Settings</a>
+    </nav>
+  </div>
+  <div class="topbar-right">
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar">
+    <div class="sb-search">
+      <div class="sb-search-wrap">
+        <span class="sb-search-icon">🔍</span>
+        <input class="sb-search-input" id="sbSearch" placeholder="Tìm dịch vụ..." oninput="renderSidebar()"/>
+      </div>
+    </div>
+    <div class="sb-list" id="sbList"></div>
+  </nav>
+
+  <main class="main">
+    <div class="main-inner" id="mainInner"></div>
+  </main>
+</div>
+
+<script>
+/* ══════════════════════════════════════
+   CONFIG — cập nhật IP/URL ở đây
+   ══════════════════════════════════════ */
+var SVCS = [
+  {
+    id:'fortigate', name:'FortiGate Firewall', icon:'🛡️', cat:'network',
+    url:'https://192.168.110.1',
+    desc:'Tường lửa & quản lý mạng chính — policy, VPN, sessions',
+    apiPage:'/service-home/fortigate.html', apiType:'fortigate',
+    tags:['Firewall','VPN','Policy','SSL-VPN']
+  },
+  {
+    id:'asus', name:'ASUS Router', icon:'📡', cat:'network',
+    url:'http://192.168.1.1',
+    desc:'Router WiFi ASUS — quản lý DHCP và kết nối không dây',
+    apiPage:'/service-home/asus.html', apiType:'asus',
+    tags:['WiFi','DHCP','Router']
+  },
+  {
+    id:'9router', name:'9Router', icon:'🔀', cat:'network',
+    url:'https://9router.home-server.id.vn',
+    desc:'Thiết bị mạng 9Router',
+    tags:['Network']
+  },
+  {
+    id:'casaos', name:'CasaOS', icon:'🏠', cat:'server',
+    url:'http://192.168.110.21:81',
+    desc:'Home server OS — quản lý Docker apps, storage, services',
+    tags:['Docker','Apps','Storage','HomeServer']
+  },
+  {
+    id:'esxi', name:'VMware ESXi', icon:'💾', cat:'server',
+    url:'https://192.168.110.10',
+    desc:'Hypervisor ảo hóa — quản lý máy ảo (VM)',
+    apiPage:'/service-home/vmware-home.html', apiType:'esxi',
+    tags:['VM','vSphere','ESXi']
+  },
+  {
+    id:'portainer', name:'Portainer', icon:'🐋', cat:'server',
+    url:'http://192.168.110.21:9000',
+    desc:'Quản lý Docker containers, images, volumes trực quan',
+    tags:['Docker','Container','Image']
+  },
+  {
+    id:'n8n', name:'n8n Automation', icon:'⚡', cat:'automation',
+    url:'http://192.168.110.21:5678',
+    desc:'Workflow automation & tích hợp dịch vụ, API, webhook',
+    apiPage:'/service-home/n8n.html', apiType:'n8n',
+    tags:['Workflow','Webhook','API','Automation']
+  },
+  {
+    id:'jenkins', name:'Jenkins CI/CD', icon:'🔧', cat:'devops',
+    url:'http://192.168.110.21:8099',
+    desc:'Continuous integration & deployment pipeline',
+    tags:['Build','Deploy','Pipeline','CI/CD']
+  },
+  {
+    id:'uptime-kuma', name:'Uptime Kuma', icon:'📊', cat:'monitoring',
+    url:'http://192.168.110.21:3001',
+    desc:'Theo dõi uptime và cảnh báo khi dịch vụ xuống',
+    tags:['Monitor','Alert','Uptime','Status']
+  },
+  {
+    id:'frigate', name:'Frigate NVR', icon:'📷', cat:'camera',
+    url:'http://192.168.110.21:5000',
+    desc:'Network Video Recorder — AI detection, recordings, events',
+    tags:['NVR','AI','Camera','Recording']
+  },
+  {
+    id:'go2rtc', name:'go2rtc', icon:'🎥', cat:'camera',
+    url:'http://192.168.110.21:1984',
+    desc:'RTSP → WebRTC/MSE streaming gateway cho camera',
+    tags:['RTSP','WebRTC','Stream','Camera']
+  },
+];
+
+var CATS = {
+  network:    { label: 'Mạng',        order: 0 },
+  server:     { label: 'Máy chủ',     order: 1 },
+  automation: { label: 'Tự động hóa', order: 2 },
+  devops:     { label: 'DevOps',      order: 3 },
+  monitoring: { label: 'Giám sát',    order: 4 },
+  camera:     { label: 'Camera',      order: 5 },
+};
+
+/* ══════════════════════════════════════
+   State
+   ══════════════════════════════════════ */
+var _statusMap = {};
+var _selected  = null;
+var _embedOpen = false;
+
+/* ── XSS guard ── */
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ══════════════════════════════════════
+   Status
+   ══════════════════════════════════════ */
+function loadStatus() {
+  fetch('/api/status', { cache:'no-store', signal:AbortSignal.timeout(8000) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      _statusMap = (d && d.services) || {};
+      renderSidebar();
+      if (_selected) {
+        var el = document.getElementById('mainInner');
+        var dots = el.querySelectorAll('[data-svc-dot]');
+        dots.forEach(function(dot){ dot.className = 'sb-dot ' + (getStatus(dot.dataset.svcDot)); });
+        var badges = el.querySelectorAll('[data-svc-badge]');
+        badges.forEach(function(b){ b.outerHTML = stBadge(getStatus(b.dataset.svcBadge)); });
+      } else {
+        renderMain();
+      }
+    })
+    .catch(function(){});
+}
+
+function getStatus(id) {
+  var s = _statusMap[id];
+  if (!s) return 'loading';
+  return s.status || 'local';
+}
+
+function stBadge(st) {
+  var map = { online:'● Online', offline:'● Offline', local:'⊙ LAN only', loading:'· · ·' };
+  return '<span class="st-badge '+st+'" data-svc-badge="'+(arguments[1]||'')+'">'+(map[st]||map.loading)+'</span>';
+}
+
+function stDot(id) {
+  return '<span class="sb-dot '+getStatus(id)+'" data-svc-dot="'+id+'"></span>';
+}
+
+/* ══════════════════════════════════════
+   Sidebar
+   ══════════════════════════════════════ */
+function renderSidebar() {
+  var q = (document.getElementById('sbSearch').value||'').toLowerCase().trim();
+  var list = SVCS.filter(function(s){
+    if (!q) return true;
+    return s.name.toLowerCase().includes(q)
+      || (s.cat||'').includes(q)
+      || (s.tags||[]).some(function(t){ return t.toLowerCase().includes(q); });
+  });
+
+  var groups = {};
+  list.forEach(function(s){ if (!groups[s.cat]) groups[s.cat]=[]; groups[s.cat].push(s); });
+
+  var html = '';
+  Object.keys(groups)
+    .sort(function(a,b){ return (CATS[a]?CATS[a].order:99)-(CATS[b]?CATS[b].order:99); })
+    .forEach(function(cat){
+      html += '<div class="sb-group"><div class="sb-group-label">'+(CATS[cat]?esc(CATS[cat].label):esc(cat))+'</div>';
+      groups[cat].forEach(function(s){
+        var act = _selected===s.id ? ' active' : '';
+        html += '<div class="sb-item'+act+'" onclick="selectSvc(\''+s.id+'\')"><span class="sb-icon">'+s.icon+'</span><span class="sb-name">'+esc(s.name)+'</span>'+stDot(s.id)+'</div>';
+      });
+      html += '</div>';
+    });
+
+  if (!html) html = '<div style="padding:1rem 14px;font-size:12px;color:var(--muted)">Không tìm thấy dịch vụ</div>';
+  document.getElementById('sbList').innerHTML = html;
+}
+
+/* ══════════════════════════════════════
+   Hash routing
+   ══════════════════════════════════════ */
+function selectSvc(id) {
+  _selected = id;
+  _embedOpen = false;
+  window.location.hash = id;
+  renderSidebar();
+  renderMain();
+}
+
+function renderMain() {
+  if (!_selected) { renderOverview(); return; }
+  var svc = SVCS.find(function(s){ return s.id===_selected; });
+  if (!svc) { _selected=null; renderOverview(); return; }
+  renderDetail(svc);
+}
+
+/* ══════════════════════════════════════
+   Overview (no selection)
+   ══════════════════════════════════════ */
+function renderOverview() {
+  var html = '<div class="overview-head">'
+    +'<div class="overview-title">Internal Services</div>'
+    +'<div class="overview-sub">'+SVCS.length+' dịch vụ · Chọn để xem chi tiết</div>'
+  +'</div>'
+  +'<div class="svc-grid">';
+
+  SVCS.forEach(function(s){
+    var st = getStatus(s.id);
+    html += '<div class="svc-card" onclick="selectSvc(\''+s.id+'\')">'
+      +'<div class="svc-card-icon">'+s.icon+'</div>'
+      +'<div class="svc-card-name">'+esc(s.name)+'</div>'
+      +'<div class="svc-card-url">'+esc(s.url)+'</div>'
+      +'<div class="svc-card-footer"><span class="st-badge '+st+'">'+(st==='online'?'● Online':st==='offline'?'● Offline':st==='local'?'⊙ LAN':'· · ·')+'</span><span class="cat-chip">'+(CATS[s.cat]?esc(CATS[s.cat].label):esc(s.cat))+'</span></div>'
+    +'</div>';
+  });
+
+  html += '</div>';
+  document.getElementById('mainInner').innerHTML = html;
+}
+
+/* ══════════════════════════════════════
+   Detail panel
+   ══════════════════════════════════════ */
+function renderDetail(svc) {
+  var st = getStatus(svc.id);
+  var isHTTP       = svc.url.startsWith('http://');
+  var isLocalHTTPS = /^https:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(svc.url);
+
+  /* ── Header ── */
+  var html = '<div class="detail-hd">'
+    +'<div class="detail-icon">'+svc.icon+'</div>'
+    +'<div class="detail-info">'
+      +'<div class="detail-name">'+esc(svc.name)+'</div>'
+      +'<div class="detail-desc">'+esc(svc.desc||'')+'</div>'
+      +'<div class="detail-url-row">'
+        +'<span class="st-badge '+st+'" data-svc-badge="'+svc.id+'">'+(st==='online'?'● Online':st==='offline'?'● Offline':st==='local'?'⊙ LAN only':'· · ·')+'</span>'
+        +'<span class="detail-url-text">'+esc(svc.url)+'</span>'
+      +'</div>'
+    +'</div>'
+    +'<div class="detail-actions">'
+      +(svc.apiPage?'<a class="tbtn" href="'+svc.apiPage+'">📊 Dashboard</a>':'')
+      +'<a class="tbtn primary" href="'+esc(svc.url)+'" target="_blank" rel="noopener noreferrer">↗ Mở</a>'
+    +'</div>'
+  +'</div>';
+
+  /* ── Tags ── */
+  if (svc.tags && svc.tags.length) {
+    html += '<div class="tags-row">';
+    svc.tags.forEach(function(t){ html += '<span class="cat-chip">'+esc(t)+'</span>'; });
+    html += '</div>';
+  }
+
+  /* ── API data placeholder ── */
+  html += '<div id="apiSection"></div>';
+
+  /* ── Info table ── */
+  html += '<div class="sec-title">Thông tin kết nối</div>'
+    +'<div class="info-tbl">'
+      +'<div class="info-row"><span class="info-key">URL / IP</span><span class="info-val">'+esc(svc.url)+'</span></div>'
+      +'<div class="info-row"><span class="info-key">Trạng thái</span><span class="info-val" style="color:var(--'+(st==='online'?'green':st==='offline'?'red':'amber')+')">'+st+(st==='local'?' (LAN only)':'')+'</span></div>'
+      +'<div class="info-row"><span class="info-key">Giao thức</span><span class="info-val" style="color:'+(isHTTP?'var(--amber)':'var(--green)')+'">'+( isHTTP?'HTTP — chỉ dùng trong LAN / khi bật VPN':'HTTPS')+'</span></div>'
+      +'<div class="info-row"><span class="info-key">Danh mục</span><span class="info-val">'+(CATS[svc.cat]?esc(CATS[svc.cat].label):esc(svc.cat||''))+'</span></div>'
+    +'</div>';
+
+  /* ── Embed section ── */
+  html += '<div class="sec-title" style="margin-top:1rem">Nhúng trực tiếp</div>';
+
+  if (_embedOpen) {
+    var iframeOrNotice;
+    if (isHTTP) {
+      iframeOrNotice = '<div class="embed-notice">'
+        +'<div class="embed-notice-icon">⚠️</div>'
+        +'<div>Dashboard chạy HTTPS — không thể nhúng trang HTTP.<br>'
+        +'Kết nối tới <strong>'+esc(svc.url)+'</strong> cần dùng trong LAN hoặc bật VPN rồi mở tab mới.</div>'
+        +'<div style="margin-top:12px"><a class="tbtn primary" href="'+esc(svc.url)+'" target="_blank" rel="noopener noreferrer">↗ Mở trong tab mới</a></div>'
+      +'</div>';
+    } else if (isLocalHTTPS) {
+      iframeOrNotice = '<div class="embed-notice">'
+        +'<div class="embed-notice-icon">🔒</div>'
+        +'<div>Địa chỉ IP local với HTTPS tự ký — trình duyệt từ chối nhúng iframe.<br>'
+        +'Cần thêm tunnel hostname để nhúng được (Cloudflare Tunnel).</div>'
+        +'<div style="margin-top:12px"><a class="tbtn primary" href="'+esc(svc.url)+'" target="_blank" rel="noopener noreferrer">↗ Mở trong tab mới</a></div>'
+      +'</div>';
+    } else {
+      iframeOrNotice = '<iframe class="embed-iframe" src="'+esc(svc.url)+'" style="height:620px"'
+        +' sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads"'
+        +' referrerpolicy="no-referrer" loading="lazy"></iframe>';
+    }
+
+    html += '<div class="embed-wrap">'
+      +'<div class="embed-bar">'
+        +'<span class="embed-bar-label">'+esc(svc.name)+' — '+esc(svc.url)+'</span>'
+        +'<button class="tbtn" style="font-size:11px;padding:3px 10px;flex-shrink:0" onclick="closeEmbed()">✕ Đóng</button>'
+      +'</div>'
+      +iframeOrNotice
+    +'</div>';
+  } else {
+    var embedStatus, embedColor;
+    if (isHTTP) {
+      embedStatus = 'Không khả dụng — HTTP bị chặn bởi HTTPS page (mixed content)';
+      embedColor  = 'var(--amber)';
+    } else if (isLocalHTTPS) {
+      embedStatus = 'Không khả dụng — HTTPS tự ký bị trình duyệt chặn';
+      embedColor  = 'var(--amber)';
+    } else {
+      embedStatus = 'Khả dụng khi có hostname HTTPS hợp lệ';
+      embedColor  = 'var(--green)';
+    }
+    html += '<div class="info-tbl" style="margin-bottom:.75rem">'
+      +'<div class="info-row"><span class="info-key">Embed status</span><span class="info-val" style="color:'+embedColor+'">'+embedStatus+'</span></div>'
+    +'</div>'
+    +'<div class="embed-try-row">'
+      +'<button class="tbtn" onclick="openEmbed()">🔲 Thử nhúng iframe</button>'
+      +(isHTTP||isLocalHTTPS?'<span style="font-size:11px;color:var(--muted)">Sẽ hiện thông báo giải thích</span>':'')
+    +'</div>';
+  }
+
+  document.getElementById('mainInner').innerHTML = html;
+
+  /* ── Load API data ── */
+  if (svc.apiType === 'fortigate') loadFortigateCards();
+  else if (svc.apiType === 'n8n')  loadN8nCards();
+  else if (svc.apiType === 'asus') loadAsusCards();
+}
+
+function openEmbed()  { _embedOpen = true;  renderMain(); }
+function closeEmbed() { _embedOpen = false; renderMain(); }
+
+/* ══════════════════════════════════════
+   API: FortiGate cards
+   ══════════════════════════════════════ */
+function loadFortigateCards() {
+  var sec = document.getElementById('apiSection');
+  if (!sec) return;
+  sec.innerHTML = '<div class="loading-row"><div class="spin"></div><span>Đang tải FortiGate...</span></div>';
+
+  fetch('/api/fortigate', { cache:'no-store', signal:AbortSignal.timeout(12000) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.error) { sec.innerHTML='<div style="padding:.75rem;color:var(--red);font-size:13px">⚠ '+esc(d.error)+'</div>'; return; }
+      var r = d.resources || {};
+      var s = d.stats     || {};
+      var hn = d.hostname || '—';
+      var cpu = r.cpuPct != null ? r.cpuPct : '—';
+      var mem = r.memPct != null ? r.memPct : '—';
+      var sess = r.sessions != null ? Number(r.sessions).toLocaleString() : '—';
+      var cpuCls = cpu!=='—' ? (cpu>80?'c-red':cpu>60?'c-amber':'c-green') : '';
+      var html = '<div class="sec-title">Dữ liệu thực — FortiGate API</div>'
+        +'<div class="api-grid">'
+          +'<div class="api-card"><div class="api-card-label">Sessions</div><div class="api-card-value c-blue">'+sess+'</div><div class="api-card-sub">active connections</div></div>'
+          +'<div class="api-card"><div class="api-card-label">CPU</div><div class="api-card-value '+cpuCls+'">'+cpu+(cpu!=='—'?'%':'')+'</div><div class="api-card-sub">utilization</div></div>'
+          +'<div class="api-card"><div class="api-card-label">Memory</div><div class="api-card-value">'+mem+(mem!=='—'?'%':'')+'</div><div class="api-card-sub">RAM usage</div></div>'
+          +'<div class="api-card"><div class="api-card-label">Policies</div><div class="api-card-value c-blue">'+(s.enabledPolicies!=null?s.enabledPolicies:'—')+'</div><div class="api-card-sub">/ '+(s.totalPolicies||'?')+' total</div></div>'
+          +'<div class="api-card"><div class="api-card-label">Interfaces</div><div class="api-card-value '+(s.ifaceUp>0?'c-green':'c-red')+'">'+(s.ifaceUp!=null?s.ifaceUp:'—')+'</div><div class="api-card-sub">/ '+(s.ifaceTotal||'?')+' up</div></div>'
+          +'<div class="api-card"><div class="api-card-label">Hostname</div><div class="api-card-value" style="font-size:14px">'+esc(hn)+'</div><div class="api-card-sub">'+(d.version?esc(d.version):'')+'</div></div>'
+        +'</div>'
+        +'<div style="margin-bottom:1rem"><a class="tbtn" href="/service-home/fortigate.html">📊 Full dashboard FortiGate →</a></div>';
+      sec.innerHTML = html;
+    })
+    .catch(function(e){ sec.innerHTML='<div style="padding:.75rem;color:var(--muted);font-size:13px">Không kết nối được: '+esc(e.message)+'</div>'; });
+}
+
+/* ══════════════════════════════════════
+   API: n8n cards
+   ══════════════════════════════════════ */
+function loadN8nCards() {
+  var sec = document.getElementById('apiSection');
+  if (!sec) return;
+  sec.innerHTML = '<div class="loading-row"><div class="spin"></div><span>Đang tải n8n...</span></div>';
+
+  fetch('/api/n8n', { cache:'no-store', signal:AbortSignal.timeout(12000) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.error) { sec.innerHTML='<div style="padding:.75rem;color:var(--red);font-size:13px">⚠ '+esc(d.error)+'</div>'; return; }
+      var s = d.stats || {};
+      var hasRunning = (d.executions||[]).some(function(e){ return e.status==='running'; });
+      var html = '<div class="sec-title">Dữ liệu thực — n8n API</div>'
+        +'<div class="api-grid">'
+          +'<div class="api-card"><div class="api-card-label">Workflows</div><div class="api-card-value c-blue">'+(s.total||0)+'</div></div>'
+          +'<div class="api-card"><div class="api-card-label">Active</div><div class="api-card-value c-green">'+(s.active||0)+'</div></div>'
+          +'<div class="api-card"><div class="api-card-label">Runs OK</div><div class="api-card-value c-green">'+(s.success||0)+'</div></div>'
+          +'<div class="api-card"><div class="api-card-label">Lỗi</div><div class="api-card-value c-red">'+(s.failed||0)+'</div></div>'
+          +'<div class="api-card"><div class="api-card-label">Running</div><div class="api-card-value c-amber">'+(s.running||0)+'</div><div class="api-card-sub">'+(hasRunning?'đang chạy':'không có')+'</div></div>'
+          +'<div class="api-card"><div class="api-card-label">Credentials</div><div class="api-card-value">'+(s.totalCreds||0)+'</div></div>'
+        +'</div>'
+        +'<div style="margin-bottom:1rem"><a class="tbtn" href="/service-home/n8n.html">📊 Full dashboard n8n →</a></div>';
+      sec.innerHTML = html;
+    })
+    .catch(function(e){ sec.innerHTML='<div style="padding:.75rem;color:var(--muted);font-size:13px">Không kết nối được: '+esc(e.message)+'</div>'; });
+}
+
+/* ══════════════════════════════════════
+   API: ASUS cards
+   ══════════════════════════════════════ */
+function loadAsusCards() {
+  var sec = document.getElementById('apiSection');
+  if (!sec) return;
+  sec.innerHTML = '<div class="loading-row"><div class="spin"></div><span>Đang tải ASUS Router...</span></div>';
+
+  fetch('/api/asus', { cache:'no-store', signal:AbortSignal.timeout(10000) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.error) { sec.innerHTML='<div style="padding:.75rem;color:var(--red);font-size:13px">⚠ '+esc(d.error)+'</div>'; return; }
+      var clients = Array.isArray(d.clients) ? d.clients : [];
+      var onlineClients = clients.filter(function(x){ return x.isOnline||x.online||x.connected; }).length;
+      var totalClients  = clients.length;
+      var r = d.resources || {};
+      var s = d.stats || {};
+      var cpu = r.cpuPct != null ? r.cpuPct : (s.cpu != null ? s.cpu : '—');
+      var mem = r.memPct != null ? r.memPct : (s.mem != null ? s.mem : '—');
+      var html = '<div class="sec-title">Dữ liệu thực — ASUS API</div>'
+        +'<div class="api-grid">'
+          +'<div class="api-card"><div class="api-card-label">Clients</div><div class="api-card-value c-green">'+onlineClients+'</div><div class="api-card-sub">/ '+totalClients+' online</div></div>'
+          +(cpu!=='—'?'<div class="api-card"><div class="api-card-label">CPU</div><div class="api-card-value '+(cpu>80?'c-red':cpu>60?'c-amber':'c-green')+'">'+cpu+'%</div></div>':'')
+          +(mem!=='—'?'<div class="api-card"><div class="api-card-label">Memory</div><div class="api-card-value">'+mem+'%</div></div>':'')
+        +'</div>'
+        +'<div style="margin-bottom:1rem"><a class="tbtn" href="/service-home/asus.html">📊 Full dashboard ASUS →</a></div>';
+      sec.innerHTML = html;
+    })
+    .catch(function(e){ sec.innerHTML='<div style="padding:.75rem;color:var(--muted);font-size:13px">Không kết nối được: '+esc(e.message)+'</div>'; });
+}
+
+/* ══════════════════════════════════════
+   Init
+   ══════════════════════════════════════ */
+(function init(){
+  /* Theme */
+  try{ var t=localStorage.getItem('dh_theme'); if(t) document.documentElement.dataset.theme=t; }catch(e){}
+  document.getElementById('themeToggle').addEventListener('click', function(){
+    var next = document.documentElement.dataset.theme==='light' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = next;
+    try{ localStorage.setItem('dh_theme', next); }catch(e){}
+  });
+
+  /* Clock */
+  setInterval(function(){ var c=document.getElementById('clock'); if(c) c.textContent=new Date().toLocaleTimeString('vi-VN',{hour12:false}); }, 1000);
+
+  /* Settings link for admins */
+  (function(){
+    function _readUserCookie(){try{var m=document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/);return m?JSON.parse(decodeURIComponent(m[1])):null;}catch(e){return null;}}
+    var U=window.__USER__||_readUserCookie()||{};
+    if(U.isAdmin){var el=document.getElementById('settings-link');if(el)el.style.display='';}
+  })();
+
+  /* Hash routing — read initial hash */
+  var hash = window.location.hash.replace('#', '');
+  if (hash && SVCS.find(function(s){ return s.id===hash; })) _selected = hash;
+
+  /* First render */
+  renderSidebar();
+  renderMain();
+
+  /* Load status, refresh every 60s */
+  loadStatus();
+  setInterval(loadStatus, 60000);
+
+  /* Listen for hash changes (back/forward) */
+  window.addEventListener('hashchange', function(){
+    var h = window.location.hash.replace('#', '');
+    _selected = SVCS.find(function(s){ return s.id===h; }) ? h : null;
+    _embedOpen = false;
+    renderSidebar();
+    renderMain();
+  });
+})();
+</script>
+</body>
+</html>
