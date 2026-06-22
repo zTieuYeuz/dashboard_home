@@ -1,4 +1,4 @@
-﻿/* ═══════════════════════════════════════════════
+/* ═══════════════════════════════════════════════
    Auth & User Management System
    ═══════════════════════════════════════════════ */
 const SESSION_COOKIE    = 'dh_session';
@@ -2970,7 +2970,10 @@ a:hover{background:#4f46e5}</style></head>
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store, no-cache',
       'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
+      // SAMEORIGIN (not DENY) so the Services Hub can embed dashboard pages (FortiGate, VMware,
+      // CasaOS…) in same-origin iframes. External/cross-origin framing stays blocked → clickjacking
+      // protection preserved. (frame-ancestors 'self' below enforces the same in modern browsers.)
+      'X-Frame-Options': 'SAMEORIGIN',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
       // [M1] HSTS: force HTTPS for 1 year, including subdomains
       'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
@@ -2991,8 +2994,8 @@ a:hover{background:#4f46e5}</style></head>
         // Google Fonts files + data URIs
         "font-src 'self' data: https://fonts.gstatic.com; " +
         // Allow camera (go2rtc), SSH terminal (termix) iframes, and Microsoft OIDC silent renewal
-        "frame-src 'self' https://camera.home-server.id.vn https://termix-movi.home-server.id.vn https://cam.movi-finance.com https://termix.movi-finance.com https://login.microsoftonline.com; " +
-        "object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "frame-src 'self' https://camera.home-server.id.vn https://fortigate.home-server.id.vn https://termix-movi.home-server.id.vn https://cam.movi-finance.com https://termix.movi-finance.com https://login.microsoftonline.com; " +
+        "object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
     }
   });
 }
@@ -4462,6 +4465,212 @@ async function handleCameraToken(request, env) {
     return json({ url, streams, labels, streamToCamId, isAdmin: false });
   }
   return json({ url, streams: allStreams, labels, streamToCamId, isAdmin: true });
+}
+
+/* ── n8n Home — Reverse Proxy (HTTP + WebSocket) ── */
+// Proxies https://n8n-home.home-server.id.vn through /n8n-proxy/* so that n8n auth
+// cookies are first-party on the dashboard origin (bypasses third-party cookie block in iframe).
+async function handleN8nHomeProxy(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return new Response('Unauthorized', { status: 401 });
+  if (!(await hasPerm(env, session, 'n8n'))) return new Response('Forbidden', { status: 403 });
+
+  const N8N_ORIGIN = 'https://n8n-home.home-server.id.vn';
+  const reqUrl  = new URL(request.url);
+
+  // Defense for double-prefix URLs (n8n folder cards build /n8n-proxy/n8n-proxy/...). For a real
+  // navigation (middle-click, bookmark) redirect the browser to the collapsed single-prefix URL so
+  // the SPA router sees a valid route. (Normal left-clicks are fixed client-side before this.)
+  if (/^\/n8n-proxy(?:\/n8n-proxy)+/.test(reqUrl.pathname)) {
+    const fixed = reqUrl.pathname.replace(/^(?:\/n8n-proxy)+/, '/n8n-proxy');
+    return Response.redirect(`${reqUrl.origin}${fixed}${reqUrl.search}`, 302);
+  }
+
+  const subPath = reqUrl.pathname.replace(/^(?:\/n8n-proxy)+/, '') || '/';
+  const target  = `${N8N_ORIGIN}${subPath}${reqUrl.search}`;
+
+  // ── WebSocket proxy (n8n push notifications) ──
+  if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+    let upstreamResp;
+    try {
+      upstreamResp = await fetch(target, { headers: { 'Upgrade': 'websocket' } });
+    } catch(e) {
+      return new Response('n8n WS upstream error: ' + e.message, { status: 502 });
+    }
+    const upstream = upstreamResp.webSocket;
+    if (!upstream) return new Response('n8n WS upstream failed (status ' + upstreamResp.status + ')', { status: 502 });
+    const { 0: client, 1: server } = new WebSocketPair();
+    server.accept();
+    server.addEventListener('message',   ({ data }) => { try { upstream.send(data); } catch(_) {} });
+    upstream.addEventListener('message', ({ data }) => { try { server.send(data);   } catch(_) {} });
+    server.addEventListener('close',   ({ code, reason }) => { try { upstream.close(code, reason); } catch(_) {} });
+    upstream.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason);   } catch(_) {} });
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // ── HTTP proxy ──
+  // Forward request headers, but override Host so upstream knows who it is
+  const fwdHeaders = {};
+  for (const [k, v] of request.headers) {
+    const kl = k.toLowerCase();
+    if (['host','cf-connecting-ip','x-forwarded-for'].includes(kl)) continue;
+    fwdHeaders[k] = v;
+  }
+  fwdHeaders['Host'] = 'n8n-home.home-server.id.vn';
+
+  let upstream;
+  try {
+    upstream = await fetch(target, {
+      method:   request.method,
+      headers:  fwdHeaders,
+      redirect: 'manual',
+      ...(request.method !== 'GET' && request.method !== 'HEAD' ? { body: request.body } : {}),
+    });
+  } catch(e) {
+    return new Response('n8n proxy error: ' + e.message, { status: 502 });
+  }
+
+  // Build response headers — strip framing restrictions, rewrite cookies & redirects
+  const rh = new Headers();
+  for (const [k, v] of upstream.headers) {
+    const kl = k.toLowerCase();
+    // Strip headers that block iframe embedding
+    if (kl === 'x-frame-options') continue;
+    if (kl === 'content-security-policy') continue;
+    // CF Workers decode gzip — don't forward encoding/length claims
+    if (kl === 'content-encoding') continue;
+    if (kl === 'content-length') continue;
+    // Cache-control / ETag handled below — we force no-store
+    if (kl === 'cache-control' || kl === 'etag' || kl === 'last-modified') continue;
+    // Set-Cookie handled separately below
+    if (kl === 'set-cookie') continue;
+    rh.set(k, v);
+  }
+  // Force no caching so JS rewriting always applies on next load
+  rh.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+
+  // Rewrite Set-Cookie: strip Domain so cookie lands on dashboard origin
+  const rawCookies = upstream.headers.getAll ? upstream.headers.getAll('set-cookie') : [];
+  for (const c of rawCookies) {
+    const rewritten = c
+      .replace(/;\s*Domain=[^;,]*/gi, '')
+      .replace(/;\s*SameSite=\w+/gi, '; SameSite=Lax');
+    rh.append('Set-Cookie', rewritten);
+  }
+
+  // Rewrite Location for redirects so browser follows through proxy
+  const loc = upstream.headers.get('Location');
+  if (loc) rh.set('Location', loc.replace(N8N_ORIGIN, '/n8n-proxy'));
+
+  const ct = upstream.headers.get('Content-Type') || '';
+
+  // ── JS response: rewrite absolute /assets/ & /static/ paths inside JS bundles ──
+  // n8n's SPA uses dynamic import('/assets/en-xxx.js') for locale files — these absolute paths
+  // bypass the HTML attribute rewriting and hit the dashboard origin → 404.
+  if (ct.includes('javascript')) {
+    let js = await upstream.text();
+    js = js.replace(/(['"`])\/assets\//g, '$1/n8n-proxy/assets/');
+    js = js.replace(/(['"`])\/static\//g,  '$1/n8n-proxy/static/');
+    // ── base-path.js: set Vue Router base to /n8n-proxy/ (native n8n sub-path hosting) ──
+    // n8n's base-path.js is `window.BASE_PATH="/"`. Rewriting it to "/n8n-proxy/" makes the
+    // Vue Router (createWebHistory(BASE_PATH)) strip the proxy prefix natively → no 404,
+    // and n8n builds REST/push/asset URLs under /n8n-proxy/ on its own.
+    js = js.replace(/(window\.BASE_PATH\s*=\s*)["']\/["']/, '$1"/n8n-proxy/"');
+    rh.set('Content-Type', ct);
+    return new Response(js, { status: upstream.status, headers: rh });
+  }
+
+  if (!ct.includes('text/html')) {
+    return new Response(upstream.body, { status: upstream.status, headers: rh });
+  }
+
+  // ── HTML response: rewrite absolute paths + fix n8n API endpoint config ──
+  let html = await upstream.text();
+
+  // With window.BASE_PATH="/n8n-proxy/" (set in base-path.js), Vue Router natively handles the
+  // proxy prefix — so no Location/history/pathname patching is needed. This shim only:
+  //  • rewrites any absolute n8n-origin (or stray root /rest) URLs back through the proxy
+  //  • collapses double-prefix links (folder cards) and keeps target="_blank" links in-frame
+  //  • hides the brief boot flash and nudges a resize once loaded
+  const interceptScript = `<script>
+(function(){
+var B='/n8n-proxy';
+var N8N='https://n8n-home.home-server.id.vn';
+
+/* fetch/XHR: route absolute n8n origin (and any stray root /rest|/push|/webhook) through proxy. */
+/* n8n already emits /n8n-proxy/rest itself now (starts with B → returned unchanged).            */
+function _rw(u){
+  if(typeof u!=='string')return u;
+  if(u.startsWith(B))return u;
+  if(u.startsWith('/rest')||u.startsWith('/push')||u.startsWith('/webhook'))return B+u;
+  if(u.startsWith(N8N+'/'))return B+u.slice(N8N.length);
+  if(u===N8N)return B+'/';
+  return u;
+}
+var _F=window.fetch;
+window.fetch=function(u,o){return _F.call(this,_rw(u),o);};
+var _X=XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open=function(m,u){return _X.apply(this,[m,_rw(u)].concat([].slice.call(arguments,2)));};
+
+/* Click fixer (capture phase, runs before vue-router's handler). Handles two n8n quirks         */
+/* that appear only when n8n runs under a sub-path:                                              */
+/*  A) Folder cards render <a href="/n8n-proxy/n8n-proxy/...">  (n8n prepends BASE_PATH to an     */
+/*     already-based path). Router strips one prefix → still /n8n-proxy/... → 404. Collapse the   */
+/*     repeated prefix and hard-navigate the (correct) URL in-frame.                              */
+/*  B) Execution/workflow links use target="_blank" → opens a jarring new tab in the embed.       */
+/*     Strip target so vue-router navigates in-place inside the iframe instead.                   */
+document.addEventListener('click',function(e){
+  var a=e.target&&e.target.closest?e.target.closest('a[href]'):null;
+  if(!a)return;
+  var href=a.getAttribute('href')||'';
+  if(href.indexOf(B)!==0)return;                 /* only our internal proxy links */
+  var plainClick=e.button===0&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&!e.altKey;
+  if(href.indexOf(B+B+'/')>-1){                  /* A: double prefix → fix + in-frame nav */
+    if(!plainClick)return;                        /* let ctrl/middle-click fall through (server redirects) */
+    e.preventDefault();e.stopImmediatePropagation();
+    window.location.assign(href.replace(/^(\\/n8n-proxy)+/,'/n8n-proxy'));
+    return;
+  }
+  var tg=(a.getAttribute('target')||'').toLowerCase();
+  if(tg.indexOf('_blank')>-1&&plainClick){       /* B: keep it in-frame → let router take over */
+    a.removeAttribute('target');
+  }
+},true);
+
+/* Hide brief boot flash, reveal once loaded; nudge resize so any list re-measures its height */
+document.documentElement.style.opacity='0';
+var _shown=false;
+function _show(){
+  if(_shown)return;_shown=true;
+  document.documentElement.style.opacity='';
+  function _rsz(){try{window.dispatchEvent(new Event('resize'));}catch(_e){}}
+  setTimeout(_rsz,100);setTimeout(_rsz,500);setTimeout(_rsz,1200);
+}
+window.addEventListener('load',function(){setTimeout(_show,150);});
+setTimeout(_show,6000);
+
+})();
+</script>`;
+  html = html.replace('<head>', '<head>' + interceptScript);
+
+  // Rewrite absolute src/href in HTML attributes so assets load via proxy
+  html = html.replace(/(\s(?:src|href|action)=["'])(\/(?!n8n-proxy\/)[^"']*)(["'])/gi,
+    (_, attr, path, q) => `${attr}/n8n-proxy${path}${q}`
+  );
+
+  // NOTE: rest-endpoint meta stays plain "rest" (cmVzdA==). With window.BASE_PATH="/n8n-proxy/"
+  // (set in base-path.js above), n8n builds restUrl = BASE_PATH + "rest" = /n8n-proxy/rest itself.
+  // Rewriting the meta too would double-prefix it (/n8n-proxy/n8n-proxy/rest) → 404.
+
+  // ── Fix collapsed app height ──
+  // Through the proxy, n8n's #app ends up with no full-height rule → it sizes to content (~337px),
+  // which collapses the inner CSS-grid `1fr` rows to 0 → the workflow list (50 cards ARE in the DOM)
+  // gets clipped to height 0 and shows blank. Force the canonical full-viewport height on #app.
+  html = html.replace('</head>',
+    '<style id="n8n-proxy-fix">html,body{height:100%;margin:0}#app{height:100vh}</style></head>');
+
+  rh.set('Content-Type', ct);
+  return new Response(html, { status: upstream.status, headers: rh });
 }
 
 /* ── Camera Home — Full Reverse Proxy (HTTP + WebSocket) with CF Access Token ── */
@@ -7000,6 +7209,7 @@ export default {
     if (p === '/api/admin/camera-aliases-movi' && m === 'PUT')  return handleSaveCameraAlias(request, env);
     if (p.startsWith('/cpai/'))                  return handleCpaiEmbed(request, env);
 if (p.startsWith('/scrypted/'))             return handleScryptedEmbed(request, env);
+    if (p.startsWith('/n8n-proxy'))               return handleN8nHomeProxy(request, env);
     if (p.startsWith('/cam-home/'))              return handleCamHomeEmbed(request, env);
     if (p.startsWith('/cam-live/'))              return handleCamLiveEmbed(request, env);
     if (p.startsWith('/cam-embed/'))             return handleCamEmbed(request, env);
@@ -7232,6 +7442,17 @@ if (p.startsWith('/scrypted/'))             return handleScryptedEmbed(request, 
 
     // ── HTML pages: inject user or redirect to login ──
     if (p === '/' || p.endsWith('.html')) return injectUser(request, env);
+
+    // ── n8n asset fallback: dynamic import('/assets/...') from n8n iframe bypasses JS rewriting ──
+    // These requests arrive without /n8n-proxy/ prefix; catch them here and proxy to n8n.
+    if (p.startsWith('/assets/') || p.startsWith('/static/') || p.startsWith('/icons/') || p.startsWith('/fonts/') || p.startsWith('/rest/') || p.startsWith('/push/') || p.startsWith('/webhook/') || p.startsWith('/types/') || p === '/healthz' || p.startsWith('/templates/')) {
+      const assetRes = await env.ASSETS.fetch(request);
+      if (assetRes.status === 404) {
+        const _s = await getSession(request, env);
+        if (_s && await hasPerm(env, _s, 'n8n')) return handleN8nHomeProxy(request, env);
+      }
+      return assetRes;
+    }
 
     return env.ASSETS.fetch(request);
     } catch (e) {

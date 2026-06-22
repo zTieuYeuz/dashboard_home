@@ -47,7 +47,7 @@ html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);he
 .theme-toggle:hover{color:var(--text)}
 
 /* ── Layout ── */
-.layout{display:flex;height:calc(100vh - 52px);overflow:hidden}
+.layout{display:flex;height:calc(100vh - 52px);overflow:hidden;position:relative}
 
 /* ── Sidebar ── */
 .sidebar{width:240px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
@@ -67,6 +67,36 @@ html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);he
 .sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--border);transition:background .3s}
 .sb-dot.online{background:var(--green)}
 .sb-dot.offline{background:var(--red)}
+
+/* ── Collapsed icon-rail mode (khi đang xem 1 service nhúng) ──
+   Sidebar thu nhỏ còn 1 dải icon; hover (hoặc focus) thì bung 240px dạng overlay,
+   đè lên iframe — KHÔNG đẩy main reflow (main giữ margin-left 56px cố định). */
+.sidebar.collapsed{position:absolute;left:0;top:0;height:100%;width:56px;z-index:60;box-shadow:1px 0 0 var(--border);transition:width .18s ease,box-shadow .18s ease}
+.sidebar.collapsed .sb-search{display:none}
+.sidebar.collapsed .sb-group-label{height:0;padding:0;margin:0;opacity:0;overflow:hidden}
+.sidebar.collapsed .sb-list{overflow:hidden}
+.sidebar.collapsed .sb-name,
+.sidebar.collapsed .sb-dot{opacity:0;transition:opacity .12s}
+.sidebar.collapsed .sb-item{justify-content:center;gap:0;padding:9px 0;margin:3px 8px}
+.sidebar.collapsed .sb-icon{font-size:17px;width:22px}
+.sidebar.collapsed:hover,
+.sidebar.collapsed:focus-within{width:240px;box-shadow:6px 0 28px rgba(0,0,0,.45)}
+.sidebar.collapsed:hover .sb-search,
+.sidebar.collapsed:focus-within .sb-search{display:block}
+.sidebar.collapsed:hover .sb-group-label,
+.sidebar.collapsed:focus-within .sb-group-label{height:auto;padding:8px 14px 4px;margin:0;opacity:1}
+.sidebar.collapsed:hover .sb-list,
+.sidebar.collapsed:focus-within .sb-list{overflow-y:auto}
+.sidebar.collapsed:hover .sb-name,
+.sidebar.collapsed:hover .sb-dot,
+.sidebar.collapsed:focus-within .sb-name,
+.sidebar.collapsed:focus-within .sb-dot{opacity:1}
+.sidebar.collapsed:hover .sb-item,
+.sidebar.collapsed:focus-within .sb-item{justify-content:flex-start;gap:9px;padding:7px 14px;margin:0 6px}
+.sidebar.collapsed:hover .sb-icon,
+.sidebar.collapsed:focus-within .sb-icon{font-size:14px;width:18px}
+/* khi rail-mode bật, main chừa 56px bên trái cho dải icon (không reflow lúc hover) */
+.main.rail{margin-left:56px}
 .sb-dot.local{background:var(--amber)}
 @keyframes sbpulse{0%,100%{opacity:1}50%{opacity:.3}}
 .sb-dot.loading{animation:sbpulse .9s ease-in-out infinite}
@@ -206,6 +236,7 @@ var SVCS = [
   {
     id:'fortigate', name:'FortiGate Firewall', icon:'🛡️', cat:'network',
     url:'https://192.168.110.1',
+    embedUrl:'https://fortigate.home-server.id.vn/',
     desc:'Tường lửa & quản lý mạng chính — policy, VPN, sessions',
     apiPage:'/service-home/fortigate.html', apiType:'fortigate',
     tags:['Firewall','VPN','Policy','SSL-VPN']
@@ -244,7 +275,8 @@ var SVCS = [
   },
   {
     id:'n8n', name:'n8n Automation', icon:'⚡', cat:'automation',
-    url:'http://192.168.110.21:5678',
+    url:'https://n8n-home.home-server.id.vn',
+    embedUrl:'/n8n-proxy/home',
     desc:'Workflow automation & tích hợp dịch vụ, API, webhook',
     apiPage:'/service-home/n8n.html', apiType:'n8n',
     tags:['Workflow','Webhook','API','Automation']
@@ -374,10 +406,17 @@ function selectSvc(id) {
 }
 
 function renderMain() {
-  if (!_selected) { renderOverview(); return; }
+  if (!_selected) { _restoreSidebar(); renderOverview(); return; }
   var svc = SVCS.find(function(s){ return s.id===_selected; });
-  if (!svc) { _selected=null; renderOverview(); return; }
+  if (!svc) { _selected=null; _restoreSidebar(); renderOverview(); return; }
   renderDetail(svc);
+}
+
+function _restoreSidebar() {
+  var sb = document.querySelector('.sidebar');
+  var mn = document.querySelector('.main');
+  if (sb) { sb.style.display = ''; sb.classList.remove('collapsed'); }
+  if (mn) mn.classList.remove('rail');
 }
 
 /* ══════════════════════════════════════
@@ -408,6 +447,34 @@ function renderOverview() {
    Detail panel
    ══════════════════════════════════════ */
 function renderDetail(svc) {
+  var sidebar = document.querySelector('.sidebar');
+  var main    = document.querySelector('.main');
+  var inner   = document.getElementById('mainInner');
+
+  /* ── Embedded service: thu sidebar thành dải icon (hover bung ra), iframe lấp phần còn lại ── */
+  if (svc.embedUrl) {
+    if (sidebar) { sidebar.style.display = ''; sidebar.classList.add('collapsed'); }
+    main.classList.add('rail');
+    main.style.overflow  = 'hidden';
+    inner.style.maxWidth = 'none';
+    inner.style.padding  = '0';
+    inner.style.height   = '100%';
+    inner.innerHTML = '<iframe src="'+esc(svc.embedUrl)+'"'
+      +' style="width:100%;height:100%;border:none;display:block"'
+      +' sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads allow-modals allow-top-navigation-by-user-activation"'
+      +' allow="clipboard-read; clipboard-write"'
+      +' referrerpolicy="no-referrer"></iframe>';
+    return;
+  }
+
+  /* ── Restore sidebar và reset styles khi chuyển sang service không có embed ── */
+  if (sidebar) { sidebar.style.display = ''; sidebar.classList.remove('collapsed'); }
+  main.classList.remove('rail');
+  main.style.overflow  = '';
+  inner.style.maxWidth = '';
+  inner.style.padding  = '';
+  inner.style.height   = '';
+
   var st = getStatus(svc.id);
   var isHTTP       = svc.url.startsWith('http://');
   var isLocalHTTPS = /^https:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(svc.url);
@@ -468,7 +535,8 @@ function renderDetail(svc) {
         +'<div style="margin-top:12px"><a class="tbtn primary" href="'+esc(svc.url)+'" target="_blank" rel="noopener noreferrer">↗ Mở trong tab mới</a></div>'
       +'</div>';
     } else {
-      iframeOrNotice = '<iframe class="embed-iframe" src="'+esc(svc.url)+'" style="height:620px"'
+      var embedSrc = svc.embedUrl || svc.url;
+      iframeOrNotice = '<iframe class="embed-iframe" src="'+esc(embedSrc)+'" style="height:620px"'
         +' sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads"'
         +' referrerpolicy="no-referrer" loading="lazy"></iframe>';
     }
@@ -488,6 +556,9 @@ function renderDetail(svc) {
     } else if (isLocalHTTPS) {
       embedStatus = 'Không khả dụng — HTTPS tự ký bị trình duyệt chặn';
       embedColor  = 'var(--amber)';
+    } else if (svc.embedUrl) {
+      embedStatus = 'Khả dụng qua Worker proxy (' + svc.embedUrl + ')';
+      embedColor  = 'var(--green)';
     } else {
       embedStatus = 'Khả dụng khi có hostname HTTPS hợp lệ';
       embedColor  = 'var(--green)';

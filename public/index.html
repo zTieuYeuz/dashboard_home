@@ -469,6 +469,7 @@ input { font: inherit; }
     <nav class="topnav">
       <a class="topnav-item active" href="/">Overview</a>
       <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
+      <a class="topnav-item" href="/service-home/services-embed.html">Services</a>
       <a class="topnav-item" id="settings-link" href="/settings.html" style="display:none">⚙ Settings</a>
     </nav>
   </div>
@@ -678,6 +679,7 @@ function doLogout() {
    SERVICES DEFINITION (matches worker.js / api/status keys exactly)
    ═══════════════════════════════════════════════════════════════ */
 var ALL_SERVICES_DEF = [
+  { id:'services-hub', name:'Services Hub',    icon:'🗂', desc:'Trung tâm dịch vụ nội bộ · launcher · nhúng web', url:'/service-home/services-embed.html', local:false, detailPage:'/service-home/services-embed.html', noCheck:true },
   { id:'esxi',        name:'VMware ESXi',     icon:'🖥', desc:'Hypervisor · bare-metal',                     url:'https://esxi.home-server.id.vn',             local:false, detailPage:'/service-home/vmware-home.html' },
   { id:'n8n',         name:'n8n Automation',  icon:'⚡', desc:'Workflow & bot automation',                    url:'https://n8n-home.home-server.id.vn',         local:false, detailPage:'/service-home/n8n.html' },
   { id:'casaos',      name:'CasaOS',          icon:'🏠', desc:'Home server OS dashboard',                     url:'https://casaos.home-server.id.vn',           local:false, detailPage:'/service-home/casaos.html' },
@@ -702,7 +704,7 @@ var ALL_SERVICES_DEF = [
 /* Categories (matches original SERVICE_CATEGORIES) */
 var SERVICE_CATEGORIES = [
   { id:'home', icon:'🏠', name:'Service Home', desc:'Hạ tầng & hệ thống · home-server.id.vn', accent:'var(--accent)',
-    serviceIds: ['esxi','n8n','casaos','9router','uptime-kuma','ssh','fortigate','asus','camera','rustdesk'] },
+    serviceIds: ['services-hub','esxi','n8n','casaos','9router','uptime-kuma','ssh','fortigate','asus','camera','rustdesk'] },
   { id:'movi', icon:'🎬', name:'Service Movi', desc:'Văn phòng Movi · Meraki & Topology',    accent:'var(--violet)',
     serviceIds: ['meraki','movi','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi','ssh-movi'] },
 ];
@@ -716,6 +718,8 @@ var _TOOL_MOVI_KEYS = ['tool-movi-create-user','tool-movi-block-user','tool-movi
 var SERVICES = __USER__.isAdmin
   ? ALL_SERVICES_DEF
   : ALL_SERVICES_DEF.filter(function(s){
+      // services-hub: accessible to all logged-in users (no permission gate on the page)
+      if (s.id === 'services-hub') return true;
       // tool-movi: show card if user has at least one sub-permission
       if (s.id === 'tool-movi') {
         return _TOOL_MOVI_KEYS.some(function(k){ return (__USER__.permissions[k] || 'none') !== 'none'; });
