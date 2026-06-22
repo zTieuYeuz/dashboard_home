@@ -743,8 +743,10 @@ var _FROZEN_MS = _IS_MOBILE ? 8000 : 4000;
 
 /* Bật/tắt iframe stream theo state — chỉ load camera đang ON ở tab Live, còn lại
    trả về about:blank để giải phóng tài nguyên (nhẹ máy, ổn định hơn). */
-/* Stagger việc nạp iframe: mở 7 camera cùng lúc → tranh băng thông/CPU → mỗi cam
-   khởi động chậm. Giãn mỗi cam 350ms cho kết nối tuần tự → nhanh + ổn định hơn. */
+/* Stagger việc nạp iframe: mở nhiều camera cùng lúc → tranh băng thông/CPU.
+   Giãn nhẹ 120ms/cam để vẫn tuần tự nhưng không bắt cam cuối chờ quá lâu
+   (7 cam: cam cuối bắt đầu ~0.7s thay vì 2.1s với 350ms cũ). */
+var _CAM_STAGGER_MS = 120;
 function syncSnapChains() {
   var delay = 0;
   CAMERAS.forEach(function(c) {
@@ -760,7 +762,7 @@ function syncSnapChains() {
             if (state[c.id] && currentTab === 'live' && el.getAttribute('src') !== src) el.src = src;
           }, d);
         })(ifr, wantSrc, delay);
-        delay += 350;
+        delay += _CAM_STAGGER_MS;
       }
     } else {
       if (ifr.src && ifr.src !== 'about:blank') ifr.src = 'about:blank';

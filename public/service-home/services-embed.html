@@ -234,7 +234,7 @@ a{color:inherit;text-decoration:none}
    ══════════════════════════════════════ */
 var SVCS = [
   {
-    id:'fortigate', name:'FortiGate Firewall', icon:'🛡️', cat:'network',
+    id:'fortigate', name:'FortiGate Firewall', icon:'🛡️', cat:'network', done:true,
     url:'https://192.168.110.1',
     embedUrl:'https://kasm.home-server.id.vn/?autoconnect=1&resize=remote',
     desc:'Tường lửa & quản lý mạng chính — policy, VPN, sessions',
@@ -274,7 +274,7 @@ var SVCS = [
     tags:['Docker','Container','Image']
   },
   {
-    id:'n8n', name:'n8n Automation', icon:'⚡', cat:'automation',
+    id:'n8n', name:'n8n Automation', icon:'⚡', cat:'automation', done:true,
     url:'https://n8n-home.home-server.id.vn',
     embedUrl:'/n8n-proxy/home',
     desc:'Workflow automation & tích hợp dịch vụ, API, webhook',
@@ -314,7 +314,12 @@ var CATS = {
   devops:     { label: 'DevOps',      order: 3 },
   monitoring: { label: 'Giám sát',    order: 4 },
   camera:     { label: 'Camera',      order: 5 },
+  todo:       { label: 'Chưa làm',    order: 99 },
 };
+
+/* Dịch vụ chưa tích hợp (chưa có embed) gom hết vào nhóm "Chưa làm".
+   Chỉ fortigate + n8n (done:true) giữ nguyên danh mục gốc. */
+function effCat(s){ return s.done ? s.cat : 'todo'; }
 
 /* ══════════════════════════════════════
    State
@@ -376,7 +381,7 @@ function renderSidebar() {
   });
 
   var groups = {};
-  list.forEach(function(s){ if (!groups[s.cat]) groups[s.cat]=[]; groups[s.cat].push(s); });
+  list.forEach(function(s){ var c=effCat(s); if (!groups[c]) groups[c]=[]; groups[c].push(s); });
 
   var html = '';
   Object.keys(groups)
