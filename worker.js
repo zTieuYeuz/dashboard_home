@@ -2994,7 +2994,7 @@ a:hover{background:#4f46e5}</style></head>
         // Google Fonts files + data URIs
         "font-src 'self' data: https://fonts.gstatic.com; " +
         // Allow camera (go2rtc), SSH terminal (termix) iframes, and Microsoft OIDC silent renewal
-        "frame-src 'self' https://camera.home-server.id.vn https://fortigate.home-server.id.vn https://termix-movi.home-server.id.vn https://cam.movi-finance.com https://termix.movi-finance.com https://login.microsoftonline.com; " +
+        "frame-src 'self' https://camera.home-server.id.vn https://fortigate.home-server.id.vn https://kasm.home-server.id.vn https://termix-movi.home-server.id.vn https://cam.movi-finance.com https://termix.movi-finance.com https://login.microsoftonline.com; " +
         "object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
     }
   });
@@ -4465,6 +4465,93 @@ async function handleCameraToken(request, env) {
     return json({ url, streams, labels, streamToCamId, isAdmin: false });
   }
   return json({ url, streams: allStreams, labels, streamToCamId, isAdmin: true });
+}
+
+/* ── KasmVNC Proxy (/kasm-proxy/*) ── */
+// Proxies https://kasm.home-server.id.vn (FortiGate-in-Chrome kiosk streamed via KasmVNC)
+// through /kasm-proxy/*. KasmVNC itself has auth disabled (-DisableBasicAuth 1 -SecurityTypes
+// None); the origin is gated by a Cloudflare Access Service Token (shared with HOME_CAM_*).
+// The Worker injects CF-Access-Client-Id/Secret server-side so the browser never authenticates
+// directly. The WebSocket (VNC stream) MUST go through the Worker too — a browser cannot send
+// the service-token headers on a WS handshake, so a direct embed would be blocked by Access.
+const KASM_ORIGIN = 'https://kasm.home-server.id.vn';
+
+async function handleKasmProxy(request, env) {
+  try {
+  const session = await getSession(request, env);
+  if (!session) return new Response('Unauthorized', { status: 401 });
+
+  const cfId     = cleanEnv(env.HOME_CAM_CF_CLIENT_ID);
+  const cfSecret = cleanEnv(env.HOME_CAM_CF_CLIENT_SECRET);
+
+  const reqUrl  = new URL(request.url);
+  const subPath = reqUrl.pathname.replace(/^\/kasm-proxy/, '') || '/';
+  const target  = `${KASM_ORIGIN}${subPath}${reqUrl.search}`;
+
+  // ── WebSocket proxy (KasmVNC VNC stream via websockify) ──
+  // Build the upstream request by CLONING the original WS request (new Request(target, request)).
+  // This preserves the low-level "websocket upgrade" intent that CF needs to actually upgrade the
+  // subrequest through the tunnel — manually setting Upgrade headers on a fresh request leaves CF
+  // treating it as plain HTTP (origin then 404s /websockify). Then inject the Access service token.
+  if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+    let upstreamResp;
+    try {
+      const wsReq = new Request(target, request);
+      try {
+        wsReq.headers.set('CF-Access-Client-Id',     cfId);
+        wsReq.headers.set('CF-Access-Client-Secret', cfSecret);
+      } catch(_) { /* headers immutable — token still passes if cookie present */ }
+      upstreamResp = await fetch(wsReq);
+    } catch(e) {
+      return new Response('KasmVNC WS error: ' + e.message, { status: 502 });
+    }
+    const upstream = upstreamResp.webSocket;
+    if (!upstream) return new Response('KasmVNC WS upstream failed (status ' + upstreamResp.status + ')', { status: 502 });
+    const { 0: client, 1: server } = new WebSocketPair();
+    server.accept();
+    upstream.accept();
+    server.addEventListener('message',   ({ data }) => { try { upstream.send(data); } catch(_) {} });
+    upstream.addEventListener('message', ({ data }) => { try { server.send(data);   } catch(_) {} });
+    server.addEventListener('close',   ({ code, reason }) => { try { upstream.close(code, reason); } catch(_) {} });
+    upstream.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason);   } catch(_) {} });
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // ── HTTP proxy ──
+  const fwdHeaders = new Headers(request.headers);
+  fwdHeaders.set('CF-Access-Client-Id',     cfId);
+  fwdHeaders.set('CF-Access-Client-Secret', cfSecret);
+  fwdHeaders.delete('host');
+  fwdHeaders.delete('cf-connecting-ip');
+  fwdHeaders.delete('x-forwarded-for');
+
+  let upstream;
+  try {
+    upstream = await fetch(target, {
+      method:  request.method,
+      headers: fwdHeaders,
+      redirect: 'manual',
+      ...(request.method !== 'GET' && request.method !== 'HEAD' ? { body: request.body } : {}),
+    });
+  } catch(e) {
+    return new Response('KasmVNC proxy error: ' + e.message, { status: 502 });
+  }
+
+  const rh = new Headers();
+  for (const [k, v] of upstream.headers) {
+    const kl = k.toLowerCase();
+    if (['x-frame-options','content-security-policy','content-encoding',
+         'content-length','cross-origin-embedder-policy','cross-origin-opener-policy'].includes(kl)) continue;
+    if (kl === 'set-cookie') continue;
+    rh.set(k, v);
+  }
+  const loc = upstream.headers.get('Location');
+  if (loc) rh.set('Location', loc.replace(KASM_ORIGIN, '/kasm-proxy'));
+
+  return new Response(upstream.body, { status: upstream.status, headers: rh });
+  } catch(err) {
+    return new Response('KasmProxy exception: ' + err.message + '\n' + err.stack, { status: 500, headers: {'Content-Type':'text/plain'} });
+  }
 }
 
 /* ── n8n Home — Reverse Proxy (HTTP + WebSocket) ── */
@@ -7209,6 +7296,7 @@ export default {
     if (p === '/api/admin/camera-aliases-movi' && m === 'PUT')  return handleSaveCameraAlias(request, env);
     if (p.startsWith('/cpai/'))                  return handleCpaiEmbed(request, env);
 if (p.startsWith('/scrypted/'))             return handleScryptedEmbed(request, env);
+    if (p.startsWith('/kasm-proxy'))              return handleKasmProxy(request, env);
     if (p.startsWith('/n8n-proxy'))               return handleN8nHomeProxy(request, env);
     if (p.startsWith('/cam-home/'))              return handleCamHomeEmbed(request, env);
     if (p.startsWith('/cam-live/'))              return handleCamLiveEmbed(request, env);
