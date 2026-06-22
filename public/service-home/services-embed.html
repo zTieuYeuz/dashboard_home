@@ -459,11 +459,23 @@ function renderDetail(svc) {
     inner.style.maxWidth = 'none';
     inner.style.padding  = '0';
     inner.style.height   = '100%';
-    inner.innerHTML = '<iframe src="'+esc(svc.embedUrl)+'"'
-      +' style="width:100%;height:100%;border:none;display:block"'
+    var _isExtEmbed = svc.embedUrl.startsWith('http');
+    var _embedBar = _isExtEmbed
+      ? '<div style="height:36px;flex-shrink:0;display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--surface);border-bottom:1px solid var(--border)">'
+        +'<span style="font-size:11px;color:var(--muted);flex:1">'+esc(svc.name)+'</span>'
+        +'<span style="font-size:11px;color:var(--warn)">Nếu màn hình trắng — đăng nhập trước</span>'
+        +'<a class="tbtn" style="font-size:11px;padding:3px 8px" href="'+esc(svc.embedUrl)+'" target="_blank" rel="noopener">↗ Đăng nhập</a>'
+        +'<button class="tbtn" style="font-size:11px;padding:3px 8px" onclick="_reloadEmbed()">⟳ Tải lại</button>'
+      +'</div>'
+      : '';
+    inner.innerHTML = '<div style="display:flex;flex-direction:column;height:100%">'
+      +_embedBar
+      +'<iframe id="svcIfr" src="'+esc(svc.embedUrl)+'"'
+      +' style="flex:1;width:100%;border:none;display:block;min-height:0"'
       +' sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads allow-modals allow-top-navigation-by-user-activation"'
       +' allow="clipboard-read; clipboard-write"'
-      +' referrerpolicy="no-referrer"></iframe>';
+      +' referrerpolicy="no-referrer"></iframe>'
+    +'</div>';
     return;
   }
 
@@ -582,6 +594,13 @@ function renderDetail(svc) {
 
 function openEmbed()  { _embedOpen = true;  renderMain(); }
 function closeEmbed() { _embedOpen = false; renderMain(); }
+function _reloadEmbed() {
+  var f = document.getElementById('svcIfr');
+  if (!f) return;
+  var src = f.src;
+  f.removeAttribute('src');
+  setTimeout(function(){ f.src = src; }, 80);
+}
 
 /* ══════════════════════════════════════
    API: FortiGate cards
