@@ -464,21 +464,7 @@ function renderDetail(svc) {
     inner.style.maxWidth = 'none';
     inner.style.padding  = '0';
     inner.style.height   = '100%';
-    // Embed ngoài (vd kasm có Cloudflare Access): hiện dải nhỏ có nút đăng nhập +
-    // tải lại. Lần đầu/khi hết phiên, iframe sẽ trống (trang login Gmail không cho
-    // nhúng) — bấm "Đăng nhập" mở tab riêng login, xong bấm "Tải lại".
-    var _isExtEmbed = svc.embedUrl.startsWith('http');
-    var _loginOrigin = _isExtEmbed ? (new URL(svc.embedUrl)).origin + '/' : '';
-    var _embedBar = _isExtEmbed
-      ? '<div style="height:34px;flex-shrink:0;display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--surface);border-bottom:1px solid var(--border)">'
-        +'<span style="font-size:11px;color:var(--muted);flex:1">'+esc(svc.name)+'</span>'
-        +'<span style="font-size:11px;color:var(--warn)">Trống? Đăng nhập rồi tải lại</span>'
-        +'<a class="tbtn" style="font-size:11px;padding:3px 8px" href="'+esc(_loginOrigin)+'" target="_blank" rel="noopener">↗ Đăng nhập</a>'
-        +'<button class="tbtn" style="font-size:11px;padding:3px 8px" onclick="_reloadEmbed()">⟳ Tải lại</button>'
-      +'</div>'
-      : '';
     inner.innerHTML = '<div style="display:flex;flex-direction:column;height:100%">'
-      +_embedBar
       +'<iframe id="svcIfr" src="'+esc(svc.embedUrl)+'"'
       +' style="flex:1;width:100%;border:none;display:block;min-height:0"'
       +' sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads allow-modals allow-top-navigation-by-user-activation"'
