@@ -2964,12 +2964,6 @@ a:hover{background:#4f46e5}</style></head>
   newHtml = /<\/body>/i.test(newHtml)
     ? newHtml.replace(/<\/body>/i, bodyEnd + '\n</body>')
     : newHtml + bodyEnd;
-  // Cross-origin isolation CHỈ cho Services Hub: KasmVNC (FortiGate embed) cần SharedArrayBuffer
-  // để bật codec QOI giải mã ngoài luồng chính → hết lag. credentialless để Google Fonts + resource
-  // cross-origin khác vẫn load không cần CORP. iframe n8n được cấp COEP riêng trong handleN8nHomeProxy.
-  const _coi = url.pathname.endsWith('/services-embed.html')
-    ? { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'credentialless' }
-    : {};
   return new Response(newHtml, {
     status: res.status,
     headers: {
@@ -3002,7 +2996,6 @@ a:hover{background:#4f46e5}</style></head>
         // Allow camera (go2rtc), SSH terminal (termix) iframes, and Microsoft OIDC silent renewal
         "frame-src 'self' https://camera.home-server.id.vn https://fortigate.home-server.id.vn https://kasm.home-server.id.vn https://termix-movi.home-server.id.vn https://cam.movi-finance.com https://termix.movi-finance.com https://login.microsoftonline.com; " +
         "object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
-      ..._coi,
     }
   });
 }
@@ -4561,10 +4554,6 @@ async function handleN8nHomeProxy(request, env) {
   rh.set('Cache-Control', _immutableAsset
     ? 'private, max-age=31536000, immutable'
     : 'no-store, no-cache, must-revalidate');
-
-  // Services Hub bật cross-origin isolation (COOP/COEP) cho KasmVNC. iframe n8n nằm trong đó nên
-  // document n8n cũng phải khai COEP, nếu không browser chặn load iframe. credentialless = nhẹ nhất.
-  rh.set('Cross-Origin-Embedder-Policy', 'credentialless');
 
   // Rewrite Set-Cookie: strip Domain so cookie lands on dashboard origin
   const rawCookies = upstream.headers.getAll ? upstream.headers.getAll('set-cookie') : [];
