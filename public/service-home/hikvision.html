@@ -866,6 +866,13 @@ function aiPickCustomDate(btn){
     var now=new Date();
     _aiCalYear=now.getFullYear(); _aiCalMonth=now.getMonth();
   }
+  // Tự chọn sẵn HÔM NAY để bấm "🔍 Tìm kiếm" là ra ngay (khỏi phải đoán phải bấm vào ngày).
+  if(!_aiCalSelected){
+    var t=new Date();
+    _aiCalSelected=t.getFullYear()+'-'+(t.getMonth()+1)+'-'+t.getDate();
+    var lbl=document.getElementById('ai-cal-selected-label');
+    if(lbl) lbl.textContent='Đã chọn: '+('0'+t.getDate()).slice(-2)+'/'+('0'+(t.getMonth()+1)).slice(-2)+'/'+t.getFullYear()+' — bấm 🔍 Tìm kiếm';
+  }
   aiCalFetchDotsAndRender();
 }
 
@@ -962,6 +969,7 @@ function loadAIEvents(){
   // Nếu chọn "📅 Chọn ngày" mà chưa chọn ngày cụ thể → nhắc, đừng tìm
   if((_aiVal('ai-when','data-when')||'today')==='custom' && !_aiCalSelected){
     grid.innerHTML='<div class="ai-empty">Hãy chọn một ngày trên lịch rồi bấm 🔍 Tìm kiếm 🙂</div>';
+    var _c0=document.getElementById('ai-count'); if(_c0) _c0.textContent='';
     return;
   }
   _aiLoading=true;
