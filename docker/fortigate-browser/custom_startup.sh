@@ -7,4 +7,6 @@ exec /usr/bin/google-chrome-stable \
   --disable-session-crashed-bubble \
   --disable-infobars \
   --disable-translate \
+  --load-extension=/opt/fortigate-autologin \
+  --disable-extensions-except=/opt/fortigate-autologin \
   "https://fortigate.home-server.id.vn/"

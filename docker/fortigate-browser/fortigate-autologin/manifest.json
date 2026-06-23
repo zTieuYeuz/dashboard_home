@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "FortiGate Auto-Login",
+  "version": "1.0",
+  "description": "Tự điền user/pass và bấm Login khi Chrome (kiosk KasmVNC) mở trang đăng nhập FortiGate.",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://fortigate.home-server.id.vn/*",
+        "https://192.168.110.1/*"
+      ],
+      "js": ["autologin.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

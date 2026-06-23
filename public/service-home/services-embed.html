@@ -242,6 +242,19 @@ var SVCS = [
     tags:['Firewall','VPN','Policy','SSL-VPN']
   },
   {
+    /* ── THỬ NGHIỆM: nhúng FortiGate TRỰC TIẾP (không qua Docker/KasmVNC) ──
+       Nếu chạy mượt → 200 site chỉ là 200 entry, không cần Docker.
+       Điều kiện để hết "refused to connect":
+       1) CF Transform Rule strip X-Frame-Options + CSP frame-ancestors trên
+          fortigate.home-server.id.vn (xem hướng dẫn anh Thoai gửi).
+       2) Test trên PRODUCTION (cùng home-server.id.vn → cookie qua iframe). */
+    id:'fortigate-test', name:'FortiGate Test', icon:'🧪', cat:'network', done:true,
+    url:'https://fortigate.home-server.id.vn',
+    embedUrl:'https://fortigate.home-server.id.vn/',
+    desc:'THỬ NGHIỆM nhúng FortiGate trực tiếp vào iframe (không Docker) — kiểm tra có bị chặn khung không',
+    tags:['Test','Iframe','Firewall']
+  },
+  {
     id:'asus', name:'ASUS Router', icon:'📡', cat:'network',
     url:'http://192.168.1.1',
     desc:'Router WiFi ASUS — quản lý DHCP và kết nối không dây',

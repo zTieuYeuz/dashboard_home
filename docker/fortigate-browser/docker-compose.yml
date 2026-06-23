@@ -53,6 +53,8 @@ services:
     # → KasmVNC stream chỉ hiện nội dung FortiGate, không có UI của Chrome.
     volumes:
       - ./custom_startup.sh:/dockerstartup/custom_startup.sh:ro
+      # Extension auto-login FortiGate (điền user/pass trong fortigate-autologin/autologin.js)
+      - ./fortigate-autologin:/opt/fortigate-autologin:ro
 
     # Một số kernel cần dòng này để Chrome sandbox không lỗi:
     security_opt:

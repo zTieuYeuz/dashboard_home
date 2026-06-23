@@ -250,6 +250,11 @@ body.cam-fs-lock{overflow:hidden}
 .ai-cal-time{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;font-size:14px;color:var(--text-2)}
 .ai-cal-time input[type=time]{font-size:15px;padding:6px 10px;border-radius:8px;border:2px solid var(--border);background:var(--surface-2);color:var(--text);cursor:pointer}
 .ai-cal-time input[type=time]:focus{border-color:var(--accent);outline:none}
+/* Nút Tìm kiếm to, rõ — dễ bấm cho người lớn tuổi */
+.ai-search-btn{display:block;width:100%;margin-top:18px;padding:15px 20px;font-size:18px;font-weight:800;letter-spacing:.3px;color:#fff;background:var(--accent);border:none;border-radius:12px;cursor:pointer;transition:filter .15s,transform .08s;box-shadow:0 4px 14px color-mix(in oklch,var(--accent) 40%,transparent)}
+.ai-search-btn:hover{filter:brightness(1.07)}
+.ai-search-btn:active{transform:translateY(1px)}
+.ai-search-btn:disabled{opacity:.6;cursor:wait;filter:saturate(.6)}
 
 /* ── Topbar override (beats global /mobile.css grid via higher specificity + !important).
    The camera page has many buttons in .topbar-right; mobile.css's grid puts brand|actions
@@ -495,6 +500,7 @@ body.cam-fs-lock{overflow:hidden}
         <button class="ai-chip" data-limit="9999" onclick="aiPick('ai-limit',this)">Tất cả</button>
       </div>
     </div>
+    <button class="ai-search-btn" id="ai-search-btn" onclick="loadAIEvents()">🔍 Tìm kiếm</button>
   </div>
   <div class="ai-count" id="ai-count"></div>
   <div class="ai-grid" id="ai-grid"></div>
@@ -842,7 +848,7 @@ function aiPick(groupId, btn){
   btn.classList.add('active');
   // Ẩn date picker khi chọn chip khác trong ai-when
   if(groupId==='ai-when') document.getElementById('ai-date-row').style.display='none';
-  loadAIEvents();
+  // KHÔNG tự tìm — chờ bấm nút "🔍 Tìm kiếm"
 }
 
 /* ── AI Calendar ── */
@@ -927,11 +933,11 @@ function aiCalSelectDay(dk, label){
   _aiCalSelected=dk;
   aiRenderCalendar();
   var lbl=document.getElementById('ai-cal-selected-label');
-  if(lbl) lbl.textContent='Đã chọn: '+label;
-  loadAIEvents();
+  if(lbl) lbl.textContent='Đã chọn: '+label+' — bấm 🔍 Tìm kiếm';
+  // KHÔNG tự tìm — chờ bấm nút "🔍 Tìm kiếm"
 }
 
-function aiCalTimeChanged(){ if(_aiCalSelected) loadAIEvents(); }
+function aiCalTimeChanged(){ /* chờ bấm nút "🔍 Tìm kiếm" */ }
 function _aiVal(groupId, attr){
   var g=document.getElementById(groupId);
   var b=g&&g.querySelector('.ai-chip.active');
@@ -953,7 +959,14 @@ function loadAIEvents(){
   if(_aiLoading) return;
   var grid=document.getElementById('ai-grid');
   if(!grid) return;
+  // Nếu chọn "📅 Chọn ngày" mà chưa chọn ngày cụ thể → nhắc, đừng tìm
+  if((_aiVal('ai-when','data-when')||'today')==='custom' && !_aiCalSelected){
+    grid.innerHTML='<div class="ai-empty">Hãy chọn một ngày trên lịch rồi bấm 🔍 Tìm kiếm 🙂</div>';
+    return;
+  }
   _aiLoading=true;
+  var _searchBtn=document.getElementById('ai-search-btn');
+  if(_searchBtn){ _searchBtn.disabled=true; _searchBtn.textContent='⏳ Đang tìm…'; }
   // Reset các entry null (đang xử lý dở) để cho phép retry khi load lại
   Object.keys(_faceCache).forEach(function(k){ if(_faceCache[k]===null) delete _faceCache[k]; });
   var cnt=document.getElementById('ai-count'); if(cnt) cnt.textContent='';
@@ -995,7 +1008,11 @@ function loadAIEvents(){
     .then(function(r){ return r.ok?r.json():Promise.reject(r.status); })
     .then(function(d){ _aiEvents=d||[]; renderAIEvents(); })
     .catch(function(){ grid.innerHTML='<div class="ai-empty">Không tải được sự kiện AI 😕</div>'; })
-    .finally(function(){ _aiLoading=false; });
+    .finally(function(){
+      _aiLoading=false;
+      var b=document.getElementById('ai-search-btn');
+      if(b){ b.disabled=false; b.textContent='🔍 Tìm kiếm'; }
+    });
 }
 
 function renderAIEvents(){
