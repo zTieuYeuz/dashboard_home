@@ -11,10 +11,17 @@
 #   GET  /next                                                    → {"url": ...|null} (lấy & xoá)
 #   GET  /health                                                  → {"status":"ok"}
 # ──────────────────────────────────────────────────────────────────────────
-import json, os, http.server, socketserver, threading
+import json, os, re, http.server, socketserver, threading
 
 LISTEN       = int(os.environ.get("NAV_PORT", "8080"))
 ALLOW_SUFFIX = os.environ.get("NAV_ALLOW_SUFFIX", ".home-server.id.vn")
+
+# Regex khớp IPv4 private: 10.x.x.x, 172.16-31.x.x, 192.168.x.x
+_PRIVATE_IP = re.compile(
+    r'^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}'
+    r'|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}'
+    r'|192\.168\.\d{1,3}\.\d{1,3})$'
+)
 
 _lock = threading.Lock()
 _pending = {"url": None}
@@ -54,8 +61,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not (url.startswith("https://") or url.startswith("http://")):
                 raise ValueError("URL phải bắt đầu bằng http(s)://")
             host = url.split("://", 1)[1].split("/", 1)[0].split(":")[0]
-            if ALLOW_SUFFIX and not host.endswith(ALLOW_SUFFIX):
-                raise ValueError(f"Domain '{host}' không thuộc {ALLOW_SUFFIX} — từ chối")
+            is_private_ip = bool(_PRIVATE_IP.match(host))
+            if ALLOW_SUFFIX and not is_private_ip and not host.endswith(ALLOW_SUFFIX):
+                raise ValueError(f"'{host}' không thuộc {ALLOW_SUFFIX} và không phải IP LAN — từ chối")
             with _lock:
                 _pending["url"] = url
             self._send(200, {"status": "ok", "url": url})
