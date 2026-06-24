@@ -1,31 +1,36 @@
 # ──────────────────────────────────────────────────────────────────────────
-# FortiGate POOL — vài container Chrome điều khiển được, cho TỐI ĐA 2 người.
+# FortiGate POOL — 3 admin + 2 view slots, tối đa 5 người dùng đồng thời.
 # Mỗi container = 1 "chỗ ngồi" (role cố định: admin hoặc view).
-# Dashboard cấp container cho người dùng, gọi navigator để đổi site.
 #
-# PHASE 1: test 1 slot trước. Chạy: docker compose up -d
-#   Test LAN:
-#     - Stream:    https://192.168.110.21:6911   (KasmVNC)
-#     - Navigator: curl -X POST http://192.168.110.21:8911/open \
-#                       -H 'Content-Type: application/json' \
-#                       -d '{"url":"https://fortigate.home-server.id.vn/"}'
-#       → tab Chrome phải nhảy sang URL đó và tự đăng nhập.
+# Port plan:
+#   a1: 6911 (kasm) / 8911 (nav)  → kasm-a1.home-server.id.vn / nav-a1.home-server.id.vn
+#   a2: 6912 / 8912               → kasm-a2 / nav-a2
+#   a3: 6913 / 8913               → kasm-a3 / nav-a3
+#   v1: 6914 / 8914               → kasm-v1 / nav-v1
+#   v2: 6915 / 8915               → kasm-v2 / nav-v2
+#
+# Hướng dẫn bật slot mới:
+#   1. Tạo 2 CF Tunnel: kasm-aX.home-server.id.vn → 192.168.110.21:69XX
+#                       nav-aX.home-server.id.vn  → 192.168.110.21:89XX
+#   2. Bỏ comment service tương ứng bên dưới
+#   3. docker compose up -d
+#   4. Uncomment slot trong FGT_POOL_SLOTS (worker.js) rồi deploy staging
 # ──────────────────────────────────────────────────────────────────────────
 
 services:
-  # ── Slot 1: ADMIN ────────────────────────────────────────────────────────
+
+  # ── Slot a1: ADMIN (đang chạy) ───────────────────────────────────────────
   fgt-slot-admin1:
     image: kasmweb/chrome:1.16.0
     container_name: fgt-slot-admin1
     restart: unless-stopped
     shm_size: "1gb"
     ports:
-      - "6911:6901"   # KasmVNC stream  (tunnel → kasm-a1.home-server.id.vn)
-      - "8911:8080"   # Navigator API   (tunnel → nav-a1.home-server.id.vn)
+      - "6911:6901"   # KasmVNC stream  → kasm-a1.home-server.id.vn
+      - "8911:8080"   # Navigator API   → nav-a1.home-server.id.vn
     environment:
       VNC_PW: "${VNC_PW:-changeme}"
       VNCOPTIONS: "-DisableBasicAuth 1 -SecurityTypes None"
-      # Role = admin → dùng account admin cho MỌI site
       FGT_URL:  "${FGT_URL:-https://fortigate.home-server.id.vn/}"
       FGT_USER: "${ADM_USER:-}"
       FGT_PASS: "${ADM_PASS:-}"
@@ -37,15 +42,84 @@ services:
     security_opt:
       - seccomp:unconfined
 
-  # ── Slot 2: VIEW (bỏ comment khi cần người thứ 2 / role view) ─────────────
+  # ── Slot a2: ADMIN (bật khi tạo tunnel kasm-a2 + nav-a2) ────────────────
+  # fgt-slot-admin2:
+  #   image: kasmweb/chrome:1.16.0
+  #   container_name: fgt-slot-admin2
+  #   restart: unless-stopped
+  #   shm_size: "1gb"
+  #   ports:
+  #     - "6912:6901"   # → kasm-a2.home-server.id.vn
+  #     - "8912:8080"   # → nav-a2.home-server.id.vn
+  #   environment:
+  #     VNC_PW: "${VNC_PW:-changeme}"
+  #     VNCOPTIONS: "-DisableBasicAuth 1 -SecurityTypes None"
+  #     FGT_URL:  "${FGT_URL:-https://fortigate.home-server.id.vn/}"
+  #     FGT_USER: "${ADM_USER:-}"
+  #     FGT_PASS: "${ADM_PASS:-}"
+  #     NAV_ALLOW_SUFFIX: "${NAV_ALLOW_SUFFIX:-.home-server.id.vn}"
+  #   volumes:
+  #     - ./custom_startup.sh:/dockerstartup/custom_startup.sh:ro
+  #     - ./navigator.py:/opt/navigator.py:ro
+  #     - ./pool-extension:/opt/pool-ext:ro
+  #   security_opt:
+  #     - seccomp:unconfined
+
+  # ── Slot a3: ADMIN (bật khi tạo tunnel kasm-a3 + nav-a3) ────────────────
+  # fgt-slot-admin3:
+  #   image: kasmweb/chrome:1.16.0
+  #   container_name: fgt-slot-admin3
+  #   restart: unless-stopped
+  #   shm_size: "1gb"
+  #   ports:
+  #     - "6913:6901"   # → kasm-a3.home-server.id.vn
+  #     - "8913:8080"   # → nav-a3.home-server.id.vn
+  #   environment:
+  #     VNC_PW: "${VNC_PW:-changeme}"
+  #     VNCOPTIONS: "-DisableBasicAuth 1 -SecurityTypes None"
+  #     FGT_URL:  "${FGT_URL:-https://fortigate.home-server.id.vn/}"
+  #     FGT_USER: "${ADM_USER:-}"
+  #     FGT_PASS: "${ADM_PASS:-}"
+  #     NAV_ALLOW_SUFFIX: "${NAV_ALLOW_SUFFIX:-.home-server.id.vn}"
+  #   volumes:
+  #     - ./custom_startup.sh:/dockerstartup/custom_startup.sh:ro
+  #     - ./navigator.py:/opt/navigator.py:ro
+  #     - ./pool-extension:/opt/pool-ext:ro
+  #   security_opt:
+  #     - seccomp:unconfined
+
+  # ── Slot v1: VIEW (bật khi tạo tunnel kasm-v1 + nav-v1) ─────────────────
   # fgt-slot-view1:
   #   image: kasmweb/chrome:1.16.0
   #   container_name: fgt-slot-view1
   #   restart: unless-stopped
   #   shm_size: "1gb"
   #   ports:
-  #     - "6912:6901"   # tunnel → kasm-v1.home-server.id.vn
-  #     - "8912:8080"   # tunnel → nav-v1.home-server.id.vn
+  #     - "6914:6901"   # → kasm-v1.home-server.id.vn
+  #     - "8914:8080"   # → nav-v1.home-server.id.vn
+  #   environment:
+  #     VNC_PW: "${VNC_PW:-changeme}"
+  #     VNCOPTIONS: "-DisableBasicAuth 1 -SecurityTypes None"
+  #     FGT_URL:  "${FGT_URL:-https://fortigate.home-server.id.vn/}"
+  #     FGT_USER: "${VIEW_USER:-}"
+  #     FGT_PASS: "${VIEW_PASS:-}"
+  #     NAV_ALLOW_SUFFIX: "${NAV_ALLOW_SUFFIX:-.home-server.id.vn}"
+  #   volumes:
+  #     - ./custom_startup.sh:/dockerstartup/custom_startup.sh:ro
+  #     - ./navigator.py:/opt/navigator.py:ro
+  #     - ./pool-extension:/opt/pool-ext:ro
+  #   security_opt:
+  #     - seccomp:unconfined
+
+  # ── Slot v2: VIEW (bật khi tạo tunnel kasm-v2 + nav-v2) ─────────────────
+  # fgt-slot-view2:
+  #   image: kasmweb/chrome:1.16.0
+  #   container_name: fgt-slot-view2
+  #   restart: unless-stopped
+  #   shm_size: "1gb"
+  #   ports:
+  #     - "6915:6901"   # → kasm-v2.home-server.id.vn
+  #     - "8915:8080"   # → nav-v2.home-server.id.vn
   #   environment:
   #     VNC_PW: "${VNC_PW:-changeme}"
   #     VNCOPTIONS: "-DisableBasicAuth 1 -SecurityTypes None"
