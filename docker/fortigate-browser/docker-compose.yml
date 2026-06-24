@@ -46,6 +46,14 @@ services:
       #    Cloudflare Access gate theo email.
       VNCOPTIONS: "-DisableBasicAuth 1 -SecurityTypes None"
 
+      # ──────────────────────────────────────────────────────────────────────
+      # Auto-login: 3 biến này điều khiển trang FortiGate mở + tài khoản tự điền.
+      # Đặt giá trị trong file .env (cùng thư mục, KHÔNG commit) — đổi site khác
+      # chỉ cần sửa .env, không đụng file .js. Mật khẩu mọi ký tự đều OK.
+      FGT_URL:  "${FGT_URL:-https://fortigate.home-server.id.vn/}"
+      FGT_USER: "${FGT_USER:-}"
+      FGT_PASS: "${FGT_PASS:-}"
+
       # (tuỳ chọn) tắt hardware decode nếu hình bị nhiễu trên 1 số máy:
       # KASM_RX_HW_DECODE: "0"
 

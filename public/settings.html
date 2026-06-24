@@ -1088,6 +1088,7 @@ var DELEGATE_SVC_LABELS = {
   'esxi':'VMware ESXi','n8n':'n8n Automation','casaos':'CasaOS',
   '9router':'9Router','fortigate':'FortiGate','asus':'ASUS Router',
   'ssh':'SSH Terminal','uptime-kuma':'Uptime Kuma','camera':'Camera Home · Live','camera_playback':'Camera Home · Playback','camera_download':'Camera Home · Tải video','app_camera':'Camera Home · Mở thẳng camera khi login','camera_autoopen':'Camera Home · Tự động mở tất cả camera','rustdesk':'RustDesk Remote',
+  'fortigate_pool':'FortiGate Pool (read=View, write=Admin)',
   /* ── Service Movi ── */
   'meraki':'Meraki Network','topology':'Movi Map Network',
   'fortigate-movi':'FortiGate Movi','camera-movi':'Camera Movi',
@@ -1098,7 +1099,7 @@ var DELEGATE_SVC_LABELS = {
   'tool-movi-fg-policy-lan':'Tool: FG Policy LAN','tool-movi-fg-policy-wifi':'Tool: FG Policy WiFi',
   'ssh-movi':'Termix Movi',
 };
-var _DELEGATE_HOME = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk'];
+var _DELEGATE_HOME = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','fortigate_pool'];
 var _DELEGATE_MOVI = ['meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
 /* tool-movi sub-keys — needed to restore parent group visibility in delegate filter */
 var _TOOL_MOVI_SUB = ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'];
@@ -1250,6 +1251,7 @@ var SERVICE_HOME_PAGES = [
   {id:'ssh',         name:'SSH Terminal',   icon:'⌨',  perms:['none','write'],  permLabels:{'none':'Không truy cập','write':'Truy cập'}},
   {id:'rustdesk',    name:'RustDesk Remote',icon:'🖥', perms:['none','read'],   permLabels:{'none':'Không truy cập','read':'Truy cập'}},
   {id:'fortigate',   name:'FortiGate',      icon:'🛡', perms:['none','read','write']},
+  {id:'fortigate_pool', name:'FortiGate Pool', icon:'🧩', perms:['none','read','write'], permLabels:{'none':'Không truy cập','read':'View (chỉ xem)','write':'Admin (toàn quyền)'}},
   {id:'asus',        name:'ASUS Router',    icon:'📡', perms:['none','read','write']},
   {id:'uptime-kuma', name:'Uptime Kuma',    icon:'📊', perms:['none','read']},
   {type:'camera-home-group', id:'camera-home-group', icon:'📷', name:'Camera Home'}

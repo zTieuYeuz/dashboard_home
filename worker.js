@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════ */
 const SESSION_COOKIE    = 'dh_session';
 const SESSION_TTL       = 60 * 60 * 8;      // default fallback only — runtime reads from KV system_config
-const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
+const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','fortigate_pool','asus','ssh','uptime-kuma','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
 
 /* Idle-timer script injected into every authenticated HTML page.
    T = idle timeout ms, W = warning threshold ms (must be < T) */
@@ -2994,7 +2994,7 @@ a:hover{background:#4f46e5}</style></head>
         // Google Fonts files + data URIs
         "font-src 'self' data: https://fonts.gstatic.com; " +
         // Allow camera (go2rtc), SSH terminal (termix) iframes, and Microsoft OIDC silent renewal
-        "frame-src 'self' https://camera.home-server.id.vn https://fortigate.home-server.id.vn https://kasm.home-server.id.vn https://termix-movi.home-server.id.vn https://cam.movi-finance.com https://termix.movi-finance.com https://login.microsoftonline.com; " +
+        "frame-src 'self' https://*.home-server.id.vn https://cam.movi-finance.com https://termix.movi-finance.com https://login.microsoftonline.com; " +
         "object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
     }
   });
@@ -6409,6 +6409,106 @@ function json(data, status = 200) {
    so it can be embedded in an iframe on the dashboard
    ═══════════════════════════════════════════════ */
 function _escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ═══════════════════════════════════════════════
+   FortiGate POOL — cấp phát container Chrome theo người dùng.
+   Quyền 'fortigate_pool': write = admin, read = view.
+   Mỗi slot = 1 container (kasm = màn hình, nav = điều khiển đổi site).
+   Thêm slot khi anh Thoai tạo container + tunnel tương ứng.
+   ═══════════════════════════════════════════════ */
+const FGT_POOL_SLOTS = [
+  { id:'a1', role:'admin', kasm:'https://kasm-a1.home-server.id.vn', nav:'https://nav-a1.home-server.id.vn' },
+  // { id:'a2', role:'admin', kasm:'https://kasm-a2.home-server.id.vn', nav:'https://nav-a2.home-server.id.vn' },
+  // { id:'a3', role:'admin', kasm:'https://kasm-a3.home-server.id.vn', nav:'https://nav-a3.home-server.id.vn' },
+  // { id:'v1', role:'view',  kasm:'https://kasm-v1.home-server.id.vn', nav:'https://nav-v1.home-server.id.vn' },
+  // { id:'v2', role:'view',  kasm:'https://kasm-v2.home-server.id.vn', nav:'https://nav-v2.home-server.id.vn' },
+];
+const FGT_POOL_TTL_SEC = 1200; // giữ slot 20 phút, trang heartbeat sẽ gia hạn
+
+async function _fgtPoolRole(env, username) {
+  const eff = await computeEffectivePermissions(env, username);
+  if (eff && eff.role === 'admin') return 'admin';   // admin hệ thống → luôn dùng slot admin
+  const lvl = (eff && eff.permissions && eff.permissions['fortigate_pool']) || 'none';
+  if (lvl === 'write') return 'admin';
+  if (lvl === 'read')  return 'view';
+  return null;
+}
+
+async function _fgtPoolClaim(env, username, role) {
+  // Đang giữ slot hợp lệ? → gia hạn & dùng lại
+  const cur = await env.DASHBOARD_KV.get(`fgtpool:user:${username}`);
+  if (cur) {
+    const rec = await env.DASHBOARD_KV.get(`fgtpool:slot:${cur}`, 'json');
+    const slot = FGT_POOL_SLOTS.find(s => s.id === cur);
+    if (slot && slot.role === role && rec && rec.username === username) {
+      await env.DASHBOARD_KV.put(`fgtpool:slot:${cur}`, JSON.stringify({ username, ts: Date.now() }), { expirationTtl: FGT_POOL_TTL_SEC });
+      await env.DASHBOARD_KV.put(`fgtpool:user:${username}`, cur, { expirationTtl: FGT_POOL_TTL_SEC });
+      return slot;
+    }
+  }
+  // Tìm slot rảnh cùng role
+  for (const slot of FGT_POOL_SLOTS.filter(s => s.role === role)) {
+    const rec = await env.DASHBOARD_KV.get(`fgtpool:slot:${slot.id}`, 'json');
+    if (!rec || rec.username === username) {
+      await env.DASHBOARD_KV.put(`fgtpool:slot:${slot.id}`, JSON.stringify({ username, ts: Date.now() }), { expirationTtl: FGT_POOL_TTL_SEC });
+      await env.DASHBOARD_KV.put(`fgtpool:user:${username}`, slot.id, { expirationTtl: FGT_POOL_TTL_SEC });
+      return slot;
+    }
+  }
+  return null;
+}
+
+async function handleFgtPoolAllocate(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const role = await _fgtPoolRole(env, session.username);
+  if (!role) return json({ error: 'forbidden' }, 403);
+  const slot = await _fgtPoolClaim(env, session.username, role);
+  if (!slot) return json({ busy: true, role }, 200);
+  return json({ ok: true, role, slot: { id: slot.id, kasm: slot.kasm } }, 200);
+}
+
+async function handleFgtPoolOpen(request, env) {
+  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const role = await _fgtPoolRole(env, session.username);
+  if (!role) return json({ error: 'forbidden' }, 403);
+  let body; try { body = await request.json(); } catch { body = {}; }
+  const url = (body && body.url) || '';
+  if (!/^https?:\/\//.test(url)) return json({ error: 'URL không hợp lệ' }, 400);
+  const slotId = await env.DASHBOARD_KV.get(`fgtpool:user:${session.username}`);
+  const slot = FGT_POOL_SLOTS.find(s => s.id === slotId);
+  if (!slot) return json({ error: 'Chưa được cấp slot — tải lại trang' }, 409);
+  const headers = { 'Content-Type': 'application/json' };
+  // Khi bật Access cho nav-*, đính Service Token để Worker qua được Access.
+  // Dùng chung token với home-cam (HOME_CAM_CF_*); fallback FGT_POOL_CF_* nếu đặt riêng.
+  const cfId  = env.FGT_POOL_CF_CLIENT_ID     || env.HOME_CAM_CF_CLIENT_ID;
+  const cfSec = env.FGT_POOL_CF_CLIENT_SECRET || env.HOME_CAM_CF_CLIENT_SECRET;
+  if (cfId && cfSec) {
+    headers['CF-Access-Client-Id']     = cleanEnv(cfId);
+    headers['CF-Access-Client-Secret'] = cleanEnv(cfSec);
+  }
+  try {
+    const r = await fetch(`${slot.nav}/open`, { method: 'POST', headers, body: JSON.stringify({ url }), signal: AbortSignal.timeout(10000) });
+    const data = await r.json().catch(() => ({}));
+    return json(data, r.status);
+  } catch (e) {
+    return json({ error: 'Không gọi được navigator: ' + e.message }, 502);
+  }
+}
+
+async function handleFgtPoolRelease(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const slotId = await env.DASHBOARD_KV.get(`fgtpool:user:${session.username}`);
+  if (slotId) {
+    await env.DASHBOARD_KV.delete(`fgtpool:slot:${slotId}`).catch(() => {});
+    await env.DASHBOARD_KV.delete(`fgtpool:user:${session.username}`).catch(() => {});
+  }
+  return json({ ok: true });
+}
+
 function proxyErr(msg, url) {
   return new Response(
     `<html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:2rem;background:#0b0d14;color:#e2e8f0">
@@ -7216,6 +7316,9 @@ export default {
     if (p.startsWith('/cpai/'))                  return handleCpaiEmbed(request, env);
 if (p.startsWith('/scrypted/'))             return handleScryptedEmbed(request, env);
     if (p.startsWith('/n8n-proxy'))               return handleN8nHomeProxy(request, env);
+    if (p === '/api/fgt-pool/allocate')          return handleFgtPoolAllocate(request, env);
+    if (p === '/api/fgt-pool/open')              return handleFgtPoolOpen(request, env);
+    if (p === '/api/fgt-pool/release')           return handleFgtPoolRelease(request, env);
     if (p.startsWith('/cam-home/'))              return handleCamHomeEmbed(request, env);
     if (p.startsWith('/cam-live/'))              return handleCamLiveEmbed(request, env);
     if (p.startsWith('/cam-embed/'))             return handleCamEmbed(request, env);

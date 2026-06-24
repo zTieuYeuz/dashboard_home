@@ -65,6 +65,35 @@ html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);he
 .sb-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
 .sb-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--border);transition:background .3s}
+/* ALL Site Network — mục cây gập/mở trong sidebar */
+.sb-allsite-hd{display:flex;align-items:center;gap:9px;padding:7px 14px;margin:0 6px;font-size:13px;cursor:pointer;transition:background .1s;border-radius:7px;color:var(--text-2);user-select:none}
+.sb-allsite-hd:hover{background:var(--surface-2);color:var(--text)}
+.sb-allsite-hd .caret{font-size:10px;width:10px;text-align:center;flex-shrink:0;transition:transform .15s}
+.sb-allsite-hd.open .caret{transform:rotate(90deg)}
+.sb-site-fld{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:6px 14px 3px 32px}
+.sb-site{display:flex;align-items:center;gap:8px;padding:6px 14px 6px 34px;margin:0 6px;font-size:13px;cursor:pointer;transition:background .1s;border-radius:7px;color:var(--text-2);user-select:none}
+.sb-site:hover{background:var(--surface-2);color:var(--text)}
+.sb-site.active{background:color-mix(in oklch,var(--accent) 15%,var(--bg));color:var(--accent);font-weight:500}
+/* Thu gọn (rail) + bung khi hover/focus — khớp với .sb-item */
+.sidebar.collapsed .sb-allsite-hd,.sidebar.collapsed .sb-site{justify-content:center;gap:0;padding:9px 0;margin:3px 8px}
+.sidebar.collapsed .sb-allsite-hd .caret{display:none}
+.sidebar.collapsed .sb-site-fld{height:0;padding:0;margin:0;opacity:0;overflow:hidden}
+.sidebar.collapsed:hover .sb-allsite-hd,.sidebar.collapsed:hover .sb-site,
+.sidebar.collapsed:focus-within .sb-allsite-hd,.sidebar.collapsed:focus-within .sb-site{justify-content:flex-start;gap:9px;padding:7px 14px;margin:0 6px}
+.sidebar.collapsed:hover .sb-site,
+.sidebar.collapsed:focus-within .sb-site{padding:6px 14px 6px 34px}
+.sidebar.collapsed:hover .sb-allsite-hd .caret,
+.sidebar.collapsed:focus-within .sb-allsite-hd .caret{display:inline}
+.sidebar.collapsed:hover .sb-site-fld,
+.sidebar.collapsed:focus-within .sb-site-fld{height:auto;padding:6px 14px 3px 32px;opacity:1}
+/* Header nhóm dạng dropdown */
+.sb-group-hd{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;padding:8px 14px 4px;cursor:pointer;user-select:none}
+.sb-group-hd:hover{color:var(--text-2)}
+.sb-group-hd .gcaret{font-size:9px;width:9px;flex-shrink:0;transition:transform .15s}
+.sb-group-hd.open .gcaret{transform:rotate(90deg)}
+.sidebar.collapsed .sb-group-hd{height:0;padding:0;margin:0;opacity:0;overflow:hidden}
+.sidebar.collapsed:hover .sb-group-hd,
+.sidebar.collapsed:focus-within .sb-group-hd{height:auto;padding:8px 14px 4px;opacity:1}
 .sb-dot.online{background:var(--green)}
 .sb-dot.offline{background:var(--red)}
 
@@ -234,27 +263,6 @@ a{color:inherit;text-decoration:none}
    ══════════════════════════════════════ */
 var SVCS = [
   {
-    id:'fortigate', name:'FortiGate Firewall', icon:'🛡️', cat:'network', done:true,
-    url:'https://192.168.110.1',
-    embedUrl:'https://kasm.home-server.id.vn/?autoconnect=1&resize=remote',
-    desc:'Tường lửa & quản lý mạng chính — policy, VPN, sessions',
-    apiPage:'/service-home/fortigate.html', apiType:'fortigate',
-    tags:['Firewall','VPN','Policy','SSL-VPN']
-  },
-  {
-    /* ── THỬ NGHIỆM: nhúng FortiGate TRỰC TIẾP (không qua Docker/KasmVNC) ──
-       Nếu chạy mượt → 200 site chỉ là 200 entry, không cần Docker.
-       Điều kiện để hết "refused to connect":
-       1) CF Transform Rule strip X-Frame-Options + CSP frame-ancestors trên
-          fortigate.home-server.id.vn (xem hướng dẫn anh Thoai gửi).
-       2) Test trên PRODUCTION (cùng home-server.id.vn → cookie qua iframe). */
-    id:'fortigate-test', name:'FortiGate Test', icon:'🧪', cat:'network', done:true,
-    url:'https://fortigate.home-server.id.vn',
-    embedUrl:'https://fortigate.home-server.id.vn/',
-    desc:'THỬ NGHIỆM nhúng FortiGate trực tiếp vào iframe (không Docker) — kiểm tra có bị chặn khung không',
-    tags:['Test','Iframe','Firewall']
-  },
-  {
     id:'asus', name:'ASUS Router', icon:'📡', cat:'network',
     url:'http://192.168.1.1',
     desc:'Router WiFi ASUS — quản lý DHCP và kết nối không dây',
@@ -341,6 +349,75 @@ var _statusMap = {};
 var _selected  = null;
 var _embedOpen = false;
 
+/* ══════════════════════════════════════
+   ALL Site Network — cây site điều khiển qua FortiGate Pool.
+   Mục gập/mở trong sidebar (mặc định thu gọn). Bấm site → cấp slot + đổi màn hình.
+   Khi có 200 site: nhóm chúng vào nhiều folder ở ALL_SITE_TREE là tự thành cây.
+   ══════════════════════════════════════ */
+var ALL_SITE_TREE = [
+  { folder:'', sites:[
+    { name:'FortiGate',   icon:'🛡️', url:'https://fortigate.home-server.id.vn/' },
+    { name:'ESXi (test)', icon:'💾', url:'https://esxi.home-server.id.vn/' },
+  ]},
+];
+var _allSiteOpen = false;   // mặc định thu gọn
+var _poolSlot = null;
+var _activeSiteUrl = '';
+/* Nhóm dropdown — true = thu gọn. todo + automation mặc định thu gọn. */
+var _groupCollapsed = { automation:true, todo:true };
+
+function toggleAllSite(){ _allSiteOpen = !_allSiteOpen; renderSidebar(); }
+function toggleGroup(cat){ _groupCollapsed[cat] = !_groupCollapsed[cat]; renderSidebar(); }
+
+function selectSite(url){
+  _activeSiteUrl = url;
+  if (_selected !== '__allsite__'){
+    _selected = '__allsite__';
+    window.location.hash = 'allsite';
+    renderSidebar();
+    renderMain();          // dựng màn hình (cấp slot) lần đầu
+  } else {
+    renderSidebar();       // chỉ cập nhật highlight
+    poolNavigate(url);     // đã có màn hình → chỉ đổi site (không dựng lại iframe)
+  }
+}
+
+function renderAllSite(){
+  // Cho sidebar thu gọn (rail) + hover bung — như các dịch vụ embed khác.
+  var sb=document.querySelector('.sidebar'), mn=document.querySelector('.main');
+  if(sb){ sb.style.display=''; sb.classList.add('collapsed'); }
+  if(mn) mn.classList.add('rail');
+  var inner = document.getElementById('mainInner');
+  inner.style.maxWidth='none'; inner.style.padding='0'; inner.style.height='100%';
+  inner.innerHTML = '<div id="poolStream" style="width:100%;height:100%;position:relative;background:#000"></div>';
+  ensurePoolSlot();
+}
+
+function _poolMsg(t){
+  var s=document.getElementById('poolStream');
+  if(s) s.innerHTML='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px;color:var(--text-2);font-size:14px;line-height:1.5">'+t+'</div>';
+}
+
+function ensurePoolSlot(){
+  fetch('/api/fgt-pool/allocate',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
+    if(d.error==='forbidden'){ _poolMsg('⚠️ Chưa được cấp quyền — nhờ admin bật quyền ALL Site Network.'); return; }
+    if(d.busy){ _poolMsg('⏳ Hết màn hình '+(d.role==='admin'?'Admin':'View')+' trống — chờ chút rồi chọn lại.'); return; }
+    if(d.ok){
+      _poolSlot=d.slot;
+      var stream=document.getElementById('poolStream');
+      if(stream) stream.innerHTML='<iframe src="'+esc(d.slot.kasm)+'/?autoconnect=1&resize=remote" style="position:absolute;inset:0;width:100%;height:100%;border:none" allow="clipboard-read; clipboard-write" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>';
+      if(_activeSiteUrl) poolNavigate(_activeSiteUrl);
+    }
+  }).catch(function(e){ _poolMsg('⚠️ Lỗi: '+e.message); });
+}
+
+function poolNavigate(url){
+  fetch('/api/fgt-pool/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url})}).catch(function(){});
+}
+// Giữ slot (heartbeat 5 phút) + trả slot khi rời trang
+setInterval(function(){ if(_poolSlot) fetch('/api/fgt-pool/allocate',{cache:'no-store'}).catch(function(){}); }, 5*60*1000);
+window.addEventListener('pagehide', function(){ if(_poolSlot){ try{ navigator.sendBeacon('/api/fgt-pool/release'); }catch(e){} } });
+
 /* ── XSS guard ── */
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -397,15 +474,40 @@ function renderSidebar() {
   list.forEach(function(s){ var c=effCat(s); if (!groups[c]) groups[c]=[]; groups[c].push(s); });
 
   var html = '';
+
+  /* ── ALL Site Network — LÊN ĐẦU (gập/mở, mặc định thu gọn) ── */
+  var siteHtml = '';
+  ALL_SITE_TREE.forEach(function(f){
+    var sites = f.sites.filter(function(s){ return !q || s.name.toLowerCase().includes(q); });
+    if (!sites.length) return;
+    if (f.folder) siteHtml += '<div class="sb-site-fld">'+esc(f.folder)+'</div>';
+    sites.forEach(function(s){
+      var act = (_selected==='__allsite__' && _activeSiteUrl===s.url) ? ' active' : '';
+      siteHtml += '<div class="sb-site'+act+'" onclick="selectSite(\''+s.url.replace(/'/g,"\\'")+'\')">'
+        + '<span class="sb-icon">'+(s.icon||'🔗')+'</span><span class="sb-name">'+esc(s.name)+'</span></div>';
+    });
+  });
+  var _asOpen = (_allSiteOpen || !!q);   // đang tìm thì tự bung
+  html += '<div class="sb-group">'
+    + '<div class="sb-allsite-hd'+(_asOpen?' open':'')+'" onclick="toggleAllSite()">'
+    +   '<span class="caret">▸</span><span class="sb-icon">🌐</span><span class="sb-name">ALL Site Network</span></div>'
+    + (_asOpen ? siteHtml : '')
+    + '</div>';
+
+  /* ── Các nhóm dịch vụ — dropdown (todo & automation mặc định thu gọn) ── */
   Object.keys(groups)
     .sort(function(a,b){ return (CATS[a]?CATS[a].order:99)-(CATS[b]?CATS[b].order:99); })
     .forEach(function(cat){
-      html += '<div class="sb-group"><div class="sb-group-label">'+(CATS[cat]?esc(CATS[cat].label):esc(cat))+'</div>';
-      groups[cat].forEach(function(s){
+      var open = !_groupCollapsed[cat] || !!q;   // tìm kiếm thì bung tất cả
+      var items = groups[cat].map(function(s){
         var act = _selected===s.id ? ' active' : '';
-        html += '<div class="sb-item'+act+'" onclick="selectSvc(\''+s.id+'\')"><span class="sb-icon">'+s.icon+'</span><span class="sb-name">'+esc(s.name)+'</span>'+stDot(s.id)+'</div>';
-      });
-      html += '</div>';
+        return '<div class="sb-item'+act+'" onclick="selectSvc(\''+s.id+'\')"><span class="sb-icon">'+s.icon+'</span><span class="sb-name">'+esc(s.name)+'</span>'+stDot(s.id)+'</div>';
+      }).join('');
+      html += '<div class="sb-group">'
+        + '<div class="sb-group-hd'+(open?' open':'')+'" onclick="toggleGroup(\''+cat+'\')">'
+        +   '<span class="gcaret">▸</span><span>'+(CATS[cat]?esc(CATS[cat].label):esc(cat))+'</span></div>'
+        + (open ? items : '')
+        + '</div>';
     });
 
   if (!html) html = '<div style="padding:1rem 14px;font-size:12px;color:var(--muted)">Không tìm thấy dịch vụ</div>';
@@ -424,6 +526,7 @@ function selectSvc(id) {
 }
 
 function renderMain() {
+  if (_selected === '__allsite__') { renderAllSite(); return; }
   if (!_selected) { _restoreSidebar(); renderOverview(); return; }
   var svc = SVCS.find(function(s){ return s.id===_selected; });
   if (!svc) { _selected=null; _restoreSidebar(); renderOverview(); return; }
@@ -728,7 +831,8 @@ function loadAsusCards() {
 
   /* Hash routing — read initial hash */
   var hash = window.location.hash.replace('#', '');
-  if (hash && SVCS.find(function(s){ return s.id===hash; })) _selected = hash;
+  if (hash === 'allsite') { _selected = '__allsite__'; _allSiteOpen = true; }
+  else if (hash && SVCS.find(function(s){ return s.id===hash; })) _selected = hash;
 
   /* First render */
   renderSidebar();
@@ -741,7 +845,8 @@ function loadAsusCards() {
   /* Listen for hash changes (back/forward) */
   window.addEventListener('hashchange', function(){
     var h = window.location.hash.replace('#', '');
-    _selected = SVCS.find(function(s){ return s.id===h; }) ? h : null;
+    if (h === 'allsite') { _selected = '__allsite__'; _allSiteOpen = true; }
+    else _selected = SVCS.find(function(s){ return s.id===h; }) ? h : null;
     _embedOpen = false;
     renderSidebar();
     renderMain();

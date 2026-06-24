@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "FortiGate Pool Agent",
+  "version": "1.0",
+  "description": "Auto-login FortiGate + poll navigator để đổi site (thay cho CDP, vì Chrome 136+ chặn remote-debugging).",
+  "background": { "service_worker": "sw.js" },
+  "host_permissions": ["http://127.0.0.1:8080/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://*/*", "http://*/*"],
+      "js": ["creds.js", "autologin.js", "poller.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}
