@@ -276,6 +276,7 @@ select.inp{cursor:pointer}
     <nav class="topnav">
       <a class="topnav-item" href="/">Overview</a>
       <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
+      <a class="topnav-item" href="/service-home/services-embed.html">Services</a>
       <a class="topnav-item active" id="settings-link" href="/settings.html">⚙ Settings</a>
     </nav>
   </div>
@@ -393,6 +394,30 @@ select.inp{cursor:pointer}
         <div style="display:flex;gap:8px;margin-top:6px">
           <input class="inp" id="cfg-maint-msg" type="text" maxlength="300" placeholder="Hệ thống đang bảo trì. Vui lòng quay lại sau." style="flex:1"/>
           <button class="btn btn-outline" onclick="saveMaintMsg()">Lưu thông báo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── IP Binding (chống trộm cookie phiên) ── -->
+    <div class="panel" id="ipbind-panel" style="border-color:color-mix(in oklch,var(--warn) 40%,transparent)">
+      <div class="panel-header" style="background:color-mix(in oklch,var(--warn) 6%,transparent)">
+        <div>
+          <div class="panel-title">🔒 Khóa phiên theo IP (IP Binding)</div>
+          <div class="panel-desc">Khi BẬT: cookie đăng nhập chỉ dùng được từ đúng IP lúc đăng nhập → chống kẻ trộm cookie dùng lại từ máy khác.</div>
+        </div>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
+          <span style="font-size:13px;color:var(--text-2)" id="ipbind-status-text">Đang tải...</span>
+          <div class="toggle-wrap">
+            <input type="checkbox" id="cfg-ipbinding" onchange="toggleIpBinding(this.checked)" style="display:none"/>
+            <div class="toggle-track" id="ipbind-track" onclick="document.getElementById('cfg-ipbinding').click()">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+        </label>
+      </div>
+      <div class="panel-body">
+        <div style="font-size:12px;color:var(--warn);background:color-mix(in oklch,var(--warn) 8%,transparent);padding:9px 12px;border-radius:8px;line-height:1.5">
+          ⚠️ <strong>Lưu ý quan trọng:</strong> Nếu anh hay dùng <strong>điện thoại</strong> và chuyển qua lại giữa WiFi và 4G, IP sẽ thay đổi và anh sẽ <strong>bị đăng xuất, phải đăng nhập lại</strong>. Chỉ nên bật nếu anh chủ yếu dùng mạng cố định, hoặc chấp nhận đăng nhập lại để đổi lấy bảo mật cao hơn. Mặc định: TẮT.
         </div>
       </div>
     </div>
@@ -1254,6 +1279,10 @@ var SERVICE_HOME_PAGES = [
   {id:'fortigate_pool', name:'FortiGate Pool', icon:'🧩', perms:['none','read','write'], permLabels:{'none':'Không truy cập','read':'View (chỉ xem)','write':'Admin (toàn quyền)'}},
   {id:'asus',        name:'ASUS Router',    icon:'📡', perms:['none','read','write']},
   {id:'uptime-kuma', name:'Uptime Kuma',    icon:'📊', perms:['none','read']},
+  {id:'nas',         name:'NAS',            icon:'🗄', perms:['none','read'],   permLabels:{'none':'Không truy cập','read':'Truy cập'}},
+  {id:'frigate',     name:'Frigate NVR',    icon:'📷', perms:['none','read'],   permLabels:{'none':'Không truy cập','read':'Truy cập'}},
+  {id:'openclaw',    name:'OpenClaw AI',    icon:'🤖', perms:['none','read'],   permLabels:{'none':'Không truy cập','read':'Truy cập'}},
+  {id:'kasm',        name:'Kasm Workspace', icon:'🖥', perms:['none','read'],   permLabels:{'none':'Không truy cập','read':'Truy cập'}},
   {type:'camera-home-group', id:'camera-home-group', icon:'📷', name:'Camera Home'}
 ];
 
@@ -2091,6 +2120,14 @@ function loadSysConfig() {
       document.getElementById('cfg-lockout-min').value = d.lockoutDurationMin ?? 15;
       document.getElementById('cfg-pw-expiry').value = d.pwExpiryDays ?? 0;
       document.getElementById('cfg-max-sessions').value = d.maxConcurrentSessions ?? 0;
+      // IP Binding toggle
+      var ipbOn = !!d.enforceIpBinding;
+      var ipbCb = document.getElementById('cfg-ipbinding');
+      if (ipbCb) ipbCb.checked = ipbOn;
+      var ipbTrack = document.getElementById('ipbind-track');
+      if (ipbTrack) { ipbTrack.classList.toggle('warn-on', ipbOn); ipbTrack.classList.remove('on'); }
+      var ipbSt = document.getElementById('ipbind-status-text');
+      if (ipbSt) ipbSt.textContent = ipbOn ? '🔴 Đang bật' : '⚪ Đang tắt';
       // IP Whitelist
       var wl = Array.isArray(d.ipWhitelist) ? d.ipWhitelist.join('\n') : '';
       document.getElementById('cfg-ip-whitelist').value = wl;
@@ -2276,6 +2313,22 @@ function toggleMaintenance(on) {
       if(!d)return;
       if(d.error){toast('Lỗi: '+d.error,'err');return;}
       toast(on ? '🚧 Đã bật Maintenance Mode' : '✓ Đã tắt Maintenance Mode', on ? 'warn' : 'ok');
+    })
+    .catch(function(e){toast('Lỗi: '+e.message,'err');});
+}
+
+function toggleIpBinding(on) {
+  var track = document.getElementById('ipbind-track');
+  if (track) { track.classList.toggle('warn-on', on); track.classList.remove('on'); }
+  var st = document.getElementById('ipbind-status-text');
+  if (st) st.textContent = on ? '🔴 Đang bật' : '⚪ Đang tắt';
+  fetch('/api/system-config',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({enforceIpBinding:on})})
+    .then(_apiJson)
+    .then(function(d){
+      if(!d)return;
+      if(d.error){toast('Lỗi: '+d.error,'err');return;}
+      toast(on ? '🔒 Đã bật khóa phiên theo IP — user nào đang ở IP khác lúc đăng nhập sẽ phải đăng nhập lại' : '✓ Đã tắt khóa phiên theo IP', on ? 'warn' : 'ok');
     })
     .catch(function(e){toast('Lỗi: '+e.message,'err');});
 }

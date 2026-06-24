@@ -741,7 +741,7 @@ function updateBadge(){
    - PC: ưu tiên WebRTC (độ trễ thấp khi cùng LAN), fallback MSE/HLS/MJPEG.
    - Điện thoại: BỎ WebRTC — vì qua mạng di động WebRTC luôn bắt tay thất bại rồi mới
      timeout (~vài giây) mới chịu rớt về MSE → load chậm. Đi thẳng MSE cho nhanh + ổn định. */
-var _IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia('(max-width:700px)').matches);
+var _IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia('(max-width:700px)').matches) || (navigator.maxTouchPoints > 1 && /Mac/i.test(navigator.userAgent)); /* iPadOS 13+ dùng desktop UA */
 var _CAM_MODE = _IS_MOBILE ? 'mse,hls,mjpeg' : 'webrtc,mse,hls,mjpeg';
 /* MSE (mobile) buffers theo segment 2-3s → currentTime đứng tự nhiên; WebRTC (PC) chạy liên tục.
    Threshold cao hơn trên mobile để tránh false-positive reload khi đang buffer segment mới. */
@@ -752,7 +752,7 @@ var _FROZEN_MS = _IS_MOBILE ? 8000 : 4000;
 /* Stagger việc nạp iframe: mở nhiều camera cùng lúc → tranh băng thông/CPU.
    Giãn nhẹ 120ms/cam để vẫn tuần tự nhưng không bắt cam cuối chờ quá lâu
    (7 cam: cam cuối bắt đầu ~0.7s thay vì 2.1s với 350ms cũ). */
-var _CAM_STAGGER_MS = 120;
+var _CAM_STAGGER_MS = _IS_MOBILE ? 250 : 120;
 function syncSnapChains() {
   var delay = 0;
   CAMERAS.forEach(function(c) {
@@ -2207,7 +2207,18 @@ document.addEventListener('visibilitychange',function(){
       ifr.src='about:blank';
     });
   }else{
+    /* Reset watchdog khi quay lại: stream vừa được khởi động lại → cần ân hạn mới */
+    _camWatch={};
     syncSnapChains(); /* phát lại các camera đang ON */
+  }
+});
+
+/* iOS Safari BFCache: khi restore từ bộ nhớ đệm (back/forward/switch app),
+   visibilitychange có thể không fire nhưng pageshow với persisted=true thì luôn fire. */
+window.addEventListener('pageshow',function(e){
+  if(e.persisted){
+    _camWatch={};
+    syncSnapChains();
   }
 });
 
@@ -2239,8 +2250,10 @@ setInterval(function(){
       w.t=t; w.since=now; w.started=true;
     } else if(now-w.since>threshold){ /* đứng hình quá threshold → nạp lại iframe */
       ifr.src='/cam-live/stream.html?src='+encodeURIComponent(c.src)+'&mode='+_CAM_MODE+'&_r='+now;
-      w.t=-1; w.since=now; w.n++; w.started=false;
+      w.t=-1; w.n++; w.started=false;
       w.coolUntil=now+25000; /* chờ 25s cho stream khởi động lại trước khi check tiếp */
+      /* since = tương lai để ân hạn (START_GRACE_MS) tính từ lúc cooldown hết, tránh reload loop */
+      w.since=now+(25000-_START_GRACE_MS+3000);
     }
   });
 },3000);

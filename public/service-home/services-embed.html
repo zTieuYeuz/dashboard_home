@@ -65,12 +65,23 @@ html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);he
 .sb-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
 .sb-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--border);transition:background .3s}
-/* ALL Site Network — mục cây gập/mở trong sidebar */
+/* ALL Service Home — mục cây gập/mở trong sidebar */
 .sb-allsite-hd{display:flex;align-items:center;gap:9px;padding:7px 14px;margin:0 6px;font-size:13px;cursor:pointer;transition:background .1s;border-radius:7px;color:var(--text-2);user-select:none}
 .sb-allsite-hd:hover{background:var(--surface-2);color:var(--text)}
 .sb-allsite-hd .caret{font-size:10px;width:10px;text-align:center;flex-shrink:0;transition:transform .15s}
 .sb-allsite-hd.open .caret{transform:rotate(90deg)}
 .sb-site-fld{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:6px 14px 3px 32px}
+/* Sub-folder headers bên trong ALL Service Home */
+.sb-fld-hd{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:5px 14px 3px 28px;cursor:pointer;user-select:none}
+.sb-fld-hd:hover{color:var(--text-2)}
+.sb-fld-hd .fcaret{font-size:9px;width:9px;flex-shrink:0;transition:transform .15s}
+.sb-fld-hd.open .fcaret{transform:rotate(90deg)}
+.sb-site.sub{padding:6px 14px 6px 44px}
+.sidebar.collapsed .sb-fld-hd{height:0;padding:0;margin:0;opacity:0;overflow:hidden}
+.sidebar.collapsed:hover .sb-fld-hd,
+.sidebar.collapsed:focus-within .sb-fld-hd{height:auto;padding:5px 14px 3px 28px;opacity:1}
+.sidebar.collapsed:hover .sb-site.sub,
+.sidebar.collapsed:focus-within .sb-site.sub{padding:6px 14px 6px 44px}
 .sb-site{display:flex;align-items:center;gap:8px;padding:6px 14px 6px 34px;margin:0 6px;font-size:13px;cursor:pointer;transition:background .1s;border-radius:7px;color:var(--text-2);user-select:none}
 .sb-site:hover{background:var(--surface-2);color:var(--text)}
 .sb-site.active{background:color-mix(in oklch,var(--accent) 15%,var(--bg));color:var(--accent);font-weight:500}
@@ -261,86 +272,10 @@ a{color:inherit;text-decoration:none}
 /* ══════════════════════════════════════
    CONFIG — cập nhật IP/URL ở đây
    ══════════════════════════════════════ */
-var SVCS = [
-  {
-    id:'asus', name:'ASUS Router', icon:'📡', cat:'network',
-    url:'http://192.168.1.1',
-    desc:'Router WiFi ASUS — quản lý DHCP và kết nối không dây',
-    apiPage:'/service-home/asus.html', apiType:'asus',
-    tags:['WiFi','DHCP','Router']
-  },
-  {
-    id:'9router', name:'9Router', icon:'🔀', cat:'network',
-    url:'https://9router.home-server.id.vn',
-    desc:'Thiết bị mạng 9Router',
-    tags:['Network']
-  },
-  {
-    id:'casaos', name:'CasaOS', icon:'🏠', cat:'server',
-    url:'http://192.168.110.21:81',
-    desc:'Home server OS — quản lý Docker apps, storage, services',
-    tags:['Docker','Apps','Storage','HomeServer']
-  },
-  {
-    id:'esxi', name:'VMware ESXi', icon:'💾', cat:'server',
-    url:'https://192.168.110.10',
-    desc:'Hypervisor ảo hóa — quản lý máy ảo (VM)',
-    apiPage:'/service-home/vmware-home.html', apiType:'esxi',
-    tags:['VM','vSphere','ESXi']
-  },
-  {
-    id:'portainer', name:'Portainer', icon:'🐋', cat:'server',
-    url:'http://192.168.110.21:9000',
-    desc:'Quản lý Docker containers, images, volumes trực quan',
-    tags:['Docker','Container','Image']
-  },
-  {
-    id:'n8n', name:'n8n Automation', icon:'⚡', cat:'automation', done:true,
-    url:'https://n8n-home.home-server.id.vn',
-    embedUrl:'/n8n-proxy/home',
-    desc:'Workflow automation & tích hợp dịch vụ, API, webhook',
-    apiPage:'/service-home/n8n.html', apiType:'n8n',
-    tags:['Workflow','Webhook','API','Automation']
-  },
-  {
-    id:'jenkins', name:'Jenkins CI/CD', icon:'🔧', cat:'devops',
-    url:'http://192.168.110.21:8099',
-    desc:'Continuous integration & deployment pipeline',
-    tags:['Build','Deploy','Pipeline','CI/CD']
-  },
-  {
-    id:'uptime-kuma', name:'Uptime Kuma', icon:'📊', cat:'monitoring',
-    url:'http://192.168.110.21:3001',
-    desc:'Theo dõi uptime và cảnh báo khi dịch vụ xuống',
-    tags:['Monitor','Alert','Uptime','Status']
-  },
-  {
-    id:'frigate', name:'Frigate NVR', icon:'📷', cat:'camera',
-    url:'http://192.168.110.21:5000',
-    desc:'Network Video Recorder — AI detection, recordings, events',
-    tags:['NVR','AI','Camera','Recording']
-  },
-  {
-    id:'go2rtc', name:'go2rtc', icon:'🎥', cat:'camera',
-    url:'http://192.168.110.21:1984',
-    desc:'RTSP → WebRTC/MSE streaming gateway cho camera',
-    tags:['RTSP','WebRTC','Stream','Camera']
-  },
-];
+var SVCS = [];
+var CATS = {};
 
-var CATS = {
-  network:    { label: 'Mạng',        order: 0 },
-  server:     { label: 'Máy chủ',     order: 1 },
-  automation: { label: 'Tự động hóa', order: 2 },
-  devops:     { label: 'DevOps',      order: 3 },
-  monitoring: { label: 'Giám sát',    order: 4 },
-  camera:     { label: 'Camera',      order: 5 },
-  todo:       { label: 'Chưa làm',    order: 99 },
-};
-
-/* Dịch vụ chưa tích hợp (chưa có embed) gom hết vào nhóm "Chưa làm".
-   Chỉ fortigate + n8n (done:true) giữ nguyên danh mục gốc. */
-function effCat(s){ return s.done ? s.cat : 'todo'; }
+function effCat(s){ return s.cat || 'monitor'; }
 
 /* ══════════════════════════════════════
    State
@@ -350,37 +285,47 @@ var _selected  = null;
 var _embedOpen = false;
 
 /* ══════════════════════════════════════
-   ALL Site Network — cây site điều khiển qua FortiGate Pool.
-   Mục gập/mở trong sidebar (mặc định thu gọn). Bấm site → cấp slot + đổi màn hình.
-   Khi có 200 site: nhóm chúng vào nhiều folder ở ALL_SITE_TREE là tự thành cây.
+   ALL Service Home — 5 nhóm, mỗi nhóm có thể thu/mở riêng.
+   Bấm site → cấp slot Chrome Pool + điều hướng.
    ══════════════════════════════════════ */
 var ALL_SITE_TREE = [
-  { folder:'', sites:[
+  { folder:'Network', icon:'🌐', sites:[
     { name:'FortiGate',   icon:'🛡️', url:'https://192.168.110.1/' },
+    { name:'Router Asus', icon:'📡', url:'https://192.168.10.1:8443/' },
   ]},
-  { folder:'Home Lab', sites:[
-    { name:'CasaOS',      icon:'🏠', url:'http://192.168.110.21:4434/' },
+  { folder:'Server', icon:'🖥️', sites:[
     { name:'VMware ESXi', icon:'💾', url:'https://192.168.110.125/' },
     { name:'NAS',         icon:'🗄️', url:'https://192.168.110.126:5001/' },
-    { name:'Uptime Kuma', icon:'📊', url:'http://192.168.110.21:3005/' },
+    { name:'CasaOS',      icon:'🏠', url:'http://192.168.110.21:4434/' },
+    { name:'Kasm',        icon:'🖥️', url:'https://192.168.110.21:6901/', wip:true },
   ]},
-  { folder:'Router / Mạng', sites:[
+  { folder:'AI', icon:'🤖', sites:[
+    { name:'OpenClaw',    icon:'🤖', url:'http://192.168.110.5:18789/' },
     { name:'9Router',     icon:'🔀', url:'http://192.168.110.5:20128/' },
-    { name:'Router Asus', icon:'📡', url:'https://192.168.10.1:8443/' },
+  ]},
+  { folder:'Automation', icon:'⚡', sites:[
+    { name:'n8n (iframe)', icon:'⚡', url:'https://n8n-home.home-server.id.vn/', embedUrl:'/n8n-proxy/home' },
+  ]},
+  { folder:'Monitor', icon:'📊', sites:[
+    { name:'Uptime Kuma', icon:'📊', url:'http://192.168.110.21:3005/' },
+    { name:'Frigate NVR', icon:'📷', url:'http://192.168.110.21:5000/' },
   ]},
 ];
 var _allSiteOpen = false;   // mặc định thu gọn
 var _poolSlot = null;
 var _activeSiteUrl = '';
-/* Nhóm dropdown — true = thu gọn. todo + automation mặc định thu gọn. */
-var _groupCollapsed = { automation:true, todo:true };
+var _embedUrl = null;        // !=null → site đang mở bằng iframe (không phải Chrome Pool)
+var _groupCollapsed = {};
+var _siteTreeOpen = ALL_SITE_TREE.reduce(function(o,f){ o[f.folder]=true; return o; }, {}); // true=thu gọn
 
 function toggleAllSite(){ _allSiteOpen = !_allSiteOpen; renderSidebar(); }
 function toggleGroup(cat){ _groupCollapsed[cat] = !_groupCollapsed[cat]; renderSidebar(); }
+function toggleSiteFolder(folder){ _siteTreeOpen[folder] = !_siteTreeOpen[folder]; renderSidebar(); }
 
 function selectSite(url){
   _activeSiteUrl = url;
-  if (_selected !== '__allsite__'){
+  if (_selected !== '__allsite__' || _embedUrl){
+    _embedUrl = null;       // chuyển từ iframe (hoặc overview) sang Chrome Pool → dựng lại
     _selected = '__allsite__';
     window.location.hash = 'allsite';
     renderSidebar();
@@ -389,6 +334,38 @@ function selectSite(url){
     renderSidebar();       // chỉ cập nhật highlight
     poolNavigate(url);     // đã có màn hình → chỉ đổi site (không dựng lại iframe)
   }
+}
+
+function selectSiteEmbed(embedUrl, siteUrl){
+  _selected = '__allsite__';
+  _embedUrl = embedUrl;
+  _activeSiteUrl = siteUrl;
+  // Hash riêng cho site iframe → reload/quay lại vẫn mở iframe, KHÔNG rơi về Chrome Pool.
+  window.location.hash = 'embed=' + encodeURIComponent(embedUrl);
+  renderEmbedFull(embedUrl);
+  renderSidebar();
+}
+
+/* Tìm url gốc của site theo embedUrl — để highlight đúng item trong sidebar khi restore. */
+function _siteUrlByEmbed(embedUrl){
+  for (var i=0;i<ALL_SITE_TREE.length;i++){
+    var ss=ALL_SITE_TREE[i].sites;
+    for (var j=0;j<ss.length;j++){ if(ss[j].embedUrl===embedUrl) return ss[j].url; }
+  }
+  return '';
+}
+
+/* Dựng iframe full-page cho site embed (dùng chung cho click & restore khi reload). */
+function renderEmbedFull(embedUrl){
+  var sb=document.querySelector('.sidebar'), mn=document.querySelector('.main');
+  if(sb){ sb.style.display=''; sb.classList.add('collapsed'); }
+  if(mn) mn.classList.add('rail');
+  var inner=document.getElementById('mainInner');
+  inner.style.maxWidth='none'; inner.style.padding='0'; inner.style.height='100%';
+  inner.innerHTML='<div style="display:flex;flex-direction:column;height:100%">'
+    +'<iframe src="'+esc(embedUrl)+'" style="flex:1;width:100%;border:none;display:block;min-height:0"'
+    +' sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads allow-modals allow-top-navigation-by-user-activation"'
+    +' allow="clipboard-read; clipboard-write" referrerpolicy="no-referrer"></iframe></div>';
 }
 
 function renderAllSite(){
@@ -421,7 +398,7 @@ function _poolConfirmAuth(){
 
 function ensurePoolSlot(){
   fetch('/api/fgt-pool/allocate',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
-    if(d.error==='forbidden'){ _poolMsg('⚠️ Chưa được cấp quyền — nhờ admin bật quyền ALL Site Network.'); return; }
+    if(d.error==='forbidden'){ _poolMsg('⚠️ Chưa được cấp quyền — nhờ admin bật quyền ALL Service Home.'); return; }
     if(d.busy){ _poolMsg('⏳ Hết màn hình '+(d.role==='admin'?'Admin':'View')+' trống — chờ chút rồi chọn lại.'); return; }
     if(d.ok){
       _poolSlot=d.slot;
@@ -507,37 +484,52 @@ function renderSidebar() {
 
   var html = '';
 
-  /* ── ALL Site Network — LÊN ĐẦU (gập/mở, mặc định thu gọn) ── */
+  /* ── ALL Service Home — cây thu/mở, mỗi sub-folder cũng collapsible ── */
   var siteHtml = '';
   ALL_SITE_TREE.forEach(function(f){
     var sites = f.sites.filter(function(s){ return !q || s.name.toLowerCase().includes(q); });
     if (!sites.length) return;
-    if (f.folder) siteHtml += '<div class="sb-site-fld">'+esc(f.folder)+'</div>';
-    sites.forEach(function(s){
-      var act = (_selected==='__allsite__' && _activeSiteUrl===s.url) ? ' active' : '';
-      siteHtml += '<div class="sb-site'+act+'" onclick="selectSite(\''+s.url.replace(/'/g,"\\'")+'\')">'
-        + '<span class="sb-icon">'+(s.icon||'🔗')+'</span><span class="sb-name">'+esc(s.name)+'</span></div>';
-    });
+    var fldOpen = !_siteTreeOpen[f.folder] || !!q;
+    siteHtml += '<div class="sb-fld-hd'+(fldOpen?' open':'')+'" onclick="toggleSiteFolder(\''+f.folder+'\')">'
+      + '<span class="fcaret">▸</span><span class="sb-icon">'+(f.icon||'📁')+'</span><span>'+esc(f.folder)+'</span></div>';
+    if (fldOpen) {
+      sites.forEach(function(s){
+        var act = (_selected==='__allsite__' && _activeSiteUrl===s.url) ? ' active' : '';
+        var wipStyle = s.wip ? ' style="opacity:0.6;cursor:default"' : '';
+        var wipBadge = s.wip ? '<span style="font-size:10px;color:var(--warn);margin-left:4px">🚧</span>' : '';
+        var onclick;
+        if (s.wip) {
+          onclick = '';
+        } else if (s.embedUrl) {
+          onclick = ' onclick="selectSiteEmbed(\''+s.embedUrl.replace(/'/g,"\\'")+'\',\''+s.url.replace(/'/g,"\\'")+'\''+')"';
+        } else {
+          onclick = ' onclick="selectSite(\''+s.url.replace(/'/g,"\\'")+'\''+')"';
+        }
+        siteHtml += '<div class="sb-site sub'+act+'"'+wipStyle+onclick+'>'
+          + '<span class="sb-icon">'+(s.icon||'🔗')+'</span><span class="sb-name">'+esc(s.name)+wipBadge+'</span></div>';
+      });
+    }
   });
-  var _asOpen = (_allSiteOpen || !!q);   // đang tìm thì tự bung
+  var _asOpen = (_allSiteOpen || !!q);
   html += '<div class="sb-group">'
     + '<div class="sb-allsite-hd'+(_asOpen?' open':'')+'" onclick="toggleAllSite()">'
-    +   '<span class="caret">▸</span><span class="sb-icon">🌐</span><span class="sb-name">ALL Site Network</span></div>'
+    +   '<span class="caret">▸</span><span class="sb-icon">🏠</span><span class="sb-name">ALL Service Home</span></div>'
     + (_asOpen ? siteHtml : '')
     + '</div>';
 
-  /* ── Các nhóm dịch vụ — dropdown (todo & automation mặc định thu gọn) ── */
+  /* ── Các nhóm dịch vụ — dropdown với icon giống ALL Site Network ── */
   Object.keys(groups)
     .sort(function(a,b){ return (CATS[a]?CATS[a].order:99)-(CATS[b]?CATS[b].order:99); })
     .forEach(function(cat){
-      var open = !_groupCollapsed[cat] || !!q;   // tìm kiếm thì bung tất cả
+      var open = !_groupCollapsed[cat] || !!q;
+      var info = CATS[cat] || { label: cat, icon: '📁' };
       var items = groups[cat].map(function(s){
         var act = _selected===s.id ? ' active' : '';
         return '<div class="sb-item'+act+'" onclick="selectSvc(\''+s.id+'\')"><span class="sb-icon">'+s.icon+'</span><span class="sb-name">'+esc(s.name)+'</span>'+stDot(s.id)+'</div>';
       }).join('');
       html += '<div class="sb-group">'
-        + '<div class="sb-group-hd'+(open?' open':'')+'" onclick="toggleGroup(\''+cat+'\')">'
-        +   '<span class="gcaret">▸</span><span>'+(CATS[cat]?esc(CATS[cat].label):esc(cat))+'</span></div>'
+        + '<div class="sb-allsite-hd'+(open?' open':'')+'" onclick="toggleGroup(\''+cat+'\')">'
+        +   '<span class="caret">▸</span><span class="sb-icon">'+info.icon+'</span><span class="sb-name">'+esc(info.label)+'</span></div>'
         + (open ? items : '')
         + '</div>';
     });
@@ -552,13 +544,17 @@ function renderSidebar() {
 function selectSvc(id) {
   _selected = id;
   _embedOpen = false;
+  _embedUrl = null;
   window.location.hash = id;
   renderSidebar();
   renderMain();
 }
 
 function renderMain() {
-  if (_selected === '__allsite__') { renderAllSite(); return; }
+  if (_selected === '__allsite__') {
+    if (_embedUrl) { renderEmbedFull(_embedUrl); return; }  // site iframe (vd n8n)
+    renderAllSite(); return;                                 // site Chrome Pool
+  }
   if (!_selected) { _restoreSidebar(); renderOverview(); return; }
   var svc = SVCS.find(function(s){ return s.id===_selected; });
   if (!svc) { _selected=null; _restoreSidebar(); renderOverview(); return; }
@@ -576,23 +572,43 @@ function _restoreSidebar() {
    Overview (no selection)
    ══════════════════════════════════════ */
 function renderOverview() {
+  var totalSites = ALL_SITE_TREE.reduce(function(n,f){ return n+f.sites.length; },0);
   var html = '<div class="overview-head">'
-    +'<div class="overview-title">Internal Services</div>'
-    +'<div class="overview-sub">'+SVCS.length+' dịch vụ · Chọn để xem chi tiết</div>'
-  +'</div>'
-  +'<div class="svc-grid">';
-
-  SVCS.forEach(function(s){
-    var st = getStatus(s.id);
-    html += '<div class="svc-card" onclick="selectSvc(\''+s.id+'\')">'
-      +'<div class="svc-card-icon">'+s.icon+'</div>'
-      +'<div class="svc-card-name">'+esc(s.name)+'</div>'
-      +'<div class="svc-card-url">'+esc(s.url)+'</div>'
-      +'<div class="svc-card-footer"><span class="st-badge '+st+'">'+(st==='online'?'● Online':st==='offline'?'● Offline':st==='local'?'⊙ LAN':'· · ·')+'</span><span class="cat-chip">'+(CATS[s.cat]?esc(CATS[s.cat].label):esc(s.cat))+'</span></div>'
+    +'<div class="overview-title">🏠 ALL Service Home</div>'
+    +'<div class="overview-sub">'+totalSites+' services · '+ALL_SITE_TREE.length+' nhóm · Bấm card để mở qua Chrome Pool hoặc iframe</div>'
     +'</div>';
+
+  html += '<div style="background:color-mix(in oklch,var(--accent) 6%,transparent);border:1px solid color-mix(in oklch,var(--accent) 20%,transparent);border-radius:12px;padding:14px 18px;font-size:13px;color:var(--text-2);line-height:1.8;margin-bottom:20px">'
+    +'<b>Cách dùng:</b><br>'
+    +'① Bấm vào service bất kỳ bên dưới (hoặc trong sidebar trái)<br>'
+    +'② Dashboard tự cấp một <b>Chrome Pool slot</b> — trình duyệt Chrome từ xa mở đúng trang đó<br>'
+    +'③ Bạn điều khiển qua màn hình KasmVNC ngay trong dashboard — không cần cài thêm gì<br>'
+    +'<span style="color:var(--muted);font-size:12px">⚡ service có nhãn <b>(iframe)</b> → nhúng trực tiếp vào dashboard, không qua Chrome Pool</span>'
+    +'</div>';
+
+  ALL_SITE_TREE.forEach(function(f){
+    html += '<div class="sec-title" style="margin:16px 0 8px">'+(f.icon||'📁')+' '+esc(f.folder)+'</div>';
+    html += '<div class="svc-grid">';
+    f.sites.forEach(function(s){
+      var disabled = s.wip ? ' style="opacity:0.55;pointer-events:none"' : '';
+      var onclick = '';
+      if (!s.wip) {
+        onclick = s.embedUrl
+          ? ' onclick="selectSiteEmbed(\''+s.embedUrl.replace(/'/g,"\\'")+'\',\''+s.url.replace(/'/g,"\\'")+'\''+')"'
+          : ' onclick="selectSite(\''+s.url.replace(/'/g,"\\'")+'\''+')"';
+      }
+      var badge = s.wip ? '🚧' : (s.embedUrl ? 'iframe' : 'pool');
+      var badgeColor = s.wip ? 'var(--warn)' : (s.embedUrl ? 'var(--ok)' : 'var(--accent)');
+      html += '<div class="svc-card"'+disabled+onclick+'>'
+        +'<div class="svc-card-icon">'+(s.icon||'🔗')+'</div>'
+        +'<div class="svc-card-name">'+esc(s.name)+'</div>'
+        +'<div class="svc-card-url">'+esc(s.url)+'</div>'
+        +'<div class="svc-card-footer"><span style="font-size:10px;font-weight:600;color:'+badgeColor+'">'+badge+'</span></div>'
+        +'</div>';
+    });
+    html += '</div>';
   });
 
-  html += '</div>';
   document.getElementById('mainInner').innerHTML = html;
 }
 
@@ -863,7 +879,12 @@ function loadAsusCards() {
 
   /* Hash routing — read initial hash */
   var hash = window.location.hash.replace('#', '');
-  if (hash === 'allsite') { _selected = '__allsite__'; _allSiteOpen = true; }
+  if (hash.indexOf('embed=') === 0) {
+    _embedUrl = decodeURIComponent(hash.slice(6));
+    _activeSiteUrl = _siteUrlByEmbed(_embedUrl);
+    _selected = '__allsite__'; _allSiteOpen = true;
+  }
+  else if (hash === 'allsite') { _embedUrl = null; _selected = '__allsite__'; _allSiteOpen = true; }
   else if (hash && SVCS.find(function(s){ return s.id===hash; })) _selected = hash;
 
   /* First render */
@@ -877,8 +898,13 @@ function loadAsusCards() {
   /* Listen for hash changes (back/forward) */
   window.addEventListener('hashchange', function(){
     var h = window.location.hash.replace('#', '');
-    if (h === 'allsite') { _selected = '__allsite__'; _allSiteOpen = true; }
-    else _selected = SVCS.find(function(s){ return s.id===h; }) ? h : null;
+    if (h.indexOf('embed=') === 0) {
+      _embedUrl = decodeURIComponent(h.slice(6));
+      _activeSiteUrl = _siteUrlByEmbed(_embedUrl);
+      _selected = '__allsite__'; _allSiteOpen = true;
+    }
+    else if (h === 'allsite') { _embedUrl = null; _selected = '__allsite__'; _allSiteOpen = true; }
+    else { _embedUrl = null; _selected = SVCS.find(function(s){ return s.id===h; }) ? h : null; }
     _embedOpen = false;
     renderSidebar();
     renderMain();
