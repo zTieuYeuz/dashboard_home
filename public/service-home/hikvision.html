@@ -262,6 +262,17 @@ body.cam-fs-lock{overflow:hidden}
      Row 1: [brand]  ............  [nav links, scroll]
      Row 2: [Live · Playback · Bật/Tắt tất cả · 📊 …  scroll]
    Breakpoint matches mobile.css (768px) so there is no uncovered range. ── */
+/* ── Nút Tải lại camera ── */
+@keyframes camSpin{to{transform:rotate(360deg)}}
+#reloadFab .ri,#ctrl-reload .ri{display:inline-block}
+#reloadFab.spinning .ri,#ctrl-reload.spinning .ri{animation:camSpin .9s linear}
+#reloadFab{display:none}
+@media(max-width:700px){
+  #reloadFab{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:160;
+    display:flex;align-items:center;gap:7px;padding:11px 20px;border-radius:999px;border:none;
+    background:var(--accent);color:#fff;font-size:14px;font-weight:600;font-family:var(--font-sans);
+    box-shadow:0 6px 20px rgba(0,0,0,.4);cursor:pointer}
+}
 @media(max-width:768px){
   body .topbar{display:flex !important;flex-direction:column !important;align-items:stretch !important;height:auto !important;min-height:0 !important;padding:0 !important;row-gap:0 !important}
   body .topbar-left{display:flex !important;flex-direction:row;align-items:center;flex-wrap:nowrap;gap:8px;padding:.5rem .75rem;border-bottom:1px solid var(--border-soft)}
@@ -345,12 +356,16 @@ body.cam-fs-lock{overflow:hidden}
     <button class="btn" id="tab-ai-btn" onclick="switchTab('ai')">🤖 Sự kiện AI</button>
     <button class="btn ghost" id="ctrl-all-on" onclick="setAll(true)">Bật tất cả</button>
     <button class="btn ghost" id="ctrl-all-off" onclick="setAll(false)">Tắt tất cả</button>
+    <button class="btn ghost" id="ctrl-reload" onclick="reloadCams()" title="Tải lại các camera"><span class="ri">🔄</span> Tải lại</button>
     <div class="clock" id="clock">--:--:--</div>
     <button class="btn ghost theme-toggle" id="themeToggle" title="Toggle theme">
       <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"/></svg>
     </button>
   </div>
 </header>
+
+<!-- Nút Tải lại nổi (chỉ hiện trên điện thoại, tab Live) -->
+<button id="reloadFab" onclick="reloadCams()"><span class="ri">🔄</span> Tải lại camera</button>
 
 <!-- ── Live Panel ── -->
 <div class="page" id="panel-live">
@@ -570,6 +585,8 @@ function switchTab(tab){
   var pai=document.getElementById('panel-ai'); if(pai) pai.classList.toggle('hidden', tab!=='ai');
   document.getElementById('ctrl-all-on').style.display = tab==='live' ? '' : 'none';
   document.getElementById('ctrl-all-off').style.display = tab==='live' ? '' : 'none';
+  var _cr=document.getElementById('ctrl-reload'); if(_cr) _cr.style.display = tab==='live' ? '' : 'none';
+  var _fab=document.getElementById('reloadFab'); if(_fab) _fab.style.display = tab==='live' ? '' : 'none';
   document.getElementById('tab-live-btn').classList.toggle('active', tab==='live');
   document.getElementById('tab-rec-btn').classList.toggle('active', tab==='rec');
   var ab=document.getElementById('tab-ai-btn'); if(ab) ab.classList.toggle('active', tab==='ai');
@@ -680,6 +697,7 @@ function render(){
   }
   updateBadge();
   syncSnapChains();
+  _setupCamIO();   /* mobile: theo dõi camera nào đang hiển thị để lazy-load */
 }
 
 /* ── Edit name ── */
@@ -753,26 +771,72 @@ var _FROZEN_MS = _IS_MOBILE ? 8000 : 4000;
    Giãn nhẹ 120ms/cam để vẫn tuần tự nhưng không bắt cam cuối chờ quá lâu
    (7 cam: cam cuối bắt đầu ~0.7s thay vì 2.1s với 350ms cũ). */
 var _CAM_STAGGER_MS = _IS_MOBILE ? 250 : 120;
+/* Lazy-load trên điện thoại: chỉ stream camera ĐANG HIỂN THỊ trên màn hình.
+   iOS Safari giới hạn ~6 kết nối/host → mở 7 cam cùng lúc khiến vài cam kẹt "load...".
+   Lưới mobile = 1 cột nên mỗi lúc chỉ thấy 1-2 cam → chỉ cần stream bấy nhiêu, hết kẹt.
+   PC: giữ nguyên — load tất cả. */
+var _camVisible = {};
+var _camLazy = _IS_MOBILE && ('IntersectionObserver' in window);
+function _camWantOn(c){
+  if (!(state[c.id] && currentTab === 'live')) return false;
+  if (_camLazy && !_camVisible[c.id]) return false;   // mobile: camera ngoài màn hình → tạm tắt
+  return true;
+}
 function syncSnapChains() {
   var delay = 0;
   CAMERAS.forEach(function(c) {
     if (!c.src) return;
     var ifr = document.getElementById('cam-iframe-' + c.id);
     if (!ifr) return;
-    if (state[c.id] && currentTab === 'live') {
+    if (_camWantOn(c)) {
       var wantSrc = '/cam-live/stream.html?src=' + encodeURIComponent(c.src) + '&mode=' + _CAM_MODE;
       if (ifr.getAttribute('src') !== wantSrc) {
-        (function(el, src, d){
+        (function(el, src, d, cc){
           setTimeout(function(){
-            /* re-check: tab/state có thể đã đổi trong lúc chờ */
-            if (state[c.id] && currentTab === 'live' && el.getAttribute('src') !== src) el.src = src;
+            /* re-check: tab/state/hiển thị có thể đã đổi trong lúc chờ */
+            if (_camWantOn(cc) && el.getAttribute('src') !== src) el.src = src;
           }, d);
-        })(ifr, wantSrc, delay);
+        })(ifr, wantSrc, delay, c);
         delay += _CAM_STAGGER_MS;
       }
     } else {
       if (ifr.src && ifr.src !== 'about:blank') ifr.src = 'about:blank';
     }
+  });
+}
+
+/* Theo dõi camera nào lọt vào màn hình → load/unload tương ứng (chỉ mobile). */
+var _camIO = null;
+function _setupCamIO(){
+  if (!_camLazy) return;
+  if (_camIO) _camIO.disconnect();
+  _camIO = new IntersectionObserver(function(entries){
+    var changed = false;
+    entries.forEach(function(en){
+      var id = en.target.getAttribute('data-cam');
+      if (!id) return;
+      if (_camVisible[id] !== en.isIntersecting){ _camVisible[id] = en.isIntersecting; changed = true; }
+    });
+    if (changed) syncSnapChains();
+  }, { rootMargin: '350px 0px', threshold: 0.01 });  /* nạp sớm khi camera gần tới màn hình */
+  CAMERAS.forEach(function(c){
+    var cell = document.getElementById('cell-' + c.id);
+    if (cell){ cell.setAttribute('data-cam', c.id); _camIO.observe(cell); }
+  });
+}
+
+/* Tải lại toàn bộ camera đang bật — dùng khi stream kẹt, khỏi phải tắt/mở lại trang. */
+function reloadCams(){
+  _camWatch = {};
+  CAMERAS.forEach(function(c){
+    var ifr = document.getElementById('cam-iframe-' + c.id);
+    if (ifr && ifr.src && ifr.src.indexOf('about:blank') === -1) ifr.src = 'about:blank';
+  });
+  /* nạp lại sau 1 nhịp để giải phóng kết nối cũ trước (né giới hạn kết nối iOS) */
+  setTimeout(syncSnapChains, 300);
+  ['reloadFab','ctrl-reload'].forEach(function(bid){
+    var b = document.getElementById(bid);
+    if (b){ b.classList.add('spinning'); setTimeout(function(){ b.classList.remove('spinning'); }, 1100); }
   });
 }
 
@@ -805,6 +869,8 @@ var recDayStart = null;
 var selRangeStart = null, selRangeEnd = null;
 var tlDragging = false;
 var _playClipStart = null, _playClipEnd = null;
+var _playRangeEnd = null;       /* đích cuối cần phát (đoạn dài → tải nhiều cửa sổ nối tiếp) */
+var MAX_VOD_WINDOW = 3600;      /* tải tối đa 1h mỗi lần — nginx-vod fail nếu range quá dài */
 var CLIP_WINDOW = 7200; /* 2h window used for MP4 fallback */
 var _hlsPlayer = null;
 
@@ -1710,22 +1776,24 @@ function _videoToWall(t){
 }
 
 function playSelectedRange(){
-  /* "▶ Phát đoạn chọn" button + drag-select → VOD HLS for the exact range */
+  /* "▶ Phát đoạn chọn" button + drag-select → VOD HLS for the exact range.
+     Đoạn dài: chỉ tải cửa sổ đầu (≤1h), phần còn lại _autoAdvance tự nối tiếp. */
   if(!recCamSrc||selRangeStart===null||selRangeEnd===null)return;
   var st=Math.floor(Math.min(selRangeStart,selRangeEnd));
   var et=Math.ceil(Math.max(selRangeStart,selRangeEnd));
-  _startVod(st,et,st);
+  _playRangeEnd=et;
+  _startVod(st,Math.min(et,st+MAX_VOD_WINDOW),st);
 }
 
 function playFromTime(ts){
-  /* click/playhead-drag → 1h VOD window from that moment */
+  /* click/playhead-drag → phát liên tục từ thời điểm đó (mỗi cửa sổ ≤1h, tự nối tiếp) */
   if(!recCamSrc||!recDayStart)return;
   ts=Math.floor(ts);
   var dayEnd=recDayStart+86400;
   var now=Math.floor(Date.now()/1000);
-  var et=Math.min(ts+3600,dayEnd,now);
-  if(et-ts<10){ /* too close to "now" — back up the window */
-    ts=Math.max(recDayStart,et-60);
+  var rangeEnd=Math.min(dayEnd,now);
+  if(rangeEnd-ts<10){ /* too close to "now" — back up the window */
+    ts=Math.max(recDayStart,rangeEnd-60);
   }
   /* nothing recorded after ts? jump to next available segment */
   var anyAfter=recSegments.some(function(s){return s.end_time>ts;});
@@ -1734,7 +1802,10 @@ function playFromTime(ts){
     if(info)info.textContent='❌ Không có ghi hình sau '+fmtTime(ts);
     return;
   }
-  _startVod(ts,et,ts);
+  _playRangeEnd=rangeEnd;
+  /* click 1 điểm → vùng chọn = cửa sổ đầu (như cũ); auto-advance phát tiếp ngầm */
+  selRangeStart=ts; selRangeEnd=Math.min(rangeEnd,ts+MAX_VOD_WINDOW);
+  _startVod(ts,Math.min(rangeEnd,ts+MAX_VOD_WINDOW),ts);
 }
 
 function _hevcSupported(){
@@ -1747,9 +1818,14 @@ function _hevcSupported(){
 function _startVod(st,et,seekTs){
   var cam=decodeURIComponent(recCamSrc);
   _destroyHls();
-  _playClipStart=st; _playClipEnd=et;
-  _buildVodSegs(st,et);
-  selRangeStart=st; selRangeEnd=et;
+  if(_playRangeEnd===null||_playRangeEnd<et) _playRangeEnd=et;  /* an toàn khi gọi trực tiếp */
+  /* Mỗi lần chỉ tải tối đa MAX_VOD_WINDOW — range quá dài làm nginx-vod fail.
+     Hết cửa sổ, _autoAdvance tự nối tiếp cho tới _playRangeEnd. */
+  var winEt=Math.min(et, st+MAX_VOD_WINDOW);
+  _playClipStart=st; _playClipEnd=winEt;
+  _buildVodSegs(st,winEt);
+  /* KHÔNG ghi đè vùng chọn (selRange) bằng cửa sổ tải — giữ nguyên đoạn user đã chọn,
+     chỉ tải ngầm theo cửa sổ ≤1h rồi nối tiếp. selRange do caller/drag quản lý. */
   updateRangeOverlay(); syncTimeInputs(); updateRangeInfo();
 
   var video=document.getElementById('rec-video');
@@ -1759,14 +1835,14 @@ function _startVod(st,et,seekTs){
   video.style.display='block';
   var spd=document.getElementById('rec-speed-row');
   if(spd)spd.style.display='flex';
-  info.textContent=fmtTime(st)+' → '+fmtTime(et)+' · Đang tải...';
+  info.textContent=fmtTime(st)+' → '+fmtTime(winEt)+' · Đang tải...';
 
   video.ontimeupdate=function(){ _updatePlayhead(); };
   video.onended=function(){ _autoAdvance(); };
   video.onerror=null;
 
   var seekSec=_wallToVideo(seekTs);
-  var hlsUrl='/cam-home/vod/'+encodeURIComponent(cam)+'/start/'+st+'/end/'+et+'/master.m3u8';
+  var hlsUrl='/cam-home/vod/'+encodeURIComponent(cam)+'/start/'+st+'/end/'+winEt+'/master.m3u8';
 
   function begin(){
     if(seekSec>0.5)video.currentTime=seekSec;
@@ -1795,7 +1871,7 @@ function _startVod(st,et,seekTs){
           return;
         }
         info.textContent='⚠ VOD không khả dụng — chuyển sang MP4...';
-        _playMp4(st,et,seekSec);
+        _playMp4(st,winEt,seekSec);
       }
     });
     return;
@@ -1823,12 +1899,12 @@ function _startVod(st,et,seekTs){
           if(fEt-fSt>5){_startVod(fSt,fEt,seekTs);return;}
         }
       }
-      _playMp4(st,et,seekSec);
+      _playMp4(st,winEt,seekSec);
     };
     return;
   }
 
-  _playMp4(st,et,seekSec);
+  _playMp4(st,winEt,seekSec);
 }
 
 /* MP4 clip fallback — only used when HLS is entirely unavailable */
@@ -1862,17 +1938,24 @@ function _playMp4(st,et,seekSec){
 }
 
 function _autoAdvance(){
-  /* VOD window finished → continue from the next recorded segment */
+  /* Hết 1 cửa sổ → nối tiếp cửa sổ kế cho tới hết đoạn cần phát (_playRangeEnd).
+     Gọi _startVod trực tiếp để GIỮ _playRangeEnd (không reset như playFromTime). */
   var info=document.getElementById('rec-player-info');
+  var limit=(_playRangeEnd!=null)?_playRangeEnd:(recDayStart?recDayStart+86400:_playClipEnd);
+  if(_playClipEnd>=limit-1){
+    if(info)info.textContent='⏹ Đã phát hết đoạn đã chọn — nhấp timeline để xem đoạn khác';
+    return;
+  }
+  /* tìm điểm có ghi hình kế tiếp từ chỗ vừa dừng (bỏ qua khoảng trống) */
   var next=null;
   for(var i=0;i<recSegments.length;i++){
     if(recSegments[i].end_time>_playClipEnd+1){next=recSegments[i];break;}
   }
-  if(next&&recDayStart&&next.start_time<recDayStart+86399){
-    playFromTime(Math.max(next.start_time,_playClipEnd));
-  } else {
-    if(info)info.textContent='⏹ Hết ghi hình trong ngày — nhấp timeline để xem đoạn khác';
+  if(next&&next.start_time<limit){
+    var startAt=Math.max(next.start_time,_playClipEnd);
+    if(startAt<limit){ _startVod(startAt,Math.min(startAt+MAX_VOD_WINDOW,limit),startAt); return; }
   }
+  if(info)info.textContent='⏹ Đã phát hết đoạn đã chọn — nhấp timeline để xem đoạn khác';
 }
 
 /* ── Playback speed ── */
@@ -1910,7 +1993,7 @@ function resetPlayer(){
   video.style.display='none';
   noSel.style.display='flex';
   document.getElementById('rec-player-info').textContent='';
-  _playClipStart=null;_playClipEnd=null;_vodSegs=[];
+  _playClipStart=null;_playClipEnd=null;_playRangeEnd=null;_vodSegs=[];
   var spd=document.getElementById('rec-speed-row');
   if(spd)spd.style.display='none';
   var ph=document.getElementById('tl-playhead');
