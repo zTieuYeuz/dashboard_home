@@ -398,14 +398,37 @@ function _poolMsg(t){
   if(s) s.innerHTML='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px;color:var(--text-2);font-size:14px;line-height:1.5">'+t+'</div>';
 }
 
+function _poolLoadIframe(slot){
+  var stream=document.getElementById('poolStream');
+  if(stream) stream.innerHTML='<iframe src="'+esc(slot.kasm)+'/?autoconnect=1&resize=remote" style="position:absolute;inset:0;width:100%;height:100%;border:none" allow="clipboard-read; clipboard-write" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>';
+}
+
+function _poolConfirmAuth(){
+  if(!_poolSlot) return;
+  try { var a=JSON.parse(sessionStorage.getItem('_kasmAuth')||'{}'); a[_poolSlot.id]=1; sessionStorage.setItem('_kasmAuth',JSON.stringify(a)); } catch(e){}
+  _poolLoadIframe(_poolSlot);
+  if(_activeSiteUrl) poolNavigate(_activeSiteUrl);
+}
+
 function ensurePoolSlot(){
   fetch('/api/fgt-pool/allocate',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
     if(d.error==='forbidden'){ _poolMsg('⚠️ Chưa được cấp quyền — nhờ admin bật quyền ALL Site Network.'); return; }
     if(d.busy){ _poolMsg('⏳ Hết màn hình '+(d.role==='admin'?'Admin':'View')+' trống — chờ chút rồi chọn lại.'); return; }
     if(d.ok){
       _poolSlot=d.slot;
-      var stream=document.getElementById('poolStream');
-      if(stream) stream.innerHTML='<iframe src="'+esc(d.slot.kasm)+'/?autoconnect=1&resize=remote" style="position:absolute;inset:0;width:100%;height:100%;border:none" allow="clipboard-read; clipboard-write" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>';
+      // Kiểm tra đã xác thực CF Access cho slot này chưa (trong session hiện tại)
+      var authed=false; try { authed=!!(JSON.parse(sessionStorage.getItem('_kasmAuth')||'{}')[d.slot.id]); } catch(e){}
+      if(authed){
+        _poolLoadIframe(d.slot);
+      } else {
+        // Lần đầu dùng slot này → mở tab xác thực CF Access
+        window.open(d.slot.kasm, '_blank');
+        var s=document.getElementById('poolStream');
+        if(s) s.innerHTML='<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;gap:16px;color:var(--text-2);font-size:14px;line-height:1.6">'
+          +'<div>🔓 Tab xác thực Cloudflare Access đã mở.<br>Đăng nhập xong → đóng tab đó lại → bấm <b>Thử lại</b>.</div>'
+          +'<button onclick="_poolConfirmAuth()" style="padding:8px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;cursor:pointer;font-family:var(--font-sans);font-weight:500">▶ Thử lại</button>'
+          +'</div>';
+      }
       if(_activeSiteUrl) poolNavigate(_activeSiteUrl);
     }
   }).catch(function(e){ _poolMsg('⚠️ Lỗi: '+e.message); });
