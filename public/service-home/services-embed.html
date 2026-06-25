@@ -325,14 +325,14 @@ function toggleSiteFolder(folder){ _siteTreeOpen[folder] = !_siteTreeOpen[folder
 function selectSite(url){
   _activeSiteUrl = url;
   if (_selected !== '__allsite__' || _embedUrl){
-    _embedUrl = null;       // chuyển từ iframe (hoặc overview) sang Chrome Pool → dựng lại
+    _embedUrl = null;
     _selected = '__allsite__';
     window.location.hash = 'allsite';
     renderSidebar();
-    renderMain();          // dựng màn hình (cấp slot) lần đầu
+    renderMain();
   } else {
-    renderSidebar();       // chỉ cập nhật highlight
-    poolNavigate(url);     // đã có màn hình → chỉ đổi site (không dựng lại iframe)
+    renderSidebar();
+    poolNavigate(url);
   }
 }
 
