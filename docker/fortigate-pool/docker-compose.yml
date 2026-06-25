@@ -20,18 +20,21 @@
 services:
 
   # ── Slot a1: ADMIN (đang chạy) ───────────────────────────────────────────
+  # NOTE: dịch vụ dùng IP LAN (192.168.x / 10.x / 172.16-31.x) đã được navigator.py
+  #       cho phép sẵn — KHÔNG cần thêm gì. NAV_ALLOW_SUFFIX để đó thì domain vẫn mở
+  #       được song song. Chỉ chạy 1 slot vì 1 người dùng (dồn CPU/RAM cho mượt).
   fgt-slot-admin1:
     image: kasmweb/chrome:1.16.0
     container_name: fgt-slot-admin1
     restart: unless-stopped
-    shm_size: "1gb"
+    shm_size: "2gb"          # tăng từ 1gb → 2gb: thêm chỗ render trang nặng (cần máy đủ RAM)
     ports:
       - "6911:6901"   # KasmVNC stream  → kasm-a1.home-server.id.vn
       - "8911:8080"   # Navigator API   → nav-a1.home-server.id.vn
     environment:
       VNC_PW: "${VNC_PW:-changeme}"
       VNCOPTIONS: "-DisableBasicAuth 1 -SecurityTypes None"
-      FGT_URL:  "${FGT_URL:-https://fortigate.home-server.id.vn/}"
+      FGT_URL:  "${FGT_URL:-https://192.168.110.1/}"
       FGT_USER: "${ADM_USER:-}"
       FGT_PASS: "${ADM_PASS:-}"
       NAV_ALLOW_SUFFIX: "${NAV_ALLOW_SUFFIX:-.home-server.id.vn}"

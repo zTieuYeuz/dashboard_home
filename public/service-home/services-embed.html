@@ -375,8 +375,32 @@ function renderAllSite(){
   if(mn) mn.classList.add('rail');
   var inner = document.getElementById('mainInner');
   inner.style.maxWidth='none'; inner.style.padding='0'; inner.style.height='100%';
-  inner.innerHTML = '<div id="poolStream" style="width:100%;height:100%;position:relative;background:#000"></div>';
+  inner.innerHTML = '<div style="width:100%;height:100%;position:relative;background:#000">'
+    +'<div id="poolStream" style="position:absolute;inset:0"></div>'
+    +'<div id="poolTools" style="position:absolute;top:8px;right:10px;z-index:5;display:flex;gap:6px">'
+    +  '<button onclick="reloadPool()" title="Tải lại màn hình" style="width:30px;height:30px;border:none;border-radius:7px;background:rgba(0,0,0,.55);color:#fff;font-size:14px;cursor:pointer">🔄</button>'
+    +  '<button onclick="reauthPool()" title="Đăng nhập lại Cloudflare Access" style="width:30px;height:30px;border:none;border-radius:7px;background:rgba(0,0,0,.55);color:#fff;font-size:14px;cursor:pointer">🔓</button>'
+    +'</div>'
+    +'</div>';
   ensurePoolSlot();
+}
+
+/* Tải lại màn hình Chrome Pool (giữ nguyên slot). */
+function reloadPool(){
+  var s=document.getElementById('poolStream'); if(s) s.innerHTML='';
+  if(_poolSlot){ _poolLoadIframe(_poolSlot); if(_activeSiteUrl) poolNavigate(_activeSiteUrl); }
+  else ensurePoolSlot();
+}
+
+/* Đăng nhập lại Cloudflare Access — dùng khi iframe hiện "This content is blocked"
+   (cookie CF Access hết hạn). Xóa cờ đã-auth → mở tab login → bấm Thử lại. */
+function reauthPool(){
+  try{ var a=JSON.parse(sessionStorage.getItem('_kasmAuth')||'{}'); if(_poolSlot) delete a[_poolSlot.id]; sessionStorage.setItem('_kasmAuth',JSON.stringify(a)); }catch(e){}
+  var k=_poolSlot?_poolSlot.kasm:null;
+  if(!k){ ensurePoolSlot(); return; }
+  window.open(k,'_blank');
+  _poolMsg('🔓 Tab xác thực Cloudflare Access đã mở.<br>Đăng nhập xong → đóng tab đó → bấm <b>Thử lại</b>.<br><br>'
+    +'<button onclick="_poolConfirmAuth()" style="padding:8px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;cursor:pointer;font-family:var(--font-sans);font-weight:500">▶ Thử lại</button>');
 }
 
 function _poolMsg(t){

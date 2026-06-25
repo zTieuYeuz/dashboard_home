@@ -6401,7 +6401,8 @@ function _escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;
    ═══════════════════════════════════════════════ */
 const FGT_POOL_SLOTS = [
   { id:'a1', role:'admin', kasm:'https://kasm-a1.home-server.id.vn', nav:'https://nav-a1.home-server.id.vn' },
-  { id:'a2', role:'admin', kasm:'https://kasm-a2.home-server.id.vn', nav:'https://nav-a2.home-server.id.vn' },
+  // Chỉ 1 người dùng → chạy 1 slot để dồn CPU/RAM, đỡ lag. Bật lại khi cần 2 người đồng thời:
+  // { id:'a2', role:'admin', kasm:'https://kasm-a2.home-server.id.vn', nav:'https://nav-a2.home-server.id.vn' },
   // { id:'a3', role:'admin', kasm:'https://kasm-a3.home-server.id.vn', nav:'https://nav-a3.home-server.id.vn' },
   // { id:'v1', role:'view',  kasm:'https://kasm-v1.home-server.id.vn', nav:'https://nav-v1.home-server.id.vn' },
   // { id:'v2', role:'view',  kasm:'https://kasm-v2.home-server.id.vn', nav:'https://nav-v2.home-server.id.vn' },
