@@ -45,7 +45,39 @@
     return null;
   }
 
-  var done = false, tries = 0;
+  // Bấm "thật" — nhiều nút Hikvision nghe mousedown/mouseup chứ không chỉ click.
+  function clickFull(el) {
+    try { el.scrollIntoView({ block: "center" }); } catch (e) {}
+    var o = { bubbles: true, cancelable: true, view: window };
+    ["mousedown", "mouseup", "click"].forEach(function (t) {
+      try { el.dispatchEvent(new MouseEvent(t, o)); } catch (e) {}
+    });
+    try { el.click(); } catch (e) {}
+  }
+
+  // Submit có kiểm soát: blur field (để form validate → bật nút) + click nút +
+  // submit form + Enter. Tối đa 2 lần, chỉ thử lại nếu form CÒN (tránh Hikvision
+  // khoá tài khoản sau nhiều lần đăng nhập sai).
+  var submitTries = 0;
+  function attemptSubmit(un, pw) {
+    submitTries++;
+    try { un && un.dispatchEvent(new Event("blur", { bubbles: true })); } catch (e) {}
+    try { pw.dispatchEvent(new Event("blur", { bubbles: true })); } catch (e) {}
+    var b = document.querySelector('#login');
+    if (!b || !visible(b)) b = findLoginBtn();
+    if (b) clickFull(b);
+    var f = (pw && pw.form) || (b && b.form);
+    if (f) { try { f.requestSubmit ? f.requestSubmit() : f.submit(); } catch (e) {} }
+    try { pw.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter", keyCode: 13, which: 13 })); } catch (e) {}
+    if (submitTries < 2) {
+      setTimeout(function () {
+        var p = document.querySelector('input[type=password]');
+        if (p && visible(p)) attemptSubmit(un, pw);   // form còn → login chưa vào → thử lại 1 lần
+      }, 2800);
+    }
+  }
+
+  var submitting = false, tries = 0;
   var timer = setInterval(function () {
     tries++;
 
@@ -73,15 +105,10 @@
     if (un && un.value !== U) setVal(un, U);
     if (pw.value !== P) setVal(pw, P);
 
-    if (!done && un && un.value === U && pw.value === P) {
-      done = true;
+    if (!submitting && un && un.value === U && pw.value === P) {
+      submitting = true;
       clearInterval(timer);
-      var b = document.querySelector('#login');
-      if (!b || !visible(b)) b = findLoginBtn();
-      setTimeout(function () {
-        if (b) b.click();
-        else pw.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter", keyCode: 13 }));
-      }, 300);
+      setTimeout(function () { attemptSubmit(un, pw); }, 350);
     } else if (tries > 80) {
       clearInterval(timer);
     }
