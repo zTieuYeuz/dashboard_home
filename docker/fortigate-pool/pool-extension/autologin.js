@@ -35,7 +35,8 @@
     function setField(el, v){
       if(!el) return;
       var ng=window.angular;
-      if(ng){ try{ var c=ng.element(el).controller('ngModel'); if(c){ c.$setViewValue(v); c.$render(); return; } }catch(e){} }
+      if(ng){ try{ var c=ng.element(el).controller('ngModel'); if(c){ c.$setViewValue(v); c.$render(); } }catch(e){} }
+      // luôn set value + bắn input/change để mọi directive (kể cả ô mã hoá) cập nhật
       try{ var d=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value'); if(d&&d.set) d.set.call(el,v); else el.value=v; }catch(e){ el.value=v; }
       el.dispatchEvent(new Event('input',{bubbles:true}));
       el.dispatchEvent(new Event('change',{bubbles:true}));
@@ -44,12 +45,20 @@
     function clickFull(el){ if(!el) return; try{ el.scrollIntoView({block:'center'}); }catch(e){} var o={bubbles:true,cancelable:true,view:window}; var ev=['mousedown','mouseup','click']; for(var i=0;i<ev.length;i++){ try{ el.dispatchEvent(new MouseEvent(ev[i],o)); }catch(e){} } try{ el.click(); }catch(e){} }
     function submit(un, pw){
       submits++;
-      setField(un, U); setField(pw, P); digest(pw);
-      var btn=findBtn();
+      var attempt = submits;
+      setField(un, U); setField(pw, P);
+      try{ un && un.dispatchEvent(new Event('blur',{bubbles:true})); }catch(e){}  // blur → form validate → bật nút
+      try{ pw.dispatchEvent(new Event('blur',{bubbles:true})); }catch(e){}
+      digest(pw);
       setTimeout(function(){
-        var ng=window.angular, called=false;
-        if(ng && btn){ try{ var s=ng.element(btn).scope(); if(s && typeof s.login==='function'){ s.login(); var r=s.$root||s; if(!r.$$phase) s.$apply(); called=true; } }catch(e){} }
-        if(!called) clickFull(btn);
+        var btn=findBtn();
+        if(attempt === 1){
+          if(btn) clickFull(btn);                         // cách 1: click THẬT → ng-click="login()" chạy đúng context
+        } else {
+          var ng=window.angular, done=false;              // cách 2 (lần thử 2): gọi scope.login() trực tiếp
+          if(ng && btn){ try{ var s=ng.element(btn).scope(); if(s && typeof s.login==='function'){ s.login(); var r=s.$root||s; if(!r.$$phase) s.$apply(); done=true; } }catch(e){} }
+          if(!done && btn) clickFull(btn);
+        }
       }, 250);
       // Thử lại tối đa 2 lần, chỉ khi form CÒN (tránh Hikvision khoá tài khoản).
       if(submits<2){ setTimeout(function(){ if(passField()) submit(un, pw); }, 2800); }
