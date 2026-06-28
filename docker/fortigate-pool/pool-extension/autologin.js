@@ -3,11 +3,13 @@
  * lúc khởi động từ biến môi trường FGT_USER / FGT_PASS).
  * LƯU Ý: tài khoản auto-login KHÔNG được bật 2FA/FortiToken.
  * ─────────────────────────────────────────────────────────────────────────── */
-/* ── Hikvision DVR (192.168.130.3:8088) auto-login ──
- * Trang login do JS render nên không biết trước selector chính xác → dùng
- * heuristic: tìm ô password, ô username (text input đứng trước/visible), nút
- * đăng nhập. User/pass lấy từ HIK_USER / HIK_PASS (sinh trong creds.js).
- * Chỉ chạy khi host khớp DVR → không đụng các trang khác.
+/* ── Hikvision DVR (192.168.130.3:8088) auto-login — trang login dùng AngularJS ──
+ * Content script chạy ở ISOLATED world → KHÔNG truy cập được window.angular của
+ * trang, nên set .value chỉ điền hiển thị mà model AngularJS rỗng → login() thất
+ * bại. Giải pháp: BƠM 1 script chạy trong PAGE world để dùng angular thật: set
+ * ng-model qua $setViewValue rồi gọi login()/bấm nút .login-btn (có fallback DOM).
+ * User/pass lấy từ HIK_USER / HIK_PASS (creds.js). Chỉ chạy đúng host DVR.
+ * DVR (Server: Webs) không gửi CSP nên inline script chạy được.
  */
 (function () {
   var HOSTS = ["192.168.130.3"];
@@ -17,102 +19,62 @@
   var P = (typeof HIK_PASS !== "undefined") ? HIK_PASS : "";
   if (!P) return;
 
-  function visible(el) {
-    if (!el) return false;
-    var r = el.getBoundingClientRect();
-    return r.width > 0 && r.height > 0 && el.offsetParent !== null;
-  }
-  function setVal(el, v) {
-    el.focus();
-    el.value = v;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-    el.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
-  }
-  function findLoginBtn(scope) {
-    var sel = ['#login', '#loginBtn', '#login-btn', '.login-btn',
-               'button[type=submit]', 'input[type=submit]'];
-    for (var i = 0; i < sel.length; i++) {
-      var b = (scope || document).querySelector(sel[i]);
-      if (b && visible(b)) return b;
+  // Chạy trong PAGE world (được stringify + bơm vào <script>).
+  function pageLogin(U, P) {
+    var tries = 0, submits = 0, launched = false;
+    function vis(el){ if(!el) return false; var r=el.getBoundingClientRect(); return r.width>0 && r.height>0 && el.offsetParent!==null; }
+    function passField(){ var p=document.querySelectorAll('input[type=password]'); for(var i=0;i<p.length;i++){ if(vis(p[i])) return p[i]; } return null; }
+    function userField(){ var a=document.querySelectorAll('input'); for(var i=0;i<a.length;i++){ var t=(a[i].getAttribute('type')||'text').toLowerCase(); if(t!=='password'&&t!=='hidden'&&t!=='checkbox'&&t!=='radio'&&t!=='submit'&&t!=='button'&&vis(a[i])) return a[i]; } return null; }
+    function findBtn(){
+      var b=document.querySelector('.login-btn,#login,#loginBtn,button[type=submit],input[type=submit]');
+      if(b&&vis(b)) return b;
+      var c=document.querySelectorAll('button,a,input[type=button],div[role=button]');
+      for(var i=0;i<c.length;i++){ var t=(c[i].textContent||c[i].value||'').toLowerCase(); if(vis(c[i])&&/login|đăng nhập|sign in|登录/.test(t)) return c[i]; }
+      return null;
     }
-    // fallback: nút/anchor có text Login / Đăng nhập / 登录
-    var cands = (scope || document).querySelectorAll("button, a, input[type=button], div[role=button]");
-    for (var j = 0; j < cands.length; j++) {
-      var t = (cands[j].textContent || cands[j].value || "").trim().toLowerCase();
-      if (visible(cands[j]) && /login|log in|đăng nhập|sign in|登录/.test(t)) return cands[j];
+    function setField(el, v){
+      if(!el) return;
+      var ng=window.angular;
+      if(ng){ try{ var c=ng.element(el).controller('ngModel'); if(c){ c.$setViewValue(v); c.$render(); return; } }catch(e){} }
+      try{ var d=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value'); if(d&&d.set) d.set.call(el,v); else el.value=v; }catch(e){ el.value=v; }
+      el.dispatchEvent(new Event('input',{bubbles:true}));
+      el.dispatchEvent(new Event('change',{bubbles:true}));
     }
-    return null;
-  }
-
-  // Bấm "thật" — nhiều nút Hikvision nghe mousedown/mouseup chứ không chỉ click.
-  function clickFull(el) {
-    try { el.scrollIntoView({ block: "center" }); } catch (e) {}
-    var o = { bubbles: true, cancelable: true, view: window };
-    ["mousedown", "mouseup", "click"].forEach(function (t) {
-      try { el.dispatchEvent(new MouseEvent(t, o)); } catch (e) {}
-    });
-    try { el.click(); } catch (e) {}
-  }
-
-  // Submit có kiểm soát: blur field (để form validate → bật nút) + click nút +
-  // submit form + Enter. Tối đa 2 lần, chỉ thử lại nếu form CÒN (tránh Hikvision
-  // khoá tài khoản sau nhiều lần đăng nhập sai).
-  var submitTries = 0;
-  function attemptSubmit(un, pw) {
-    submitTries++;
-    try { un && un.dispatchEvent(new Event("blur", { bubbles: true })); } catch (e) {}
-    try { pw.dispatchEvent(new Event("blur", { bubbles: true })); } catch (e) {}
-    var b = document.querySelector('#login');
-    if (!b || !visible(b)) b = findLoginBtn();
-    if (b) clickFull(b);
-    var f = (pw && pw.form) || (b && b.form);
-    if (f) { try { f.requestSubmit ? f.requestSubmit() : f.submit(); } catch (e) {} }
-    try { pw.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter", keyCode: 13, which: 13 })); } catch (e) {}
-    if (submitTries < 2) {
-      setTimeout(function () {
-        var p = document.querySelector('input[type=password]');
-        if (p && visible(p)) attemptSubmit(un, pw);   // form còn → login chưa vào → thử lại 1 lần
-      }, 2800);
+    function digest(el){ var ng=window.angular; if(!ng) return; try{ var s=ng.element(el).scope(); if(s){ var r=s.$root||s; if(!r.$$phase) s.$apply(); } }catch(e){} }
+    function clickFull(el){ if(!el) return; try{ el.scrollIntoView({block:'center'}); }catch(e){} var o={bubbles:true,cancelable:true,view:window}; var ev=['mousedown','mouseup','click']; for(var i=0;i<ev.length;i++){ try{ el.dispatchEvent(new MouseEvent(ev[i],o)); }catch(e){} } try{ el.click(); }catch(e){} }
+    function submit(un, pw){
+      submits++;
+      setField(un, U); setField(pw, P); digest(pw);
+      var btn=findBtn();
+      setTimeout(function(){
+        var ng=window.angular, called=false;
+        if(ng && btn){ try{ var s=ng.element(btn).scope(); if(s && typeof s.login==='function'){ s.login(); var r=s.$root||s; if(!r.$$phase) s.$apply(); called=true; } }catch(e){} }
+        if(!called) clickFull(btn);
+      }, 250);
+      // Thử lại tối đa 2 lần, chỉ khi form CÒN (tránh Hikvision khoá tài khoản).
+      if(submits<2){ setTimeout(function(){ if(passField()) submit(un, pw); }, 2800); }
     }
+    var timer=setInterval(function(){
+      tries++;
+      var pw=passField();
+      if(!pw){ if(tries>80) clearInterval(timer); return; }
+      var un=userField();
+      setField(un, U); setField(pw, P); digest(pw);
+      if(!launched && pw.value===P){ launched=true; clearInterval(timer); setTimeout(function(){ submit(un, pw); }, 350); }
+      else if(tries>80){ clearInterval(timer); }
+    }, 500);
   }
 
-  var submitting = false, tries = 0;
-  var timer = setInterval(function () {
-    tries++;
-
-    // Ưu tiên ID chuẩn của Hikvision (template ©2020: #username/#password/#login).
-    var un = document.querySelector('#username');
-    var pw = document.querySelector('#password');
-
-    // Fallback heuristic nếu firmware khác đổi ID.
-    if (!pw || !visible(pw)) {
-      pw = null; var pws = document.querySelectorAll('input[type=password]');
-      for (var i = 0; i < pws.length; i++) { if (visible(pws[i])) { pw = pws[i]; break; } }
-    }
-    if (!pw) { if (tries > 80) clearInterval(timer); return; }
-    if (!un || !visible(un)) {
-      un = null; var ins = document.querySelectorAll('input');
-      for (var k = 0; k < ins.length; k++) {
-        var ty = (ins[k].getAttribute("type") || "text").toLowerCase();
-        if (ty !== "password" && ty !== "hidden" && ty !== "checkbox" &&
-            ty !== "radio" && ty !== "submit" && ty !== "button" && visible(ins[k])) {
-          un = ins[k]; break;
-        }
-      }
-    }
-
-    if (un && un.value !== U) setVal(un, U);
-    if (pw.value !== P) setVal(pw, P);
-
-    if (!submitting && un && un.value === U && pw.value === P) {
-      submitting = true;
-      clearInterval(timer);
-      setTimeout(function () { attemptSubmit(un, pw); }, 350);
-    } else if (tries > 80) {
-      clearInterval(timer);
-    }
-  }, 500);
+  function inject(){
+    try{
+      var s=document.createElement('script');
+      s.textContent='('+pageLogin.toString()+')('+JSON.stringify(U)+','+JSON.stringify(P)+');';
+      (document.documentElement||document.head||document.body).appendChild(s);
+      if(s.parentNode) s.parentNode.removeChild(s);
+    }catch(e){}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', inject);
+  else inject();
 })();
 
 /* ── FortiGate auto-login (content script). User/pass lấy từ creds.js (tự sinh
