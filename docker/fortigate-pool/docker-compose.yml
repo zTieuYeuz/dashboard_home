@@ -37,6 +37,8 @@ services:
       FGT_URL:  "${FGT_URL:-https://192.168.110.1/}"
       FGT_USER: "${ADM_USER:-}"
       FGT_PASS: "${ADM_PASS:-}"
+      HIK_USER: "${HIK_USER:-admin}"   # Camera NVR (Hikvision DVR) auto-login
+      HIK_PASS: "${HIK_PASS:-}"
       NAV_ALLOW_SUFFIX: "${NAV_ALLOW_SUFFIX:-.home-server.id.vn}"
     volumes:
       - ./custom_startup.sh:/dockerstartup/custom_startup.sh:ro

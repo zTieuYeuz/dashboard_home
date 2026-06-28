@@ -297,7 +297,7 @@ var ALL_SITE_TREE = [
     { name:'VMware ESXi', icon:'💾', url:'https://192.168.110.125/' },
     { name:'NAS',         icon:'🗄️', url:'https://192.168.110.126:5001/' },
     { name:'CasaOS',      icon:'🏠', url:'http://192.168.110.21:4434/' },
-    { name:'Kasm',        icon:'🖥️', url:'https://192.168.110.21:6901/', wip:true },
+    { name:'Kasm',        icon:'🖥️', url:'https://kasm-service.home-server.id.vn/', embedUrl:'https://kasm-service.home-server.id.vn/?fps=24&quality=6&compression=9' },
   ]},
   { folder:'AI', icon:'🤖', sites:[
     { name:'OpenClaw',    icon:'🤖', url:'http://192.168.110.5:18789/' },
@@ -309,6 +309,7 @@ var ALL_SITE_TREE = [
   { folder:'Monitor', icon:'📊', sites:[
     { name:'Uptime Kuma', icon:'📊', url:'http://192.168.110.21:3005/' },
     { name:'Frigate NVR', icon:'📷', url:'http://192.168.110.21:5000/' },
+    { name:'Camera NVR',  icon:'📹', url:'http://192.168.130.3:8088/' },
   ]},
 ];
 var _allSiteOpen = false;   // mặc định thu gọn
@@ -364,7 +365,7 @@ function renderEmbedFull(embedUrl){
   inner.style.maxWidth='none'; inner.style.padding='0'; inner.style.height='100%';
   inner.innerHTML='<div style="display:flex;flex-direction:column;height:100%">'
     +'<iframe src="'+esc(embedUrl)+'" style="flex:1;width:100%;border:none;display:block;min-height:0"'
-    +' sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads allow-modals allow-top-navigation-by-user-activation"'
+    +' sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads allow-modals"'
     +' allow="clipboard-read; clipboard-write" referrerpolicy="no-referrer"></iframe></div>';
 }
 
@@ -655,7 +656,7 @@ function renderDetail(svc) {
     inner.innerHTML = '<div style="display:flex;flex-direction:column;height:100%">'
       +'<iframe id="svcIfr" src="'+esc(svc.embedUrl)+'"'
       +' style="flex:1;width:100%;border:none;display:block;min-height:0"'
-      +' sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads allow-modals allow-top-navigation-by-user-activation"'
+      +' sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads allow-modals"'
       +' allow="clipboard-read; clipboard-write"'
       +' referrerpolicy="no-referrer"></iframe>'
     +'</div>';

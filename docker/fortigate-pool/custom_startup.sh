@@ -15,8 +15,11 @@ rm -rf "$EXT"; mkdir -p "$EXT"
 cp -r "$EXT_SRC"/. "$EXT"/
 U_B64=$(printf '%s' "${FGT_USER:-}" | base64 | tr -d '\n')
 P_B64=$(printf '%s' "${FGT_PASS:-}" | base64 | tr -d '\n')
+HU_B64=$(printf '%s' "${HIK_USER:-admin}" | base64 | tr -d '\n')
+HP_B64=$(printf '%s' "${HIK_PASS:-}" | base64 | tr -d '\n')
 cat > "$EXT/creds.js" <<EOF
 var FGT_USER = atob("$U_B64"), FGT_PASS = atob("$P_B64");
+var HIK_USER = atob("$HU_B64"), HIK_PASS = atob("$HP_B64");
 EOF
 
 # ── Navigator (hộp thư lệnh điều hướng) chạy nền ──

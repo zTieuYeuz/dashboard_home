@@ -5011,8 +5011,6 @@ async function handleCamLiveEmbed(request, env) {
   });
 }
 
-/* ── Scrypted — Reverse Proxy (HTTP + WebSocket for engine.io) ── */
-
 /* ── CodeProject.AI — Simple REST Reverse Proxy ── */
 async function handleCpaiEmbed(request, env) {
   const session = await getSession(request, env);
