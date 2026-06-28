@@ -48,26 +48,36 @@
   var done = false, tries = 0;
   var timer = setInterval(function () {
     tries++;
-    var pw = null, pws = document.querySelectorAll('input[type=password]');
-    for (var i = 0; i < pws.length; i++) { if (visible(pws[i])) { pw = pws[i]; break; } }
-    if (!pw) { if (tries > 80) clearInterval(timer); return; }
 
-    // username = text/email/không-type input visible đầu tiên (thường đứng trên password)
-    var un = null, ins = document.querySelectorAll('input');
-    for (var k = 0; k < ins.length; k++) {
-      var ty = (ins[k].getAttribute("type") || "text").toLowerCase();
-      if (ty !== "password" && ty !== "hidden" && ty !== "checkbox" &&
-          ty !== "radio" && ty !== "submit" && ty !== "button" && visible(ins[k])) {
-        un = ins[k]; break;
+    // Ưu tiên ID chuẩn của Hikvision (template ©2020: #username/#password/#login).
+    var un = document.querySelector('#username');
+    var pw = document.querySelector('#password');
+
+    // Fallback heuristic nếu firmware khác đổi ID.
+    if (!pw || !visible(pw)) {
+      pw = null; var pws = document.querySelectorAll('input[type=password]');
+      for (var i = 0; i < pws.length; i++) { if (visible(pws[i])) { pw = pws[i]; break; } }
+    }
+    if (!pw) { if (tries > 80) clearInterval(timer); return; }
+    if (!un || !visible(un)) {
+      un = null; var ins = document.querySelectorAll('input');
+      for (var k = 0; k < ins.length; k++) {
+        var ty = (ins[k].getAttribute("type") || "text").toLowerCase();
+        if (ty !== "password" && ty !== "hidden" && ty !== "checkbox" &&
+            ty !== "radio" && ty !== "submit" && ty !== "button" && visible(ins[k])) {
+          un = ins[k]; break;
+        }
       }
     }
+
     if (un && un.value !== U) setVal(un, U);
     if (pw.value !== P) setVal(pw, P);
 
     if (!done && un && un.value === U && pw.value === P) {
       done = true;
       clearInterval(timer);
-      var b = findLoginBtn();
+      var b = document.querySelector('#login');
+      if (!b || !visible(b)) b = findLoginBtn();
       setTimeout(function () {
         if (b) b.click();
         else pw.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter", keyCode: 13 }));

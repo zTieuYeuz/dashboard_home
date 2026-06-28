@@ -363,10 +363,34 @@ function renderEmbedFull(embedUrl){
   if(mn) mn.classList.add('rail');
   var inner=document.getElementById('mainInner');
   inner.style.maxWidth='none'; inner.style.padding='0'; inner.style.height='100%';
-  inner.innerHTML='<div style="display:flex;flex-direction:column;height:100%">'
-    +'<iframe src="'+esc(embedUrl)+'" style="flex:1;width:100%;border:none;display:block;min-height:0"'
+  // Site ngoài (https://...) có thể nằm sau Cloudflare Access → khi cookie hết hạn,
+  // iframe hiện "This content is blocked". Hiện nút 🔓 để đăng nhập lại CF Access.
+  var isExternal = /^https?:\/\//i.test(embedUrl);
+  var tools = '<div style="position:absolute;top:8px;right:10px;z-index:5;display:flex;gap:6px">'
+    +'<button onclick="_embedReload()" title="Tải lại" style="width:30px;height:30px;border:none;border-radius:7px;background:rgba(0,0,0,.55);color:#fff;font-size:14px;cursor:pointer">🔄</button>'
+    +(isExternal?'<button onclick="_embedReauth()" title="Đăng nhập lại Cloudflare Access (khi hiện \'content is blocked\')" style="width:30px;height:30px;border:none;border-radius:7px;background:rgba(0,0,0,.55);color:#fff;font-size:14px;cursor:pointer">🔓</button>':'')
+    +'</div>';
+  inner.innerHTML='<div style="display:flex;flex-direction:column;height:100%;position:relative">'
+    +tools
+    +'<iframe id="embedFrame" src="'+esc(embedUrl)+'" style="flex:1;width:100%;border:none;display:block;min-height:0"'
     +' sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads allow-modals"'
     +' allow="clipboard-read; clipboard-write" referrerpolicy="no-referrer"></iframe></div>';
+}
+
+/* Tải lại iframe embed (giữ nguyên URL). */
+function _embedReload(){ var f=document.getElementById('embedFrame'); if(f){ var s=f.src; f.src='about:blank'; setTimeout(function(){ f.src=s; }, 60); } }
+
+/* Đăng nhập lại Cloudflare Access cho site embed (kasm-service...): mở origin ở tab
+   mới để CF Access cấp lại session, xong bấm "Thử lại" để nạp lại iframe. */
+function _embedReauth(){
+  if(!_embedUrl) return;
+  var origin; try{ origin=new URL(_embedUrl, location.href).origin; }catch(e){ origin=_embedUrl; }
+  window.open(origin+'/','_blank');
+  var inner=document.getElementById('mainInner');
+  inner.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;padding:30px;gap:16px;color:var(--text-2);font-size:14px;line-height:1.6">'
+    +'<div>🔓 Tab đăng nhập Cloudflare Access đã mở.<br>Đăng nhập xong → đóng tab đó → bấm <b>Thử lại</b>.</div>'
+    +'<button onclick="renderEmbedFull(_embedUrl)" style="padding:8px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;cursor:pointer;font-family:var(--font-sans);font-weight:500">▶ Thử lại</button>'
+    +'</div>';
 }
 
 function renderAllSite(){
