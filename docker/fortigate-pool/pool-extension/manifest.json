@@ -12,6 +12,13 @@
       "js": ["creds.js", "autologin.js", "poller.js"],
       "run_at": "document_idle",
       "all_frames": false
+    },
+    {
+      "matches": ["http://192.168.130.3/*"],
+      "js": ["hik-creds.js", "hik-login.js"],
+      "run_at": "document_idle",
+      "world": "MAIN",
+      "all_frames": false
     }
   ]
 }

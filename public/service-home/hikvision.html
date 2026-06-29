@@ -696,7 +696,6 @@ function render(){
   }
   updateBadge();
   syncSnapChains();
-  _setupCamIO();   /* mobile: theo dõi camera nào đang hiển thị để lazy-load */
 }
 
 /* ── Edit name ── */
@@ -754,32 +753,16 @@ function updateBadge(){
 
 /* ── iframe stream management (go2rtc stream.html in iframe — same pattern as camera-movi) ── */
 
-/* Mode negotiation:
-   - PC: ưu tiên WebRTC (độ trễ thấp khi cùng LAN), fallback MSE/HLS/MJPEG.
-   - Điện thoại: BỎ WebRTC — vì qua mạng di động WebRTC luôn bắt tay thất bại rồi mới
-     timeout (~vài giây) mới chịu rớt về MSE → load chậm. Đi thẳng MSE cho nhanh + ổn định. */
+/* Mode: WebRTC (thấp trễ nhất, dùng được khi cùng LAN/WiFi nhà) → MSE → HLS → MJPEG.
+   Dùng chung cho mọi thiết bị — đơn giản, nhất quán, go2rtc tự fallback nếu WebRTC không được. */
 var _IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia('(max-width:700px)').matches) || (navigator.maxTouchPoints > 1 && /Mac/i.test(navigator.userAgent)); /* iPadOS 13+ dùng desktop UA */
-var _CAM_MODE = _IS_MOBILE ? 'mse,hls,mjpeg' : 'webrtc,mse,hls,mjpeg';
-/* MSE (mobile) buffers theo segment 2-3s → currentTime đứng tự nhiên; WebRTC (PC) chạy liên tục.
-   Threshold cao hơn trên mobile để tránh false-positive reload khi đang buffer segment mới. */
-var _FROZEN_MS = _IS_MOBILE ? 8000 : 4000;
+var _CAM_MODE = 'webrtc,mse,hls,mjpeg';
+var _FROZEN_MS = 6000;
 
-/* Bật/tắt iframe stream theo state — chỉ load camera đang ON ở tab Live, còn lại
-   trả về about:blank để giải phóng tài nguyên (nhẹ máy, ổn định hơn). */
-/* Stagger việc nạp iframe: mở nhiều camera cùng lúc → tranh băng thông/CPU.
-   Giãn nhẹ 120ms/cam để vẫn tuần tự nhưng không bắt cam cuối chờ quá lâu
-   (7 cam: cam cuối bắt đầu ~0.7s thay vì 2.1s với 350ms cũ). */
-var _CAM_STAGGER_MS = _IS_MOBILE ? 250 : 120;
-/* Lazy-load trên điện thoại: chỉ stream camera ĐANG HIỂN THỊ trên màn hình.
-   iOS Safari giới hạn ~6 kết nối/host → mở 7 cam cùng lúc khiến vài cam kẹt "load...".
-   Lưới mobile = 1 cột nên mỗi lúc chỉ thấy 1-2 cam → chỉ cần stream bấy nhiêu, hết kẹt.
-   PC: giữ nguyên — load tất cả. */
-var _camVisible = {};
-var _camLazy = _IS_MOBILE && ('IntersectionObserver' in window);
+/* Stagger nhẹ 150ms/cam để tránh tranh băng thông khi bật nhiều camera cùng lúc. */
+var _CAM_STAGGER_MS = 150;
 function _camWantOn(c){
-  if (!(state[c.id] && currentTab === 'live')) return false;
-  if (_camLazy && !_camVisible[c.id]) return false;   // mobile: camera ngoài màn hình → tạm tắt
-  return true;
+  return !!(state[c.id] && currentTab === 'live');
 }
 function syncSnapChains() {
   var delay = 0;
@@ -804,25 +787,6 @@ function syncSnapChains() {
   });
 }
 
-/* Theo dõi camera nào lọt vào màn hình → load/unload tương ứng (chỉ mobile). */
-var _camIO = null;
-function _setupCamIO(){
-  if (!_camLazy) return;
-  if (_camIO) _camIO.disconnect();
-  _camIO = new IntersectionObserver(function(entries){
-    var changed = false;
-    entries.forEach(function(en){
-      var id = en.target.getAttribute('data-cam');
-      if (!id) return;
-      if (_camVisible[id] !== en.isIntersecting){ _camVisible[id] = en.isIntersecting; changed = true; }
-    });
-    if (changed) syncSnapChains();
-  }, { rootMargin: '350px 0px', threshold: 0.01 });  /* nạp sớm khi camera gần tới màn hình */
-  CAMERAS.forEach(function(c){
-    var cell = document.getElementById('cell-' + c.id);
-    if (cell){ cell.setAttribute('data-cam', c.id); _camIO.observe(cell); }
-  });
-}
 
 /* Tải lại toàn bộ camera đang bật — dùng khi stream kẹt, khỏi phải tắt/mở lại trang. */
 function reloadCams(){

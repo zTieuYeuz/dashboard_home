@@ -21,6 +21,10 @@ cat > "$EXT/creds.js" <<EOF
 var FGT_USER = atob("$U_B64"), FGT_PASS = atob("$P_B64");
 var HIK_USER = atob("$HU_B64"), HIK_PASS = atob("$HP_B64");
 EOF
+# hik-creds.js: chỉ HIK creds, nạp ở MAIN world (hik-login.js) — chỉ trên host DVR.
+cat > "$EXT/hik-creds.js" <<EOF
+var HIK_USER = atob("$HU_B64"), HIK_PASS = atob("$HP_B64");
+EOF
 
 # ── Navigator (hộp thư lệnh điều hướng) chạy nền ──
 python3 /opt/navigator.py &
