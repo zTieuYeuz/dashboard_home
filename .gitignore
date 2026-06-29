@@ -33,3 +33,11 @@ frigate-config.yml
 frigate-config-ai.yml
 RUSTDESK-GUIDE.md
 
+# ── Files hạ tầng KHÔNG cần cho Cloudflare build ──
+# Cloudflare chỉ build từ: worker.js + public/ + wrangler.toml
+# Các file dưới vẫn giữ local + trong git history; ẩn khỏi GitHub để repo gọn + không lộ thông tin nội bộ
+docker/
+n8n/
+docs/
+scrypted-docker-compose.yaml
+

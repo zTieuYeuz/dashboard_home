@@ -4,7 +4,7 @@ Dashboard quản lý hạ tầng Home Lab & Văn phòng Movi, chạy trên **Clo
 
 ## Tính năng
 
-- 🏠 **Service Home** — VMware ESXi, n8n, CasaOS, FortiGate, ASUS Router, SSH, Uptime Kuma
+- 🏠 **Service Home** — VMware ESXi, n8n, CasaOS, FortiGate, ASUS Router, SSH, RustDesk, Services Hub
 - 🎬 **Service Movi** — Cisco Meraki Network Monitor, FortiGate Movi, Camera Movi, Topology
 - 🔐 **Auth System** — Multi-user, role-based permissions, policy groups
 - 📑 **Bookmarks** — Trang bookmark cá nhân, sync qua Cloudflare KV
