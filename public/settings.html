@@ -173,8 +173,11 @@ select.inp{cursor:pointer}
 .cam-check-label:has(input:checked){border-color:var(--warn);background:color-mix(in oklch,var(--warn) 10%,transparent);color:var(--warn)}
 .cam-check-label input{width:13px;height:13px;accent-color:var(--warn);cursor:pointer}
 
-/* ── Camera Home hierarchical sub-section ── */
+/* ── Camera Home & Services Hub hierarchical sub-sections ── */
 .cam-home-sub{border-left:2px solid var(--border-soft);margin:0 0 0 2.25rem;padding:.375rem 0 .375rem .75rem;display:flex;flex-direction:column;gap:0}
+.hub-folder-hdr{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:.55rem .25rem .2rem 0;margin-top:.1rem}
+.hub-folder-hdr:first-child{padding-top:.2rem;margin-top:0}
+.hub-sites-row{display:flex;flex-wrap:wrap;gap:4px;padding-bottom:.15rem}
 .cam-home-sub-row{padding:.25rem 0}
 .cam-home-sub-label{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:500;padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer;transition:all .15s;user-select:none}
 .cam-home-sub-label:has(input:checked){border-color:var(--accent);background:color-mix(in oklch,var(--accent) 9%,transparent);color:var(--accent)}
@@ -1111,9 +1114,12 @@ var __USER__ = window.__USER__ || _readUserCookie() || { username:'?', role:'use
 var DELEGATE_SVC_LABELS = {
   /* ── Service Home ── */
   'esxi':'VMware ESXi','n8n':'n8n Automation','casaos':'CasaOS',
-  '9router':'9Router','fortigate':'FortiGate','asus':'ASUS Router',
-  'ssh':'SSH Terminal','uptime-kuma':'Uptime Kuma','camera':'Camera Home · Live','camera_playback':'Camera Home · Playback','camera_download':'Camera Home · Tải video','app_camera':'Camera Home · Mở thẳng camera khi login','camera_autoopen':'Camera Home · Tự động mở tất cả camera','rustdesk':'RustDesk Remote',
-  'fortigate_pool':'FortiGate Pool (read=View, write=Admin)',
+  'fortigate':'FortiGate','asus':'ASUS Router',
+  'ssh':'SSH Terminal','camera':'Camera Home · Live','camera_playback':'Camera Home · Playback','camera_download':'Camera Home · Tải video','app_camera':'Camera Home · Mở thẳng camera khi login','camera_autoopen':'Camera Home · Tự động mở tất cả camera','rustdesk':'RustDesk Remote',
+
+  'services-hub':'Services Hub (Internal)',
+  'hub-fortigate':'Hub · FortiGate','hub-asus':'Hub · Router Asus','hub-esxi':'Hub · VMware ESXi','hub-nas':'Hub · NAS','hub-casaos':'Hub · CasaOS','hub-kasm':'Hub · Kasm',
+  'hub-openclaw':'Hub · OpenClaw','hub-n8n':'Hub · n8n','hub-frigate':'Hub · Frigate NVR','hub-camera-nvr':'Hub · Camera NVR',
   /* ── Service Movi ── */
   'meraki':'Meraki Network','topology':'Movi Map Network',
   'fortigate-movi':'FortiGate Movi','camera-movi':'Camera Movi',
@@ -1124,7 +1130,7 @@ var DELEGATE_SVC_LABELS = {
   'tool-movi-fg-policy-lan':'Tool: FG Policy LAN','tool-movi-fg-policy-wifi':'Tool: FG Policy WiFi',
   'ssh-movi':'Termix Movi',
 };
-var _DELEGATE_HOME = ['esxi','n8n','casaos','9router','fortigate','asus','ssh','uptime-kuma','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','fortigate_pool'];
+var _DELEGATE_HOME = ['esxi','n8n','casaos','fortigate','asus','ssh','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','services-hub','hub-fortigate','hub-asus','hub-esxi','hub-nas','hub-casaos','hub-kasm','hub-openclaw','hub-n8n','hub-frigate','hub-camera-nvr'];
 var _DELEGATE_MOVI = ['meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
 /* tool-movi sub-keys — needed to restore parent group visibility in delegate filter */
 var _TOOL_MOVI_SUB = ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'];
@@ -1272,17 +1278,12 @@ var SERVICE_HOME_PAGES = [
   {id:'esxi',        name:'VMware ESXi',    icon:'🖥', perms:['none','read','write']},
   {id:'n8n',         name:'n8n Automation', icon:'⚡', perms:['none','read','write']},
   {id:'casaos',      name:'CasaOS',         icon:'🏠', perms:['none','read','write']},
-  {id:'9router',     name:'9Router',        icon:'🔀', perms:['none','read','write']},
   {id:'ssh',         name:'SSH Terminal',   icon:'⌨',  perms:['none','write'],  permLabels:{'none':'Không truy cập','write':'Truy cập'}},
   {id:'rustdesk',    name:'RustDesk Remote',icon:'🖥', perms:['none','read'],   permLabels:{'none':'Không truy cập','read':'Truy cập'}},
   {id:'fortigate',   name:'FortiGate',      icon:'🛡', perms:['none','read','write']},
-  {id:'fortigate_pool', name:'FortiGate Pool', icon:'🧩', perms:['none','read','write'], permLabels:{'none':'Không truy cập','read':'View (chỉ xem)','write':'Admin (toàn quyền)'}},
+
   {id:'asus',        name:'ASUS Router',    icon:'📡', perms:['none','read','write']},
-  {id:'uptime-kuma', name:'Uptime Kuma',    icon:'📊', perms:['none','read']},
-  {id:'nas',         name:'NAS',            icon:'🗄', perms:['none','read'],   permLabels:{'none':'Không truy cập','read':'Truy cập'}},
-  {id:'frigate',     name:'Frigate NVR',    icon:'📷', perms:['none','read'],   permLabels:{'none':'Không truy cập','read':'Truy cập'}},
-  {id:'openclaw',    name:'OpenClaw AI',    icon:'🤖', perms:['none','read'],   permLabels:{'none':'Không truy cập','read':'Truy cập'}},
-  {id:'kasm',        name:'Kasm Workspace', icon:'🖥', perms:['none','read'],   permLabels:{'none':'Không truy cập','read':'Truy cập'}},
+  {type:'services-hub-group', id:'services-hub-group', icon:'🏠', name:'Services Hub (Internal)'},
   {type:'camera-home-group', id:'camera-home-group', icon:'📷', name:'Camera Home'}
 ];
 
@@ -2839,6 +2840,47 @@ function buildServiceSection(title, pages, permissions, panels, cameras, pfx, se
       return;
     }
 
+    // ── Services Hub hierarchical group ──
+    if (page.type === 'services-hub-group') {
+      var hubHasAccess = (permissions['services-hub']||'none') !== 'none';
+
+      // Main row
+      var hubRow = document.createElement('div');
+      hubRow.className = 'perm-row';
+      hubRow.id = pfx+'-row-services-hub-group';
+      var hubRadios = '<label class="perm-radio-label"><input type="radio" name="'+pfx+'-perm-services-hub" value="none"'+(hubHasAccess?'':' checked')+' onchange="onHubAccessChange(\''+pfx+'\')"> Không truy cập</label>'
+        +'<label class="perm-radio-label"><input type="radio" name="'+pfx+'-perm-services-hub" value="read"'+(hubHasAccess?' checked':'')+' onchange="onHubAccessChange(\''+pfx+'\')"> Truy cập</label>';
+      hubRow.innerHTML = '<span class="perm-row-icon">🏠</span><span class="perm-row-name">Services Hub (Internal)</span><div class="perm-radios">'+hubRadios+'</div>';
+      body.appendChild(hubRow);
+
+      // Sub-section — folder tree
+      var hubSub = document.createElement('div');
+      hubSub.className = 'cam-home-sub';
+      hubSub.id = pfx+'-hub-sub';
+      hubSub.style.display = hubHasAccess ? '' : 'none';
+
+      SERVICES_HUB_TREE.forEach(function(folder) {
+        var fhdr = document.createElement('div');
+        fhdr.className = 'hub-folder-hdr';
+        fhdr.innerHTML = folder.icon+' '+esc(folder.folder);
+        hubSub.appendChild(fhdr);
+
+        var sitesRow = document.createElement('div');
+        sitesRow.className = 'hub-sites-row';
+        folder.sites.forEach(function(site) {
+          var checked = (permissions[site.perm]||'none') !== 'none';
+          var lbl = document.createElement('label');
+          lbl.className = 'cam-home-sub-label';
+          lbl.innerHTML = '<input type="checkbox" class="hub-site-cb" data-perm="'+esc(site.perm)+'"'+(checked?' checked':'')+'> '+site.icon+' '+esc(site.name);
+          sitesRow.appendChild(lbl);
+        });
+        hubSub.appendChild(sitesRow);
+      });
+
+      body.appendChild(hubSub);
+      return;
+    }
+
     // ── Camera Home hierarchical group ──
     if (page.type === 'camera-home-group') {
       var hasAccess = (permissions['camera']||'none')!=='none'||
@@ -3071,6 +3113,35 @@ function onCamHomeChange(pfx) {
   if (sub) sub.style.display = (radio && radio.value !== 'none') ? '' : 'none';
 }
 
+function onHubAccessChange(pfx) {
+  var radio = document.querySelector('input[name="'+pfx+'-perm-services-hub"]:checked');
+  var sub = document.getElementById(pfx+'-hub-sub');
+  if (sub) sub.style.display = (radio && radio.value !== 'none') ? '' : 'none';
+}
+
+var SERVICES_HUB_TREE = [
+  { folder:'Network', icon:'🌐', sites:[
+    { name:'FortiGate',   icon:'🛡️', perm:'hub-fortigate' },
+    { name:'Router Asus', icon:'📡', perm:'hub-asus' },
+  ]},
+  { folder:'Server', icon:'🖥️', sites:[
+    { name:'VMware ESXi', icon:'💾', perm:'hub-esxi' },
+    { name:'NAS',         icon:'🗄️', perm:'hub-nas' },
+    { name:'CasaOS',      icon:'🏠', perm:'hub-casaos' },
+    { name:'Kasm',        icon:'🖥️', perm:'hub-kasm' },
+  ]},
+  { folder:'AI', icon:'🤖', sites:[
+    { name:'OpenClaw', icon:'🤖', perm:'hub-openclaw' },
+  ]},
+  { folder:'Automation', icon:'⚡', sites:[
+    { name:'n8n', icon:'⚡', perm:'hub-n8n' },
+  ]},
+  { folder:'Monitor', icon:'📊', sites:[
+    { name:'Frigate NVR', icon:'📷', perm:'hub-frigate' },
+    { name:'Camera NVR',  icon:'📹', perm:'hub-camera-nvr' },
+  ]},
+];
+
 function onCamHomeViewChange(pfx) {
   var cb = document.getElementById(pfx+'-camhome-view');
   var camSec = document.getElementById(pfx+'-cams-camera');
@@ -3098,6 +3169,20 @@ function collectPermissions(pfx) {
 
   // Service Home
   SERVICE_HOME_PAGES.forEach(function(page){
+    if (page.type === 'services-hub-group') {
+      var hubR = document.querySelector('input[name="'+pfx+'-perm-services-hub"]:checked');
+      permissions['services-hub'] = (hubR && hubR.value !== 'none') ? 'read' : 'none';
+      var hubSub = document.getElementById(pfx+'-hub-sub');
+      if (hubSub) {
+        hubSub.querySelectorAll('.hub-site-cb').forEach(function(cb) {
+          permissions[cb.dataset.perm] = cb.checked ? 'read' : 'none';
+        });
+      } else {
+        // sub-section not rendered (hub=none) → clear all hub-site keys
+        SERVICES_HUB_TREE.forEach(function(f){ f.sites.forEach(function(s){ permissions[s.perm]='none'; }); });
+      }
+      return;
+    }
     if (page.type === 'camera-home-group') {
       var mainR = document.querySelector('input[name="'+pfx+'-perm-camera-home-group"]:checked');
       if (!mainR || mainR.value === 'none') {

@@ -683,8 +683,6 @@ var ALL_SERVICES_DEF = [
   { id:'esxi',        name:'VMware ESXi',     icon:'🖥', desc:'Hypervisor · bare-metal',                     url:'https://esxi.home-server.id.vn',             local:false, detailPage:'/service-home/vmware-home.html' },
   { id:'n8n',         name:'n8n Automation',  icon:'⚡', desc:'Workflow & bot automation',                    url:'https://n8n-home.home-server.id.vn',         local:false, detailPage:'/service-home/n8n.html' },
   { id:'casaos',      name:'CasaOS',          icon:'🏠', desc:'Home server OS dashboard',                     url:'https://casaos.home-server.id.vn',           local:false, detailPage:'/service-home/casaos.html' },
-  { id:'9router',     name:'9Router',         icon:'🔀', desc:'Router & network management',                  url:'https://9router.home-server.id.vn/dashboard',local:false, detailPage:'/service-home/9router.html' },
-  { id:'uptime-kuma', name:'Uptime Kuma',     icon:'📊', desc:'Service health monitor',                       url:'http://192.168.110.21:3005/dashboard',       local:true,  detailPage:null },
   { id:'ssh',         name:'SSH Terminal',    icon:'⌨',  desc:'Web SSH · Termix',                             url:'https://termix.home-server.id.vn',           local:false, detailPage:'/service-home/ssh.html' },
   { id:'fortigate',   name:'FortiGate',       icon:'🛡', desc:'Firewall · security gateway',                  url:'http://192.168.110.1',                       local:true,  detailPage:'/service-home/fortigate.html' },
   { id:'asus',        name:'ASUS Router',     icon:'📡', desc:'ASUS · home network',                          url:'http://192.168.10.1:8443',                   local:true,  detailPage:'/service-home/asus.html' },
@@ -704,7 +702,7 @@ var ALL_SERVICES_DEF = [
 /* Categories (matches original SERVICE_CATEGORIES) */
 var SERVICE_CATEGORIES = [
   { id:'home', icon:'🏠', name:'Service Home', desc:'Hạ tầng & hệ thống · home-server.id.vn', accent:'var(--accent)',
-    serviceIds: ['services-hub','esxi','n8n','casaos','9router','uptime-kuma','ssh','fortigate','asus','camera','rustdesk'] },
+    serviceIds: ['services-hub','esxi','n8n','casaos','ssh','fortigate','asus','camera','rustdesk'] },
   { id:'movi', icon:'🎬', name:'Service Movi', desc:'Văn phòng Movi · Meraki & Topology',    accent:'var(--violet)',
     serviceIds: ['meraki','movi','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi','ssh-movi'] },
 ];
@@ -718,8 +716,8 @@ var _TOOL_MOVI_KEYS = ['tool-movi-create-user','tool-movi-block-user','tool-movi
 var SERVICES = __USER__.isAdmin
   ? ALL_SERVICES_DEF
   : ALL_SERVICES_DEF.filter(function(s){
-      // services-hub: accessible to all logged-in users (no permission gate on the page)
-      if (s.id === 'services-hub') return true;
+      // services-hub: shown only if user has the permission (page is server-gated)
+      if (s.id === 'services-hub') return (__USER__.permissions['services-hub'] || 'none') !== 'none';
       // tool-movi: show card if user has at least one sub-permission
       if (s.id === 'tool-movi') {
         return _TOOL_MOVI_KEYS.some(function(k){ return (__USER__.permissions[k] || 'none') !== 'none'; });

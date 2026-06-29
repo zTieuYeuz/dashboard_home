@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════ */
 const SESSION_COOKIE    = 'dh_session';
 const SESSION_TTL       = 60 * 60 * 8;      // default fallback only — runtime reads from KV system_config
-const ALL_SERVICES      = ['esxi','n8n','casaos','9router','fortigate','fortigate_pool','asus','ssh','uptime-kuma','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
+const ALL_SERVICES      = ['esxi','n8n','casaos','fortigate','asus','ssh','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','nas','frigate','openclaw','kasm','services-hub','hub-fortigate','hub-asus','hub-esxi','hub-nas','hub-casaos','hub-kasm','hub-openclaw','hub-n8n','hub-frigate','hub-camera-nvr','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
 
 /* Idle-timer script injected into every authenticated HTML page.
    T = idle timeout ms, W = warning threshold ms (must be < T) */
@@ -2508,7 +2508,6 @@ const WAYFIND_NAV = `<style>
   {i:'\\uD83D\\uDDA5',n:'VMware ESXi',d:'Hypervisor · bare metal',h:'/service-home/vmware-home.html',p:'esxi'},
   {i:'\\uD83C\\uDFE0',n:'CasaOS',d:'Home server OS',h:'/service-home/casaos.html',p:'casaos'},
   {i:'\\uD83D\\uDCE1',n:'ASUS Router',d:'Home network router',h:'/service-home/asus.html',p:'asus'},
-  {i:'\\uD83D\\uDD00',n:'9Router',d:'Router & network management',h:'/service-home/9router.html',p:'9router'},
   {i:'\\u26A1',n:'n8n Automation',d:'Workflow & bot automation',h:'/service-home/n8n.html',p:'n8n'},
   {i:'\\uD83D\\uDCF7',n:'Camera',d:'Hệ thống camera · go2rtc',h:'/service-home/hikvision.html',p:'camera'},
   {i:'\\uD83D\\uDDA7',n:'SSH Terminal',d:'Web SSH · Termix',h:'/service-home/ssh.html',p:'ssh'},
@@ -2612,7 +2611,7 @@ const DATA_REFRESH = `<style>
   '/service-movi/tool-movi.html':[],
   '/service-movi/ssh-movi.html':[],
   '/service-home/fortigate.html':['load'],'/service-home/vmware-home.html':['loadData'],'/service-home/casaos.html':['loadData'],
-  '/service-home/asus.html':['load'],'/service-home/9router.html':['loadData'],'/service-home/n8n.html':['loadData'],
+  '/service-home/asus.html':['load'],'/service-home/n8n.html':['loadData'],
   '/service-home/hikvision.html':['loadState'],'/service-home/ssh.html':['loadData'],
   '/service-home/rustdesk.html':['loadDevices'],
   '/bookmarks.html':['loadData'],'/settings.html':['loadSettings']};
@@ -2871,11 +2870,11 @@ a:hover{background:#4f46e5}</style></head>
       '/service-home/vmware-home.html': 'esxi',
       '/service-home/casaos.html': 'casaos',
       '/service-home/asus.html': 'asus',
-      '/service-home/9router.html': '9router',
       '/service-home/n8n.html': 'n8n',
       '/service-home/hikvision.html': ['camera','camera_playback','camera_download','app_camera','camera_autoopen'],
       '/service-home/ssh.html': 'ssh',
       '/service-home/rustdesk.html': 'rustdesk',
+      '/service-home/services-embed.html': 'services-hub',
       // '/settings.html' intentionally NOT gated — all authenticated users can access own profile/MFA settings
       '/policy.html': '_mgmt',
     };
@@ -3028,8 +3027,6 @@ const SERVICES = [
   { id: 'esxi',        name: 'VMware ESXi',    checkUrl: 'https://esxi.home-server.id.vn' },
   { id: 'n8n',         name: 'n8n Automation', checkUrl: 'https://n8n-home.home-server.id.vn' },
   { id: 'casaos',      name: 'CasaOS',         checkUrl: 'https://casaos.home-server.id.vn' },
-  { id: '9router',     name: '9Router',        checkUrl: 'https://9router.home-server.id.vn' },
-  { id: 'uptime-kuma', name: 'Uptime Kuma',    checkUrl: null },
   { id: 'ssh',         name: 'SSH Terminal',   checkUrl: 'https://termix.home-server.id.vn' },
   { id: 'fortigate',   name: 'FortiGate',      checkUrl: null },
   { id: 'asus',        name: 'ASUS Router',    checkUrl: null },
@@ -3039,8 +3036,50 @@ const SERVICES = [
 
 const N8N_BASE        = 'https://n8n-home.home-server.id.vn/api/v1';
 const MOVI_N8N_BASE   = 'https://n8n.movi-finance.com/api/v1';
-const NINEROUTER_BASE = 'https://9router.home-server.id.vn';
 const RUSTDESK_BASE   = 'https://rustdesk.home-server.id.vn';
+
+/* ── Services Hub internal site tree (server-authoritative) ──
+   perm: permission key mỗi site cần; admin bypass tất cả.
+   API /api/services-embed-config trả về chỉ sites user có quyền (bỏ trường perm). */
+const SERVICES_EMBED_TREE = [
+  { folder:'Network', icon:'🌐', sites:[
+    { name:'FortiGate',   icon:'🛡️', url:'https://192.168.110.1/',        perm:'hub-fortigate' },
+    { name:'Router Asus', icon:'📡', url:'https://192.168.10.1:8443/',    perm:'hub-asus' },
+  ]},
+  { folder:'Server', icon:'🖥️', sites:[
+    { name:'VMware ESXi', icon:'💾', url:'https://192.168.110.125/',      perm:'hub-esxi' },
+    { name:'NAS',         icon:'🗄️', url:'https://192.168.110.126:5001/', perm:'hub-nas' },
+    { name:'CasaOS',      icon:'🏠', url:'http://192.168.110.21:4434/',   perm:'hub-casaos' },
+    { name:'Kasm',        icon:'🖥️', url:'https://kasm-service.home-server.id.vn/', embedUrl:'https://kasm-service.home-server.id.vn/?fps=24&quality=6&compression=9', perm:'hub-kasm' },
+  ]},
+  { folder:'AI', icon:'🤖', sites:[
+    { name:'OpenClaw', icon:'🤖', url:'http://192.168.110.5:18789/', perm:'hub-openclaw' },
+  ]},
+  { folder:'Automation', icon:'⚡', sites:[
+    { name:'n8n', icon:'⚡', url:'https://n8n-home.home-server.id.vn/', embedUrl:'/n8n-proxy/home', perm:'hub-n8n' },
+  ]},
+  { folder:'Monitor', icon:'📊', sites:[
+    { name:'Frigate NVR', icon:'📷', url:'http://192.168.110.21:5000/', perm:'hub-frigate' },
+    { name:'Camera NVR',  icon:'📹', url:'http://192.168.130.3:8088/',  perm:'hub-camera-nvr' },
+  ]},
+];
+
+async function handleServicesEmbedConfig(env, session) {
+  const eff = await computeEffectivePermissions(env, session.username);
+  const isAdmin = !!(eff && (eff.role === 'admin' || session.role === 'admin'));
+  const userPerms = (eff && eff.permissions) || {};
+  const tree = SERVICES_EMBED_TREE.map(function(folder) {
+    const sites = folder.sites
+      .filter(function(s) { return isAdmin || (userPerms[s.perm] || 'none') !== 'none'; })
+      .map(function(s) {
+        const out = { name: s.name, icon: s.icon, url: s.url };
+        if (s.embedUrl) out.embedUrl = s.embedUrl;
+        return out;
+      });
+    return { folder: folder.folder, icon: folder.icon, sites: sites };
+  }).filter(function(f) { return f.sites.length > 0; });
+  return json({ tree: tree });
+}
 
 /* ── Movi n8n webhook basic-auth (credentials from Cloudflare secrets) ──
    Set via:  wrangler secret put MOVI_N8N_USER  /  MOVI_N8N_PASS
@@ -3850,141 +3889,6 @@ async function handleClearToolMoviHistory(request, env) {
   if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
   await env.DASHBOARD_KV.delete('tool_movi_history');
   return json({ success: true });
-}
-
-async function handle9Router(request, env) {
-  // 9Router dashboard auth: password-only login → session cookie (auth_token)
-  // Set via: npx wrangler secret put NINEROUTER_PASSWORD
-  const password = env && env.NINEROUTER_PASSWORD;
-  if (!password) {
-    return json({ error: 'Chưa cấu hình NINEROUTER_PASSWORD. Chạy: npx wrangler secret put NINEROUTER_PASSWORD' }, 502);
-  }
-
-  // Step 1: Login to get session cookie
-  let authCookie = '';
-  try {
-    const loginRes = await fetch(`${NINEROUTER_BASE}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ password }),
-      signal: AbortSignal.timeout(10000),
-    });
-    if (loginRes.status === 401) return json({ error: '9Router login thất bại — mật khẩu NINEROUTER_PASSWORD không đúng' }, 502);
-    if (!loginRes.ok) return json({ error: `9Router login lỗi HTTP ${loginRes.status}` }, 502);
-
-    // Extract auth_token cookie from Set-Cookie header
-    const setCookie = loginRes.headers.get('set-cookie') || '';
-    const match = setCookie.match(/(?:^|,\s*)auth_token=([^;,]+)/i);
-    if (!match) return json({ error: '9Router login OK nhưng không nhận được auth_token cookie' }, 502);
-    authCookie = `auth_token=${match[1]}`;
-  } catch (e) {
-    return json({ error: `Không kết nối được 9Router (${NINEROUTER_BASE}): ${e.message}` }, 502);
-  }
-
-  const opts = {
-    signal: AbortSignal.timeout(12000),
-    headers: { 'Accept': 'application/json', 'Cookie': authCookie },
-  };
-
-  // safeFetch with session cookie
-  const safeFetch = async (url) => {
-    try {
-      const res = await fetch(url, opts);
-      const ct = res.headers.get('content-type') || '';
-      if (ct.includes('text/html')) return { data: null, error: `Nhận HTML — session cookie không hợp lệ` };
-      if (res.status === 401) return { data: null, error: `401 — session hết hạn` };
-      if (!res.ok) return { data: null, error: `HTTP ${res.status}` };
-      const d = await res.json();
-      if (d && d.error) return { data: null, error: d.error };
-      return { data: d, error: null };
-    } catch (e) {
-      return { data: null, error: `${e.name}: ${e.message}` };
-    }
-  };
-
-  try {
-    const [connResult, comboResult, usageResult] = await Promise.all([
-      safeFetch(`${NINEROUTER_BASE}/api/providers`),
-      safeFetch(`${NINEROUTER_BASE}/api/combos`),
-      safeFetch(`${NINEROUTER_BASE}/api/usage/stats`),
-    ]);
-
-    // If ALL three endpoints fail → return a meaningful error so the frontend shows the banner
-    if (!connResult.data && !comboResult.data && !usageResult.data) {
-      const reasons = [
-        connResult.error && `providers: ${connResult.error}`,
-        comboResult.error && `combos: ${comboResult.error}`,
-        usageResult.error && `usage: ${usageResult.error}`,
-      ].filter(Boolean).join(' | ');
-      return json({ error: `Không kết nối được 9Router backend. ${reasons}` }, 502);
-    }
-
-    const connData  = connResult.data;
-    const comboData = comboResult.data;
-    const usageData = usageResult.data;
-
-    const rawConns = (connData && connData.connections) ? connData.connections : [];
-    const combos   = (comboData && comboData.combos)    ? comboData.combos    : [];
-    const usage    = usageData || {};
-
-    // Extract modelLock fields from each connection
-    const connections = rawConns.map(c => {
-      const modelLocks = {};
-      Object.keys(c).forEach(k => {
-        if (k.startsWith('modelLock_')) modelLocks[k.slice(10)] = c[k];
-      });
-      return {
-        id: c.id, provider: c.provider, authType: c.authType,
-        name: c.name, email: c.email || null,
-        priority: c.priority, isActive: c.isActive,
-        testStatus: c.testStatus, errorCode: c.errorCode || null,
-        backoffLevel: c.backoffLevel || 0,
-        expiresAt: c.expiresAt, expiresIn: c.expiresIn,
-        lastUsedAt: c.lastUsedAt,
-        lastError: c.lastError ? c.lastError.slice(0, 120) : null,
-        consecutiveUseCount: c.consecutiveUseCount || 0,
-        modelLocks,
-        lockedModels: Object.entries(modelLocks).filter(([,v]) => v !== null).map(([m, until]) => ({ model: m, until })),
-      };
-    });
-
-    // byProvider usage → sorted array
-    const usageByProvider = Object.entries(usage.byProvider || {})
-      .map(([name, d]) => ({ provider: name, requests: d.requests||0, promptTokens: d.promptTokens||0, completionTokens: d.completionTokens||0, cost: d.cost||0 }))
-      .sort((a, b) => b.requests - a.requests);
-
-    // byModel → top 30
-    const usageByModel = Object.entries(usage.byModel || {})
-      .map(([, d]) => ({ model: d.rawModel, provider: d.provider, requests: d.requests||0, promptTokens: d.promptTokens||0, completionTokens: d.completionTokens||0, cost: d.cost||0, lastUsed: d.lastUsed }))
-      .sort((a, b) => b.requests - a.requests)
-      .slice(0, 30);
-
-    const activeConns = connections.filter(c => c.isActive).length;
-    const errorConns  = connections.filter(c => c.errorCode && c.errorCode >= 400).length;
-
-    return json({
-      connections,
-      combos,
-      usage: {
-        totalRequests:         usage.totalRequests         || 0,
-        totalPromptTokens:     usage.totalPromptTokens     || 0,
-        totalCompletionTokens: usage.totalCompletionTokens || 0,
-        totalCost:             usage.totalCost             || 0,
-        byProvider:    usageByProvider,
-        byModel:       usageByModel,
-        recentRequests: (usage.recentRequests || []).slice(0, 25),
-        activeRequests: usage.activeRequests || [],
-      },
-      stats: {
-        totalConnections: connections.length,
-        activeConnections: activeConns,
-        errorConnections:  errorConns,
-        totalCombos: combos.length,
-      },
-    });
-  } catch (e) {
-    return json({ error: e.message }, 502);
-  }
 }
 
 /* ═══════════════════════════════════════════════
@@ -6393,7 +6297,7 @@ function _escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;
 
 /* ═══════════════════════════════════════════════
    FortiGate POOL — cấp phát container Chrome theo người dùng.
-   Quyền 'fortigate_pool': write = admin, read = view.
+   Quyền 'services-hub: read' → truy cập slot admin (slot view để reserved).
    Mỗi slot = 1 container (kasm = màn hình, nav = điều khiển đổi site).
    Thêm slot khi anh Thoai tạo container + tunnel tương ứng.
    ═══════════════════════════════════════════════ */
@@ -6409,10 +6313,9 @@ const FGT_POOL_TTL_SEC = 1200; // giữ slot 20 phút, trang heartbeat sẽ gia 
 
 async function _fgtPoolRole(env, username) {
   const eff = await computeEffectivePermissions(env, username);
-  if (eff && eff.role === 'admin') return 'admin';   // admin hệ thống → luôn dùng slot admin
-  const lvl = (eff && eff.permissions && eff.permissions['fortigate_pool']) || 'none';
-  if (lvl === 'write') return 'admin';
-  if (lvl === 'read')  return 'view';
+  if (eff && eff.role === 'admin') return 'admin';
+  const hubLvl = (eff && eff.permissions && eff.permissions['services-hub']) || 'none';
+  if (hubLvl !== 'none') return 'admin';
   return null;
 }
 
@@ -7459,12 +7362,6 @@ export default {
       if (!(await isAdminUser(env, _s))) return json({ error: 'Admin required để thực hiện power action VMware02 Movi' }, 403);
       return handleMoviVmwarePower(request, env, '2');
     }
-    if (p === '/api/9router') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, '9router'))) return json({ error: 'Không có quyền truy cập 9Router' }, 403);
-      return handle9Router(request, env);
-    }
     if (p === '/api/casaos') {
       const _s = await getSession(request, env);
       if (!_s) return json({ error: 'Unauthorized' }, 401);
@@ -7476,6 +7373,12 @@ export default {
       if (!_s) return json({ error: 'Unauthorized' }, 401);
       if (!(await hasPerm(env, _s, 'rustdesk'))) return json({ error: 'Không có quyền truy cập RustDesk' }, 403);
       return handleRustdesk(env);
+    }
+    if (p === '/api/services-embed-config') {
+      const _s = await getSession(request, env);
+      if (!_s) return json({ error: 'Unauthorized' }, 401);
+      if (!(await hasPerm(env, _s, 'services-hub'))) return json({ error: 'Không có quyền truy cập Services Hub' }, 403);
+      return handleServicesEmbedConfig(env, _s);
     }
     if (p === '/api/fortigate') {
       const _s = await getSession(request, env);

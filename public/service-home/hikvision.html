@@ -753,11 +753,16 @@ function updateBadge(){
 
 /* ── iframe stream management (go2rtc stream.html in iframe — same pattern as camera-movi) ── */
 
-/* Mode: WebRTC (thấp trễ nhất, dùng được khi cùng LAN/WiFi nhà) → MSE → HLS → MJPEG.
-   Dùng chung cho mọi thiết bị — đơn giản, nhất quán, go2rtc tự fallback nếu WebRTC không được. */
+/* Desktop: WebRTC (thấp trễ, hoạt động tốt cùng WiFi/LAN) → MSE → HLS → MJPEG.
+   Mobile: bỏ WebRTC (qua CF Tunnel luôn fail trên mobile, chỉ làm chậm khung hình đầu).
+   Bắt đầu bằng MSE (mượt nhất qua tunnel); go2rtc TỰ fallback sang HLS nếu MSE lỗi/502.
+   → không cần watchdog ngoài nạp lại iframe (thứ gây "đen rồi mở lại"). */
 var _IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia('(max-width:700px)').matches) || (navigator.maxTouchPoints > 1 && /Mac/i.test(navigator.userAgent)); /* iPadOS 13+ dùng desktop UA */
-var _CAM_MODE = 'webrtc,mse,hls,mjpeg';
-var _FROZEN_MS = 6000;
+var _CAM_MODE = _IS_MOBILE ? 'mse,hls,mjpeg' : 'webrtc,mse,hls,mjpeg';
+/* Mobile: chỉ reload khi stream ĐỨNG HẲN rất lâu (60s). Mạng mobile chập chờn vài giây
+   là bình thường — để go2rtc tự reconnect bên trong iframe (mượt) thay vì nạp lại cả
+   iframe (đen 10-15s). Desktop ổn định nên ngưỡng ngắn 6s. */
+var _FROZEN_MS = _IS_MOBILE ? 60000 : 6000;
 
 /* Stagger nhẹ 150ms/cam để tránh tranh băng thông khi bật nhiều camera cùng lúc. */
 var _CAM_STAGGER_MS = 150;
@@ -2269,10 +2274,11 @@ window.addEventListener('pageshow',function(e){
   }
 });
 
-/* ── Watchdog: tự khôi phục stream bị treo ──
-   Player go2rtc trong iframe có lúc đứng hình mà không tự kết nối lại (hay gặp với
-   camera yếu/khác hãng như cam07). Cứ vài giây kiểm tra <video> trong từng iframe:
-   nếu currentTime không nhích trong >8s → coi như treo → nạp lại iframe để reconnect. */
+/* ── Watchdog: lưới an toàn cuối khi stream chết hẳn ──
+   Player go2rtc trong iframe thường tự kết nối lại được, nên đây CHỈ là lưới an toàn:
+   kiểm tra <video> trong iframe, nếu currentTime đứng quá _FROZEN_MS mới nạp lại iframe.
+   Mobile để ngưỡng rất cao (60s) — tránh reload oan gây "đen rồi mở lại" khi mạng chỉ
+   chập chờn vài giây; desktop ổn định nên ngưỡng ngắn (6s). */
 /* Stream mới cần thời gian khởi động (transcode H265 như cam07 có thể ~10-15s mới
    ra frame đầu). Cho ân hạn dài trước khi có frame đầu, threshold ngắn chỉ áp dụng
    khi stream ĐÃ chạy rồi mới đứng → tránh reload oan gây churn. */
@@ -2281,6 +2287,9 @@ var _camWatch = {};
 function _resetWatch(id){ if(_camWatch[id]) _camWatch[id]={t:-1,since:Date.now(),n:0,coolUntil:0,started:false}; }
 setInterval(function(){
   if(document.hidden || currentTab!=='live') return;
+  /* Mobile: TẮT hẳn watchdog — để go2rtc tự reconnect bên trong iframe (mượt, không đen).
+     Đây là cách "ngày xưa" hoạt động. Nếu camera nào chết hẳn, bấm nút 🔄 reload thủ công. */
+  if(_IS_MOBILE) return;
   CAMERAS.forEach(function(c){
     if(!c.src || !state[c.id]) { delete _camWatch[c.id]; return; }
     var ifr=document.getElementById('cam-iframe-'+c.id);

@@ -285,39 +285,27 @@ var _selected  = null;
 var _embedOpen = false;
 
 /* ══════════════════════════════════════
-   ALL Service Home — 5 nhóm, mỗi nhóm có thể thu/mở riêng.
+   ALL Service Home — cây thu/mở, server-filtered theo quyền.
    Bấm site → cấp slot Chrome Pool + điều hướng.
    ══════════════════════════════════════ */
-var ALL_SITE_TREE = [
-  { folder:'Network', icon:'🌐', sites:[
-    { name:'FortiGate',   icon:'🛡️', url:'https://192.168.110.1/' },
-    { name:'Router Asus', icon:'📡', url:'https://192.168.10.1:8443/' },
-  ]},
-  { folder:'Server', icon:'🖥️', sites:[
-    { name:'VMware ESXi', icon:'💾', url:'https://192.168.110.125/' },
-    { name:'NAS',         icon:'🗄️', url:'https://192.168.110.126:5001/' },
-    { name:'CasaOS',      icon:'🏠', url:'http://192.168.110.21:4434/' },
-    { name:'Kasm',        icon:'🖥️', url:'https://kasm-service.home-server.id.vn/', embedUrl:'https://kasm-service.home-server.id.vn/?fps=24&quality=6&compression=9' },
-  ]},
-  { folder:'AI', icon:'🤖', sites:[
-    { name:'OpenClaw',    icon:'🤖', url:'http://192.168.110.5:18789/' },
-    { name:'9Router',     icon:'🔀', url:'http://192.168.110.5:20128/' },
-  ]},
-  { folder:'Automation', icon:'⚡', sites:[
-    { name:'n8n (iframe)', icon:'⚡', url:'https://n8n-home.home-server.id.vn/', embedUrl:'/n8n-proxy/home' },
-  ]},
-  { folder:'Monitor', icon:'📊', sites:[
-    { name:'Uptime Kuma', icon:'📊', url:'http://192.168.110.21:3005/' },
-    { name:'Frigate NVR', icon:'📷', url:'http://192.168.110.21:5000/' },
-    { name:'Camera NVR',  icon:'📹', url:'http://192.168.130.3:8088/' },
-  ]},
-];
+var ALL_SITE_TREE = [];  // populated by loadSiteTree() below
 var _allSiteOpen = false;   // mặc định thu gọn
 var _poolSlot = null;
 var _activeSiteUrl = '';
 var _embedUrl = null;        // !=null → site đang mở bằng iframe (không phải Chrome Pool)
 var _groupCollapsed = {};
-var _siteTreeOpen = ALL_SITE_TREE.reduce(function(o,f){ o[f.folder]=true; return o; }, {}); // true=thu gọn
+var _siteTreeOpen = {};  // per-folder collapsed state; built after tree loads
+
+function loadSiteTree(){
+  fetch('/api/services-embed-config', { cache:'no-store' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      ALL_SITE_TREE = (d && d.tree) || [];
+      ALL_SITE_TREE.forEach(function(f){ if (_siteTreeOpen[f.folder]===undefined) _siteTreeOpen[f.folder]=true; });
+      renderSidebar();
+    })
+    .catch(function(){});
+}
 
 function toggleAllSite(){ _allSiteOpen = !_allSiteOpen; renderSidebar(); }
 function toggleGroup(cat){ _groupCollapsed[cat] = !_groupCollapsed[cat]; renderSidebar(); }
@@ -939,6 +927,9 @@ function loadAsusCards() {
   /* First render */
   renderSidebar();
   renderMain();
+
+  /* Load site tree (server-filtered by user permissions) */
+  loadSiteTree();
 
   /* Load status, refresh every 60s */
   loadStatus();
