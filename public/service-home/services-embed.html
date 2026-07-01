@@ -8,43 +8,12 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Internal Services — Dashboard SYSTEM</title>
+<link rel="stylesheet" href="/service-home/_shared/base.css"/>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-:root,[data-theme="dark"]{
-  --bg:oklch(0.18 0.012 250);--surface:oklch(0.22 0.012 250);--surface-2:oklch(0.26 0.012 250);
-  --card:oklch(0.21 0.012 250);--border:oklch(0.31 0.012 250);--border-soft:oklch(0.27 0.012 250);
-  --text:oklch(0.96 0.005 250);--text-2:oklch(0.86 0.008 250);--muted:oklch(0.62 0.012 250);
-  --accent:oklch(0.72 0.18 290);--ok:oklch(0.74 0.16 155);--warn:oklch(0.78 0.16 70);--bad:oklch(0.68 0.20 25);
-  --font-sans:'IBM Plex Sans',system-ui,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,monospace;
-  --radius:12px;--radius-sm:8px;
-}
-[data-theme="light"]{
-  --bg:oklch(0.985 0.003 250);--surface:oklch(1 0 0);--surface-2:oklch(0.965 0.005 250);
-  --card:oklch(1 0 0);--border:oklch(0.91 0.008 250);--border-soft:oklch(0.94 0.008 250);
-  --text:oklch(0.22 0.015 250);--text-2:oklch(0.36 0.015 250);--muted:oklch(0.55 0.012 250);
-  --accent:oklch(0.55 0.18 290);--ok:oklch(0.52 0.15 155);--warn:oklch(0.62 0.16 70);--bad:oklch(0.55 0.20 25);
-}
 :root{--green:var(--ok);--red:var(--bad);--amber:var(--warn);}
 html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:100%;overflow:hidden;-webkit-font-smoothing:antialiased}
-
-/* ── Topbar ── */
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:52px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
-.topbar-left{display:flex;align-items:center;gap:28px}
-.topbar-right{display:flex;align-items:center;gap:8px}
-.brand{display:flex;align-items:center;gap:10px}
-.brand-mark{width:30px;height:30px;display:grid;place-items:center;background:var(--accent);color:var(--bg);border-radius:var(--radius-sm)}
-.brand-name{font-weight:600;font-size:14px;line-height:1.1}
-.brand-sub{font-size:11px;color:var(--muted);margin-top:1px}
-.topnav{display:flex;gap:2px}
-.topnav-item{font-size:13px;font-weight:500;color:var(--muted);padding:6px 12px;border-radius:var(--radius-sm);transition:all .12s;text-decoration:none}
-.topnav-item:hover,.topnav-item.active{color:var(--text);background:var(--surface-2)}
-.clock{font-family:var(--font-mono);font-size:13px;color:var(--text-2);padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm)}
-.tbtn{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);transition:all .12s;cursor:pointer;font-family:var(--font-sans);text-decoration:none}
-.tbtn:hover{color:var(--text);border-color:var(--muted)}
 .tbtn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .tbtn.primary:hover{opacity:.88}
-.theme-toggle{width:32px;height:32px;display:grid;place-items:center;padding:0;border:1px solid var(--border);background:var(--surface-2);border-radius:var(--radius-sm);cursor:pointer;color:var(--text-2)}
-.theme-toggle:hover{color:var(--text)}
 
 /* ── Layout ── */
 .layout{display:flex;height:calc(100vh - 52px);overflow:hidden;position:relative}
@@ -207,7 +176,6 @@ html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);he
 .spin{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:_spin .7s linear infinite;flex-shrink:0}
 @keyframes _spin{to{transform:rotate(360deg)}}
 .loading-row{display:flex;align-items:center;gap:8px;padding:1.25rem;color:var(--muted);font-size:13px}
-a{color:inherit;text-decoration:none}
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 
 @media(max-width:900px){
@@ -237,12 +205,8 @@ a{color:inherit;text-decoration:none}
       </div>
       <div><div class="brand-name">Dashboard SYSTEM</div><div class="brand-sub">Internal Services</div></div>
     </div>
-    <nav class="topnav">
-      <a class="topnav-item" href="/">Overview</a>
-      <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
-      <a class="topnav-item active" href="/service-home/services-embed.html">Services</a>
-      <a class="topnav-item" id="settings-link" href="/settings.html" style="display:none">⚙ Settings</a>
-    </nav>
+    <nav class="topnav" id="sh-topnav"></nav>
+    <script src="/service-home/_shared/nav.js"></script>
   </div>
   <div class="topbar-right">
     <div class="clock" id="clock">--:--:--</div>
@@ -293,6 +257,8 @@ var _allSiteOpen = false;   // mặc định thu gọn
 var _poolSlot = null;
 var _activeSiteUrl = '';
 var _embedUrl = null;        // !=null → site đang mở bằng iframe (không phải Chrome Pool)
+var _authGen = 0;            // token thế hệ auth — tăng mỗi lần đổi service để hủy vòng lặp _embedAutoAuth cũ
+var _authPopup = null;       // popup xác thực CF Access đang mở (đóng khi chuyển service)
 var _groupCollapsed = {};
 var _siteTreeOpen = {};  // per-folder collapsed state; built after tree loads
 
@@ -311,7 +277,16 @@ function toggleAllSite(){ _allSiteOpen = !_allSiteOpen; renderSidebar(); }
 function toggleGroup(cat){ _groupCollapsed[cat] = !_groupCollapsed[cat]; renderSidebar(); }
 function toggleSiteFolder(folder){ _siteTreeOpen[folder] = !_siteTreeOpen[folder]; renderSidebar(); }
 
+/* Hủy mọi vòng lặp xác thực CF Access đang chạy + đóng popup cũ.
+   Gọi ở đầu mỗi lần chọn service để auth cũ KHÔNG ghi đè lên service mới. */
+function _cancelAuth(){
+  _authGen++;
+  try{ if(_authPopup && !_authPopup.closed) _authPopup.close(); }catch(e){}
+  _authPopup = null;
+}
+
 function selectSite(url){
+  _cancelAuth();
   _activeSiteUrl = url;
   if (_selected !== '__allsite__' || _embedUrl){
     _embedUrl = null;
@@ -326,6 +301,7 @@ function selectSite(url){
 }
 
 function selectSiteEmbed(embedUrl, siteUrl){
+  _cancelAuth();
   _selected = '__allsite__';
   _embedUrl = embedUrl;
   _activeSiteUrl = siteUrl;
@@ -374,31 +350,38 @@ function renderEmbedFull(embedUrl){
 /* Tải lại iframe embed (giữ nguyên URL). */
 function _embedReload(){ var f=document.getElementById('embedFrame'); if(f){ var s=f.src; f.src='about:blank'; setTimeout(function(){ f.src=s; }, 60); } }
 
-/* Tự xác thực Cloudflare Access cho site embed (Kasm) rồi TỰ kết nối:
-   - Mở tab origin để CF Access cấp cookie (gọi trong user-gesture nên không bị chặn popup).
-   - Khi user xác thực xong quay lại dashboard (sự kiện focus) → tự nạp iframe + đóng tab + nhớ flag.
-   - Có nút "Kết nối ngay" làm fallback nếu popup bị chặn / cookie đã sẵn. */
+/* Xác thực site embed lần đầu trong session (Kasm dùng login RIÊNG của app, không phải
+   CF Access edge → KHÔNG thể phát hiện login-xong từ dashboard vì khác origin) — 2026-07-01:
+   - Mở POPUP tới origin để user đăng nhập (trong user-gesture nên không bị chặn).
+   - Nhúng iframe khi: user bấm nút "Đã đăng nhập xong", HOẶC tự động khi user đóng popup
+     (poll .closed) — tín hiệu đáng tin cho mọi kiểu login.
+   - Đặt cờ _kasmEmbedAuth[origin] để lần sau trong session nhúng thẳng, không hỏi lại. */
 function _embedAutoAuth(origin){
-  var w=null; try{ w=window.open(origin+'/','_blank'); }catch(e){}
+  var w=null; try{ w=window.open(origin+'/','kasmAuth','width=560,height=720,menubar=no,toolbar=no,location=yes'); }catch(e){}
+  _authPopup = w;
+  var myGen = _authGen;   // nếu user đổi service, _authGen tăng → vòng lặp này tự dừng
   var inner=document.getElementById('mainInner');
   inner.style.maxWidth='none'; inner.style.padding='0'; inner.style.height='100%';
-  inner.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;padding:30px;gap:14px;color:var(--text-2);font-size:14px;line-height:1.6">'
-    +'<div style="font-size:30px">🔓</div>'
-    +'<div>Đang xác thực Cloudflare Access cho Kasm...<br>Nếu hiện tab đăng nhập → đăng nhập xong <b>quay lại đây</b>, Kasm sẽ tự kết nối.</div>'
-    +'<button id="_embedAuthBtn" style="padding:7px 18px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);font-size:12px;cursor:pointer;font-family:var(--font-sans)">▶ Kết nối ngay</button>'
+  inner.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;padding:30px;gap:16px;color:var(--text-2);font-size:14px;line-height:1.6">'
+    +'<div style="font-size:34px">🔓</div>'
+    +'<div style="max-width:460px"><b>Đăng nhập dịch vụ trong cửa sổ vừa mở</b><br>Đăng nhập xong → bấm nút bên dưới (hoặc đóng cửa sổ đó lại). Dashboard sẽ tự nhúng dịch vụ vào đây.</div>'
+    +'<button id="_embedAuthBtn" style="padding:10px 26px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font-sans)">✓ Đã đăng nhập xong — nhúng vào dashboard</button>'
+    +'<button id="_embedSkipBtn" style="padding:6px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--font-sans)">Nhúng luôn (nếu đã đăng nhập từ trước)</button>'
     +'</div>';
-  var done=false;
+  var done=false, closePoll=null, giveUp=null;
+  function stop(){ if(closePoll)clearInterval(closePoll); if(giveUp)clearTimeout(giveUp); }
   function finish(){
-    if(done) return; done=true;
-    window.removeEventListener('focus', onFocus);
+    if(done || _authGen!==myGen) return; done=true; stop();
     try{ if(w && !w.closed) w.close(); }catch(e){}
+    if(_authPopup===w) _authPopup=null;
     try{ var a=JSON.parse(sessionStorage.getItem('_kasmEmbedAuth')||'{}'); a[origin]=1; sessionStorage.setItem('_kasmEmbedAuth',JSON.stringify(a)); }catch(e){}
     renderEmbedFull(_embedUrl);
   }
-  function onFocus(){ finish(); }
-  // Delay gắn listener để KHÔNG fire ngay lúc mở tab (lúc đó dashboard đang mất focus).
-  setTimeout(function(){ window.addEventListener('focus', onFocus); }, 800);
+  // Tự nhúng khi user đóng cửa sổ đăng nhập (tín hiệu đáng tin cho MỌI kiểu login).
+  closePoll=setInterval(function(){ if(_authGen!==myGen){ stop(); return; } if(w && w.closed) finish(); }, 500);
+  giveUp=setTimeout(stop, 300000);   // ngừng theo dõi sau 5' (nút vẫn bấm được)
   var btn=document.getElementById('_embedAuthBtn'); if(btn) btn.onclick=finish;
+  var sk=document.getElementById('_embedSkipBtn'); if(sk) sk.onclick=finish;
 }
 
 /* Nút 🔓 thủ công (khi restore/reload mà cookie hết hạn → iframe "content is blocked"). */
@@ -606,6 +589,7 @@ function renderSidebar() {
    Hash routing
    ══════════════════════════════════════ */
 function selectSvc(id) {
+  _cancelAuth();
   _selected = id;
   _embedOpen = false;
   _embedUrl = null;

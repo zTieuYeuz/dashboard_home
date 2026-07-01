@@ -170,7 +170,7 @@ async function loginRedirect() {
     if (r.ok) {
       var d = await r.json();
       if (d.permissions && d.permissions['app_camera'] === 'read') {
-        window.location.href = '/service-home/hikvision.html';
+        window.location.href = '/service-home/camera-home.html';
         return;
       }
     }

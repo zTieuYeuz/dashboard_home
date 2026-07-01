@@ -1,9 +1,114 @@
+import {
+  ALL_SERVICES,
+  DEFAULT_CAMERAS,
+  DEFAULT_CAMERAS_MOVI,
+  MOVI_N8N_BASE,
+  N8N_BASE,
+  SESSION_COOKIE,
+  _constEq,
+  _effCache,
+  _getCfg,
+  _invalidateCfgCache,
+  _invalidateEffCache,
+  _invalidateSessionCache,
+  _sessionCache,
+  _sha256Hex,
+  checkIpWhitelist,
+  cleanEnv,
+  computeEffectivePermissions,
+  ensureAdmin,
+  getSession,
+  getSessionDelegateServices,
+  getSessionToken,
+  hasPerm,
+  hashPw,
+  isAdminUser,
+  json,
+  logActivity,
+  notifyEmail,
+  rlBump,
+  rlClear,
+  rlGet,
+  sanitizeCameraIds,
+  sanitizeName,
+  sanitizePanels,
+  sanitizePermissions,
+  sanitizeSysPerms,
+  verifyPw
+} from './src/core.js';
+import {
+  handleClearToolMoviHistory,
+  handleFgPolicyDone,
+  handleGetToolMoviHistory,
+  handleListFgPolicies,
+  handleSaveToolMoviHistory,
+  handleToolMoviAssetSearch,
+  handleToolMoviBlockUser,
+  handleToolMoviCheckAzureGroup,
+  handleToolMoviCheckEmail,
+  handleToolMoviCreateUser,
+  handleToolMoviDeleteUserAction,
+  handleToolMoviDeleteUserList,
+  handleToolMoviFgPolicy
+} from './src/tool-movi.js';
+import {
+  handleMerakiBlockedClients,
+  handleMerakiClientPolicy,
+  handleMerakiClients,
+  handleMerakiDeviceStatus,
+  handleMerakiDevices,
+  handleMerakiEvents,
+  handleMerakiL3Routing,
+  handleMerakiLinkAggregations,
+  handleMerakiSwitchPortConfigs,
+  handleMerakiSwitchPorts,
+  handleMerakiUplinks,
+  handleMoviSdwan,
+  handleMoviSdwanRules
+} from './src/meraki.js';
+import {
+  handleMoviDhcp,
+  handleMoviFirewallDeauth,
+  handleMoviFirewallUsers,
+  handleMoviFortiviewSource,
+  handleMoviInterfaces,
+  handleMoviLicense,
+  handleMoviPolicy,
+  handleMoviSslVpn,
+  handleMoviSystem,
+  handleMoviVpn
+} from './src/movi-fortigate.js';
+import {
+  handleAsusBw,
+  handleAsusClients,
+  handleAsusReboot,
+  handleAsusWebhook,
+  handleCasaOS,
+  handleFortigateBW,
+  handleFortigateReboot,
+  handleFortigateWebhook,
+  handleMoviVmwareData,
+  handleMoviVmwarePower,
+  handleRustdesk,
+  handleVmwareHome,
+  handleVmwareHomePower
+} from './src/home-services.js';
+import {
+  handleFgtPoolAllocate,
+  handleFgtPoolOpen,
+  handleFgtPoolRelease,
+  handleProxy
+} from './src/proxy.js';
+import {
+  handleSshMoviToken,
+  handleSshMoviVerify,
+  handleTermixHomeProxy,
+  handleTermixMoviProxy
+} from './src/termix.js';
+
 /* ═══════════════════════════════════════════════
    Auth & User Management System
    ═══════════════════════════════════════════════ */
-const SESSION_COOKIE    = 'dh_session';
-const SESSION_TTL       = 60 * 60 * 8;      // default fallback only — runtime reads from KV system_config
-const ALL_SERVICES      = ['esxi','n8n','casaos','fortigate','asus','ssh','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','nas','frigate','openclaw','kasm','services-hub','hub-fortigate','hub-asus','hub-esxi','hub-nas','hub-casaos','hub-kasm','hub-openclaw','hub-n8n','hub-frigate','hub-camera-nvr','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
 
 /* Idle-timer script injected into every authenticated HTML page.
    T = idle timeout ms, W = warning threshold ms (must be < T) */
@@ -70,187 +175,6 @@ return `<script>(function(){
 })();<\/script>`;
 }
 
-/* ── Strip BOM + trim any env/config string value ── */
-function cleanEnv(v) { return (v || '').replace(/^﻿/, '').trim(); }
-
-/* ── Short-TTL cache for system_config (read on nearly every request) ──
-   Returns the config object, or {} on absence/error (matches the old
-   `... || {}` semantics). Writers call _invalidateCfgCache() for instant
-   effect; other readers see changes within CFG_CACHE_TTL_MS. */
-let _cfgCache = null; // { cfg, exp }
-const CFG_CACHE_TTL_MS = 8000;
-function _invalidateCfgCache() { _cfgCache = null; }
-async function _getCfg(env) {
-  if (_cfgCache && _cfgCache.exp > Date.now()) return _cfgCache.cfg;
-  let cfg;
-  try { cfg = await env.DASHBOARD_KV.get('system_config', 'json'); } catch (_) { cfg = null; }
-  cfg = cfg || {};
-  _cfgCache = { cfg, exp: Date.now() + CFG_CACHE_TTL_MS };
-  return cfg;
-}
-
-/* ── IP CIDR whitelist matching ── */
-function _ipToInt(ip) {
-  const parts = (ip || '').split('.');
-  if (parts.length !== 4) return null;
-  return parts.reduce((acc, o) => ((acc << 8) | (parseInt(o, 10) & 0xFF)) >>> 0, 0);
-}
-function _ipInCidr(ip, cidr) {
-  const c = (cidr || '').trim();
-  if (!c.includes('/')) return ip === c;
-  const [net, b] = c.split('/');
-  const bits = parseInt(b, 10);
-  if (bits < 0 || bits > 32) return false;
-  const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
-  const ipN = _ipToInt(ip), netN = _ipToInt(net);
-  if (ipN === null || netN === null) return false;
-  return (ipN & mask) === (netN & mask);
-}
-function checkIpWhitelist(ip, list) {
-  if (!Array.isArray(list) || list.length === 0) return true;
-  return list.some(c => _ipInCidr(ip, c));
-}
-
-/* ── Email notification via n8n webhook (best-effort, never blocks login) ── */
-function notifyEmail(env, ctx, event, data) {
-  const work = async () => {
-    try {
-      const cfg = await _getCfg(env);
-      if (!cfg.emailEnabled) return;
-      const wh = cleanEnv(cfg.emailWebhook);
-      if (!wh) return;
-      const evts = cfg.emailEvents || {};
-      if (!evts[event]) return;
-      await fetch(wh, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event, ...data, timestamp: new Date().toISOString(), emailTo: cleanEnv(cfg.emailAdminAddress) }),
-        signal: AbortSignal.timeout(8000),
-      });
-    } catch (_) { /* never block main flow */ }
-  };
-  if (ctx) ctx.waitUntil(work()); else work();
-}
-
-/* ── Password hashing ──
-   New format (string): "pbkdf2$<iter>$<saltHex>$<hashHex>"
-   Legacy format: bare 64-hex SHA-256(pw + ':dh-salt-2024'). Verified for
-   backward-compat, then transparently re-hashed to PBKDF2 on next login. */
-const PW_PBKDF2_ITER = 100000; // Cloudflare Workers WebCrypto max supported
-
-function _bytesToHex(buf) {
-  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
-}
-function _hexToBytes(hex) {
-  return Uint8Array.from((hex.match(/../g) || []).map(h => parseInt(h, 16)));
-}
-function _constEq(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
-  let r = 0;
-  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return r === 0;
-}
-
-async function _sha256Hex(str) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return _bytesToHex(buf);
-}
-async function _pbkdf2Hex(password, saltHex, iter) {
-  const key = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: _hexToBytes(saltHex), iterations: iter },
-    key, 256);
-  return _bytesToHex(bits);
-}
-
-// Produce a fresh strong hash string (per-user random salt).
-async function hashPw(password) {
-  const saltHex = _bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
-  const hash = await _pbkdf2Hex(password, saltHex, PW_PBKDF2_ITER);
-  return `pbkdf2$${PW_PBKDF2_ITER}$${saltHex}$${hash}`;
-}
-
-// Verify a password against a stored hash (new or legacy format).
-async function verifyPw(password, stored) {
-  if (!stored || typeof stored !== 'string') return false;
-  if (stored.startsWith('pbkdf2$')) {
-    const [, iterS, saltHex, hashHex] = stored.split('$');
-    const iter = parseInt(iterS, 10) || PW_PBKDF2_ITER;
-    return _constEq(await _pbkdf2Hex(password, saltHex, iter), hashHex);
-  }
-  // Legacy SHA-256 + static salt
-  return _constEq(await _sha256Hex(password + ':dh-salt-2024'), stored);
-}
-
-function getSessionToken(request) {
-  const cookie = request.headers.get('cookie') || '';
-  for (const part of cookie.split(';')) {
-    const [k, ...vs] = part.trim().split('=');
-    if (k.trim() === SESSION_COOKIE) return vs.join('=').trim();
-  }
-  return null;
-}
-
-async function getSession(request, env) {
-  const token = getSessionToken(request);
-  if (!token) return null;
-  let result;
-  const cached = _sessionCache.get(token);
-  if (cached && cached.exp > Date.now()) {
-    result = cached.session;
-  } else {
-    const session = await env.DASHBOARD_KV.get(`session:${token}`, 'json');
-    if (!session || Date.now() > session.expires) {
-      if (session) await env.DASHBOARD_KV.delete(`session:${token}`).catch(() => {});
-      _sessionCache.delete(token);
-      return null;
-    }
-    result = { ...session, token };
-    _sessionCache.set(token, { session: result, exp: Date.now() + SESSION_CACHE_TTL_MS });
-  }
-  // ── IP binding (tùy chọn) — chống dùng lại cookie phiên bị trộm từ IP khác ──
-  // MẶC ĐỊNH TẮT: nhiều user mobile đổi IP khi chuyển WiFi/4G → bật cứng sẽ rớt phiên oan.
-  // Chỉ kích hoạt khi admin đặt system_config.enforceIpBinding = true.
-  if (result.boundIp) {
-    try {
-      const cfg = await _getCfg(env);
-      if (cfg.enforceIpBinding) {
-        const curIp = request.headers.get('cf-connecting-ip')
-          || (request.headers.get('x-forwarded-for') || '').split(',')[0].trim();
-        if (curIp && curIp !== result.boundIp) return null;
-      }
-    } catch (_) { /* lỗi đọc config → không chặn, tránh khóa nhầm toàn hệ thống */ }
-  }
-  return result;
-}
-
-/* ── Brute-force throttle (KV-backed, best-effort) ── */
-async function rlGet(env, key) {
-  return parseInt(await env.DASHBOARD_KV.get(`rl:${key}`) || '0', 10);
-}
-async function rlBump(env, key, windowSec) {
-  const n = (await rlGet(env, key)) + 1;
-  await env.DASHBOARD_KV.put(`rl:${key}`, String(n), { expirationTtl: windowSec });
-  return n;
-}
-async function rlClear(env, key) {
-  await env.DASHBOARD_KV.delete(`rl:${key}`).catch(() => {});
-}
-
-async function ensureAdmin(env) {
-  const admin = await env.DASHBOARD_KV.get('user:admin', 'json');
-  if (!admin) {
-    // Fail closed: never auto-create a weak default admin. Operator must set
-    // the ADMIN_PASSWORD secret to bootstrap the first admin account.
-    if (!env.ADMIN_PASSWORD || String(env.ADMIN_PASSWORD).length < 10) return false;
-    await env.DASHBOARD_KV.put('user:admin', JSON.stringify({
-      password: await hashPw(env.ADMIN_PASSWORD), role: 'admin', permissions: {}, created: Date.now()
-    }));
-    await env.DASHBOARD_KV.put('userlist', JSON.stringify(['admin']));
-  }
-  return true;
-}
 
 async function handleLogin(request, env, ctx) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
@@ -1081,206 +1005,6 @@ async function handleChangePw(request, env, username, ctx) {
    Policy Groups & Granular Permissions
    ═══════════════════════════════════════════════ */
 
-/* ── Helper: merge one policy_group object into eff ── */
-function _mergePolicyGroup(g, eff) {
-  if (!g) return;
-  if (g.role === 'admin' && eff.role !== 'admin') eff.role = 'admin';
-  for (const [k, v] of Object.entries(g.permissions || {})) {
-    const cur = eff.permissions[k];
-    if (!cur || cur === 'none') eff.permissions[k] = v;
-    else if (cur === 'read' && v === 'write') eff.permissions[k] = 'write';
-  }
-  for (const [k, v] of Object.entries(g.panels || {})) {
-    if (!v) continue;
-    const cur = eff.panels[k];
-    if (!cur) { eff.panels[k] = v; }
-    else if ((v === 'write' || v === true) && cur !== 'write' && cur !== true) { eff.panels[k] = v; }
-  }
-  for (const c of (g.cameras || [])) { if (!eff.cameras.includes(c)) eff.cameras.push(c); }
-}
-
-/**
- * Get canManagePerms for a session — always reads from live user KV.
- * We intentionally bypass the session cache because:
- *  1. Old sessions (pre-feature) have canManagePerms=undefined
- *  2. Sessions created before admin SET delegation have canManagePerms=[]
- *  3. Admin may revoke/change delegation → session would be stale
- * Live KV read ensures real-time accuracy for all these cases.
- */
-async function getSessionDelegateServices(env, session) {
-  const user = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
-  if (!user || !Array.isArray(user.canManagePerms)) return [];
-  return user.canManagePerms.filter(s => ALL_SERVICES.includes(s));
-}
-
-/**
- * Returns true if the session represents an admin — either by account role (fast, no KV)
- * or via a policy group with role='admin' (requires computeEffectivePermissions).
- * Use this everywhere instead of session.role === 'admin' so group-based admins work.
- */
-async function isAdminUser(env, session) {
-  if (!session) return false;
-  if (session.role === 'admin') return true;  // fast path — no KV needed
-  const eff = await computeEffectivePermissions(env, session.username);
-  return !!(eff && eff.role === 'admin');
-}
-
-/* ── Short-TTL cache for effective permissions (hot path) ──
-   computeEffectivePermissions reads user + multiple groups from KV and runs on
-   EVERY authenticated page load and API permission check. Caching collapses the
-   duplicate reads that happen within a single request (isAdminUser + hasPerm)
-   and across rapid successive requests. User-level changes call
-   _invalidateEffCache(username) for instant effect; group/policy-group edits
-   rely on the short TTL (changes apply within EFF_CACHE_TTL_MS). */
-const _effCache = new Map(); // username -> { eff, exp }
-const EFF_CACHE_TTL_MS = 8000;
-function _invalidateEffCache(username) { if (username) _effCache.delete(username); }
-
-/* ── Short-TTL in-memory session cache (hot path) ──
-   getSession does a KV read on EVERY authenticated request, including per-frame
-   camera snapshot fetches. This cache collapses those reads so the KV is hit at
-   most once per SESSION_CACHE_TTL_MS per token. Logout and invalidateUserSessions
-   call _invalidateSessionCache for instant effect. */
-const _sessionCache = new Map(); // token -> { session, exp }
-const SESSION_CACHE_TTL_MS = 30_000;
-function _invalidateSessionCache(token) { if (token) _sessionCache.delete(token); }
-
-/* ── Worker-level JPEG cache for latest.jpg snapshot polling ──
-   3 parallel browser workers × N cameras = N×3 requests/sec to Frigate.
-   This cache lets only 1 request per 250ms per camera reach Frigate;
-   the other workers get an instant in-memory response. */
-const _snapJpgCache = new Map(); // subPath → { bytes: Uint8Array, ct: string, exp: number }
-const SNAP_JPG_TTL_MS = 250;
-
-async function computeEffectivePermissions(env, username) {
-  const _c = _effCache.get(username);
-  if (_c && _c.exp > Date.now()) return _c.eff;
-  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
-  if (!user) return null;
-  const eff = {
-    role: user.role || 'user',
-    permissions: { ...(user.permissions || {}) },
-    panels:      { ...(user.panels || {}) },
-    cameras:     [...(user.cameras || [])],
-    groups:      [...(user.groups || [])],
-    userGroups:  [...(user.userGroups || [])],
-    canManagePerms: Array.isArray(user.canManagePerms)
-      ? user.canManagePerms.filter(s => ALL_SERVICES.includes(s))
-      : [],
-    sysPerms:    sanitizeSysPerms(user.sysPerms || {}),
-    mfaEnabled:  !!(user.mfaEnabled),
-    isSaml:      !!(user.microsoftEmail),
-  };
-
-  // Track processed policy groups to avoid double-applying
-  const processed = new Set();
-
-  // 1. Direct policy group assignments — fetch all in parallel
-  const directGids = eff.groups.filter(gid => { processed.add(gid); return true; });
-  if (directGids.length > 0) {
-    const groups = await Promise.all(directGids.map(gid => env.DASHBOARD_KV.get(`policy_group:${gid}`, 'json')));
-    groups.forEach(g => _mergePolicyGroup(g, eff));
-  }
-
-  // 2. User Groups → Role Management Groups — fetch user_groups in parallel, then policy_groups in parallel
-  if (eff.userGroups.length > 0) {
-    const userGroups = await Promise.all(eff.userGroups.map(ugid => env.DASHBOARD_KV.get(`user_group:${ugid}`, 'json')));
-    const pgIds = [];
-    for (const ug of userGroups) {
-      if (!ug) continue;
-      for (const pgid of (ug.roleGroups || [])) {
-        if (!processed.has(pgid)) { processed.add(pgid); pgIds.push(pgid); }
-      }
-    }
-    if (pgIds.length > 0) {
-      const policyGroups = await Promise.all(pgIds.map(pgid => env.DASHBOARD_KV.get(`policy_group:${pgid}`, 'json')));
-      policyGroups.forEach(g => _mergePolicyGroup(g, eff));
-    }
-  }
-
-  _effCache.set(username, { eff, exp: Date.now() + EFF_CACHE_TTL_MS });
-  // Bound memory: purge expired entries when the map grows large
-  if (_effCache.size > 200) {
-    const now = Date.now();
-    for (const [k, v] of _effCache) if (v.exp <= now) _effCache.delete(k);
-  }
-  return eff;
-}
-
-/**
- * Quick permission gate: returns true if session user has any non-'none' value
- * for the given page key (e.g. 'meraki', 'fortigate-movi', 'camera-movi').
- * Admin role always passes. Non-admins have effective permissions computed.
- */
-async function hasPerm(env, session, permKey) {
-  if (!session) return false;
-  if (session.role === 'admin') return true;
-  const eff = await computeEffectivePermissions(env, session.username);
-  if (!eff) return false;
-  if (eff.role === 'admin') return true;  // catches users promoted since last login
-  return (eff.permissions[permKey] || 'none') !== 'none';
-}
-
-/**
- * Write-level permission gate: returns true only if the user has 'write' (or is admin).
- * Used for destructive/mutating actions like block/unblock clients.
- */
-async function hasWritePerm(env, session, permKey) {
-  if (!session) return false;
-  if (session.role === 'admin') return true;
-  const eff = await computeEffectivePermissions(env, session.username);
-  if (!eff) return false;
-  if (eff.role === 'admin') return true;
-  return (eff.permissions[permKey] || 'none') === 'write';
-}
-
-/** Whitelist permission keys/values để chặn XSS qua group names/permission keys */
-function sanitizePermissions(raw) {
-  if (!raw || typeof raw !== 'object') return {};
-  const out = {};
-  const VALID_VALS = ['none', 'read', 'write'];
-  for (const k of Object.keys(raw)) {
-    if (ALL_SERVICES.includes(k) && VALID_VALS.includes(raw[k])) out[k] = raw[k];
-  }
-  return out;
-}
-function sanitizeSysPerms(raw) {
-  if (!raw || typeof raw !== 'object') return {};
-  const out = {};
-  if (raw.addUser === true) out.addUser = true;
-  if (raw.systemConfig === true) out.systemConfig = true;
-  if (raw.resetMfa === true) out.resetMfa = true;
-  if (raw.blockUser === true) out.blockUser = true;
-  return out;
-}
-function sanitizePanels(raw) {
-  if (!raw || typeof raw !== 'object') return {};
-  const out = {};
-  const VALID_VALS = ['read', 'write', false, true];
-  for (const k of Object.keys(raw)) {
-    // panel key must start with a known service ID
-    const svc = ALL_SERVICES.find(s => k.startsWith(s + '.'));
-    if (svc && k.length <= 64 && VALID_VALS.includes(raw[k])) out[k] = raw[k];
-  }
-  return out;
-}
-function sanitizeCameraIds(raw) {
-  if (!Array.isArray(raw)) return [];
-  return raw.filter(c => typeof c === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(c));
-}
-function sanitizeName(s, maxLen = 64) {
-  if (typeof s !== 'string') return '';
-  // strip HTML tags / control chars
-  return s.replace(/<[^>]*>/g, '').replace(/[^\x20-\x7EÀ-ɏ]/g, '').trim().slice(0, maxLen);
-}
-/** Store value as-is if its JSON is within maxBytes; otherwise store truncated string representation. */
-function _truncateJson(v, maxBytes) {
-  try {
-    const s = JSON.stringify(v);
-    if (s.length <= maxBytes) return v;
-    return { _truncated: true, preview: s.slice(0, maxBytes) };
-  } catch (_) { return null; }
-}
 
 async function handleListGroups(request, env) {
   const session = await getSession(request, env);
@@ -1595,33 +1319,6 @@ async function handleUpdateUserPanels(request, env, username) {
   return json({ success: true, username, permissions: user.permissions, panels: user.panels, cameras: user.cameras });
 }
 
-const DEFAULT_CAMERAS = [
-  { id: 'cam01', name: 'Camera 01',          type: 'analog',  stream: 'cam01' },
-  { id: 'cam03', name: 'Camera 03',          type: 'analog',  stream: 'cam03' },
-  { id: 'cam04', name: 'Camera 04',          type: 'ip',      stream: 'cam04' },
-  { id: 'cam05', name: 'Camera 05',          type: 'ip',      stream: 'cam05' },
-  { id: 'cam06', name: 'Camera 06',          type: 'ip',      stream: 'cam06' },
-  { id: 'cam07', name: 'Camera Phòng Khách', type: 'unknown', stream: null    },
-];
-
-const DEFAULT_CAMERAS_MOVI = [
-  { id: 'cam1',  name: 'Camera 1',  type: 'ip', stream: 'cam1'  },
-  { id: 'cam2',  name: 'Camera 2',  type: 'ip', stream: 'cam2'  },
-  { id: 'cam3',  name: 'Camera 3',  type: 'ip', stream: 'cam3'  },
-  { id: 'cam4',  name: 'Camera 4',  type: 'ip', stream: 'cam4'  },
-  { id: 'cam5',  name: 'Camera 5',  type: 'ip', stream: 'cam5'  },
-  { id: 'cam6',  name: 'Camera 6',  type: 'ip', stream: 'cam6'  },
-  { id: 'cam7',  name: 'Camera 7',  type: 'ip', stream: 'cam7'  },
-  { id: 'cam8',  name: 'Camera 8',  type: 'ip', stream: 'cam8'  },
-  { id: 'cam9',  name: 'Camera 9',  type: 'ip', stream: 'cam9'  },
-  { id: 'cam10', name: 'Camera 10', type: 'ip', stream: 'cam10' },
-  { id: 'cam11', name: 'Camera 11', type: 'ip', stream: 'cam11' },
-  { id: 'cam12', name: 'Camera 12', type: 'ip', stream: 'cam12' },
-  { id: 'cam13', name: 'Camera 13', type: 'ip', stream: 'cam13' },
-  { id: 'cam14', name: 'Camera 14', type: 'ip', stream: 'cam14' },
-  { id: 'cam15', name: 'Camera 15', type: 'ip', stream: 'cam15' },
-  { id: 'cam16', name: 'Camera 16', type: 'ip', stream: 'cam16' },
-];
 
 async function handleMoviCameraList(request, env) {
   const session = await getSession(request, env);
@@ -2509,7 +2206,7 @@ const WAYFIND_NAV = `<style>
   {i:'\\uD83C\\uDFE0',n:'CasaOS',d:'Home server OS',h:'/service-home/casaos.html',p:'casaos'},
   {i:'\\uD83D\\uDCE1',n:'ASUS Router',d:'Home network router',h:'/service-home/asus.html',p:'asus'},
   {i:'\\u26A1',n:'n8n Automation',d:'Workflow & bot automation',h:'/service-home/n8n.html',p:'n8n'},
-  {i:'\\uD83D\\uDCF7',n:'Camera',d:'Hệ thống camera · go2rtc',h:'/service-home/hikvision.html',p:'camera'},
+  {i:'\\uD83D\\uDCF7',n:'Camera',d:'Hệ thống camera · Frigate NVR',h:'/service-home/camera-home.html',p:'camera'},
   {i:'\\uD83D\\uDDA7',n:'SSH Terminal',d:'Web SSH · Termix',h:'/service-home/ssh.html',p:'ssh'},
   {i:'\\uD83D\\uDDA5',n:'RustDesk',d:'Remote desktop · máy nhân viên',h:'/service-home/rustdesk.html',p:'rustdesk'},
   {i:'\\uD83D\\uDDA7',n:'Termix Movi',d:'SSH Movi · token auth',h:'/service-movi/ssh-movi.html',p:'ssh-movi'},
@@ -2612,7 +2309,7 @@ const DATA_REFRESH = `<style>
   '/service-movi/ssh-movi.html':[],
   '/service-home/fortigate.html':['load'],'/service-home/vmware-home.html':['loadData'],'/service-home/casaos.html':['loadData'],
   '/service-home/asus.html':['load'],'/service-home/n8n.html':['loadData'],
-  '/service-home/hikvision.html':['loadState'],'/service-home/ssh.html':['loadData'],
+  '/service-home/camera-home.html':[],'/service-home/ssh.html':['loadData'],
   '/service-home/rustdesk.html':['loadDevices'],
   '/bookmarks.html':['loadData'],'/settings.html':['loadSettings']};
  var path=location.pathname.replace(/\\/index\\.html$/,'/');
@@ -2848,7 +2545,7 @@ a:hover{background:#4f46e5}</style></head>
   // which login path was used (password, MFA, Microsoft SSO).
   if (!isAdmin && (url.pathname === '/' || url.pathname === '/index.html')) {
     if ((effPerms.permissions['app_camera'] || 'none') !== 'none') {
-      return Response.redirect(new URL('/service-home/hikvision.html', request.url).toString(), 302);
+      return Response.redirect(new URL('/service-home/camera-home.html', request.url).toString(), 302);
     }
   }
 
@@ -2871,7 +2568,7 @@ a:hover{background:#4f46e5}</style></head>
       '/service-home/casaos.html': 'casaos',
       '/service-home/asus.html': 'asus',
       '/service-home/n8n.html': 'n8n',
-      '/service-home/hikvision.html': ['camera','camera_playback','camera_download','app_camera','camera_autoopen'],
+      '/service-home/camera-home.html': ['camera','camera_playback','camera_download','app_camera','camera_autoopen'],
       '/service-home/ssh.html': 'ssh',
       '/service-home/rustdesk.html': 'rustdesk',
       '/service-home/services-embed.html': 'services-hub',
@@ -3039,9 +2736,6 @@ const SERVICES = [
   { id: 'rustdesk',    name: 'RustDesk',       checkUrl: 'https://rustdesk.home-server.id.vn' },
 ];
 
-const N8N_BASE        = 'https://n8n-home.home-server.id.vn/api/v1';
-const MOVI_N8N_BASE   = 'https://n8n.movi-finance.com/api/v1';
-const RUSTDESK_BASE   = 'https://rustdesk.home-server.id.vn';
 
 /* ── Services Hub internal site tree (server-authoritative) ──
    perm: permission key mỗi site cần; admin bypass tất cả.
@@ -3089,13 +2783,6 @@ async function handleServicesEmbedConfig(env, session) {
 /* ── Movi n8n webhook basic-auth (credentials from Cloudflare secrets) ──
    Set via:  wrangler secret put MOVI_N8N_USER  /  MOVI_N8N_PASS
    Never hardcode credentials in source. */
-function moviN8nAuth(env) {
-  const u = cleanEnv(env.MOVI_N8N_USER);
-  const p = cleanEnv(env.MOVI_N8N_PASS);
-  if (!u || !p) throw new Error('MOVI_N8N_USER / MOVI_N8N_PASS not configured');
-  return 'Basic ' + btoa(unescape(encodeURIComponent(u + ':' + p)));
-}
-
 async function checkService(service) {
   if (!service.checkUrl) return { id: service.id, status: 'local', ping: null };
   const t0 = Date.now();
@@ -3369,537 +3056,6 @@ async function handleMoviN8nExecDetail(request, env) {
    Tool Movi — Workflow triggers via n8n webhook
    Secret: MOVI_TOOL_CREATE_USER_WEBHOOK
    ═══════════════════════════════════════════════ */
-async function handleToolMoviCreateUser(request, env, session, ctx) {
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = cleanEnv(env.MOVI_TOOL_CREATE_USER_WEBHOOK);
-  if (!webhookUrl) return json({ error: 'MOVI_TOOL_CREATE_USER_WEBHOOK not configured. Run: npx wrangler secret put MOVI_TOOL_CREATE_USER_WEBHOOK' }, 500);
-
-  let body;
-  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
-
-  // Validate required fields
-  const required = ['email','firstName','lastName','personalEmail','group'];
-  for (const f of required) {
-    if (!body[f] || !String(body[f]).trim()) return json({ error: `Missing required field: ${f}` }, 400);
-  }
-
-  // Force createdBy from server-side session (cannot be spoofed by client)
-  const createdBy = session.username || session.email || 'unknown';
-
-  // Transform to n8n expected format: flat object, fields accessible as $json['Field Name']
-  const n8nPayload = {
-    'Email User Movi': body.email         || '',
-    'First Name':      body.firstName     || '',
-    'Last Name':       body.lastName      || '',
-    'JobTitle':        body.jobTitle      || '',
-    'Department':      body.department    || '',
-    'Personal Email':  body.personalEmail || '',
-    'Office':          body.office        || '',
-    'MobilePhone':     body.mobilePhone   || '',
-    'Manager':         body.manager       || '',
-    'Company':         body.company       || '',
-    'Phòng Ban':       body.group         || '',
-    'Người Tạo user':  createdBy,
-  };
-
-  let auth;
-  try { auth = moviN8nAuth(env); } catch (e) { return json({ error: e.message }, 500); }
-
-  // Cloudflare Workers HTTP: no wall-clock limit while browser stays connected.
-  // Await n8n directly — browser shows spinner, gets result when workflow finishes.
-  try {
-    const res = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': auth },
-      body: JSON.stringify(n8nPayload),
-      signal: AbortSignal.timeout(180000), // 3 min safety cap
-    });
-    const txt = await res.text().catch(() => '');
-    let result;
-    try { result = JSON.parse(txt); } catch { result = { raw: txt.slice(0, 1000) }; }
-    if (!res.ok) return json({ error: `n8n returned ${res.status}`, result }, 502);
-    return json({ success: true, result });
-  } catch (e) {
-    return json({ error: `Webhook error: ${e.message}` }, 502);
-  }
-}
-
-
-/* ── Tool Movi: Block User ── */
-async function handleToolMoviBlockUser(request, env, session) {
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = cleanEnv(env.MOVI_WH_BLOCK_USER);
-  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  const email     = (body.email || '').trim();
-  const startDate = (body.startDate || '').trim();
-  const endDate   = (body.endDate || '').trim();
-  const reason    = (body.reason || '').trim();
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Email không hợp lệ' }, 400);
-  if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return json({ error: 'Ngày bắt đầu không hợp lệ (định dạng: YYYY-MM-DD)' }, 400);
-  if (!endDate   || !/^\d{4}-\d{2}-\d{2}$/.test(endDate))   return json({ error: 'Ngày kết thúc không hợp lệ (định dạng: YYYY-MM-DD)' }, 400);
-  if (endDate < startDate) return json({ error: 'Ngày kết thúc phải sau hoặc bằng ngày bắt đầu' }, 400);
-  if (!reason) return json({ error: 'Lý do block là bắt buộc' }, 400);
-  const payload = [
-    {
-      data: {
-        'Tài khoản user block': email,
-        'Thời gian bắt đầu':   startDate,
-        'thời gian kết thúc':  endDate,
-        'ghi chú lý do ':      reason,
-      }
-    }
-  ];
-  const ip = request.headers.get('CF-Connecting-IP') || '?';
-  try {
-    const resp = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': moviN8nAuth(env) },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(180000),
-    });
-    if (!resp.ok) {
-      const txt = await resp.text().catch(() => '');
-      return json({ error: `n8n error: HTTP ${resp.status}`, detail: txt.slice(0, 200) }, 502);
-    }
-    const raw = await resp.json().catch(() => ({}));
-    const result = Array.isArray(raw) ? raw : raw;
-    await logActivity(env, { action: 'tool-movi-block-user', username: session.username, ip, success: true, detail: `Blocked ${email} (${startDate} → ${endDate})` });
-    return json({ success: true, result });
-  } catch (e) {
-    await logActivity(env, { action: 'tool-movi-block-user', username: session.username, ip, success: false, detail: `Failed: ${e.message}` });
-    return json({ error: e.name === 'TimeoutError' ? 'n8n timeout sau 3 phút' : `Lỗi kết nối: ${e.message}` }, 502);
-  }
-}
-
-/* ── Tool Movi: Asset Search ── */
-async function handleToolMoviAssetSearch(request, env, session) {
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = cleanEnv(env.MOVI_WH_ASSET_SEARCH);
-  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  const params = {
-    email:     (body.email     || '').trim(),
-    assetTag:  (body.assetTag  || '').trim(),
-    model:     (body.model     || '').trim(),
-    serial:    (body.serial    || '').trim(),
-    location:  (body.location  || '').trim(),
-    status:    (body.status    || '').trim(),
-    assetType: (body.assetType || '').trim(),
-  };
-  if (!Object.values(params).some(v => v))
-    return json({ error: 'Vui lòng nhập ít nhất 1 tiêu chí tìm kiếm' }, 400);
-  try {
-    const resp = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': moviN8nAuth(env) },
-      body: JSON.stringify(params),
-      signal: AbortSignal.timeout(30000),
-    });
-    if (!resp.ok) {
-      const txt = await resp.text().catch(() => '');
-      return json({ error: `n8n error: HTTP ${resp.status}`, detail: txt.slice(0, 200) }, 502);
-    }
-    const raw  = await resp.json().catch(() => []);
-    const list = Array.isArray(raw) ? raw : (raw ? [raw] : []);
-    return json({ success: true, list, total: list.length });
-  } catch(e) {
-    return json({ error: e.name === 'TimeoutError' ? 'n8n timeout sau 30 giây' : `Lỗi kết nối: ${e.message}` }, 502);
-  }
-}
-
-/* ── Tool Movi: Check Email Azure AD ── */
-async function handleToolMoviCheckEmail(request, env, session) {
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = cleanEnv(env.MOVI_WH_AZURE_CHECK_EMAIL);
-  if (!webhookUrl) return json({ error: 'MOVI_WH_AZURE_CHECK_EMAIL chưa được cấu hình' }, 503);
-  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  // Accept email OR partial name/keyword — no strict email format check
-  const query = (body.query || body.email || '').trim();
-  if (!query || query.length < 2)
-    return json({ error: 'Nhập ít nhất 2 ký tự để tìm kiếm' }, 400);
-  if (query.length > 100)
-    return json({ error: 'Từ khoá tìm kiếm quá dài' }, 400);
-  try {
-    const url = `${webhookUrl}?email=${encodeURIComponent(query)}`;
-    const resp = await fetch(url, {
-      method: 'GET',
-      headers: { 'Authorization': moviN8nAuth(env) },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!resp.ok) {
-      const txt = await resp.text().catch(() => '');
-      return json({ error: `n8n error: HTTP ${resp.status}`, detail: txt.slice(0, 200) }, 502);
-    }
-    // n8n Respond to Webhook returns $json.body (raw Graph API response)
-    // Shape: { value: [...users], @odata.context: "..." }
-    // OR legacy flat shape: { found, id, displayName, ... }
-    const raw = await resp.json().catch(() => ({}));
-    // Case 1: n8n returns raw Graph API body { value: [...] }
-    if (Array.isArray(raw.value)) {
-      const users = raw.value;
-      return json({ success: true, found: users.length > 0, users });
-    }
-    // Case 2: n8n returns flat single-user fields { found, id, displayName, ... }
-    if (raw.found !== undefined) {
-      const user = (raw.id || raw.displayName) ? {
-        id: raw.id, displayName: raw.displayName,
-        userPrincipalName: raw.userPrincipalName,
-        mail: raw.mail, accountEnabled: raw.accountEnabled,
-      } : null;
-      return json({ success: true, found: !!raw.found, users: user ? [user] : [] });
-    }
-    // Case 3: unexpected shape
-    return json({ success: true, found: false, users: [] });
-  } catch(e) {
-    return json({ error: e.name === 'TimeoutError' ? 'n8n timeout sau 15 giây' : `Lỗi kết nối: ${e.message}` }, 502);
-  }
-}
-
-/* ── Tool Movi: Check Azure Group ── */
-async function handleToolMoviCheckAzureGroup(request, env, session) {
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = cleanEnv(env.MOVI_WH_AZURE_CHECK_GROUP);
-  if (!webhookUrl) return json({ error: 'MOVI_WH_AZURE_CHECK_GROUP chưa được cấu hình' }, 503);
-  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  const query = (body.query || '').trim();
-  if (!query || query.length < 2)
-    return json({ error: 'Nhập ít nhất 2 ký tự để tìm kiếm' }, 400);
-  if (query.length > 100)
-    return json({ error: 'Từ khoá tìm kiếm quá dài' }, 400);
-  try {
-    const url = `${webhookUrl}?query=${encodeURIComponent(query)}`;
-    const resp = await fetch(url, {
-      method: 'GET',
-      headers: { 'Authorization': moviN8nAuth(env) },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!resp.ok) {
-      const txt = await resp.text().catch(() => '');
-      return json({ error: `n8n error: HTTP ${resp.status}`, detail: txt.slice(0, 200) }, 502);
-    }
-    const raw = await resp.json().catch(() => ({}));
-    if (Array.isArray(raw.value)) {
-      return json({ success: true, found: raw.value.length > 0, groups: raw.value });
-    }
-    return json({ success: true, found: false, groups: [] });
-  } catch(e) {
-    return json({ error: e.name === 'TimeoutError' ? 'n8n timeout sau 15 giây' : `Lỗi kết nối: ${e.message}` }, 502);
-  }
-}
-
-/* ── Tool Movi: Delete User List ── */
-async function handleToolMoviDeleteUserList(request, env, session) {
-  const webhookUrl = cleanEnv(env.MOVI_WH_DELETE_USER_LIST);
-  try {
-    const resp = await fetch(webhookUrl, {
-      method: 'GET',
-      headers: { 'Authorization': moviN8nAuth(env) },
-      signal: AbortSignal.timeout(30000),
-    });
-    if (!resp.ok) {
-      const txt = await resp.text().catch(() => '');
-      return json({ error: `n8n error: HTTP ${resp.status}`, detail: txt.slice(0, 200) }, 502);
-    }
-    const raw  = await resp.json().catch(() => []);
-    const list = Array.isArray(raw) ? raw : (raw ? [raw] : []);
-    return json({ success: true, list, total: list.length });
-  } catch(e) {
-    return json({ error: e.name === 'TimeoutError' ? 'n8n timeout sau 30 giây' : `Lỗi kết nối: ${e.message}` }, 502);
-  }
-}
-
-/* ── Tool Movi: Delete User Action ── */
-async function handleToolMoviDeleteUserAction(request, env, session) {
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = cleanEnv(env.MOVI_WH_DELETE_USER);
-  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  const email = (body.email || '').trim();
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Email không hợp lệ' }, 400);
-  const ip = request.headers.get('CF-Connecting-IP') || '?';
-  try {
-    const resp = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': moviN8nAuth(env) },
-      body: JSON.stringify({ email, 'Người thực hiện': session.username }),
-      signal: AbortSignal.timeout(20000),
-    });
-    if (!resp.ok) {
-      const txt = await resp.text().catch(() => '');
-      return json({ error: `n8n error: HTTP ${resp.status}`, detail: txt.slice(0, 200) }, 502);
-    }
-    const raw = await resp.json().catch(() => ({}));
-    const result = Array.isArray(raw) ? raw : raw;
-    await logActivity(env, { action: 'tool-movi-delete-user', username: session.username, ip, success: true, detail: `Deleted ${email}` });
-    return json({ success: true, result });
-  } catch(e) {
-    await logActivity(env, { action: 'tool-movi-delete-user', username: session.username, ip, success: false, detail: `Failed: ${e.message}` });
-    return json({ error: e.name === 'TimeoutError' ? 'TIMEOUT' : `Lỗi kết nối: ${e.message}` }, 502);
-  }
-}
-
-async function handleToolMoviFgPolicy(request, env, session, policyType, ctx) {
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const envKey = policyType === 'lan' ? env.MOVI_WH_FG_POLICY_LAN : env.MOVI_WH_FG_POLICY_WIFI;
-  const webhookUrl = cleanEnv(envKey);
-  if (!webhookUrl) return json({ error: "MOVI_WH_FG_POLICY_" + policyType.toUpperCase() + " chưa được cấu hình" }, 503);
-  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  const email = (body.email || '').trim();
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Email user không hợp lệ' }, 400);
-  if (!body.date) return json({ error: 'Thiếu ngày' }, 400);
-  if (!body.startTime || !body.endTime) return json({ error: 'Thiếu thời gian bắt đầu/kết thúc' }, 400);
-  const ip = request.headers.get('CF-Connecting-IP') || '?';
-
-  const policyId = crypto.randomUUID();
-  const expiresAt = new Date(`${body.date}T${body.endTime}:00+07:00`).getTime();
-  const effectiveTtl = Math.max(60, Math.floor((expiresAt - Date.now()) / 1000));
-  // KV TTL = thời gian đến endTime + 15 phút buffer (n8n cần thời gian xóa rule rồi mới callback)
-  const kvTtl = effectiveTtl + 900;
-  const policyData = {
-    id: policyId, type: policyType,
-    email, allowApp: (body.allowApp || '').trim(),
-    department: (body.department || '').trim(),
-    date: body.date, startTime: body.startTime, endTime: body.endTime,
-    location: (body.location || '').trim(),
-    reason: (body.reason || '').trim(),
-    createdBy: session.username,
-    createdAt: Date.now(), expiresAt,
-  };
-  // Generate a single-use callback token — n8n sends this back when deleting rule
-  const callbackToken = crypto.randomUUID();
-  // Store token → policyId mapping (TTL same as policy)
-  await env.DASHBOARD_KV.put(`fgcb:${callbackToken}`, policyId, { expirationTtl: kvTtl }).catch(() => {});
-
-  const payload = [{ data: {
-    'policyId':            policyId,       // for reference
-    'callbackToken':       callbackToken,  // n8n sends this back to mark done
-    'Email user':          email,
-    'cho phép sử dụng':   policyData.allowApp,
-    'phòng Ban':           policyData.department,
-    'Ngày':                body.date,
-    'thời gian bắt đầu ': body.startTime,
-    'thời gian kết thúc': body.endTime,
-    'vị trí máy':         policyData.location,
-    'Lý do':              policyData.reason,
-    'Người Tạo':          session.username,
-  }}];
-
-  try {
-    // Wait for n8n Respond to Webhook #1 (policy created confirmation)
-    const resp = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': moviN8nAuth(env) },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(120000), // 2 min — wait for FortiGate + Teams
-    });
-    if (!resp.ok) {
-      const txt = await resp.text().catch(() => '');
-      return json({ error: "n8n error: HTTP " + resp.status, detail: txt.slice(0, 200) }, 502);
-    }
-    // Parse n8n response — trích xuất Rule ID + Rule Name từ Teams message HTML
-    let ruleId = null, ruleName = null;
-    try {
-      const respData = await resp.json();
-      // n8n trả về Teams message JSON, body.content là HTML
-      const html = respData?.body?.content || respData?.content || '';
-      // Extract Rule ID: <td>ID Rule</td><td>174</td>
-      const mId = html.match(/ID Rule<\/td>\s*<td[^>]*>(\d+)<\/td>/i);
-      if (mId) ruleId = mId[1];
-      // Extract Rule Name: <td>Name</td><td>N8N-xxx-...</td>
-      const mName = html.match(/>\s*Name\s*<\/td>\s*<td[^>]*>([^<]+)<\/td>/i);
-      if (mName) ruleName = mName[1].trim();
-    } catch (_) {}
-    if (ruleId)   policyData.ruleId   = ruleId;
-    if (ruleName) policyData.ruleName = ruleName;
-    // Policy confirmed created — now save to KV
-    try {
-      await env.DASHBOARD_KV.put(`fgpolicy:${policyId}`, JSON.stringify(policyData), { expirationTtl: kvTtl });
-    } catch (kvErr) { console.error('fgpolicy KV save error:', kvErr); }
-    await logActivity(env, { action: "tool-movi-fg-policy-" + policyType, username: session.username, ip, success: true, detail: "Policy " + policyType.toUpperCase() + " [" + policyId.slice(0,8) + "] cho " + email + " " + body.date + (ruleId ? " Rule#" + ruleId : '') });
-    // Lưu vào lịch sử ngay khi tạo xong (không đợi callback)
-    try {
-      const hist = await env.DASHBOARD_KV.get('tool_movi_history', 'json') || [];
-      hist.unshift({
-        id:          policyId,
-        tool:        'fg-policy-' + policyType,
-        toolLabel:   'Policy ' + policyType.toUpperCase() + ' — Đang hoạt động',
-        email:       policyData.email,
-        displayName: policyData.email,
-        createdBy:   policyData.createdBy,
-        status:      'active',   // phân biệt với "done" khi xóa xong
-        expiresAt:   policyData.expiresAt,
-        result: {
-          type:       policyData.type,
-          ruleName:   policyData.ruleName || null,
-          ruleId:     policyData.ruleId   || null,
-          date:       policyData.date,
-          startTime:  policyData.startTime,
-          endTime:    policyData.endTime,
-          location:   policyData.location,
-          allowApp:   policyData.allowApp,
-          department: policyData.department,
-          reason:     policyData.reason,
-        },
-        error:   null,
-        input:   null,
-        savedAt: Date.now(),
-      });
-      if (hist.length > 1000) hist.length = 1000;
-      await env.DASHBOARD_KV.put('tool_movi_history', JSON.stringify(hist));
-    } catch (_) {}
-    return json({ success: true, policy: policyData });
-  } catch(e) {
-    await logActivity(env, { action: "tool-movi-fg-policy-" + policyType, username: session.username, ip, success: false, detail: "Failed: " + e.message });
-    return json({ error: e.name === 'TimeoutError' ? 'n8n timeout sau 2 phút — kiểm tra FortiGate/Teams' : "Lỗi kết nối: " + e.message }, 502);
-  }
-}
-
-/* ── Tool Movi: FG Policy Done callback (n8n gọi về khi xóa rule xong) ── */
-/* Bảo mật 3 lớp: CF Access Service Token → Basic Auth → callbackToken UUID */
-async function handleFgPolicyDone(request, env) {
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  // Lớp 2: Verify Basic Auth từ n8n (Lớp 1 là CF Access Service Token ở edge)
-  const authH = request.headers.get('Authorization') || '';
-  try {
-    if (authH !== moviN8nAuth(env)) return json({ error: 'Unauthorized' }, 401);
-  } catch { return json({ error: 'Auth config error' }, 500); }
-  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  const callbackToken = (body.callbackToken || '').trim();
-  if (!callbackToken) return json({ error: 'Missing callbackToken' }, 400);
-  // Lookup token → policyId (token is single-use, TTL same as policy)
-  const policyId = await env.DASHBOARD_KV.get(`fgcb:${callbackToken}`).catch(() => null);
-  if (!policyId) return json({ error: 'Invalid or expired token' }, 403);
-  // Load policy data before deleting (for history)
-  const policyData = await env.DASHBOARD_KV.get(`fgpolicy:${policyId}`, 'json').catch(() => null);
-  // Delete both the policy and the token
-  await Promise.all([
-    env.DASHBOARD_KV.delete(`fgpolicy:${policyId}`).catch(() => {}),
-    env.DASHBOARD_KV.delete(`fgcb:${callbackToken}`).catch(() => {}),
-  ]);
-  // Update tool_movi_history: đổi label từ "Đã tạo rule" → "Đã xóa rule" (tìm theo policyId)
-  if (policyData) {
-    try {
-      const history = await env.DASHBOARD_KV.get('tool_movi_history', 'json') || [];
-      const existIdx = history.findIndex(h => h.id === policyId);
-      if (existIdx >= 0) {
-        // Cập nhật entry cũ: đổi sang "Đã xóa rule", xóa expiresAt, đổi status
-        history[existIdx].toolLabel  = 'Policy ' + policyData.type.toUpperCase() + ' — Đã xóa rule';
-        history[existIdx].status     = 'done';
-        history[existIdx].expiresAt  = null;
-        history[existIdx].doneAt     = Date.now();
-        history[existIdx].savedAt    = Date.now();
-      } else {
-        // Không tìm thấy entry cũ → thêm mới
-        history.unshift({
-          id:          policyId,
-          tool:        'fg-policy-' + policyData.type,
-          toolLabel:   'Policy ' + policyData.type.toUpperCase() + ' — Đã xóa rule',
-          email:       policyData.email,
-          displayName: policyData.email,
-          createdBy:   policyData.createdBy,
-          status:      'done',
-          expiresAt:   null,
-          doneAt:      Date.now(),
-          result: {
-            type:       policyData.type,
-            ruleName:   policyData.ruleName  || null,
-            ruleId:     policyData.ruleId    || null,
-            date:       policyData.date,
-            startTime:  policyData.startTime,
-            endTime:    policyData.endTime,
-            location:   policyData.location,
-            allowApp:   policyData.allowApp,
-            department: policyData.department,
-            reason:     policyData.reason,
-          },
-          error:   null,
-          input:   null,
-          savedAt: Date.now(),
-        });
-      }
-      if (history.length > 1000) history.length = 1000;
-      await env.DASHBOARD_KV.put('tool_movi_history', JSON.stringify(history));
-    } catch (_) {}
-  }
-  return json({
-    success: true,
-    policyId,
-    message: 'Policy đã được xóa và ghi vào lịch sử',
-    policy: policyData || { id: policyId },
-  });
-}
-
-/* ── Tool Movi: List active FG policies ── */
-async function handleListFgPolicies(request, env, session) {
-  if (request.method !== 'GET') return json({ error: 'GET required' }, 405);
-  try {
-    const listed = await env.DASHBOARD_KV.list({ prefix: 'fgpolicy:' });
-    const now = Date.now();
-    const all = await Promise.all(listed.keys.map(k => env.DASHBOARD_KV.get(k.name, 'json')));
-    const policies = all
-      .filter(p => p != null)          // KV already handles TTL expiry
-      .filter(p => !p.expiresAt || p.expiresAt > now - 60000) // 1 min grace
-      .sort((a, b) => (a.expiresAt || 0) - (b.expiresAt || 0));
-    return json({ success: true, policies });
-  } catch(e) {
-    return json({ error: e.message }, 502);
-  }
-}
-
-/* ── Tool Movi History (KV-backed) ── */
-async function hasAnyToolMoviPerm(env, session) {
-  if (session.role === 'admin') return true;
-  for (const key of ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi']) {
-    if (await hasPerm(env, session, key)) return true;
-  }
-  return false;
-}
-
-async function handleGetToolMoviHistory(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasAnyToolMoviPerm(env, session))) return json({ error: 'Không có quyền truy cập Tool Movi' }, 403);
-  const history = await env.DASHBOARD_KV.get('tool_movi_history', 'json') || [];
-  const isAdmin = await isAdminUser(env, session);
-  const visible = isAdmin ? history : history.filter(h => h.createdBy === session.username);
-  return json({ history: visible, total: visible.length, isAdmin });
-}
-
-async function handleSaveToolMoviHistory(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasAnyToolMoviPerm(env, session))) return json({ error: 'Không có quyền truy cập Tool Movi' }, 403);
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  const history = await env.DASHBOARD_KV.get('tool_movi_history', 'json') || [];
-  const entry = {
-    id:          crypto.randomUUID(),
-    tool:        String(body.tool || 'create-user').slice(0, 50),
-    toolLabel:   String(body.toolLabel || '').slice(0, 100),
-    email:       String(body.email || '').slice(0, 200),
-    displayName: String(body.displayName || '').slice(0, 200),
-    createdBy:   session.username,
-    status:      ['done', 'error'].includes(body.status) ? body.status : 'error',
-    result:      body.result ? _truncateJson(body.result, 8000)  : null,
-    error:       body.error  ? String(body.error).slice(0, 500)   : null,
-    input:       body.input  ? _truncateJson(body.input, 4000)   : null,
-    savedAt:     Date.now(),
-  };
-  history.unshift(entry);
-  if (history.length > 1000) history.length = 1000;
-  await env.DASHBOARD_KV.put('tool_movi_history', JSON.stringify(history));
-  return json({ success: true, id: entry.id, total: history.length });
-}
-
-async function handleClearToolMoviHistory(request, env) {
-  const session = await getSession(request, env);
-  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
-  await env.DASHBOARD_KV.delete('tool_movi_history');
-  return json({ success: true });
-}
-
-/* ═══════════════════════════════════════════════
-   Bookmarks — per-user, stored in KV
-   ═══════════════════════════════════════════════ */
-
 async function handleGetBookmarks(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Not authenticated' }, 401);
@@ -3925,401 +3081,8 @@ async function handleSaveBookmarks(request, env) {
 }
 
 
-/* ── Activity Log ── */
-async function logActivity(env, { action, username, ip, success, detail }) {
-  try {
-    const [log, cfg] = await Promise.all([
-      env.DASHBOARD_KV.get('activity_log', 'json').then(v => v || []),
-      _getCfg(env),
-    ]);
-    const retDays = Math.max(7, cfg.auditRetentionDays ?? 30);
-    const cutoff  = Date.now() - retDays * 24 * 60 * 60 * 1000;
-    log.unshift({ ts: Date.now(), action, username: username||'?', ip: ip||'?', success: !!success, detail: detail||'' });
-    const trimmed = log.filter(l => l.ts >= cutoff).slice(0, 500);
-    await env.DASHBOARD_KV.put('activity_log', JSON.stringify(trimmed), { expirationTtl: retDays * 24 * 60 * 60 });
-  } catch(e) { /* non-critical */ }
-}
 
 /* ── Meraki Devices Proxy ── */
-async function handleMerakiDevices(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_DEVICES);
-  const N8N_AUTH = moviN8nAuth(env);
-
-  try {
-    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH } });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw = await resp.json();
-
-    // n8n trả raw array, transform thành format chuẩn
-    const list = Array.isArray(raw) ? raw : (raw.devices || []);
-    const TYPE_ICON = { switch: '🔀', wireless: '📡', appliance: '🔥', camera: '📷' };
-
-    const devices = list.map(function(d) {
-      const ip = d.lanIp || d.wan1Ip || d.wan2Ip || '—';
-      // Nếu firmware chứa "Not running configured version" → coi là cần chú ý
-      const firmwareOk = d.firmware && !d.firmware.includes('Not running');
-      return {
-        name:       d.name || '—',
-        mac:        d.mac  || null,
-        model:      d.model || '—',
-        serial:     d.serial || '—',
-        lanIp:      ip,
-        productType: d.productType || 'switch',
-        typeIcon:   TYPE_ICON[d.productType] || '📦',
-        tags:       Array.isArray(d.tags) ? d.tags : (d.tags ? String(d.tags).split(',').map(function(t){return t.trim();}).filter(Boolean) : []),
-        firmware:   d.firmware || '—',
-        firmwareOk: firmwareOk,
-        status:     firmwareOk ? 'online' : 'alerting',
-        lastReportedAt: d.configurationUpdatedAt || null,
-        url:        d.url || null,
-      };
-    });
-
-    return json({ devices, total: devices.length, fetchedAt: new Date().toISOString() });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-/* ── Meraki Clients Proxy ── */
-async function handleMerakiClients(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_CLIENTS);
-  const N8N_AUTH = moviN8nAuth(env);
-
-  try {
-    const resp = await fetch(N8N_URL, {
-      headers: { 'Authorization': N8N_AUTH },
-      cf: { cacheTtl: 60, cacheEverything: false },
-    });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const data = await resp.json();
-    // n8n trả array, lấy phần tử đầu
-    const payload = Array.isArray(data) ? data[0] : data;
-    // Normalize raw Meraki client fields that the API doesn't return
-    const rawList = Array.isArray(payload) ? payload : (payload.clients || []);
-    const clients = rawList.map(c => {
-      const wired  = c.recentDeviceConnection === 'Wired' || !c.ssid;
-      const online = c.status === 'Online';
-      const recv   = (c.usage && c.usage.recv) || 0;
-      const sent   = (c.usage && c.usage.sent) || 0;
-      return {
-        ...c,
-        name:   c.name   || c.description || c.mac,
-        ssid:   c.ssid   || (wired ? 'Wired' : '—'),
-        signal: c.signal != null ? c.signal : (wired ? 0 : online ? 3 : 1),
-        rxKbps: c.rxKbps != null ? c.rxKbps : Math.round(recv / 10),
-        txKbps: c.txKbps != null ? c.txKbps : Math.round(sent / 10),
-      };
-    });
-    return json({ clients });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-/* ── Meraki Client Policy: block / unblock — meraki:write required ── */
-async function handleMerakiClientPolicy(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasWritePerm(env, session, 'meraki'))) return json({ error: 'Cần quyền meraki:write để thực hiện thao tác này' }, 403);
-  if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
-
-  let body;
-  try { body = await request.json(); } catch (e) { return json({ error: 'Invalid JSON body' }, 400); }
-  const mac = String((body && body.mac) || '').trim().toLowerCase();
-  const policy = String((body && body.policy) || '').trim();
-  const MAC_RE = /^[0-9a-f]{2}([:-]?)([0-9a-f]{2}\1){4}[0-9a-f]{2}$/;
-  if (!MAC_RE.test(mac)) return json({ error: 'MAC không hợp lệ' }, 400);
-  if (policy !== 'Blocked' && policy !== 'Normal') {
-    return json({ error: "policy phải là 'Blocked' hoặc 'Normal'" }, 400);
-  }
-
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_CLIENT_POLICY);
-  const N8N_AUTH = moviN8nAuth(env);
-  try {
-    const resp = await fetch(N8N_URL, {
-      method: 'POST',
-      headers: { 'Authorization': N8N_AUTH, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mac, policy }),
-      signal: AbortSignal.timeout(30000),
-    });
-    const text = await resp.text();
-    if (!resp.ok) {
-      return json({ error: 'n8n upstream error', status: resp.status, detail: text.slice(0, 300) }, 502);
-    }
-    let data; try { data = JSON.parse(text); } catch (e) { data = { raw: text }; }
-    const payload = Array.isArray(data) ? data[0] : data;
-    // Persist blocked-clients list in KV
-    try {
-      const bl = await env.DASHBOARD_KV.get('meraki_blocked_clients', 'json') || [];
-      if (policy === 'Blocked') {
-        if (!bl.find(b => b.mac === mac)) {
-          bl.push({
-            mac,
-            name: String((body && body.name) || '').trim() || mac,
-            ip: String((body && body.ip) || '').trim() || '—',
-            blockedAt: new Date().toISOString(),
-            blockedBy: session.username,
-          });
-        }
-      } else {
-        const idx = bl.findIndex(b => b.mac === mac);
-        if (idx !== -1) bl.splice(idx, 1);
-      }
-      await env.DASHBOARD_KV.put('meraki_blocked_clients', JSON.stringify(bl));
-    } catch (e) {}
-    // Log the admin action for auditing
-    await logActivity(env, { action: 'meraki-client-policy', username: session.username, ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `${policy} client ${mac}` });
-    return json({ success: true, mac, policy, result: payload });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-/* ── Meraki Blocked Clients list (GET) — meraki:write required ── */
-async function handleMerakiBlockedClients(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasWritePerm(env, session, 'meraki'))) return json({ error: 'Cần quyền meraki:write để xem danh sách chặn' }, 403);
-  const list = await env.DASHBOARD_KV.get('meraki_blocked_clients', 'json') || [];
-  return json({ blocked: list });
-}
-
-/* ── Meraki Device Status Proxy ── */
-async function handleMerakiDeviceStatus(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_DEV_STATUS);
-  const N8N_AUTH = moviN8nAuth(env);
-
-  try {
-    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH } });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw = await resp.json();
-    // n8n trả [{ devices: [...] }] hoặc raw array
-    const first = Array.isArray(raw) ? raw[0] : raw;
-    const list = (first && first.devices) || (first && first.statuses) || (Array.isArray(raw) ? raw : []);
-
-    const statuses = list.map(d => ({
-      name:           d.name || '—',
-      serial:         d.serial || '—',
-      model:          d.model || '—',
-      productType:    d.productType || '—',
-      status:         d.status || 'offline',
-      publicIp:       d.publicIp || '—',
-      lastReportedAt: d.lastReportedAt || null,
-    }));
-
-    const online   = statuses.filter(d => d.status === 'online').length;
-    const offline  = statuses.filter(d => d.status === 'offline').length;
-    const alerting = statuses.filter(d => d.status === 'alerting').length;
-    const dormant  = statuses.filter(d => d.status === 'dormant').length;
-
-    return json({ statuses, total: statuses.length, online, offline, alerting, dormant, fetchedAt: new Date().toISOString() });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-/* ── Meraki Switch Ports (via n8n webhook) ── */
-async function handleMerakiSwitchPorts(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_SW_PORTS);
-  const N8N_AUTH = moviN8nAuth(env);
-  try {
-    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(60000) });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw = await resp.json();
-    const switches = Array.isArray(raw) ? raw : [raw];
-    const totalPorts     = switches.reduce((s, sw) => s + (sw.totalPorts || 0), 0);
-    const connectedPorts = switches.reduce((s, sw) => s + (sw.connectedPorts || 0), 0);
-    const errorPorts     = switches.reduce((s, sw) => s + (sw.errorPorts || 0), 0);
-    const deadSwitches   = switches.filter(sw => sw.connectedPorts === 0).length;
-    return json({ switches, totalSwitches: switches.length, totalPorts, connectedPorts, errorPorts, deadSwitches, fetchedAt: new Date().toISOString() });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message + ' (timeout 90s)', }, 502);
-  }
-}
-
-/* ── Meraki Switch Port Configs (W5b) ── */
-async function handleMerakiSwitchPortConfigs(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_PORT_CFG);
-  const N8N_AUTH = moviN8nAuth(env);
-  try {
-    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(50000) });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw = await resp.json();
-    const configs = Array.isArray(raw) ? raw : [raw];
-    return json({ configs, fetchedAt: new Date().toISOString() });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-/* ── Meraki Link Aggregations (W5c) ── */
-async function handleMerakiLinkAggregations(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_LINK_AGG);
-  const N8N_AUTH = moviN8nAuth(env);
-  try {
-    const resp = await fetch(N8N_URL, {
-      headers: { 'Authorization': N8N_AUTH },
-      signal: AbortSignal.timeout(60000)   // 60s — loop qua nhiều networks có thể chậm hơn
-    });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw  = await resp.json();
-    const data = Array.isArray(raw) ? raw[0] : raw;
-    return json({
-      aggregations: data.aggregations || [],   // [ { id, label, networkId, memberCount, members[] } ]
-      portMap:      data.portMap      || {},    // { "serial:portId": { aggId, label, memberCount, members[] } }
-      aggIndex:     data.aggIndex     || {},    // { aggId: { label, networkId, members[] } }
-      totalGroups:  data.totalGroups  || 0,
-      totalPorts:   data.totalPorts   || 0,
-      fetchedAt:    data.fetchedAt    || new Date().toISOString()
-    });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-/* ── Meraki WAN Uplinks (W6a) ── */
-async function handleMerakiUplinks(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_UPLINKS);
-  const N8N_AUTH = moviN8nAuth(env);
-  try {
-    const resp = await fetch(N8N_URL, {
-      headers: { 'Authorization': N8N_AUTH },
-      signal: AbortSignal.timeout(30000)
-    });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw  = await resp.json();
-    const data = Array.isArray(raw) ? raw[0] : raw;
-    return json({
-      devices:     data.devices     || [],
-      totalActive: data.totalActive || 0,
-      totalDown:   data.totalDown   || 0,
-      fetchedAt:   data.fetchedAt   || new Date().toISOString()
-    });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-/* ── Meraki L3 Switch Routing (W6b) — SVIs + Static Routes ── */
-async function handleMerakiL3Routing(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_L3);
-  const N8N_AUTH = moviN8nAuth(env);
-  try {
-    const resp = await fetch(N8N_URL, {
-      headers: { 'Authorization': N8N_AUTH },
-      signal: AbortSignal.timeout(60000)   // loop nhiều switches có thể chậm
-    });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw  = await resp.json();
-    const data = Array.isArray(raw) ? raw[0] : raw;
-    return json({
-      interfaces:    data.interfaces    || [],   // SVIs (VLAN interfaces với IP)
-      staticRoutes:  data.staticRoutes  || [],   // L3 static routes trên switch
-      totalInterfaces: data.totalInterfaces || 0,
-      totalRoutes:     data.totalRoutes     || 0,
-      fetchedAt:       data.fetchedAt       || new Date().toISOString()
-    });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-/* ── Meraki Events Proxy ── */
-async function handleMerakiEvents(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_EVENTS);
-  const N8N_AUTH = moviN8nAuth(env);
-
-  try {
-    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH } });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw = await resp.json();
-    // Code Node trả { events, total, high, medium, fetchedAt }
-    const payload = Array.isArray(raw) ? raw[0] : raw;
-    return json(payload);
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-/* ── FortiGate Movi — SD-WAN Rules ── */
-async function handleMoviSdwanRules(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_SDWAN_RULES);
-  const N8N_AUTH = moviN8nAuth(env);
-  try {
-    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw  = await resp.json();
-    const data = Array.isArray(raw) ? raw[0] : raw;
-    return json({
-      rules:     data.rules    || [],
-      total:     data.total    || 0,
-      enabled:   data.enabled  || 0,
-      fetchedAt: data.fetchedAt || new Date().toISOString()
-    });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-/* ── FortiGate Movi — SD-WAN Members ── */
-async function handleMoviSdwan(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_SDWAN_MEMBERS);
-  const N8N_AUTH = moviN8nAuth(env);
-  try {
-    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw  = await resp.json();
-    const data = Array.isArray(raw) ? raw[0] : raw;
-    return json({
-      members:   data.members   || [],
-      total:     data.total     || 0,
-      zone:      data.zone      || '',
-      fetchedAt: data.fetchedAt || new Date().toISOString()
-    });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-/* ── Camera Movi — Aliases (admin rename) ── */
 async function handleGetCameraAliases(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
@@ -4618,216 +3381,38 @@ setTimeout(_show,6000);
   return new Response(html, { status: upstream.status, headers: rh });
 }
 
-/* ── Camera Home — Full Reverse Proxy (HTTP + WebSocket) with CF Access Token ── */
-async function handleCamHomeEmbed(request, env) {
+/* ── Camera Test (Linux PC Frigate) — go2rtc Live Proxy (port 1984) ── */
+async function handleCamTestLiveEmbed(request, env) {
   const session = await getSession(request, env);
   if (!session) return new Response('Unauthorized', { status: 401 });
   if (!(await hasPerm(env, session, 'camera'))) return new Response('Forbidden', { status: 403 });
 
-  const camUrl    = 'https://camera.home-server.id.vn';
-  const cfId      = cleanEnv(env.HOME_CAM_CF_CLIENT_ID);
-  const cfSecret  = cleanEnv(env.HOME_CAM_CF_CLIENT_SECRET);
-  const g2User    = cleanEnv(env.HOME_GO2RTC_USER);
-  const g2Pass    = cleanEnv(env.HOME_GO2RTC_PASS);
-
-  const authHeaders = {
-    'CF-Access-Client-Id':     cfId,
-    'CF-Access-Client-Secret': cfSecret,
-    ...(g2User ? { 'Authorization': 'Basic ' + btoa(unescape(encodeURIComponent(`${g2User}:${g2Pass}`))) } : {}),
-  };
+  const baseUrl  = cleanEnv(env.HOME_FRIGATE_TEST_LIVE_URL);
+  if (!baseUrl) return new Response('HOME_FRIGATE_TEST_LIVE_URL chưa được cấu hình', { status: 503 });
+  const cfId     = cleanEnv(env.HOME_CAM_CF_CLIENT_ID);
+  const cfSecret = cleanEnv(env.HOME_CAM_CF_CLIENT_SECRET);
 
   const reqUrl  = new URL(request.url);
-  const subPath = reqUrl.pathname.replace('/cam-home', '') || '/';
-  const target  = `${camUrl}${subPath}${reqUrl.search}`;
+  const subPath = reqUrl.pathname.replace('/cam-test-live', '') || '/';
+  const target  = `${baseUrl}${subPath}${reqUrl.search}`;
 
-  // ── Granular camera permission checks ──
-  // Recordings = python API paths + nginx-vod HLS paths (/vod/... serves master.m3u8/segments)
-  const isRecPath = /^\/(?:api\/(?:[^/]+\/(?:recordings|start\/|clip\.mp4)|vod\/)|vod\/)/.test(subPath);
-  const isDownload = reqUrl.searchParams.get('dl') === '1';
-  const isLatestJpg = request.method === 'GET' && /^\/api\/[^/]+\/latest\.jpg$/.test(subPath);
-  if (isDownload) {
-    if (!(await hasPerm(env, session, 'camera_download')))
-      return new Response('Forbidden', { status: 403 });
-  } else if (isRecPath) {
-    if (!(await hasPerm(env, session, 'camera_playback')))
-      return new Response('Forbidden', { status: 403 });
-  }
-
-  // ── JPEG cache: serve cached frame if within TTL (collapses N-worker burst) ──
-  if (isLatestJpg) {
-    const _hit = _snapJpgCache.get(subPath);
-    if (_hit && _hit.exp > Date.now()) {
-      return new Response(_hit.bytes, { status: 200, headers: { 'Content-Type': _hit.ct, 'Cache-Control': 'no-cache' } });
-    }
-  }
-
-  // ── WebSocket proxy (MSE streaming) ──
-  // CF Workers: pass only Upgrade header — Connection/Sec-WebSocket-* are managed internally.
-  // Do NOT call upstream.accept() — fetch().webSocket is already established.
-  if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
-    let upstreamResp;
-    try {
-      upstreamResp = await fetch(target, {
-        headers: { ...authHeaders, 'Upgrade': 'websocket' },
-      });
-    } catch(e) {
-      return new Response('WebSocket upstream error: ' + e.message, { status: 502 });
-    }
-    const upstream = upstreamResp.webSocket;
-    if (!upstream) return new Response('WebSocket upstream failed (status ' + upstreamResp.status + ')', { status: 502 });
-
-    const { 0: client, 1: server } = new WebSocketPair();
-    server.accept();
-    // upstream from fetch() is already established — do NOT call upstream.accept()
-    server.addEventListener('message',   ({ data }) => { try { upstream.send(data); } catch(_) {} });
-    upstream.addEventListener('message', ({ data }) => { try { server.send(data);   } catch(_) {} });
-    server.addEventListener('close',   ({ code, reason }) => { try { upstream.close(code, reason); } catch(_) {} });
-    upstream.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason);   } catch(_) {} });
-    return new Response(null, { status: 101, webSocket: client });
-  }
-
-  // ── HTTP proxy ──
-  const fwdHeaders = { ...authHeaders };
-  const rangeHdr = request.headers.get('Range');
-  if (rangeHdr) fwdHeaders['Range'] = rangeHdr;
-  const upstream = await fetch(target, {
-    method:    request.method,
-    headers:   fwdHeaders,
-    redirect:  'follow',
-    ...(request.method !== 'GET' && request.method !== 'HEAD' ? { body: request.body } : {}),
-  });
-
-  // Detect CF Access redirect loop — service token rejected → upstream redirected to CF login
-  if (upstream.url && upstream.url.includes('cloudflareaccess.com')) {
-    return new Response(JSON.stringify({ error: 'camera_auth_failed' }), {
-      status: 502,
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-    });
-  }
-
-  const ct = upstream.headers.get('Content-Type') || 'application/octet-stream';
-
-  // For binary/video responses, pass through with relevant headers preserved
-  if (!ct.includes('text/html')) {
-    if (isLatestJpg && upstream.status === 200) {
-      const bytes = new Uint8Array(await upstream.arrayBuffer());
-      _snapJpgCache.set(subPath, { bytes, ct, exp: Date.now() + SNAP_JPG_TTL_MS });
-      if (_snapJpgCache.size > 64) for (const [k, v] of _snapJpgCache) if (v.exp < Date.now()) _snapJpgCache.delete(k);
-      return new Response(bytes, { status: 200, headers: { 'Content-Type': ct, 'Cache-Control': 'no-cache' } });
-    }
-    const respHeaders = { 'Content-Type': ct, 'Cache-Control': 'no-cache' };
-    const contentRange = upstream.headers.get('Content-Range');
-    const contentLength = upstream.headers.get('Content-Length');
-    const acceptRanges = upstream.headers.get('Accept-Ranges');
-    if (contentRange) respHeaders['Content-Range'] = contentRange;
-    if (contentLength) respHeaders['Content-Length'] = contentLength;
-    if (acceptRanges) respHeaders['Accept-Ranges'] = acceptRanges;
-    return new Response(upstream.body, { status: upstream.status, headers: respHeaders });
-  }
-
-  // Patch go2rtc's HTML: redirect all API/WS calls through /cam-home/
-  // Frigate embeds go2rtc under /live/ (nginx strips prefix before proxying to go2rtc:1984).
-  // go2rtc's stream.html uses /api/ws for WebSocket — when served from Frigate that must
-  // be /live/api/ws. We detect /api/* paths and prepend /live/ automatically.
-  if (ct.includes('text/html')) {
-    let html = await upstream.text();
-
-    // ── Server-side: rewrite absolute paths in HTML attributes ──
-    // go2rtc (Vite build) embeds <script src="/assets/..."> and <link href="/assets/...">
-    // which the browser resolves against OUR Worker origin → 404.
-    // We must rewrite them to /cam-home/live/assets/... so the Worker proxies to Frigate → go2rtc.
-    html = html.replace(/(\s(?:src|href|action)=["'])(\/(?!cam-home\/)[^"']*)(["'])/gi,
-      (_, attr, path, q) => `${attr}/cam-home/live${path}${q}`
-    );
-
-    const patch = `<script>
-(function(){
-  var PRX='/cam-home';
-  var CAM='camera.home-server.id.vn';
-  function _rw(u){return(u.indexOf('/api/')===0)?'/live'+u:u;}
-  function rwHTTP(u){
-    if(typeof u!=='string'||!u)return u;
-    if(u.indexOf('https://'+CAM)===0)return PRX+u.slice(('https://'+CAM).length);
-    if(u.indexOf('http://'+CAM)===0)return PRX+u.slice(('http://'+CAM).length);
-    if(u.charAt(0)==='/'&&u.indexOf(PRX)!==0)return PRX+_rw(u);
-    return u;
-  }
-  function rwWS(u){
-    if(typeof u!=='string'||!u)return u;
-    var h=window.location.host;
-    if(u.indexOf('wss://'+CAM)===0)return 'wss://'+h+PRX+u.slice(('wss://'+CAM).length);
-    if(u.indexOf('ws://'+CAM)===0)return 'wss://'+h+PRX+u.slice(('ws://'+CAM).length);
-    if(u.charAt(0)==='/'&&u.indexOf(PRX)!==0)return 'wss://'+h+PRX+_rw(u);
-    return u;
-  }
-  var _W=window.WebSocket;
-  window.WebSocket=function(u,p){
-    u=rwWS(u);
-    return p!=null?new _W(u,p):new _W(u);
-  };
-  window.WebSocket.prototype=_W.prototype;
-  for(var k in _W)try{window.WebSocket[k]=_W[k];}catch(e){}
-  var _f=window.fetch;
-  window.fetch=function(){
-    var a=[].slice.call(arguments);
-    if(typeof a[0]==='string')a[0]=rwHTTP(a[0]);
-    return _f.apply(this,a);
-  };
-  var _xo=XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open=function(){
-    var a=[].slice.call(arguments);
-    if(typeof a[1]==='string')a[1]=rwHTTP(a[1]);
-    return _xo.apply(this,a);
-  };
-})();
-<\/script>`;
-    html = html.includes('</head>') ? html.replace('</head>', patch + '</head>') : patch + html;
-    return new Response(html, {
-      status: upstream.status,
-      headers: { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' },
-    });
-  }
-}
-
-/* ── Camera Home Live — go2rtc Reverse Proxy (WebSocket MSE + HTTP) ── */
-async function handleCamLiveEmbed(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return new Response('Unauthorized', { status: 401 });
-  if (!(await hasPerm(env, session, 'camera'))) return new Response('Forbidden', { status: 403 });
-
-  const camLiveUrl = 'https://camera-home-live.home-server.id.vn';
-  const cfId       = cleanEnv(env.HOME_CAM_CF_CLIENT_ID);
-  const cfSecret   = cleanEnv(env.HOME_CAM_CF_CLIENT_SECRET);
-  const g2User     = cleanEnv(env.HOME_GO2RTC_USER);
-  const g2Pass     = cleanEnv(env.HOME_GO2RTC_PASS);
-  const authHeaders = {
-    'CF-Access-Client-Id':     cfId,
-    'CF-Access-Client-Secret': cfSecret,
-    ...(g2User ? { 'Authorization': 'Basic ' + btoa(unescape(encodeURIComponent(`${g2User}:${g2Pass}`))) } : {}),
-  };
-
-  const reqUrl  = new URL(request.url);
-  const subPath = reqUrl.pathname.replace('/cam-live', '') || '/';
-  const target  = `${camLiveUrl}${subPath}${reqUrl.search}`;
-
-  // WebSocket proxy for go2rtc MSE streaming — match camera-movi's proven header set
   if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
     let upstreamResp;
     try {
       upstreamResp = await fetch(target, {
         headers: {
-          ...authHeaders,
           'Upgrade':               'websocket',
           'Connection':            'Upgrade',
           'Sec-WebSocket-Version': '13',
           'Sec-WebSocket-Key':     'dGhlIHNhbXBsZSBub25jZQ==',
+          ...(cfId ? { 'CF-Access-Client-Id': cfId, 'CF-Access-Client-Secret': cfSecret } : {}),
         },
       });
     } catch(e) {
       return new Response('WebSocket upstream error: ' + e.message, { status: 502 });
     }
     const upstream = upstreamResp.webSocket;
-    if (!upstream) return new Response('WebSocket upstream failed (status ' + upstreamResp.status + ')', { status: 502 });
+    if (!upstream) return new Response('WebSocket upstream failed (' + upstreamResp.status + ')', { status: 502 });
 
     const { 0: client, 1: server } = new WebSocketPair();
     server.accept();
@@ -4839,24 +3424,24 @@ async function handleCamLiveEmbed(request, env) {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  // HTTP proxy — for HTML (go2rtc stream.html + Vite shell), inject URL-rewriting JS
   const upstream = await fetch(target, {
     method:  request.method,
-    headers: authHeaders,
+    headers: { ...(cfId ? { 'CF-Access-Client-Id': cfId, 'CF-Access-Client-Secret': cfSecret } : {}) },
     ...(request.method !== 'GET' && request.method !== 'HEAD' ? { body: request.body } : {}),
   });
   const ct = upstream.headers.get('Content-Type') || 'application/octet-stream';
 
   if (ct.includes('text/html')) {
     let html = await upstream.text();
-    // Rewrite absolute Vite asset paths so browser fetches them through /cam-live/
-    html = html.replace(/(\s(?:src|href|action)=["'])(\/(?!cam-live\/)[^"']*)(["'])/gi,
-      (_, attr, path, q) => `${attr}/cam-live${path}${q}`
+    html = html.replace(/(\s(?:src|href|action)=["'])(\/(?!cam-test-live\/)[^"']*)(["'])/gi,
+      (_, attr, path, q) => `${attr}/cam-test-live${path}${q}`
     );
+    let camHost;
+    try { camHost = new URL(baseUrl).host; } catch(_) { camHost = baseUrl; }
     const patch = `<script>
 (function(){
-  var PRX='/cam-live';
-  var CAM='camera-home-live.home-server.id.vn';
+  var PRX='/cam-test-live';
+  var CAM='${camHost.replace(/'/g,"\\'")}';
   function rwHTTP(u){
     if(typeof u!=='string'||!u)return u;
     if(u.indexOf('https://'+CAM)===0)return PRX+u.slice(('https://'+CAM).length);
@@ -4885,26 +3470,22 @@ async function handleCamLiveEmbed(request, env) {
   };
   var _xo=window.XMLHttpRequest.prototype.open;
   window.XMLHttpRequest.prototype.open=function(m,u){
-    var a=[].slice.call(arguments);
-    if(typeof a[1]==='string')a[1]=rwHTTP(a[1]);
+    var a=[].slice.call(arguments);if(typeof a[1]==='string')a[1]=rwHTTP(a[1]);
     return _xo.apply(this,a);
   };
-  /* ── Mobile autoplay fix: force muted + playsinline + autoplay so the browser
-     doesn't show a big centre play-button overlay (it blocks autoplay otherwise). ── */
+  try{if(new URLSearchParams(window.location.search).get('cam_audio')==='1')window.CAM_AUDIO=true;}catch(e){}
   function _fixVid(v){
-    try{
-      v.muted=true; v.defaultMuted=true; v.setAttribute('muted','');
-      v.playsInline=true; v.setAttribute('playsinline',''); v.setAttribute('webkit-playsinline','');
-      v.autoplay=true; v.setAttribute('autoplay','');
-      v.controls=false;
-      var p=v.play(); if(p&&p.catch)p.catch(function(){});
-    }catch(e){}
+    try{if(!window.CAM_AUDIO){v.muted=true;v.defaultMuted=true;v.setAttribute('muted','');}
+    else{v.muted=false;v.defaultMuted=false;v.removeAttribute('muted');v.volume=1;}
+    v.playsInline=true;v.setAttribute('playsinline','');v.setAttribute('webkit-playsinline','');
+    v.autoplay=true;v.setAttribute('autoplay','');v.controls=false;
+    var p=v.play();if(p&&p.catch)p.catch(function(){});}catch(e){}
   }
-  function _scanVids(){ try{ document.querySelectorAll('video').forEach(_fixVid); }catch(e){} }
-  try{ new MutationObserver(_scanVids).observe(document.documentElement,{childList:true,subtree:true}); }catch(e){}
-  document.addEventListener('DOMContentLoaded',_scanVids);
-  window.addEventListener('load',_scanVids);
-  setInterval(_scanVids,1000);
+  function _scan(){try{document.querySelectorAll('video').forEach(_fixVid);}catch(e){}}
+  try{new MutationObserver(_scan).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}
+  document.addEventListener('DOMContentLoaded',_scan);
+  window.addEventListener('load',_scan);
+  setInterval(_scan,1000);
 })();
 <\/script>`;
     html = html.includes('</head>') ? html.replace('</head>', patch + '</head>') : patch + html;
@@ -4914,10 +3495,66 @@ async function handleCamLiveEmbed(request, env) {
     });
   }
 
+  // HLS m3u8: rewrite absolute segment paths to go through /cam-test-live/ proxy
+  if (ct.includes('mpegurl') || ct.includes('m3u8') || reqUrl.pathname.endsWith('.m3u8')) {
+    let m3u8 = await upstream.text();
+    m3u8 = m3u8.replace(/^(\/(?!cam-test-live\/)[^\s].*)$/gm, '/cam-test-live$1');
+    return new Response(m3u8, { status: upstream.status, headers: { 'Content-Type': ct, 'Cache-Control': 'no-cache' } });
+  }
+
   return new Response(upstream.body, {
     status: upstream.status,
     headers: { 'Content-Type': ct, 'Cache-Control': 'no-cache' },
   });
+}
+
+/* ── Camera Test (Linux PC Frigate) — Frigate API Proxy (port 5000) ── */
+async function handleCamTestApiEmbed(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return new Response('Unauthorized', { status: 401 });
+  if (!(await hasPerm(env, session, 'camera'))) return new Response('Forbidden', { status: 403 });
+
+  const baseUrl  = cleanEnv(env.HOME_FRIGATE_TEST_URL);
+  if (!baseUrl) return new Response('HOME_FRIGATE_TEST_URL chưa được cấu hình', { status: 503 });
+  const cfId     = cleanEnv(env.HOME_CAM_CF_CLIENT_ID);
+  const cfSecret = cleanEnv(env.HOME_CAM_CF_CLIENT_SECRET);
+
+  const isDownload = new URL(request.url).searchParams.get('dl') === '1';
+  const subPath = new URL(request.url).pathname.replace('/cam-test-api', '') || '/';
+  const isRecPath = /^\/(api\/[^/]+\/start\/|vod\/)/.test(subPath);
+  if (isDownload) {
+    if (!(await hasPerm(env, session, 'camera_download')))
+      return new Response('Forbidden', { status: 403 });
+  } else if (isRecPath) {
+    if (!(await hasPerm(env, session, 'camera_playback')))
+      return new Response('Forbidden', { status: 403 });
+  }
+
+  const reqUrl = new URL(request.url);
+  const target = `${baseUrl}${subPath}${reqUrl.search}`;
+
+  try {
+    const fetchOpts = {
+      method:  request.method,
+      headers: {
+        ...(cfId ? { 'CF-Access-Client-Id': cfId, 'CF-Access-Client-Secret': cfSecret } : {}),
+      },
+    };
+    const ct = request.headers.get('Content-Type');
+    if (ct) fetchOpts.headers['Content-Type'] = ct;
+    if (request.method !== 'GET' && request.method !== 'HEAD') fetchOpts.body = request.body;
+
+    const upstream = await fetch(target, fetchOpts);
+    const resCt = upstream.headers.get('Content-Type') || 'application/octet-stream';
+
+    const resHeaders = { 'Content-Type': resCt, 'Cache-Control': 'no-cache' };
+    const cd = upstream.headers.get('Content-Disposition');
+    if (cd) resHeaders['Content-Disposition'] = cd;
+
+    return new Response(upstream.body, { status: upstream.status, headers: resHeaders });
+  } catch(e) {
+    return new Response('Frigate upstream error: ' + e.message, { status: 502 });
+  }
 }
 
 /* ── CodeProject.AI — Simple REST Reverse Proxy ── */
@@ -5073,234 +3710,6 @@ async function handleCamEmbed(request, env) {
 }
 
 /* ── FortiGate Movi — Interfaces & Bandwidth ── */
-async function handleMoviInterfaces(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_INTERFACES);
-  const N8N_AUTH = moviN8nAuth(env);
-  try {
-    const resp = await fetch(N8N_URL, {
-      headers: { 'Authorization': N8N_AUTH },
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw  = await resp.json();
-    const data = Array.isArray(raw) ? raw[0] : raw;
-    return json({
-      interfaces: data.interfaces || [],
-      ts:         data.ts         || Date.now(),
-      fetchedAt:  data.fetchedAt  || new Date().toISOString()
-    });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-/* ── FortiGate Movi — Firewall Policy Hit ── */
-async function handleMoviPolicy(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_POLICY);
-  const N8N_AUTH = moviN8nAuth(env);
-  try {
-    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw  = await resp.json();
-    const data = Array.isArray(raw) ? raw[0] : raw;
-    return json({ policies: data.policies || [], total: data.total || 0, fetchedAt: data.fetchedAt || new Date().toISOString() });
-  } catch (e) { return json({ error: 'Failed to reach n8n', detail: e.message }, 502); }
-}
-
-/* ── FortiGate Movi — Routing Table ── */
-async function handleMoviDhcp(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_ROUTING);
-  const N8N_AUTH = moviN8nAuth(env);
-  try {
-    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw  = await resp.json();
-    const data = Array.isArray(raw) ? raw[0] : raw;
-    return json({ routes: data.routes || data.leases || [], total: data.total || 0, fetchedAt: data.fetchedAt || new Date().toISOString() });
-  } catch (e) { return json({ error: 'Failed to reach n8n', detail: e.message }, 502); }
-}
-
-/* ── FortiGate Movi — SSL VPN ── */
-async function handleMoviSslVpn(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_SSL_VPN);
-  const N8N_AUTH = moviN8nAuth(env);
-  try {
-    const resp = await fetch(N8N_URL, {
-      headers: { 'Authorization': N8N_AUTH },
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw  = await resp.json();
-    const data = Array.isArray(raw) ? raw[0] : raw;
-    return json({
-      sessions:  data.sessions  || [],
-      total:     data.total     || 0,
-      fetchedAt: data.fetchedAt || new Date().toISOString()
-    });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-/* ── FortiGate Movi — VPN IPSec ── */
-async function handleMoviVpn(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_VPN);
-  const N8N_AUTH = moviN8nAuth(env);
-  try {
-    const resp = await fetch(N8N_URL, {
-      headers: { 'Authorization': N8N_AUTH },
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw  = await resp.json();
-    const data = Array.isArray(raw) ? raw[0] : raw;
-    return json({
-      tunnels:  data.tunnels  || [],
-      total:    data.total    || 0,
-      up:       data.up       || 0,
-      down:     data.down     || 0,
-      fetchedAt: data.fetchedAt || new Date().toISOString()
-    });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-/* ── FortiGate Movi — License ── */
-async function handleMoviLicense(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_LICENSE);
-  const N8N_AUTH = moviN8nAuth(env);
-  try {
-    const resp = await fetch(N8N_URL, {
-      headers: { 'Authorization': N8N_AUTH },
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw  = await resp.json();
-    const data = Array.isArray(raw) ? raw[0] : raw;
-    return json({
-      licenses:   data.licenses   || [],
-      hasWarning: data.hasWarning || false,
-      fetchedAt:  data.fetchedAt  || new Date().toISOString()
-    });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-/* ── FortiGate Movi — System Info ── */
-async function handleMoviSystem(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_SYSTEM);
-  const N8N_AUTH = moviN8nAuth(env);
-  try {
-    const resp = await fetch(N8N_URL, {
-      headers: { 'Authorization': N8N_AUTH },
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    const raw  = await resp.json();
-    const data = Array.isArray(raw) ? raw[0] : raw;
-
-    // Normalize CPU — n8n may return number or [{current: N, historical: ...}]
-    let cpu = null;
-    if (typeof data.cpu === 'number') cpu = data.cpu;
-    else if (Array.isArray(data.cpu) && data.cpu.length > 0) cpu = data.cpu[0].current ?? null;
-
-    // Normalize MEM
-    let mem = null;
-    if (typeof data.mem === 'number') mem = data.mem;
-    else if (Array.isArray(data.mem) && data.mem.length > 0) mem = data.mem[0].current ?? null;
-
-    // Normalize sessions — may be number or array
-    let sessions = 0;
-    if (typeof data.sessions === 'number') sessions = data.sessions;
-    else if (Array.isArray(data.sessions) && data.sessions.length > 0) sessions = data.sessions[0].current ?? 0;
-
-    return json({
-      hostname:  data.hostname  || '',
-      model:     data.model     || '',
-      version:   data.version   || '',
-      build:     data.build     || '',
-      serial:    data.serial    || '',
-      uptime:    data.uptime    || 0,
-      cpu, mem, sessions,
-      fetchedAt: data.fetchedAt || new Date().toISOString()
-    });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-async function handleMoviFirewallUsers(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_FIREWALL_USERS);
-  const N8N_AUTH = moviN8nAuth(env);
-  if (!N8N_URL) return json({ error: 'MOVI_WH_FG_FIREWALL_USERS chưa được cấu hình' }, 503);
-  try {
-    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    return json(await resp.json());
-  } catch (e) { return json({ error: e.message }, 502); }
-}
-
-async function handleMoviFortiviewSource(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_FORTIVIEW_SOURCE);
-  const N8N_AUTH = moviN8nAuth(env);
-  if (!N8N_URL) return json({ error: 'MOVI_WH_FG_FORTIVIEW_SOURCE chưa được cấu hình' }, 503);
-  try {
-    const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(20000) });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    return json(await resp.json());
-  } catch (e) { return json({ error: e.message }, 502); }
-}
-
-async function handleMoviFirewallDeauth(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasWritePerm(env, session, 'fortigate-movi'))) return json({ error: 'Cần quyền Write trên FortiGate Movi để deauth user' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_FIREWALL_DEAUTH);
-  const N8N_AUTH = moviN8nAuth(env);
-  if (!N8N_URL) return json({ error: 'MOVI_WH_FG_FIREWALL_DEAUTH chưa được cấu hình' }, 503);
-  let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  if (!body || !body.ip) return json({ error: 'Thiếu trường ip' }, 400);
-  try {
-    const resp = await fetch(N8N_URL, {
-      method: 'POST',
-      headers: { 'Authorization': N8N_AUTH, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ip: body.ip, username: body.username || '' }),
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!resp.ok) return json({ error: 'n8n upstream error', status: resp.status }, 502);
-    return json(await resp.json());
-  } catch (e) { return json({ error: e.message }, 502); }
-}
-
 async function handleGetActivity(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
@@ -5451,1333 +3860,6 @@ async function handleSaveSystemConfig(request, env, ctx) {
    CasaOS — REST API (v0.4.x)
    Auth: POST /v1/users/login → token (raw, no "Bearer" prefix!)
    ═══════════════════════════════════════════════ */
-const CASAOS_BASE = 'https://casaos.home-server.id.vn';
-
-async function handleCasaOS(env) {
-  const user = env.CASAOS_USER;
-  const pass = env.CASAOS_PASSWORD;
-  if (!user || !pass) return json({ error: 'CASAOS_USER / CASAOS_PASSWORD not configured' }, 500);
-
-  // ── Step 1: Login ──
-  let token;
-  try {
-    const loginRes = await fetch(`${CASAOS_BASE}/v1/users/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: user, password: pass }),
-      signal: AbortSignal.timeout(20000),
-    });
-    if (!loginRes.ok) return json({ error: `CasaOS login failed: ${loginRes.status}` }, 502);
-    const loginData = await loginRes.json();
-    token = loginData?.data?.token?.access_token;
-    if (!token) return json({ error: 'No access_token in login response' }, 502);
-  } catch (e) {
-    return json({ error: `CasaOS login error: ${e.message}` }, 502);
-  }
-
-  // NOTE: CasaOS uses raw token, NOT "Bearer <token>"
-  const opts = {
-    headers: { 'Authorization': token },
-    signal: AbortSignal.timeout(20000),
-  };
-  const safeJson = async (url) => {
-    try {
-      const r = await fetch(url, opts);
-      if (!r.ok) return null;
-      const d = await r.json();
-      return d?.data !== undefined ? d.data : d;
-    } catch { return null; }
-  };
-
-  // ── Step 2: Fetch in parallel ──
-  const [sysRaw, appsRaw, hwRaw] = await Promise.all([
-    safeJson(`${CASAOS_BASE}/v1/sys/utilization`),
-    safeJson(`${CASAOS_BASE}/v2/app_management/web/appgrid`),
-    safeJson(`${CASAOS_BASE}/v1/sys/hardware`),
-  ]);
-
-  // ── Parse system ──
-  const cpu  = sysRaw?.cpu  || {};
-  const mem  = sysRaw?.mem  || {};
-  const disk = sysRaw?.sys_disk || {};
-  const net  = (sysRaw?.net || [])[0] || {};
-
-  // ── Parse apps ──
-  const rawApps = Array.isArray(appsRaw) ? appsRaw : [];
-  const apps = rawApps
-    .filter(a => a.name)
-    .map(a => ({
-      name:          a.name,
-      title:         a.title?.custom || a.title?.en_us || a.title?.en_US || a.name,
-      icon:          a.icon || null,
-      status:        a.status || 'unknown',
-      port:          a.port  || null,
-      image:         a.image || null,
-      scheme:        a.scheme || 'http',
-      hostname:      a.hostname || null,
-      appType:       a.app_type,
-      authorType:    a.author_type,
-      isUncontrolled: !!a.is_uncontrolled,
-    }));
-
-  const running = apps.filter(a => a.status === 'running').length;
-  const stopped = apps.filter(a => a.status === 'exited' || a.status === 'stopped').length;
-
-  return json({
-    system: {
-      cpu: {
-        model:       cpu.model       || '',
-        cores:       cpu.num         || 0,
-        percent:     cpu.percent     || 0,
-        temperature: cpu.temperature || 0,
-      },
-      memory: {
-        totalGB:     Math.round((mem.total || 0) / 1073741824 * 10) / 10,
-        usedGB:      Math.round((mem.used  || 0) / 1073741824 * 10) / 10,
-        usedPercent: Math.round(mem.usedPercent || 0),
-      },
-      disk: {
-        totalGB:    Math.round((disk.size || 0) / 1073741824 * 10) / 10,
-        usedGB:     Math.round((disk.used || 0) / 1073741824 * 10) / 10,
-        availGB:    Math.round((disk.avail || 0) / 1073741824 * 10) / 10,
-        usedPercent: disk.size > 0 ? Math.round(disk.used / disk.size * 100) : 0,
-        healthy:    disk.health !== false,
-      },
-      network: {
-        name:       net.name      || '',
-        sentGB:     Math.round((net.bytesSent || 0) / 1073741824 * 100) / 100,
-        recvGB:     Math.round((net.bytesRecv || 0) / 1073741824 * 100) / 100,
-        state:      net.state     || '',
-      },
-      arch: hwRaw?.arch || '',
-    },
-    apps,
-    stats: { total: apps.length, running, stopped },
-  });
-}
-
-/* ═══════════════════════════════════════════════
-   RustDesk — self-hosted (lejianwen/rustdesk-api)
-   Login lấy token (cache KV 1h), liệt kê peers + groups.
-   Token header = "api-token" (KHÔNG phải Authorization: Bearer)
-   ═══════════════════════════════════════════════ */
-async function rustdeskToken(env) {
-  const cached = await env.DASHBOARD_KV.get('rustdesk_token');
-  if (cached) return cached;
-  const user = cleanEnv(env.RUSTDESK_ADMIN_USER);
-  const pass = cleanEnv(env.RUSTDESK_ADMIN_PASS);
-  if (!user || !pass) throw new Error('RUSTDESK_ADMIN_USER / RUSTDESK_ADMIN_PASS chưa cấu hình');
-  const r = await fetch(`${RUSTDESK_BASE}/api/admin/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: user, password: pass }),
-    signal: AbortSignal.timeout(20000),
-  });
-  if (!r.ok) throw new Error(`RustDesk login failed: ${r.status}`);
-  const d = await r.json();
-  const token = d?.data?.token;
-  if (!token) throw new Error('Không nhận được token từ RustDesk');
-  await env.DASHBOARD_KV.put('rustdesk_token', token, { expirationTtl: 3600 });
-  return token;
-}
-
-async function handleRustdesk(env) {
-  let token;
-  try { token = await rustdeskToken(env); }
-  catch (e) { return json({ error: e.message }, 502); }
-
-  const api = async (path) => {
-    const call = (tk) => fetch(`${RUSTDESK_BASE}${path}`, {
-      headers: { 'api-token': tk },
-      signal: AbortSignal.timeout(20000),
-    });
-    let r = await call(token);
-    if (r.status === 401 || r.status === 403) {
-      // token hết hạn → xóa cache, login lại 1 lần
-      await env.DASHBOARD_KV.delete('rustdesk_token');
-      try { token = await rustdeskToken(env); } catch { return null; }
-      r = await call(token);
-    }
-    return r.ok ? r.json() : null;
-  };
-
-  const [peerRaw, groupRaw, connRaw, userRaw, loginRaw, fileRaw] = await Promise.all([
-    api('/api/admin/peer/list?page=1&page_size=200'),
-    api('/api/admin/group/list?page=1&page_size=100'),
-    api('/api/admin/audit_conn/list?page=1&page_size=60'),
-    api('/api/admin/user/list?page=1&page_size=1'),
-    api('/api/admin/login_log/list?page=1&page_size=30'),
-    api('/api/admin/audit_file/list?page=1&page_size=40'),
-  ]);
-
-  if (!peerRaw) return json({ error: 'Không lấy được danh sách máy từ RustDesk' }, 502);
-
-  const groups = {};
-  (groupRaw?.data?.list || []).forEach(g => { groups[g.id] = g.name; });
-
-  const now = Math.floor(Date.now() / 1000);
-  const rawPeers = peerRaw?.data?.list || [];
-
-  // map peer_id → tên hiển thị để dịch connection log
-  const peerName = {};
-  rawPeers.forEach(p => { peerName[p.id] = p.alias || p.hostname || p.id; });
-
-  const devices = rawPeers.map(p => ({
-    id:         p.id,
-    hostname:   p.hostname || p.id,
-    alias:      p.alias || '',
-    username:   p.username || '',
-    os:         p.os || '',
-    cpu:        (p.cpu || '').replace(/\s+/g, ' ').trim(),
-    memory:     p.memory || '',
-    version:    p.version || '',
-    lastOnline: p.last_online_time || 0,
-    lastIp:     p.last_online_ip || '',
-    firstSeen:  p.created_at || '',
-    group:      groups[p.group_id] || '',
-    online:     p.last_online_time ? (now - p.last_online_time) < 60 : false,
-  }));
-
-  // ── Connection log: chuẩn hoá + dịch peer_id sang tên ──
-  const _toEpoch = (s) => {
-    if (!s) return 0;
-    // "2026-06-13 12:15:49" (server giờ Asia/Shanghai) → epoch xấp xỉ để tính thời lượng
-    const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(s);
-    if (!m) return 0;
-    return Math.floor(Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]) / 1000);
-  };
-  const connections = (connRaw?.data?.list || []).map(c => {
-    const start = _toEpoch(c.created_at);
-    const end = c.close_time || 0;
-    let dur = (end && start && end > start) ? (end - start) : 0;
-    if (dur > 86400 * 7) dur = 0; // bỏ giá trị vô lý
-    return {
-      id:        c.id,
-      toPeer:    c.peer_id || '',
-      toName:    peerName[c.peer_id] || c.peer_id || '',
-      fromPeer:  c.from_peer || '',
-      fromName:  c.from_name || (c.from_peer ? (peerName[c.from_peer] || c.from_peer) : ''),
-      ip:        c.ip || '',
-      startStr:  c.created_at || '',
-      duration:  dur,
-      hasSession: c.session_id && c.session_id !== '0',
-    };
-  });
-
-  // ── Login log (đăng nhập admin panel) ──
-  const logins = (loginRaw?.data?.list || []).map(l => ({
-    id:       l.id,
-    client:   l.client || '',
-    type:     l.type || '',
-    ip:       l.ip || '',
-    platform: l.platform || '',
-    deviceId: l.device_id || '',
-    at:       l.created_at || '',
-  }));
-
-  // ── File transfer log ──
-  const fileTransfers = (fileRaw?.data?.list || []).map(f => ({
-    id:       f.id,
-    toPeer:   f.peer_id || '',
-    toName:   peerName[f.peer_id] || f.peer_id || '',
-    fromPeer: f.from_peer || '',
-    fromName: f.from_name || (f.from_peer ? (peerName[f.from_peer] || f.from_peer) : ''),
-    ip:       f.ip || '',
-    isFile:   !!f.is_file,
-    path:     f.path || '',
-    info:     f.info || '',
-    num:      f.num || 0,
-    type:     f.type,          // hướng truyền (gửi/nhận)
-    at:       f.created_at || '',
-  }));
-
-  const onlineCount = devices.filter(d => d.online).length;
-  const grpSet = {}; devices.forEach(d => { if (d.group) grpSet[d.group] = 1; });
-  // số phiên remote thật trong hôm nay (theo ngày server)
-  const todayStr = (connRaw?.data?.list || [])[0]?.created_at?.slice(0, 10) || '';
-  const connToday = connections.filter(c => c.hasSession && c.startStr.slice(0, 10) === todayStr).length;
-
-  const osCount = {};
-  devices.forEach(d => {
-    const o = (d.os || '').toLowerCase();
-    const k = o.indexOf('windows') >= 0 ? 'Windows'
-            : (o.indexOf('mac') >= 0 || o.indexOf('darwin') >= 0) ? 'macOS'
-            : o.indexOf('android') >= 0 ? 'Android'
-            : (o.indexOf('linux') >= 0) ? 'Linux' : 'Khác';
-    osCount[k] = (osCount[k] || 0) + 1;
-  });
-
-  return json({
-    devices,
-    connections,
-    logins,
-    fileTransfers,
-    stats: {
-      total:    devices.length,
-      online:   onlineCount,
-      offline:  devices.length - onlineCount,
-      groups:   Object.keys(grpSet).length,
-      users:    userRaw?.data?.total || 0,
-      connToday,
-      connTotal: connRaw?.data?.total || connections.length,
-      fileTotal: fileRaw?.data?.total || 0,
-      loginTotal: loginRaw?.data?.total || 0,
-      os:       osCount,
-    },
-    fetchedAt: now,
-  });
-}
-
-/* ═══════════════════════════════════════════════
-   VMware Home — via n8n webhook (SOAP handled by n8n)
-   ═══════════════════════════════════════════════ */
-async function handleVmwareHome(env) {
-  const n8nUser = cleanEnv(env.HOME_N8N_USER);
-  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
-  const wh      = cleanEnv(env.HOME_WH_VMWARE_DATA);
-  if (!wh) return json({ error: 'HOME_WH_VMWARE_DATA not configured' }, 500);
-  const hdrs = { 'Content-Type': 'application/json' };
-  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
-  try {
-    const resp = await fetch(wh, { headers: hdrs, signal: AbortSignal.timeout(30000) });
-    if (!resp.ok) { const t = await resp.text(); return json({ error: `n8n error ${resp.status}: ${t.slice(0,200)}` }, 502); }
-    const raw  = await resp.json();
-    const data = Array.isArray(raw) ? raw[0] : raw;
-    return json(data);
-  } catch (e) { return json({ error: 'Failed to reach n8n', detail: e.message }, 502); }
-}
-
-async function handleVmwareHomePower(request, env) {
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const n8nUser = cleanEnv(env.HOME_N8N_USER);
-  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
-  const wh      = cleanEnv(env.HOME_WH_VMWARE_POWER);
-  if (!wh) return json({ error: 'HOME_WH_VMWARE_POWER not configured' }, 500);
-  let body;
-  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
-  const hdrs = { 'Content-Type': 'application/json' };
-  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
-  try {
-    const resp = await fetch(wh, { method: 'POST', headers: hdrs, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) });
-    if (!resp.ok) { const t = await resp.text(); return json({ error: `n8n error ${resp.status}: ${t.slice(0,200)}` }, 502); }
-    const raw  = await resp.json();
-    return json(Array.isArray(raw) ? raw[0] : raw);
-  } catch (e) { return json({ error: 'Failed to reach n8n', detail: e.message }, 502); }
-}
-
-/* ═══════════════════════════════════════════════
-   Movi VMware — n8n webhook proxy (thay thế SOAP trực tiếp)
-   Secrets: MOVI_WH_VMWARE01_DATA, MOVI_WH_VMWARE01_POWER
-            MOVI_WH_VMWARE02_DATA, MOVI_WH_VMWARE02_POWER
-            Auth: MOVI_N8N_USER / MOVI_N8N_PASS
-   ═══════════════════════════════════════════════ */
-async function handleMoviVmwareData(env, hostNum) {
-  const moviUser = cleanEnv(env.MOVI_N8N_USER);
-  const moviPass = cleanEnv(env.MOVI_N8N_PASS);
-  const wh = cleanEnv(env[`MOVI_WH_VMWARE0${hostNum}_DATA`]);
-  if (!wh) return json({ error: `MOVI_WH_VMWARE0${hostNum}_DATA not configured` }, 500);
-  const hdrs = { 'Content-Type': 'application/json' };
-  if (moviUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${moviUser}:${moviPass}`)));
-  try {
-    const resp = await fetch(wh, { headers: hdrs, signal: AbortSignal.timeout(30000) });
-    if (!resp.ok) { const t = await resp.text(); return json({ error: `n8n error ${resp.status}: ${t.slice(0,200)}` }, 502); }
-    const raw = await resp.json();
-    return json(Array.isArray(raw) ? raw[0] : raw);
-  } catch (e) { return json({ error: 'Failed to reach n8n', detail: e.message }, 502); }
-}
-
-async function handleMoviVmwarePower(request, env, hostNum) {
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const moviUser = cleanEnv(env.MOVI_N8N_USER);
-  const moviPass = cleanEnv(env.MOVI_N8N_PASS);
-  const wh = cleanEnv(env[`MOVI_WH_VMWARE0${hostNum}_POWER`]);
-  if (!wh) return json({ error: `MOVI_WH_VMWARE0${hostNum}_POWER not configured` }, 500);
-  let body;
-  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
-  const hdrs = { 'Content-Type': 'application/json' };
-  if (moviUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${moviUser}:${moviPass}`)));
-  try {
-    const resp = await fetch(wh, { method: 'POST', headers: hdrs, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) });
-    if (!resp.ok) { const t = await resp.text(); return json({ error: `n8n error ${resp.status}: ${t.slice(0,200)}` }, 502); }
-    const raw = await resp.json();
-    return json(Array.isArray(raw) ? raw[0] : raw);
-  } catch (e) { return json({ error: 'Failed to reach n8n', detail: e.message }, 502); }
-}
-
-/* ═══════════════════════════════════════════════
-   FortiGate Home — 5 workflows riêng, gọi song song
-   Mỗi workflow độc lập: 1 fail không ảnh hưởng cái khác
-   ═══════════════════════════════════════════════ */
-async function handleFortigateWebhook(env) {
-  const n8nUser = cleanEnv(env.HOME_N8N_USER);
-  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
-  const hdrs = { 'Content-Type': 'application/json' };
-  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
-
-  // Helper: gọi 1 webhook, trả null nếu lỗi/timeout
-  const call = (url, ms = 12000) => {
-    const u = cleanEnv(url);
-    if (!u) return Promise.resolve(null);
-    return fetch(u, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(ms) })
-      .then(r => r.ok ? r.json() : null)
-      .catch(() => null);
-  };
-
-  const whSys    = cleanEnv(env.HOME_WH_FG_SYSTEM);
-  const whRes    = cleanEnv(env.HOME_WH_FG_RESOURCES);
-  const whIface  = cleanEnv(env.HOME_WH_FG_INTERFACES);
-  const whVpn    = cleanEnv(env.HOME_WH_FG_VPN);
-  const whSsl    = cleanEnv(env.HOME_WH_FG_SSL);
-  const whPolicy = cleanEnv(env.HOME_WH_FG_POLICIES);
-  const whDdns   = cleanEnv(env.HOME_WH_FG_DDNS);
-
-  if (!whSys) return json({ error: 'HOME_WH_FG_SYSTEM not configured' }, 500);
-
-  // Gọi tất cả song song — tổng thời gian = max(các nhóm)
-  const [sys, res, iface, vpn, ssl, policy, ddns] = await Promise.all([
-    call(whSys),
-    call(whRes),
-    call(whIface),
-    call(whVpn),
-    call(whSsl),
-    call(whPolicy),
-    call(whDdns, 8000),
-  ]);
-
-  const merged = {
-    system:     sys?.system     || {},
-    resources:  res?.resources  || {},
-    interfaces: iface?.interfaces || [],
-    vpn:        vpn?.vpn        || [],
-    ssl:        ssl?.ssl        || { activeUsers: 0, maxTunnels: null, numTunnels: 0, users: [] },
-    policies:   policy?.policies  || [],
-    ddns:       ddns?.ddns      || [],
-    stats: {
-      ...(iface?.stats  || {}),
-      ...(vpn?.stats    || {}),
-      ...(ssl?.stats    || {}),
-      ...(policy?.stats || {}),
-      ...(ddns?.stats   || {}),
-    },
-  };
-
-  return new Response(JSON.stringify(merged), {
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-  });
-}
-
-async function handleFortigateBW(env) {
-  const n8nUser = cleanEnv(env.HOME_N8N_USER);
-  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
-  const hdrs = { 'Content-Type': 'application/json' };
-  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
-  const whIface = cleanEnv(env.HOME_WH_FG_INTERFACES);
-  if (!whIface) return json({ error: 'HOME_WH_FG_INTERFACES not configured' }, 500);
-  try {
-    const r = await fetch(whIface, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(8000) });
-    if (!r.ok) return json({ error: 'webhook failed' }, 502);
-    const data = await r.json();
-    const raw = Array.isArray(data) ? data[0] : data;
-    return new Response(JSON.stringify(raw || {}), {
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-    });
-  } catch(e) {
-    return json({ error: e.message }, 500);
-  }
-}
-
-async function handleFortigateReboot(env) {
-  const wh = cleanEnv(env.HOME_WH_FG_REBOOT);
-  if (!wh) return json({ error: 'HOME_WH_FG_REBOOT not configured' }, 500);
-  const n8nUser = cleanEnv(env.HOME_N8N_USER);
-  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
-  const hdrs = { 'Content-Type': 'application/json' };
-  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
-  try {
-    const r = await fetch(wh, {
-      method: 'POST',
-      headers: hdrs,
-      body: '{}',
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!r.ok) return json({ error: 'n8n upstream error', status: r.status }, 502);
-    return new Response(await r.text(), {
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-    });
-  } catch (e) {
-    return json({ error: 'Failed to reach n8n', detail: e.message }, 502);
-  }
-}
-
-
-/* ═══════════════════════════════════════════════
-   ASUS Router — via n8n webhooks (local IP)
-   ═══════════════════════════════════════════════ */
-
-
-async function handleAsusWebhook(env) {
-  const n8nUser = cleanEnv(env.HOME_N8N_USER);
-  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
-  const hdrs = { 'Content-Type': 'application/json' };
-  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
-  const call = (url, ms = 15000) => {
-    const u = cleanEnv(url);
-    if (!u) return Promise.resolve(null);
-    return fetch(u, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(ms) })
-      .then(r => r.ok ? r.json() : null).catch(() => null);
-  };
-  const whMain    = cleanEnv(env.HOME_WH_ASUS_MAIN);
-  const whClients = cleanEnv(env.HOME_WH_ASUS_CLIENTS);
-  if (!whMain) return json({ error: 'HOME_WH_ASUS_MAIN not configured' }, 500);
-  const [main, clients] = await Promise.all([call(whMain), call(whClients)]);
-  return new Response(JSON.stringify({
-    system:         main?.system         || {},
-    resources:      main?.resources      || {},
-    wan:            main?.wan            || {},
-    ddns:           main?.ddns           || {},
-    wifi:           main?.wifi           || {},
-    portForwarding: main?.portForwarding || { enabled: false, rules: [] },
-    dhcpStatic:     main?.dhcpStatic     || [],
-    vpn:            main?.vpn            || { server: { enabled: false }, client: { active: false, proto: '' } },
-    aiProtection:   main?.aiProtection   || { enabled: false },
-    qos:            main?.qos            || { enabled: false },
-    clients:        clients?.clients     || [],
-    stats:          { ...(main?.stats || {}), ...(clients?.stats || {}) },
-  }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
-}
-
-async function handleAsusClients(env) {
-  const n8nUser = cleanEnv(env.HOME_N8N_USER);
-  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
-  const hdrs = { 'Content-Type': 'application/json' };
-  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
-  const whClients = cleanEnv(env.HOME_WH_ASUS_CLIENTS);
-  if (!whClients) return json({ error: 'HOME_WH_ASUS_CLIENTS not configured' }, 500);
-  try {
-    const r = await fetch(whClients, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(15000) });
-    const d = r.ok ? await r.json() : null;
-    return new Response(JSON.stringify({ clients: d?.clients || [], stats: d?.stats || {} }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
-  } catch (e) {
-    return json({ error: e.message }, 500);
-  }
-}
-
-async function handleAsusBw(env) {
-  const n8nUser = cleanEnv(env.HOME_N8N_USER);
-  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
-  const hdrs = { 'Content-Type': 'application/json' };
-  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
-  const whMain = cleanEnv(env.HOME_WH_ASUS_MAIN);
-  if (!whMain) return json({ error: 'HOME_WH_ASUS_MAIN not configured' }, 500);
-  try {
-    const r = await fetch(whMain, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(15000) });
-    const d = r.ok ? await r.json() : null;
-    return new Response(JSON.stringify({ wan: d?.wan || {} }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
-  } catch (e) {
-    return json({ error: e.message }, 500);
-  }
-}
-
-async function handleAsusReboot(request, env) {
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const n8nUser = cleanEnv(env.HOME_N8N_USER);
-  const n8nPass = cleanEnv(env.HOME_N8N_PASS);
-  const whReboot = cleanEnv(env.HOME_WH_ASUS_REBOOT);
-  if (!whReboot) return json({ error: 'HOME_WH_ASUS_REBOOT not configured' }, 500);
-  const hdrs = { 'Content-Type': 'application/json' };
-  if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
-  try {
-    await fetch(whReboot, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(20000) })
-      .catch(() => {});
-    return json({ success: true, message: 'Reboot command sent' });
-  } catch (e) {
-    return json({ success: true, message: 'Reboot command sent (router may have disconnected)' });
-  }
-}
-
-function json(data, status = 200) {
-  // No wildcard CORS: the dashboard is same-origin; cookie-auth'd JSON must
-  // not be readable by arbitrary cross-origin sites.
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-store',
-      'X-Content-Type-Options': 'nosniff',
-    },
-  });
-}
-
-/* ═══════════════════════════════════════════════
-   Web Proxy — fetch any HTTPS URL, strip frame-blocking headers
-   so it can be embedded in an iframe on the dashboard
-   ═══════════════════════════════════════════════ */
-function _escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-
-/* ═══════════════════════════════════════════════
-   FortiGate POOL — cấp phát container Chrome theo người dùng.
-   Quyền 'services-hub: read' → truy cập slot admin (slot view để reserved).
-   Mỗi slot = 1 container (kasm = màn hình, nav = điều khiển đổi site).
-   Thêm slot khi anh Thoai tạo container + tunnel tương ứng.
-   ═══════════════════════════════════════════════ */
-const FGT_POOL_SLOTS = [
-  { id:'a1', role:'admin', kasm:'https://kasm-a1.home-server.id.vn', nav:'https://nav-a1.home-server.id.vn' },
-  // Chỉ 1 người dùng → chạy 1 slot để dồn CPU/RAM, đỡ lag. Bật lại khi cần 2 người đồng thời:
-  // { id:'a2', role:'admin', kasm:'https://kasm-a2.home-server.id.vn', nav:'https://nav-a2.home-server.id.vn' },
-  // { id:'a3', role:'admin', kasm:'https://kasm-a3.home-server.id.vn', nav:'https://nav-a3.home-server.id.vn' },
-  // { id:'v1', role:'view',  kasm:'https://kasm-v1.home-server.id.vn', nav:'https://nav-v1.home-server.id.vn' },
-  // { id:'v2', role:'view',  kasm:'https://kasm-v2.home-server.id.vn', nav:'https://nav-v2.home-server.id.vn' },
-];
-const FGT_POOL_TTL_SEC = 1200; // giữ slot 20 phút, trang heartbeat sẽ gia hạn
-
-async function _fgtPoolRole(env, username) {
-  const eff = await computeEffectivePermissions(env, username);
-  if (eff && eff.role === 'admin') return 'admin';
-  const hubLvl = (eff && eff.permissions && eff.permissions['services-hub']) || 'none';
-  if (hubLvl !== 'none') return 'admin';
-  return null;
-}
-
-async function _fgtPoolClaim(env, username, role) {
-  // Đang giữ slot hợp lệ? → gia hạn & dùng lại
-  const cur = await env.DASHBOARD_KV.get(`fgtpool:user:${username}`);
-  if (cur) {
-    const rec = await env.DASHBOARD_KV.get(`fgtpool:slot:${cur}`, 'json');
-    const slot = FGT_POOL_SLOTS.find(s => s.id === cur);
-    if (slot && slot.role === role && rec && rec.username === username) {
-      await env.DASHBOARD_KV.put(`fgtpool:slot:${cur}`, JSON.stringify({ username, ts: Date.now() }), { expirationTtl: FGT_POOL_TTL_SEC });
-      await env.DASHBOARD_KV.put(`fgtpool:user:${username}`, cur, { expirationTtl: FGT_POOL_TTL_SEC });
-      return slot;
-    }
-  }
-  // Tìm slot rảnh cùng role
-  for (const slot of FGT_POOL_SLOTS.filter(s => s.role === role)) {
-    const rec = await env.DASHBOARD_KV.get(`fgtpool:slot:${slot.id}`, 'json');
-    if (!rec || rec.username === username) {
-      await env.DASHBOARD_KV.put(`fgtpool:slot:${slot.id}`, JSON.stringify({ username, ts: Date.now() }), { expirationTtl: FGT_POOL_TTL_SEC });
-      await env.DASHBOARD_KV.put(`fgtpool:user:${username}`, slot.id, { expirationTtl: FGT_POOL_TTL_SEC });
-      return slot;
-    }
-  }
-  return null;
-}
-
-async function handleFgtPoolAllocate(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  const role = await _fgtPoolRole(env, session.username);
-  if (!role) return json({ error: 'forbidden' }, 403);
-  const slot = await _fgtPoolClaim(env, session.username, role);
-  if (!slot) return json({ busy: true, role }, 200);
-  return json({ ok: true, role, slot: { id: slot.id, kasm: slot.kasm } }, 200);
-}
-
-async function handleFgtPoolOpen(request, env) {
-  if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  const role = await _fgtPoolRole(env, session.username);
-  if (!role) return json({ error: 'forbidden' }, 403);
-  let body; try { body = await request.json(); } catch { body = {}; }
-  const url = (body && body.url) || '';
-  if (!/^https?:\/\//.test(url)) return json({ error: 'URL không hợp lệ' }, 400);
-  const slotId = await env.DASHBOARD_KV.get(`fgtpool:user:${session.username}`);
-  const slot = FGT_POOL_SLOTS.find(s => s.id === slotId);
-  if (!slot) return json({ error: 'Chưa được cấp slot — tải lại trang' }, 409);
-  const headers = { 'Content-Type': 'application/json' };
-  // Khi bật Access cho nav-*, đính Service Token để Worker qua được Access.
-  // Dùng chung token với home-cam (HOME_CAM_CF_*); fallback FGT_POOL_CF_* nếu đặt riêng.
-  const cfId  = env.FGT_POOL_CF_CLIENT_ID     || env.HOME_CAM_CF_CLIENT_ID;
-  const cfSec = env.FGT_POOL_CF_CLIENT_SECRET || env.HOME_CAM_CF_CLIENT_SECRET;
-  if (cfId && cfSec) {
-    headers['CF-Access-Client-Id']     = cleanEnv(cfId);
-    headers['CF-Access-Client-Secret'] = cleanEnv(cfSec);
-  }
-  try {
-    const r = await fetch(`${slot.nav}/open`, { method: 'POST', headers, body: JSON.stringify({ url }), signal: AbortSignal.timeout(10000) });
-    const data = await r.json().catch(() => ({}));
-    return json(data, r.status);
-  } catch (e) {
-    return json({ error: 'Không gọi được navigator: ' + e.message }, 502);
-  }
-}
-
-async function handleFgtPoolRelease(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  const slotId = await env.DASHBOARD_KV.get(`fgtpool:user:${session.username}`);
-  if (slotId) {
-    await env.DASHBOARD_KV.delete(`fgtpool:slot:${slotId}`).catch(() => {});
-    await env.DASHBOARD_KV.delete(`fgtpool:user:${session.username}`).catch(() => {});
-  }
-  return json({ ok: true });
-}
-
-function proxyErr(msg, url) {
-  return new Response(
-    `<html><head><meta charset="UTF-8"></head><body style="font-family:system-ui;padding:2rem;background:#0b0d14;color:#e2e8f0">
-      <h2 style="color:#f87171;margin-bottom:1rem">⚠ Không thể kết nối</h2>
-      <p style="white-space:pre-line;line-height:1.7;color:#cbd5e1">${_escHtml(msg)}</p>
-      ${url ? `<p style="margin-top:1rem;font-size:12px;color:#64748b">URL: ${_escHtml(url)}</p>` : ''}
-    </body></html>`,
-    { status: 502, headers: { 'content-type': 'text/html;charset=utf-8' } }
-  );
-}
-
-async function handleProxy(request, env) {
-  // Require an authenticated session — this endpoint can carry CF-Access
-  // service credentials, so it must never be reachable anonymously (SSRF).
-  const session = await getSession(request, env);
-  if (!session) return proxyErr('Bạn cần đăng nhập để dùng tính năng này.', '');
-  // Proxy chung này đính kèm CF-Access service credentials → có thể bypass Cloudflare Access
-  // để chạm tới mọi dịch vụ nội bộ. Chỉ admin được dùng (không UI nào gọi route này).
-  if (!(await isAdminUser(env, session))) return proxyErr('Tính năng proxy chỉ dành cho admin.', '');
-
-  const reqUrl = new URL(request.url);
-  const target = reqUrl.searchParams.get('url');
-  if (!target) return new Response('Missing ?url= parameter', { status: 400 });
-
-  let targetUrl;
-  try { targetUrl = new URL(target); } catch {
-    return new Response('Invalid URL', { status: 400 });
-  }
-  if (targetUrl.protocol !== 'https:')
-    return proxyErr('Chỉ hỗ trợ URL HTTPS.', target);
-
-  // Block private/local/link-local/loopback hosts (defence-in-depth vs SSRF)
-  const h = targetUrl.hostname.replace(/^\[|\]$/g, '');
-  const isPrivate =
-    /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|127\.|0\.)/.test(h) ||
-    /^(localhost|.*\.local|.*\.internal)$/i.test(h) ||
-    /^(::1?$|fc|fd|fe80:)/i.test(h) ||
-    h === '0.0.0.0';
-  if (isPrivate) return proxyErr(
-    `"${h}" là địa chỉ IP nội bộ — Cloudflare Worker không thể kết nối tới LAN của anh.\n\n` +
-    `Để dùng tính năng này, anh cần tạo Cloudflare Tunnel cho dịch vụ này trước,\n` +
-    `rồi dùng URL tunnel (VD: https://fortigate-ui.home-server.id.vn) thay vì IP local.`, target);
-
-  // Whitelist: only allow proxying to our own trusted domains
-  const isTrustedDomain = h === 'home-server.id.vn' || h.endsWith('.home-server.id.vn')
-    || h === 'movi-finance.com' || h.endsWith('.movi-finance.com');
-  if (!isTrustedDomain) return proxyErr(
-    `Proxy chỉ hỗ trợ các domain nội bộ (*.home-server.id.vn, *.movi-finance.com).\n` +
-    `Domain "${h}" không được phép.`, target);
-
-  // Forward CF Access credentials ONLY to our own trusted domain
-  // (exact host or *.home-server.id.vn — note the leading dot to prevent
-  // an attacker-controlled "evilhome-server.id.vn" from matching).
-  const cfId  = env.CF_ACCESS_CLIENT_ID;
-  const cfSec = env.CF_ACCESS_CLIENT_SECRET;
-  const trusted = h === 'home-server.id.vn' || h.endsWith('.home-server.id.vn');
-  const headers = { 'User-Agent': 'Mozilla/5.0 (HomeLabDashboard Proxy)' };
-  if (cfId && cfSec && trusted) {
-    headers['CF-Access-Client-Id']     = cfId;
-    headers['CF-Access-Client-Secret'] = cfSec;
-  }
-
-  try {
-    const res = await fetch(targetUrl.toString(), {
-      method: 'GET', headers,
-      redirect: 'follow',
-      signal: AbortSignal.timeout(20000),
-    });
-
-    // Build new headers, stripping frame-blocking ones
-    const out = new Headers();
-    for (const [k, v] of res.headers) {
-      const kl = k.toLowerCase();
-      if (kl === 'x-frame-options') continue;         // allow iframe
-      if (kl === 'content-security-policy') {
-        // Strip frame-ancestors directive only
-        const stripped = v.replace(/frame-ancestors[^;]*(;|$)/gi, '').trim().replace(/;$/, '');
-        if (stripped) out.set(k, stripped);
-        continue;
-      }
-      out.set(k, v);
-    }
-    out.set('X-Proxy-By', 'HomeLabDashboard');
-
-    const ct = res.headers.get('content-type') || '';
-    if (ct.includes('text/html')) {
-      let html = await res.text();
-      // Inject <base> so relative URLs resolve back to the original origin
-      const baseTag = `<base href="${targetUrl.origin}/">`;
-      if (/<head[\s>]/i.test(html)) {
-        html = html.replace(/(<head[^>]*>)/i, `$1\n  ${baseTag}`);
-      } else {
-        html = baseTag + html;
-      }
-      out.set('content-type', 'text/html; charset=utf-8');
-      return new Response(html, { status: res.status, headers: out });
-    }
-
-    return new Response(res.body, { status: res.status, headers: out });
-  } catch (e) {
-    return proxyErr(`Lỗi kết nối: ${e.message}\n\nKiểm tra lại URL và đảm bảo dịch vụ đang chạy và có Cloudflare Tunnel.`, target);
-  }
-}
-
-/* ═══════════════════════════════════════════════
-   SSH Movi — Secure Terminal Token Flow
-   Bảo vệ bằng short-lived single-use token (KV)
-   Nginx trên Movi server gọi /api/ssh-movi/verify
-   để validate trước khi cho browser qua ttyd
-   ═══════════════════════════════════════════════ */
-
-/**
- * POST /api/ssh-movi/token
- * Requires: session + ssh-movi permission
- * Returns: { token, url, expiresIn }
- * Token TTL = 10 phút, single-use (bị xoá ngay sau verify)
- */
-async function handleSshMoviToken(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'ssh-movi'))) return json({ error: 'Không có quyền truy cập SSH Movi' }, 403);
-
-  const termixUrl = env.TERMIX_MOVI_URL;
-  if (!termixUrl) return json({ error: 'TERMIX_MOVI_URL chưa được cấu hình. Chạy: npx wrangler secret put TERMIX_MOVI_URL' }, 502);
-
-  // Generate a cryptographically random single-use token
-  const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
-  const ip    = request.headers.get('cf-connecting-ip') || 'unknown';
-  const ttl   = 600; // 10 minutes
-
-  await env.DASHBOARD_KV.put(
-    `ssh_movi_token:${token}`,
-    JSON.stringify({ username: session.username, ip, createdAt: Date.now() }),
-    { expirationTtl: ttl }
-  );
-
-  await logActivity(env, {
-    action: 'ssh-movi-token-issued',
-    username: session.username,
-    ip,
-    success: true,
-    detail: `Token issued for SSH Movi terminal`,
-  });
-
-  // Append token as query param — nginx on Movi server validates via auth_request
-  const iframeUrl = termixUrl.replace(/\/$/, '') + '/?t=' + token;
-  return json({ token, url: iframeUrl, expiresIn: ttl });
-}
-
-/**
- * GET /api/ssh-movi/verify?t=TOKEN
- * Called by nginx auth_request on Movi server — NO dashboard session required.
- * Validates token, deletes it (single-use), returns 200 or 403.
- * IMPORTANT: This endpoint is intentionally public but token is 64-char random hex
- * (2× UUID = 128-bit entropy each → brute-force infeasible within 10-min window).
- */
-async function handleSshMoviVerify(request, env) {
-  // 1. Check session cookie first (subsequent requests)
-  const cookieHeader = request.headers.get('cookie') || '';
-  const sessionMatch = cookieHeader.match(/ts_movi=([a-f0-9]{64})/);
-  if (sessionMatch) {
-    const sessionKey = `ssh_movi_session:${sessionMatch[1]}`;
-    const sessionData = await env.DASHBOARD_KV.get(sessionKey, 'json');
-    if (sessionData) {
-      // Refresh session TTL
-      await env.DASHBOARD_KV.put(sessionKey, JSON.stringify(sessionData), { expirationTtl: 3600 });
-      return new Response('OK', {
-        status: 200,
-        headers: {
-          'X-Session-Cookie': `ts_movi=${sessionMatch[1]}; Path=/; Max-Age=3600; HttpOnly; Secure; SameSite=None`,
-          'Cache-Control': 'no-store',
-        },
-      });
-    }
-  }
-
-  // 2. No valid session — check URL token (initial request)
-  const url   = new URL(request.url);
-  const token = (url.searchParams.get('t') || '').replace(/[^a-f0-9]/gi, '');
-  if (!token || token.length < 32) return new Response('Forbidden', { status: 403 });
-
-  const kvKey = `ssh_movi_token:${token}`;
-  const data  = await env.DASHBOARD_KV.get(kvKey, 'json');
-  if (!data) return new Response('Forbidden', { status: 403 });
-
-  // Single-use: xóa token ngay để chống replay attack
-  await env.DASHBOARD_KV.delete(kvKey).catch(() => {});
-
-  // 3. Token valid — create a session
-  const sessionBytes = new Uint8Array(32);
-  crypto.getRandomValues(sessionBytes);
-  const sessionId = Array.from(sessionBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-  await env.DASHBOARD_KV.put(`ssh_movi_session:${sessionId}`, JSON.stringify({ username: data.username }), { expirationTtl: 3600 });
-
-  await logActivity(env, {
-    action: 'ssh-movi-token-verified',
-    username: data.username,
-    ip: request.headers.get('cf-connecting-ip') || data.ip,
-    success: true,
-    detail: `SSH Movi session started`,
-  });
-
-  return new Response('OK', {
-    status: 200,
-    headers: {
-      'X-Session-Cookie': `ts_movi=${sessionId}; Path=/; Max-Age=3600; HttpOnly; Secure; SameSite=None`,
-      'Cache-Control': 'no-store',
-    },
-  });
-}
-
-/* ═══════════════════════════════════════════════
-   Termix Movi — Worker Reverse Proxy
-   Proxies termix-movi.home-server.id.vn qua Worker,
-   thêm CF Service Token headers để bypass CF Access.
-   Yêu cầu: dashboard session + quyền ssh-movi.
-   ═══════════════════════════════════════════════ */
-
-async function handleTermixProxy(request, env, opts) {
-  // Auth check
-  const session = await getSession(request, env);
-  if (!session) return new Response('Chưa đăng nhập — vui lòng đăng nhập lại', { status: 401 });
-  if (!(await hasPerm(env, session, opts.perm)))
-    return new Response('Không có quyền truy cập ' + opts.label, { status: 403 });
-
-  const termixOrigin = opts.origin.replace(/\/$/, '');
-  const originHost   = new URL(termixOrigin).hostname;
-  const BASE         = opts.base;
-  const clientId     = opts.cfId;
-  const clientSecret = opts.cfSecret;
-
-  // Build target URL (strip proxy prefix)
-  const reqUrl  = new URL(request.url);
-  const subPath = reqUrl.pathname.slice(BASE.length) || '/';
-  const target  = `${termixOrigin}${subPath}${reqUrl.search}`;
-
-  // Upstream auth headers
-  const upHeaders = new Headers();
-  // CF Service Token (nếu có — bypass CF Access)
-  if (clientId && clientSecret) {
-    upHeaders.set('CF-Access-Client-Id',     clientId);
-    upHeaders.set('CF-Access-Client-Secret', clientSecret);
-  }
-  // Shared secret header — nginx validates này để block direct browser access
-  if (opts.secret) upHeaders.set('X-Proxy-Token', opts.secret);
-
-  // X-Forwarded-Host: needed so Termix generates + stores redirect_uri = https://<dashboard>/users/oidc/callback
-  // for BOTH the authorization URL AND the code→token exchange (both must use the same redirect_uri).
-  // Without this, Termix stores redirect_uri=termix-movi.../callback but Microsoft issues code for
-  // dashboard.../callback → mismatch → 400 on token exchange.
-  // Post-login redirect (Termix → dashboard URL) is handled in the redirect handler below.
-  const _dashFwdOrigin = new URL(request.url);
-  upHeaders.set('X-Forwarded-Host',  _dashFwdOrigin.hostname);
-  upHeaders.set('X-Forwarded-Proto', 'https');
-
-  // Forward Termix session cookies, strip dashboard cookies
-  const rawCookie = request.headers.get('cookie') || '';
-  const fwdCookie = rawCookie.split(';')
-    .map(c => c.trim())
-    .filter(c => c && !c.startsWith('dh_session=') && !c.startsWith('ts_movi='))
-    .join('; ');
-  if (fwdCookie) upHeaders.set('Cookie', fwdCookie);
-  // Forward Authorization header — Termix API uses Bearer token auth for protected endpoints
-  const authHeader = request.headers.get('Authorization');
-  if (authHeader) upHeaders.set('Authorization', authHeader);
-
-  // ── WebSocket proxy ──
-  if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
-    // CF Workers: fetch the https:// target with only Upgrade header — Connection/Sec-WebSocket-*
-    // are managed internally by Workers (giống camera proxy đã chạy ổn). KHÔNG dùng wss:// scheme
-    // và KHÔNG tự set Connection/Sec-WebSocket-Version → nếu không, response.webSocket = null.
-    const wsTarget = target;
-    upHeaders.set('Upgrade', 'websocket');
-    // Set Origin to the Termix origin so Guacamole accepts the connection (chống cross-origin reject)
-    upHeaders.set('Origin', termixOrigin);
-    // Forward subprotocol (required for Guacamole: 'guacamole')
-    const swp = request.headers.get('Sec-WebSocket-Protocol');
-    if (swp) upHeaders.set('Sec-WebSocket-Protocol', swp);
-
-    let upResp;
-    try {
-      upResp = await fetch(wsTarget, { headers: upHeaders });
-    } catch (wsErr) {
-      return new Response(
-        JSON.stringify({ error: 'WS fetch error', msg: wsErr.message, target: wsTarget }),
-        { status: 502, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-    const upstream = upResp.webSocket;
-    if (!upstream) {
-      // Verbose error so user can diagnose in Network tab
-      const upStatus = upResp.status;
-      const upBody   = await upResp.text().catch(() => '(no body)');
-      return new Response(
-        JSON.stringify({ error: 'WS upstream did not upgrade', status: upStatus, body: upBody.slice(0, 800), target: wsTarget }),
-        { status: 502, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const { 0: client, 1: server } = new WebSocketPair();
-    server.accept();
-    upstream.accept();
-
-    server.addEventListener('message',   ({ data }) => { try { upstream.send(data); } catch(_) {} });
-    upstream.addEventListener('message', ({ data }) => { try { server.send(data);   } catch(_) {} });
-    server.addEventListener('close',   ({ code, reason }) => { try { upstream.close(code, reason); } catch(_) {} });
-    upstream.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason);   } catch(_) {} });
-
-    // Pass Sec-WebSocket-Protocol back — Guacamole requires server to echo the subprotocol
-    const wsRespHeaders = new Headers();
-    const echoSwp = upResp.headers.get('Sec-WebSocket-Protocol');
-    if (echoSwp) wsRespHeaders.set('Sec-WebSocket-Protocol', echoSwp);
-    else if (swp) wsRespHeaders.set('Sec-WebSocket-Protocol', swp);
-
-    return new Response(null, { status: 101, webSocket: client, headers: wsRespHeaders });
-  }
-
-  // ── HTTP proxy ──
-  if (!['GET', 'HEAD'].includes(request.method)) {
-    const ct = request.headers.get('Content-Type');
-    if (ct) upHeaders.set('Content-Type', ct);
-  }
-  let upstream;
-  try {
-    upstream = await fetch(target, {
-      method:   request.method,
-      headers:  upHeaders,
-      body:     ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
-      redirect: 'manual', // Don't follow redirects — rewrite Location headers ourselves
-    });
-  } catch (fetchErr) {
-    return new Response(
-      `<html><body style="font:14px system-ui;padding:2rem;background:#1a1a2e;color:#e0e0e0">
-        <h2 style="color:#ff6b6b">⚠ Termix Proxy — Fetch Error</h2>
-        <p><b>Target:</b> <code>${_escHtml(target)}</code></p>
-        <p><b>Error:</b> <code>${_escHtml(fetchErr.message)}</code></p>
-        <p style="color:#888">Kiểm tra: CF Access Bypass, nginx đang chạy, Termix port 8081</p>
-      </body></html>`,
-      { status: 502, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-    );
-  }
-
-  // Handle 3xx redirects from Termix — rewrite Location headers before forwarding to browser.
-  // Without this, Termix's Location headers point to termix-movi.home-server.id.vn (blocked by CF Access).
-  if (upstream.status >= 300 && upstream.status < 400) {
-    const _loc    = upstream.headers.get('Location') || '';
-    const _reqOri = new URL(request.url).origin;
-    let   _newLoc = _loc;
-
-    // [Defensive] Nếu upstream redirect tới CF Access login (cloudflareaccess.com) → service token
-    // KHÔNG hợp lệ/thiếu. KHÔNG đẩy redirect này về browser (sẽ lạc sang CF Access của upstream).
-    // Báo lỗi rõ để dễ sửa (thường do thiếu secret service token trên worker).
-    if (/cloudflareaccess\.com/i.test(_loc)) {
-      return new Response(
-        `<html><body style="font:14px system-ui;padding:2rem;background:#1a1a2e;color:#e0e0e0">
-          <h2 style="color:#ff6b6b">⚠ ${_escHtml(opts.label)} — Service token không hợp lệ</h2>
-          <p>Worker proxy tới <code>${_escHtml(originHost)}</code> nhưng bị CF Access chặn (thiếu/sai service token).</p>
-          <p style="color:#888">Kiểm tra secret CF Access service token của worker (vd: TERMIX_HOME_CF_CLIENT_ID / _SECRET) đã set đúng trên môi trường này chưa.</p>
-        </body></html>`,
-        { status: 502, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' } }
-      );
-    }
-
-    if (_loc.startsWith(termixOrigin)) {
-      // Absolute Termix URL → proxy path
-      _newLoc = BASE + _loc.slice(termixOrigin.length);
-    } else if (_loc === _reqOri + '/' || _loc === _reqOri) {
-      // Termix redirected to our dashboard root — redirect to Termix app root through proxy
-      _newLoc = BASE + '/';
-    } else if (_loc.startsWith(_reqOri + '/') && !_loc.startsWith(_reqOri + '/proxy/')) {
-      // Termix redirected to our dashboard domain for a non-proxy path — redirect to proxy root
-      _newLoc = BASE + '/';
-    } else if (_loc.startsWith('/') && !_loc.startsWith(BASE) && !_loc.startsWith('//')) {
-      // Root-relative → prefix with proxy path
-      _newLoc = BASE + _loc;
-    }
-    // else: already absolute external URL — pass through as-is
-
-    const _rhRedir = new Headers({ 'Location': _newLoc, 'Cache-Control': 'no-cache' });
-    const _setSCR  = typeof upstream.headers.getAll === 'function'
-      ? upstream.headers.getAll('set-cookie')
-      : (upstream.headers.get('set-cookie') ? [upstream.headers.get('set-cookie')] : []);
-    for (const _sc of _setSCR) _rhRedir.append('Set-Cookie', _rewriteTermixCookie(_sc, BASE));
-    return new Response(null, { status: upstream.status, headers: _rhRedir });
-  }
-
-  // Non-2xx: pass through 4xx as-is so Termix frontend can handle auth errors (401, 403, etc.)
-  // Only replace with visible error HTML for 5xx upstream failures
-  if (!upstream.ok) {
-    if (upstream.status < 500) {
-      const upCt4 = upstream.headers.get('Content-Type') || 'application/octet-stream';
-      const rh4   = new Headers({ 'Content-Type': upCt4, 'Cache-Control': 'no-cache' });
-      const setSC4 = typeof upstream.headers.getAll === 'function'
-        ? upstream.headers.getAll('set-cookie')
-        : (upstream.headers.get('set-cookie') ? [upstream.headers.get('set-cookie')] : []);
-      for (const sc of setSC4) rh4.append('Set-Cookie', _rewriteTermixCookie(sc, BASE));
-      return new Response(upstream.body, { status: upstream.status, headers: rh4 });
-    }
-    // 5xx: show visible error page for diagnosability
-    const errBody = await upstream.text().catch(() => '(no body)');
-    return new Response(
-      `<html><body style="font:14px system-ui;padding:2rem;background:#1a1a2e;color:#e0e0e0">
-        <h2 style="color:#ff6b6b">⚠ Termix Proxy — Upstream Error</h2>
-        <p><b>Target:</b> <code>${_escHtml(target)}</code></p>
-        <p><b>Status:</b> <code>${upstream.status} ${_escHtml(upstream.statusText)}</code></p>
-        <p><b>Content-Type:</b> <code>${_escHtml(upstream.headers.get('content-type') || 'none')}</code></p>
-        <pre style="background:#111;padding:1rem;border-radius:8px;overflow:auto;color:#ffa;font-size:12px">${_escHtml(errBody.slice(0,500))}</pre>
-        <p style="color:#888">Nếu 403: X-Proxy-Token không khớp với nginx. Nếu 502/504: Termix chưa chạy.</p>
-      </body></html>`,
-      { status: 502, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-    );
-  }
-
-  // Build response headers
-  const ct  = upstream.headers.get('Content-Type') || 'application/octet-stream';
-  const rh  = new Headers({ 'Content-Type': ct, 'Cache-Control': 'no-cache' });
-  const setSC = typeof upstream.headers.getAll === 'function'
-    ? upstream.headers.getAll('set-cookie')
-    : (upstream.headers.get('set-cookie') ? [upstream.headers.get('set-cookie')] : []);
-  for (const sc of setSC) rh.append('Set-Cookie', _rewriteTermixCookie(sc, BASE));
-
-  // HTML — inject JS to rewrite WebSocket/fetch/XHR URLs to proxy path
-  if (ct.includes('text/html')) {
-    let html = await upstream.text();
-    // [Termix subpath] Termix hỗ trợ chạy dưới subpath qua window.__TERMIX_BASE_PATH__.
-    // Set nó = BASE để Termix tự gọi mọi API/route đúng path proxy (same-origin → cookie chạy).
-    // Đây là cơ chế chính thức của Termix-SSH, robust hơn rewrite URL.
-    if (opts.baseInject !== false) {
-      html = html.replace(/window\.__TERMIX_BASE_PATH__\s*=\s*["'][^"']*["']/,
-        'window.__TERMIX_BASE_PATH__ = "' + BASE + '"');
-    }
-    // [CF Access fix] Vite thêm crossorigin vào <script>/<link> asset → trình duyệt tải KHÔNG kèm cookie
-    // → CF Access (trên domain dashboard) chặn asset → CORS fail. Strip crossorigin để asset tải
-    // same-origin CÓ cookie → CF Access cho qua. (asset cùng origin nên không cần crossorigin)
-    html = html.replace(/\s+crossorigin(=("[^"]*"|'[^']*'|\S+))?/gi, '');
-    // [H2 fix] Extract JWT from HttpOnly cookie for safe server-side injection.
-    // The JWT cookie is HttpOnly so JS cannot read it via document.cookie.
-    // Instead we extract it here and inject as a scoped JS variable.
-    const _reqCookies = request.headers.get('cookie') || '';
-    const _jwtMatch = _reqCookies.split(';').map(c=>c.trim()).find(c=>c.startsWith('jwt='));
-    const _jwtVal = _jwtMatch ? _jwtMatch.slice(4) : '';
-    // Patcher must run BEFORE Termix's Vue bundle — inject at very start of <head>
-    // NOTE: NO new RegExp() here — use indexOf/slice only to avoid escaping issues
-    const patch = `<script>
-(function(){
-  var B='${BASE}';
-  var O='${originHost}';
-  var __JWT='${_jwtVal.replace(/'/g, "\\'")}'; // server-injected, HttpOnly safe
-  // [Termix webview fix] Termix coi MỌI iframe (window.self!==window.top) là Electron webview
-  // → dùng auth model native + kẹt "Redirecting to app...". Ép window.top===window.self để
-  // Termix nghĩ nó chạy top-level → dùng auth web cookie bình thường. PHẢI chạy trước bundle Termix.
-  try{
-    Object.defineProperty(window,'top',{get:function(){return window.self;},configurable:true});
-    console.log('[proxy-patcher] window.top override OK (self===top)');
-  }catch(e){ console.warn('[proxy-patcher] window.top override failed',e); }
-  try{ window.IS_ELECTRON_WEBVIEW=false; }catch(e){}
-  var WSMODE='${opts.wsMode || 'direct'}';
-  console.log('[proxy-patcher] loaded B='+B);
-  function _stripB(p){ return (p.indexOf(B)===0)?(p.slice(B.length)||'/'):p; }
-  function rw(u,isWS){
-    if(typeof u!=='string'||!u)return u;
-    // http(s)://<origin>... -> /proxy/.../...  (HTTP only, not WS)
-    if(u.indexOf('http')===0&&u.indexOf(O)!==-1){
-      return u.replace('https://'+O,B).replace('http://'+O,B);
-    }
-    // WebSocket. WSMODE='proxy' → giữ WS tới dashboard/proxy (worker proxy + thêm CF token).
-    //           WSMODE='direct' → DIRECT tới origin thật (strip base), browser tự nối (Movi).
-    if(u.indexOf('wss://')===0||u.indexOf('ws://')===0){
-      var si=u.indexOf('/',u.indexOf('//')+2);
-      var path=si===-1?'/':u.slice(si);
-      // guac WS PHẢI đi qua proxy (bất kể WSMODE): guacamole-lite check Origin → worker set
-      // Origin=termix.home (+ CF token) thì guac mới accept. Direct sẽ bị reject vì cross-origin.
-      if(_stripB(path).indexOf('/guacamole/websocket')===0) return u.slice(0,si)+B+_stripB(path);
-      if(WSMODE==='proxy') return u; // Termix đã dựng URL có base path → tới dashboard/proxy → worker
-      if(u.indexOf(O)!==-1)return u;
-      return 'wss://'+O+_stripB(path);
-    }
-    // Root-relative path
-    if(u.charAt(0)==='/'&&u.slice(0,2)!=='//'){
-      if(isWS){
-        if(_stripB(u).indexOf('/guacamole/websocket')===0) return B+_stripB(u); // guac → qua proxy
-        if(WSMODE==='proxy') return (u.slice(0,B.length)===B)?u:(B+u); // đảm bảo có prefix proxy
-        return 'wss://'+O+_stripB(u); // direct tới origin
-      }
-      if(u.slice(0,B.length)!==B) return B+u;
-    }
-    return u;
-  }
-  var _W=window.WebSocket;
-  window.WebSocket=function(u,p){
-    var r=rw(u,true);
-    r=r.replace(/[?&]undefined$/,''); // strip ?undefined appended by Termix new version bug
-    // For SSH websocket: append JWT as ?token= so verifyClient can auth
-    // [H2 fix] JWT is injected server-side (__JWT), NOT read from document.cookie (HttpOnly)
-    if(r.indexOf('/ssh/websocket')!==-1){
-      var _tk=__JWT||(localStorage.getItem('token')||localStorage.getItem('jwt')||localStorage.getItem('authToken')||'');
-      if(_tk)r+=(r.indexOf('?')===-1?'?':'&')+'token='+_tk;
-      else console.warn('[proxy-patcher] SSH WS: no JWT found');
-    }
-    if(r!==u)console.log('[proxy-patcher] WS',u,'->',r);
-    return p!=null?new _W(r,p):new _W(r);
-  };
-  window.WebSocket.prototype=_W.prototype;
-  for(var k in _W)try{window.WebSocket[k]=_W[k];}catch(e){}
-  var _f=window.fetch;
-  window.fetch=function(){
-    var a=[].slice.call(arguments);
-    if(typeof a[0]==='string'){var r=rw(a[0]);if(r!==a[0]){console.log('[proxy-patcher] fetch',a[0],'->',r);a[0]=r;}}
-    return _f.apply(this,a);
-  };
-  var _x=XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open=function(){
-    var a=[].slice.call(arguments);
-    if(typeof a[1]==='string'){var r=rw(a[1]);if(r!==a[1]){console.log('[proxy-patcher] XHR',a[1],'->',r);a[1]=r;}}
-    this._proxyUrl=a[1]||'';
-    return _x.apply(this,a);
-  };
-  // loginRedirect: reload parent iframe sau khi login thanh cong
-  // Don gian: sau POST /users/login -> 200 -> fire loginRedirect sau 800ms
-  function _fireLoginRedirect(src){
-    console.log('[proxy-patcher] loginRedirect from:',src);
-    try{
-      if(window.parent && window.parent!==window){
-        // chạy trong iframe → báo parent reload iframe
-        window.parent.postMessage({_termixProxy:true,type:'loginRedirect'},'*');
-      } else {
-        // chạy top-level (tab riêng) → tự reload để lấy jwt cookie mới (cần cho __JWT inject + token WS)
-        setTimeout(function(){location.reload();},250);
-      }
-    }catch(e){ try{location.reload();}catch(e2){} }
-  }
-  try{
-    var _xs=XMLHttpRequest.prototype.send;
-    XMLHttpRequest.prototype.send=function(){
-      var self=this;
-      var _u=self._proxyUrl||'';
-      // TOTP verify thành công = login HOÀN TẤT (cho cả user bật 2FA)
-      if(_u.indexOf('/users/totp/verify-login')!==-1){
-        self.addEventListener('load',function(){
-          if(self.status>=200&&self.status<300){
-            console.log('[proxy-patcher] totp verify 200 -> loginRedirect in 800ms');
-            setTimeout(function(){_fireLoginRedirect('totp-ok');},800);
-          }
-        });
-      } else if(_u.indexOf('/users/login')!==-1){
-        self.addEventListener('load',function(){
-          if(self.status>=200&&self.status<300){
-            // Nếu response báo cần 2FA (requires_totp/temp_token) → KHÔNG reload, để user nhập mã
-            var _b='';
-            try{ _b=self.responseText||''; }catch(e){ try{ _b=JSON.stringify(self.response||''); }catch(e2){} }
-            var _needTotp=_b.indexOf('requires_totp')!==-1||_b.indexOf('temp_token')!==-1;
-            if(_needTotp){
-              console.log('[proxy-patcher] login 200 nhưng cần 2FA -> CHỜ nhập mã, không reload');
-            } else {
-              console.log('[proxy-patcher] login 200 (no 2FA) -> loginRedirect in 800ms');
-              setTimeout(function(){_fireLoginRedirect('login-ok');},800);
-            }
-          }
-        });
-      }
-      return _xs.apply(this,arguments);
-    };
-  }catch(e){console.warn('[proxy-patcher] XHR send patch failed',e);}
-  // Patch location.assign / location.replace (URL rewriting only)
-  try{
-    var _la=location.assign.bind(location);
-    location.assign=function(u){var r=rw(u);console.log('[proxy-patcher] assign',u,'->',r);return _la(r);};
-    var _lr=location.replace.bind(location);
-    location.replace=function(u){var r=rw(u);console.log('[proxy-patcher] replace',u,'->',r);return _lr(r);};
-  }catch(e){console.warn('[proxy-patcher] location patch failed',e);}
-  // Patch location.href setter (URL rewriting only)
-  try{
-    var _hd=Object.getOwnPropertyDescriptor(Location.prototype,'href');
-    if(_hd&&_hd.set){
-      Object.defineProperty(Location.prototype,'href',{
-        get:_hd.get,
-        set:function(u){var r=rw(u);if(r!==u)console.log('[proxy-patcher] href=',u,'->',r);_hd.set.call(this,r);},
-        configurable:true
-      });
-    }
-  }catch(e){console.warn('[proxy-patcher] href setter patch failed',e);}
-  // Patch history.pushState / replaceState (URL rewriting only)
-  try{
-    var _hps=history.pushState.bind(history);
-    var _hrs=history.replaceState.bind(history);
-    history.pushState=function(state,title,url){
-      var r=(url!=null)?rw(String(url)):url;
-      if(r!==url)console.log('[proxy-patcher] pushState',url,'->',r);
-      return _hps(state,title,r);
-    };
-    history.replaceState=function(state,title,url){
-      var r=(url!=null)?rw(String(url)):url;
-      if(r!==url)console.log('[proxy-patcher] replaceState',url,'->',r);
-      return _hrs(state,title,r);
-    };
-  }catch(e){console.warn('[proxy-patcher] history patch failed',e);}
-  // Global error logger to catch post-load failures
-  window.addEventListener('unhandledrejection',function(e){
-    console.error('[proxy-patcher] unhandledRejection',e.reason);
-  });
-  console.log('[proxy-patcher] ready — WS+fetch+XHR+location+history patched');
-})();
-<\/script>`;
-    // Inject at very FIRST position inside <head> so it runs before any other script
-    if (/<head(\s[^>]*)?>/i.test(html)) {
-      html = html.replace(/<head(\s[^>]*)?>/i, function(m){ return m + patch; });
-    } else {
-      html = patch + html;
-    }
-    rh.set('Content-Type', 'text/html; charset=utf-8');
-    return new Response(html, { status: upstream.status, headers: rh });
-  }
-
-  return new Response(upstream.body, { status: upstream.status, headers: rh });
-}
-
-// Rewrite Set-Cookie from Termix backend: remove Domain, set Path to proxy prefix
-// KEEP HttpOnly (H2 fix) — JWT is injected server-side for WS auth, not via document.cookie
-function _rewriteTermixCookie(sc, base) {
-  sc = sc.replace(/;\s*Domain=[^;]*/gi, '');
-  // HttpOnly is preserved — prevents XSS from stealing Termix JWT
-  if (/;\s*Path=\//i.test(sc)) {
-    sc = sc.replace(/;\s*Path=\//i, '; Path=' + base + '/');
-  } else if (!/;\s*Path=/i.test(sc)) {
-    sc += '; Path=' + base + '/';
-  }
-  // Iframe embedding: SameSite=Lax KHÔNG được gửi khi reload iframe (sub-frame) bằng script
-  // → ép SameSite=None + Secure để cookie session được gửi trong iframe (sau verify 2FA reload)
-  if (/;\s*SameSite=/i.test(sc)) {
-    sc = sc.replace(/;\s*SameSite=(Lax|Strict|None)/i, '; SameSite=None');
-  } else {
-    sc += '; SameSite=None';
-  }
-  if (!/;\s*Secure/i.test(sc)) sc += '; Secure';
-  return sc;
-}
-
-// Termix Movi — reverse proxy wrapper (CF Access service token + shared secret)
-function handleTermixMoviProxy(request, env) {
-  return handleTermixProxy(request, env, {
-    origin:   cleanEnv(env.TERMIX_MOVI_URL) || 'https://termix-movi.home-server.id.vn',
-    base:     '/proxy/termix-movi',
-    perm:     'ssh-movi',
-    label:    'Termix Movi',
-    cfId:     cleanEnv(env.TERMIX_MOVI_CF_CLIENT_ID),
-    cfSecret: cleanEnv(env.TERMIX_MOVI_CF_CLIENT_SECRET),
-    secret:   cleanEnv(env.TERMIX_MOVI_SECRET),
-  });
-}
-
-// Termix Home — reverse proxy wrapper (mở top-level tab qua dashboard proxy)
-// wsMode='proxy': WS đi QUA worker (worker thêm CF service token) → bật được CF Access cho termix.home
-function handleTermixHomeProxy(request, env) {
-  return handleTermixProxy(request, env, {
-    origin:   cleanEnv(env.TERMIX_HOME_URL) || 'https://termix.home-server.id.vn',
-    base:     '/proxy/termix-home',
-    perm:     'ssh',
-    label:    'Termix Home',
-    cfId:     cleanEnv(env.TERMIX_HOME_CF_CLIENT_ID),
-    cfSecret: cleanEnv(env.TERMIX_HOME_CF_CLIENT_SECRET),
-    secret:   cleanEnv(env.TERMIX_HOME_SECRET),
-    wsMode:   'direct',  // WS đi thẳng tới termix.home (+?token=jwt) — CF Worker không proxy WS qua CF Tunnel được
-  });
-}
-
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -6925,8 +4007,8 @@ export default {
     if (p === '/api/fgt-pool/allocate')          return handleFgtPoolAllocate(request, env);
     if (p === '/api/fgt-pool/open')              return handleFgtPoolOpen(request, env);
     if (p === '/api/fgt-pool/release')           return handleFgtPoolRelease(request, env);
-    if (p.startsWith('/cam-home/'))              return handleCamHomeEmbed(request, env);
-    if (p.startsWith('/cam-live/'))              return handleCamLiveEmbed(request, env);
+    if (p.startsWith('/cam-test-live/'))         return handleCamTestLiveEmbed(request, env);
+    if (p.startsWith('/cam-test-api/'))          return handleCamTestApiEmbed(request, env);
     if (p.startsWith('/cam-embed/'))             return handleCamEmbed(request, env);
     // ── Termix Movi proxy ──
     if (p.startsWith('/proxy/termix-movi'))      return handleTermixMoviProxy(request, env);

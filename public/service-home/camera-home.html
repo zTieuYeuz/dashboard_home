@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.light.min.js" defer></script>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Camera Home · Linux PC Frigate</title>
+<link rel="stylesheet" href="/service-home/_shared/base.css"/>
+<style>
+html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+.hidden{display:none!important}
+.topnav-item:hover{color:var(--text);background:var(--surface-2)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);transition:all .12s;cursor:pointer}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn:hover{color:var(--text);border-color:var(--muted)}
+.btn.active{color:var(--accent);border-color:color-mix(in oklch,var(--accent) 40%,transparent);background:color-mix(in oklch,var(--accent) 10%,transparent)}
+.btn.ok{color:var(--ok);border-color:color-mix(in oklch,var(--ok) 35%,transparent);background:color-mix(in oklch,var(--ok) 10%,transparent)}
+
+/* ── Page ── */
+.page{padding:16px 24px 48px;max-width:1600px;margin:0 auto}
+
+.cam-toolbar{display:flex;gap:8px;margin-bottom:14px}
+
+/* ── Camera grid ── */
+.cam-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:1200px){.cam-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.cam-grid{grid-template-columns:1fr}}
+.cam-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.cam-hdr{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--border)}
+.cam-title{flex:1;min-width:0}
+.cam-name{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cam-sub-text{font-size:10px;font-family:var(--font-mono);color:var(--muted)}
+.live-badge{font-size:9px;font-weight:700;font-family:var(--font-mono);color:#fff;background:rgba(220,40,40,.85);padding:2px 6px;border-radius:20px;letter-spacing:.4px;flex-shrink:0}
+.toggle-btn{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;padding:3px 10px;border-radius:20px;border:1px solid;cursor:pointer;transition:all .15s;flex-shrink:0}
+.toggle-btn.is-on{color:var(--ok);border-color:color-mix(in oklch,var(--ok) 35%,transparent);background:color-mix(in oklch,var(--ok) 10%,transparent)}
+.toggle-btn.is-on:hover{background:color-mix(in oklch,var(--ok) 18%,transparent)}
+.toggle-btn.is-off{color:var(--muted);border-color:var(--border)}
+.toggle-btn.is-off:hover{color:var(--text);border-color:var(--muted)}
+.toggle-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.cam-frame{position:relative;width:100%;padding-top:56.25%;background:#000}
+.cam-frame iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none}
+.cam-frame img.snap{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:.28}
+.cam-overlay{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.cam-overlay .ico{font-size:24px;opacity:.28}
+.cam-overlay .msg{font-size:11px;color:var(--muted)}
+.cam-overlay .resume-btn{font-size:10px;padding:4px 14px;border-radius:20px;border:1px solid color-mix(in oklch,var(--ok) 30%,transparent);background:color-mix(in oklch,var(--ok) 10%,transparent);color:var(--ok);cursor:pointer;font-weight:600}
+.cam-overlay .resume-btn:hover{background:color-mix(in oklch,var(--ok) 18%,transparent)}
+.cam-actions{position:absolute;top:5px;right:5px;display:flex;gap:3px;opacity:0;transition:opacity .18s;pointer-events:none;z-index:10}
+.cam-frame:hover .cam-actions,.cam-frame.fs .cam-actions{opacity:1;pointer-events:auto}
+.cam-act-btn{width:28px;height:28px;border-radius:6px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.18);color:#fff;display:grid;place-items:center;cursor:pointer;font-size:13px;transition:background .15s;backdrop-filter:blur(6px);padding:0}
+.cam-act-btn:hover{background:rgba(0,0,0,.9)}
+.cam-frame.fs{position:fixed;inset:0;width:100vw;height:100vh;padding-top:0;z-index:99999;background:#000;border-radius:0}
+body.fs-lock{overflow:hidden}
+
+/* ── Recordings Panel ── */
+.rec-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius)}
+.rec-controls label{font-size:12px;color:var(--muted);white-space:nowrap}
+.rec-select{font:inherit;font-size:13px;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 10px;outline:none;transition:border-color .12s}
+.rec-select:focus{border-color:var(--accent)}
+.rec-select option{background:var(--surface)}
+.rec-load-btn{padding:5px 14px;font-size:13px;font-weight:500;background:color-mix(in oklch,var(--accent) 15%,transparent);color:var(--accent);border:1px solid color-mix(in oklch,var(--accent) 40%,transparent);border-radius:var(--radius-sm);cursor:pointer;transition:all .15s}
+.rec-load-btn:hover{background:color-mix(in oklch,var(--accent) 25%,transparent)}
+.rec-load-btn:disabled{opacity:.45;cursor:not-allowed}
+.cam-dp-wrap{position:relative;flex-shrink:0}
+.cam-dp-btn{display:flex;align-items:center;gap:7px;font:inherit;font-size:13px;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 10px;cursor:pointer;transition:border-color .12s;white-space:nowrap;outline:none}
+.cam-dp-btn:hover,.cam-dp-btn:focus{border-color:var(--accent)}
+.cam-dp-popup{position:absolute;top:calc(100% + 6px);left:0;z-index:200;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 28px rgba(0,0,0,.3);padding:14px;width:232px}
+.cam-dp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cam-dp-nav{width:26px;height:26px;display:grid;place-items:center;border-radius:var(--radius-sm);cursor:pointer;font-size:15px;color:var(--muted);transition:all .12s;background:none;border:none}
+.cam-dp-nav:hover{background:var(--surface-2);color:var(--text)}
+.cam-dp-ml{font-size:13px;font-weight:600}
+.cam-dp-week,.cam-dp-days{display:grid;grid-template-columns:repeat(7,1fr)}
+.cam-dp-wday{font-size:10px;font-weight:600;color:var(--muted);text-align:center;padding:3px 0}
+.cam-dp-day{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;height:30px;border-radius:var(--radius-sm);font-size:12.5px;cursor:pointer;transition:all .1s;color:var(--text-2);gap:1px}
+.cam-dp-day:hover{background:var(--surface-2);color:var(--text)}
+.cam-dp-day.out{color:color-mix(in oklch,var(--border) 80%,transparent);pointer-events:none}
+.cam-dp-day.today{color:var(--accent);font-weight:700}
+.cam-dp-day.sel{background:var(--accent);color:var(--bg);font-weight:700}
+.cam-dp-day.sel:hover{background:var(--accent)}
+.cam-dot{width:4px;height:4px;border-radius:50%;background:var(--ok);flex-shrink:0}
+.cam-dp-day.sel .cam-dot{background:var(--bg);opacity:.75}
+/* Timeline */
+.timeline-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;user-select:none;-webkit-user-select:none}
+.timeline-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.timeline-title{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.3px;text-transform:uppercase}
+.timeline-msg{font-size:11.5px;color:var(--muted)}
+.timeline-hour-labels{display:flex;margin-bottom:4px}
+.tl-label{flex:1;font-size:9px;font-family:var(--font-mono);color:var(--muted);text-align:left;padding-left:2px}
+.timeline-hours{position:relative;height:64px;background:var(--surface-2);border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--border-soft);cursor:crosshair}
+.tl-segment{position:absolute;top:4px;height:calc(100% - 8px);border-radius:3px;pointer-events:none;background:color-mix(in oklch,var(--ok) 55%,transparent);border:1px solid color-mix(in oklch,var(--ok) 80%,transparent)}
+.tl-range-overlay{position:absolute;top:0;bottom:0;background:color-mix(in oklch,var(--accent) 22%,transparent);border-left:2px solid var(--accent);border-right:2px solid var(--accent);pointer-events:none;display:none}
+.tl-playhead{position:absolute;top:0;bottom:0;width:2px;background:#f55;pointer-events:none;z-index:11;display:none;box-shadow:0 0 6px rgba(255,80,80,.5)}
+.tl-playhead::before{content:'';position:absolute;top:0;left:-4px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #f55}
+.tl-ph-handle{position:absolute;top:0;bottom:0;left:-8px;right:-8px;cursor:ew-resize;pointer-events:all;z-index:12}
+.tl-ph-tip{position:absolute;top:-26px;left:50%;transform:translateX(-50%);background:#f55;color:#fff;font-size:10px;font-family:var(--font-mono);padding:2px 7px;border-radius:4px;white-space:nowrap;display:none;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.35);z-index:13}
+.tl-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:12px;pointer-events:none}
+.tl-range-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding:8px 12px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm);min-height:42px}
+.tl-time-label{font-size:12px;color:var(--muted);white-space:nowrap;flex-shrink:0}
+.tl-time-input{font:500 13px/1 var(--font-mono);color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 8px;outline:none;transition:border-color .12s;width:140px;flex-shrink:0}
+.tl-time-input:focus{border-color:var(--accent)}
+.tl-range-sep{width:1px;height:20px;background:var(--border);flex-shrink:0}
+.tl-range-text{flex:1;min-width:120px;font-size:11.5px;color:var(--muted);font-family:var(--font-mono)}
+.tl-play-btn{padding:5px 18px;font-size:13px;font-weight:600;background:color-mix(in oklch,var(--ok) 15%,transparent);color:var(--ok);border:1px solid color-mix(in oklch,var(--ok) 40%,transparent);border-radius:var(--radius-sm);cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.tl-play-btn:hover{background:color-mix(in oklch,var(--ok) 25%,transparent)}
+.tl-dl-btn{padding:5px 14px;font-size:13px;font-weight:600;background:color-mix(in oklch,var(--accent) 12%,transparent);color:var(--accent);border:1px solid color-mix(in oklch,var(--accent) 35%,transparent);border-radius:var(--radius-sm);cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.tl-dl-btn:hover{background:color-mix(in oklch,var(--accent) 22%,transparent)}
+/* Video player */
+.rec-player-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.rec-player-title{font-size:12px;font-weight:600;color:var(--muted);padding:8px 14px;border-bottom:1px solid var(--border-soft);letter-spacing:.3px;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between}
+.rec-stop-btn{padding:4px 14px;font-size:12px;font-weight:600;background:color-mix(in oklch,var(--bad) 12%,transparent);color:var(--bad);border:1px solid color-mix(in oklch,var(--bad) 35%,transparent);border-radius:var(--radius-sm);cursor:pointer;transition:all .12s;text-transform:none;letter-spacing:0}
+.rec-stop-btn:hover{background:color-mix(in oklch,var(--bad) 22%,transparent)}
+.rec-player-body{padding:14px}
+.rec-player-body video{width:100%;border-radius:var(--radius-sm);background:#000;display:block;aspect-ratio:16/9}
+.rec-player-info{margin-top:8px;font-size:11px;color:var(--muted);font-family:var(--font-mono);min-height:16px}
+.rec-speed-row{display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+.rec-speed-label{font-size:11.5px;color:var(--muted);margin-right:2px}
+.rec-speed-btn{padding:4px 12px;font-size:12px;font-weight:600;font-family:var(--font-mono);background:var(--surface-2);color:var(--text-2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:all .12s}
+.rec-speed-btn:hover{border-color:var(--accent)}
+.rec-speed-btn.active{background:color-mix(in oklch,var(--accent) 18%,transparent);color:var(--accent);border-color:var(--accent)}
+.rec-no-select{display:flex;align-items:center;justify-content:center;height:220px;color:var(--muted);font-size:12px;text-align:center;line-height:1.7}
+
+/* ── Rename camera ── */
+.cam-name-wrap{display:flex;align-items:center;gap:4px;min-width:0}
+.cam-name-input{font:600 12.5px/1 var(--font-sans);color:var(--text);background:var(--surface-2);border:1px solid var(--accent);border-radius:4px;padding:2px 6px;outline:none;width:110px;flex-shrink:0}
+.edit-btn{width:16px;height:16px;display:inline-grid;place-items:center;padding:0;background:none;border:none;color:var(--muted);cursor:pointer;opacity:0;transition:opacity .15s;flex-shrink:0}
+.cam-hdr:hover .edit-btn,.cam-hdr.editing .edit-btn{opacity:1}
+.edit-btn:hover{color:var(--accent)}
+.edit-save,.edit-cancel{width:20px;height:20px;display:inline-grid;place-items:center;padding:0;background:none;border:none;cursor:pointer;font-size:14px;flex-shrink:0}
+.edit-save{color:var(--ok)}.edit-cancel{color:var(--bad)}
+
+/* ── AI Events ── */
+.ai-filter{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px}
+.ai-filter-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ai-filter-label{font-size:11.5px;color:var(--muted);white-space:nowrap;min-width:68px}
+.ai-chips{display:flex;flex-wrap:wrap;gap:5px}
+.ai-chip{font-size:11.5px;font-weight:500;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);cursor:pointer;transition:all .12s}
+.ai-chip:hover{border-color:var(--accent);color:var(--text)}
+.ai-chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ai-search-btn{align-self:flex-start;padding:6px 18px;font-size:13px;font-weight:600;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);cursor:pointer;transition:filter .15s}
+.ai-search-btn:hover{filter:brightness(1.1)}
+.ai-search-btn:disabled{opacity:.5;cursor:wait}
+.ai-count{font-size:12px;color:var(--muted);margin-bottom:12px}
+.ai-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:10px}
+.ai-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color .15s}
+.ai-card:hover{border-color:var(--accent)}
+.ai-thumb{position:relative;width:100%;padding-top:56.25%;background:#000}
+.ai-thumb img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
+.ai-play{position:absolute;inset:0;display:grid;place-items:center;font-size:26px;color:#fff;background:rgba(0,0,0,.28);opacity:0;transition:opacity .15s}
+.ai-card:hover .ai-play{opacity:1}
+.ai-meta{padding:7px 9px}
+.ai-label-row{display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:3px}
+.ai-label{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:10px;background:var(--surface-2);color:var(--text)}
+.ai-label.person{background:rgba(239,68,68,.18);color:#f87171}
+.ai-label.car,.ai-label.truck{background:rgba(59,130,246,.18);color:#60a5fa}
+.ai-label.motorcycle,.ai-label.bicycle{background:rgba(168,85,247,.18);color:#c084fc}
+.ai-score{font-size:10.5px;color:var(--muted);font-family:var(--font-mono)}
+.ai-cam-tag{display:inline-block;font-size:10px;font-family:var(--font-mono);color:var(--muted);background:var(--surface-2);border-radius:4px;padding:1px 5px;margin-bottom:2px}
+.ai-time{font-size:10.5px;color:var(--muted);font-family:var(--font-mono)}
+.ai-empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:48px 16px;font-size:13px;line-height:1.8}
+.ai-modal{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.92);display:grid;place-items:center;padding:20px}
+.ai-modal video{max-width:100%;max-height:85vh;border-radius:8px;background:#000}
+.ai-modal-close{position:absolute;top:14px;right:18px;width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.14);border:none;color:#fff;font-size:22px;cursor:pointer;display:grid;place-items:center}
+.ai-modal-close:hover{background:rgba(255,255,255,.26)}
+
+/* ── Mobile ── */
+@media(max-width:768px){
+  .topbar{flex-direction:column;align-items:stretch;height:auto;padding:0}
+  .topbar-left{padding:.5rem .75rem;border-bottom:1px solid var(--border-soft)}
+  .topbar-right{padding:.4rem .75rem .5rem;flex-wrap:nowrap;overflow-x:auto;gap:5px;scrollbar-width:none}
+  .topbar-right::-webkit-scrollbar{display:none}
+  .topbar-right .btn{flex-shrink:0;font-size:12px;padding:5px 9px}
+  .brand-sub{display:none}
+  .topnav{display:none}
+  .cam-toolbar{gap:6px}
+  .rec-controls{flex-direction:column;align-items:stretch;gap:8px}
+  .cam-dp-wrap{width:100%}
+  .cam-dp-btn{width:100%;justify-content:space-between}
+  .cam-dp-popup{width:calc(100vw - 1.5rem)}
+  .tl-range-bar{gap:6px}
+  .tl-time-input{flex:1;width:auto;min-width:0}
+  .tl-range-sep{display:none}
+  .tl-range-text{width:100%;font-size:11px;text-align:center;order:10}
+  .tl-play-btn,.tl-dl-btn{flex:1;text-align:center}
+  .timeline-hours{height:80px;touch-action:none}
+}
+@media(max-width:640px){
+  .page{padding:.75rem}
+  .ai-grid{grid-template-columns:1fr 1fr}
+  .ai-play{opacity:1;background:rgba(0,0,0,.15)}
+  .cam-actions{opacity:1;pointer-events:auto}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M2 20c0-4 4.5-7 10-7s10 3 10 7"/><circle cx="19" cy="5" r="2"/></svg>
+      </div>
+      <div><div class="brand-name">Dashboard SYSTEM</div><div class="brand-sub">Camera Home · GTX 1050</div></div>
+    </div>
+    <nav class="topnav" id="sh-topnav"></nav>
+    <script src="/service-home/_shared/nav.js"></script>
+  </div>
+  <div class="topbar-right">
+    <button class="btn active" id="tab-live-btn" onclick="switchTab('live')">▶ Live</button>
+    <button class="btn hidden" id="tab-rec-btn" onclick="switchTab('rec')">📼 Playback</button>
+    <button class="btn" id="tab-ai-btn" onclick="switchTab('ai')">🤖 Sự kiện AI</button>
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="btn ghost theme-toggle" id="themeToggle" title="Toggle theme">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- ── Live Panel ── -->
+<div class="page" id="panel-live">
+  <div class="cam-toolbar">
+    <button class="btn ok" onclick="toggleAllCams(true)">▶ Bật tất cả</button>
+    <button class="btn" onclick="toggleAllCams(false)">■ Tắt tất cả</button>
+  </div>
+  <div class="cam-grid" id="cam-grid"></div>
+</div>
+
+<!-- ── Playback Panel ── -->
+<div class="page hidden" id="panel-rec">
+  <div class="rec-controls">
+    <label>Camera</label>
+    <select class="rec-select" id="rec-cam-sel" onchange="onRecCamChange()"></select>
+    <label>Ngày</label>
+    <div class="cam-dp-wrap" id="cam-dp-wrap">
+      <button class="cam-dp-btn" id="cam-dp-btn" onclick="toggleDp(event)">
+        <span id="cam-dp-label">--/--/----</span>
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="12" rx="1.5"/><path d="M5 1v3M11 1v3M2 7h12"/></svg>
+      </button>
+      <div class="cam-dp-popup hidden" id="cam-dp-popup">
+        <div class="cam-dp-header">
+          <button class="cam-dp-nav" onclick="dpNav(-1)">‹</button>
+          <span class="cam-dp-ml" id="dp-ml"></span>
+          <button class="cam-dp-nav" onclick="dpNav(1)">›</button>
+        </div>
+        <div class="cam-dp-week">
+          <div class="cam-dp-wday">CN</div><div class="cam-dp-wday">T2</div><div class="cam-dp-wday">T3</div>
+          <div class="cam-dp-wday">T4</div><div class="cam-dp-wday">T5</div><div class="cam-dp-wday">T6</div><div class="cam-dp-wday">T7</div>
+        </div>
+        <div class="cam-dp-days" id="dp-days"></div>
+      </div>
+    </div>
+    <input type="hidden" id="rec-date-inp"/>
+    <button class="rec-load-btn" id="rec-load-btn" onclick="loadRecordings()">Tải ghi hình</button>
+  </div>
+  <div class="timeline-wrap">
+    <div class="timeline-hdr">
+      <span class="timeline-title">Timeline (24 giờ)</span>
+      <span class="timeline-msg" id="tl-msg"></span>
+    </div>
+    <div class="timeline-hour-labels" id="tl-hour-labels"></div>
+    <div class="timeline-hours" id="tl-bar">
+      <div class="tl-empty">Chọn camera và ngày để xem timeline</div>
+    </div>
+    <div class="tl-range-bar">
+      <span class="tl-time-label">Từ</span>
+      <input type="time" step="1" class="tl-time-input" id="tl-from-inp" oninput="onTimeInputChange()">
+      <span class="tl-time-label">Đến</span>
+      <input type="time" step="1" class="tl-time-input" id="tl-to-inp" oninput="onTimeInputChange()">
+      <div class="tl-range-sep"></div>
+      <span class="tl-range-text" id="tl-range-text">Kéo timeline hoặc nhập giờ</span>
+      <button class="tl-play-btn hidden" id="tl-play-btn" onclick="playSelectedRange()">▶ Phát đoạn chọn</button>
+      <button class="tl-dl-btn hidden" id="tl-dl-btn" onclick="downloadSelectedRange()" title="Tải video về máy">⬇ Tải về</button>
+    </div>
+  </div>
+  <div class="rec-player-wrap">
+    <div class="rec-player-title">
+      <span>Video Playback</span>
+      <button class="rec-stop-btn" onclick="stopPlayback()">⏹ Đặt lại</button>
+    </div>
+    <div class="rec-player-body">
+      <div class="rec-no-select" id="rec-no-select">Nhấp vào timeline để phát từ giờ đó<br>hoặc kéo để chọn khoảng thời gian</div>
+      <video id="rec-video" controls style="display:none"></video>
+      <div class="rec-speed-row" id="rec-speed-row" style="display:none">
+        <span class="rec-speed-label">⏩ Tốc độ:</span>
+        <button class="rec-speed-btn active" data-rate="1" onclick="setPlayRate(1)">1x</button>
+        <button class="rec-speed-btn" data-rate="2" onclick="setPlayRate(2)">2x</button>
+        <button class="rec-speed-btn" data-rate="4" onclick="setPlayRate(4)">4x</button>
+        <button class="rec-speed-btn" data-rate="8" onclick="setPlayRate(8)">8x</button>
+        <button class="rec-speed-btn" data-rate="16" onclick="setPlayRate(16)">16x</button>
+      </div>
+      <div class="rec-player-info" id="rec-player-info"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── AI Events Panel ── -->
+<div class="page hidden" id="panel-ai">
+  <div class="ai-filter">
+    <div class="ai-filter-row">
+      <span class="ai-filter-label">📷 Camera</span>
+      <div class="ai-chips" id="ai-cam">
+        <button class="ai-chip active" data-cam="" onclick="aiPick('ai-cam',this)">Tất cả</button>
+      </div>
+    </div>
+    <div class="ai-filter-row">
+      <span class="ai-filter-label">🕐 Thời gian</span>
+      <div class="ai-chips" id="ai-when">
+        <button class="ai-chip active" data-when="today" onclick="aiPick('ai-when',this)">Hôm nay</button>
+        <button class="ai-chip" data-when="yesterday" onclick="aiPick('ai-when',this)">Hôm qua</button>
+        <button class="ai-chip" data-when="7d" onclick="aiPick('ai-when',this)">7 ngày qua</button>
+        <button class="ai-chip" data-when="all" onclick="aiPick('ai-when',this)">Tất cả</button>
+      </div>
+    </div>
+    <div class="ai-filter-row">
+      <span class="ai-filter-label">🔍 Đối tượng</span>
+      <div class="ai-chips" id="ai-what">
+        <button class="ai-chip active" data-what="" onclick="aiPick('ai-what',this)">Tất cả</button>
+        <button class="ai-chip" data-what="person" onclick="aiPick('ai-what',this)">👤 Người</button>
+        <button class="ai-chip" data-what="car" onclick="aiPick('ai-what',this)">🚗 Xe hơi</button>
+        <button class="ai-chip" data-what="truck" onclick="aiPick('ai-what',this)">🚛 Xe tải</button>
+        <button class="ai-chip" data-what="motorcycle" onclick="aiPick('ai-what',this)">🏍 Xe máy</button>
+      </div>
+    </div>
+    <div class="ai-filter-row">
+      <span class="ai-filter-label">📊 Số lượng</span>
+      <div class="ai-chips" id="ai-limit">
+        <button class="ai-chip" data-limit="50" onclick="aiPick('ai-limit',this)">50</button>
+        <button class="ai-chip active" data-limit="200" onclick="aiPick('ai-limit',this)">200</button>
+        <button class="ai-chip" data-limit="500" onclick="aiPick('ai-limit',this)">500</button>
+      </div>
+    </div>
+    <button class="ai-search-btn" id="ai-search-btn" onclick="loadAIEvents()">🔍 Tìm kiếm</button>
+  </div>
+  <div class="ai-count" id="ai-count"></div>
+  <div class="ai-grid" id="ai-grid"></div>
+</div>
+
+<!-- ── Clip modal ── -->
+<div class="ai-modal hidden" id="ai-modal" onclick="if(event.target===this)closeModal()">
+  <button class="ai-modal-close" onclick="closeModal()">✕</button>
+  <video id="ai-video" controls playsinline></video>
+</div>
+
+<script>
+/* ── Auth & Role ── */
+(function(){
+  function readUser(){try{var m=document.cookie.match(/dh_user=([^;]+)/);if(!m)return null;return JSON.parse(decodeURIComponent(m[1]));}catch{return null;}}
+  if(typeof window.__USER__==='undefined'){var u=readUser();if(u)window.__USER__=u;else{window.location.href='/login.html';return;}}
+  var U=window.__USER__||{};
+  var perm=U.isAdmin?'read':((U.permissions||{})['camera']||'none');
+  if(perm==='none'){
+    document.addEventListener('DOMContentLoaded',function(){
+      document.body.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:80vh;gap:12px"><div style="font-size:48px">🔒</div><div style="font-size:17px;font-weight:600">Không có quyền truy cập</div><a href="/" style="font-size:13px;color:var(--accent)">← Về trang chủ</a></div>';
+    });
+  }
+})();
+
+var USER = (typeof window.__USER__ !== 'undefined') ? window.__USER__ : {};
+var CAN_PLAYBACK = USER.isAdmin || (USER.permissions||{})['camera_playback'] === 'read';
+var CAN_DOWNLOAD = USER.isAdmin || (USER.permissions||{})['camera_download'] === 'read';
+var CAN_AUTOOPEN = (USER.permissions||{})['camera_autoopen'] === 'read';
+
+/* ── Camera config ── */
+var CAM_DEFAULTS = {
+  'cam01': {sub:'Hikvision · H264',          audio:false},
+  'cam03': {sub:'Hikvision · H264',          audio:false},
+  'cam04': {sub:'Hikvision · H264',          audio:false},
+  'cam05': {sub:'Hikvision · H264',          audio:false},
+  'cam06': {sub:'Hikvision · H264',          audio:false},
+  'cam07': {sub:'H265 → H264/NVENC · audio', audio:true},
+};
+var CAMS = [];
+var _camState = {};
+var _camNames = {};
+var _editingId = null;
+function _loadNames(){try{return JSON.parse(localStorage.getItem('cam_home_names_v1')||'{}');}catch{return{};}}
+function _saveNames(n){localStorage.setItem('cam_home_names_v1',JSON.stringify(n));}
+function _displayName(c){return _camNames[c.id]||c.name;}
+
+var _isMobile=/Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&/Mac/i.test(navigator.userAgent));
+var _MODE=_isMobile?'mse,hls,mjpeg':'webrtc,mse,hls,mjpeg';
+var currentTab='live';
+
+/* ── Clock ── */
+(function tick(){
+  var el=document.getElementById('clock');
+  if(el){var n=new Date();el.textContent=[n.getHours(),n.getMinutes(),n.getSeconds()].map(function(v){return String(v).padStart(2,'0');}).join(':');}
+  setTimeout(tick,1000);
+})();
+
+/* ── Theme ── */
+(function(){
+  var saved=localStorage.getItem('theme')||'dark';
+  document.documentElement.setAttribute('data-theme',saved);
+  document.getElementById('themeToggle').addEventListener('click',function(){
+    var t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+    document.documentElement.setAttribute('data-theme',t);
+    localStorage.setItem('theme',t);
+  });
+})();
+
+/* ── Tabs ── */
+function switchTab(tab){
+  currentTab=tab;
+  document.getElementById('panel-live').classList.toggle('hidden',tab!=='live');
+  document.getElementById('panel-rec').classList.toggle('hidden',tab!=='rec');
+  document.getElementById('panel-ai').classList.toggle('hidden',tab!=='ai');
+  document.getElementById('tab-live-btn').classList.toggle('active',tab==='live');
+  document.getElementById('tab-rec-btn').classList.toggle('active',tab==='rec');
+  document.getElementById('tab-ai-btn').classList.toggle('active',tab==='ai');
+  if(tab==='ai') loadAIEvents();
+  if(tab==='rec' && !_recInited){ _recInited=true; buildRecCamSelector(); }
+}
+
+/* ── Build live grid ── */
+function buildCamGrid(){
+  document.getElementById('cam-grid').innerHTML=CAMS.map(function(c){
+    var isEditing=(_editingId===c.id);
+    var dname=escHtml(_displayName(c));
+    var nameHtml;
+    if(isEditing){
+      nameHtml='<div class="cam-name-wrap">'
+        +'<input class="cam-name-input" id="edit-input-'+c.id+'" value="'+dname+'" maxlength="40"'
+        +' onkeydown="handleEditKey(event,\''+c.id+'\')" onclick="event.stopPropagation()">'
+        +'<button class="edit-save" onclick="saveEdit(\''+c.id+'\')">✓</button>'
+        +'<button class="edit-cancel" onclick="cancelEdit()">✕</button>'
+        +'</div>';
+    } else {
+      nameHtml='<div class="cam-name-wrap">'
+        +'<span class="cam-name">'+dname+'</span>'
+        +'<button class="edit-btn" title="Đổi tên" onclick="startEdit(\''+c.id+'\')">'
+        +'<svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M11 2l3 3-8 8H3v-3L11 2z"/></svg>'
+        +'</button>'
+        +'</div>';
+    }
+    return '<div class="cam-card">'
+      +'<div class="cam-hdr'+(isEditing?' editing':'')+'">'
+        +'<div class="cam-title">'+nameHtml+'<div class="cam-sub-text">'+escHtml(c.sub)+'</div></div>'
+        +'<span class="live-badge" id="badge-'+c.id+'" style="display:none">● LIVE</span>'
+        +(c.audio?'<button class="cam-act-btn" id="unmute-'+c.id+'" onclick="camToggleAudio(\''+c.id+'\')" title="Âm thanh" style="width:26px;height:26px;font-size:12px;background:var(--surface-2);border-color:var(--border);color:var(--text-2)">🔇</button>':'')
+        +'<button class="toggle-btn is-off" id="toggle-'+c.id+'" onclick="toggleCam(\''+c.id+'\')">'
+          +'<span class="toggle-dot"></span><span id="tlabel-'+c.id+'">OFF</span>'
+        +'</button>'
+      +'</div>'
+      +'<div class="cam-frame" id="frame-'+c.id+'">'
+        +'<img class="snap hidden" id="snap-'+c.id+'" src="" alt="'+escAttr(c.id)+'"/>'
+        +'<div class="cam-overlay" id="overlay-'+c.id+'">'
+          +'<div class="ico">⏸</div>'
+          +'<div class="msg">Stream tắt</div>'
+          +'<button class="resume-btn" onclick="toggleCam(\''+c.id+'\')">▶ Bật</button>'
+        +'</div>'
+        +'<div class="cam-actions">'
+          +'<button class="cam-act-btn" onclick="camFullscreen(\''+c.id+'\')" title="Toàn màn hình">⛶</button>'
+          +'<button class="cam-act-btn" onclick="camSnapshot(\''+c.id+'\')" title="Chụp ảnh">📷</button>'
+        +'</div>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+  if(_editingId){var inp=document.getElementById('edit-input-'+_editingId);if(inp){inp.focus();inp.select();}}
+}
+
+/* ── Rename functions ── */
+function startEdit(id){_editingId=id;buildCamGrid();}
+function cancelEdit(){_editingId=null;buildCamGrid();}
+function saveEdit(id){
+  var inp=document.getElementById('edit-input-'+id);if(!inp)return;
+  var val=inp.value.trim();if(!val){cancelEdit();return;}
+  if(USER.isAdmin){
+    fetch('/api/admin/cameras/'+encodeURIComponent(id)+'/rename',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:val})})
+      .then(function(r){return r.json();}).then(function(d){
+        if(!d.error){var c=CAMS.find(function(x){return x.id===id;});if(c)c.name=val;delete _camNames[id];_saveNames(_camNames);}
+        _editingId=null;buildCamGrid();_rebuildSelectors();
+      }).catch(function(){_editingId=null;buildCamGrid();});
+  } else {
+    _camNames[id]=val;_saveNames(_camNames);_editingId=null;buildCamGrid();_rebuildSelectors();
+  }
+}
+function handleEditKey(e,id){if(e.key==='Enter'){e.preventDefault();saveEdit(id);}else if(e.key==='Escape'){e.preventDefault();cancelEdit();}}
+function _rebuildSelectors(){
+  /* Cập nhật tên trong Playback selector và AI cam chips sau khi rename */
+  var sel=document.getElementById('rec-cam-sel');
+  if(sel){CAMS.forEach(function(c){var opt=sel.querySelector('option[value="'+c.id+'"]');if(opt)opt.textContent=_displayName(c);});}
+  buildAICamChips();
+}
+
+/* ── Load cameras from KV (API) ── */
+function initCameras(){
+  _camNames=_loadNames();
+  fetch('/api/admin/cameras')
+    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
+    .then(function(d){
+      var allCams=d.cameras||[];
+      var allowedIds=USER.isAdmin?null:(USER.cameras||[]);
+      var visible=allowedIds===null?allCams:allCams.filter(function(c){return allowedIds.indexOf(c.id)>=0;});
+      CAMS=visible.filter(function(c){return CAM_DEFAULTS[c.id];}).map(function(c){
+        var def=CAM_DEFAULTS[c.id]||{};return{id:c.id,name:c.name||c.id,sub:def.sub||'',audio:!!def.audio};
+      });
+      if(!CAMS.length){CAMS=Object.keys(CAM_DEFAULTS).map(function(id){var d=CAM_DEFAULTS[id];return{id:id,name:id,sub:d.sub,audio:d.audio};});}
+      _finishInit();
+    })
+    .catch(function(){
+      CAMS=Object.keys(CAM_DEFAULTS).map(function(id){var d=CAM_DEFAULTS[id];return{id:id,name:id,sub:d.sub,audio:d.audio};});
+      _finishInit();
+    });
+}
+function _finishInit(){
+  _camState={};CAMS.forEach(function(c){_camState[c.id]={on:false,audioOn:false};});
+  buildCamGrid();buildAICamChips();
+  if(CAN_AUTOOPEN){toggleAllCams(true);}
+}
+
+/* ── Toggle ── */
+function toggleCam(id){_camState[id].on=!_camState[id].on;renderCam(id);}
+function toggleAllCams(on){CAMS.forEach(function(c){if(_camState[c.id].on!==on){_camState[c.id].on=on;renderCam(c.id);}});}
+
+function renderCam(id){
+  var st=_camState[id];
+  var frame=document.getElementById('frame-'+id);
+  var overlay=document.getElementById('overlay-'+id);
+  var snap=document.getElementById('snap-'+id);
+  var badge=document.getElementById('badge-'+id);
+  var toggle=document.getElementById('toggle-'+id);
+  var label=document.getElementById('tlabel-'+id);
+  var old=frame.querySelector('iframe');
+  if(old) old.remove();
+  toggle.className='toggle-btn '+(st.on?'is-on':'is-off');
+  label.textContent=st.on?'ON':'OFF';
+  if(st.on){
+    badge.style.display='';overlay.style.display='none';snap.classList.add('hidden');
+    var ifr=document.createElement('iframe');
+    ifr.allow='autoplay';ifr.allowFullscreen=true;
+    ifr.src='/cam-test-live/stream.html?src='+encodeURIComponent(id)+'&mode='+_MODE;
+    frame.insertBefore(ifr,frame.querySelector('.cam-actions'));
+  } else {
+    badge.style.display='none';
+    snap.src='/cam-test-api/api/'+encodeURIComponent(id)+'/latest.jpg?t='+Date.now();
+    snap.classList.remove('hidden');overlay.style.display='';
+  }
+}
+
+/* ── Audio ── */
+function camToggleAudio(id){
+  var st=_camState[id];st.audioOn=!st.audioOn;
+  var btn=document.getElementById('unmute-'+id);if(btn)btn.textContent=st.audioOn?'🔊':'🔇';
+  var frame=document.getElementById('frame-'+id);
+  var ifr=frame&&frame.querySelector('iframe');
+  if(!ifr)return;
+  if(st.audioOn){
+    // Mobile: dùng HLS thay MSE — HLS buffer 2s/segment, không bị jitter audio như MSE qua 4G
+    var audioMode=_isMobile?'hls,mjpeg':_MODE;
+    var src='/cam-test-live/stream.html?src='+encodeURIComponent(id)+'&mode='+audioMode+'&cam_audio=1';
+    ifr.src='about:blank';
+    setTimeout(function(){ifr.src=src;},80);
+  }else{
+    var src2='/cam-test-live/stream.html?src='+encodeURIComponent(id)+'&mode='+_MODE;
+    ifr.src='about:blank';
+    setTimeout(function(){ifr.src=src2;},80);
+  }
+}
+
+/* ── Fullscreen ── */
+function camFullscreen(id){
+  var frame=document.getElementById('frame-'+id);
+  if(frame.classList.contains('fs')){frame.classList.remove('fs');document.body.classList.remove('fs-lock');return;}
+  if(frame.requestFullscreen){frame.requestFullscreen().catch(function(){_cssFs(frame);});}else{_cssFs(frame);}
+}
+function _cssFs(f){
+  f.classList.add('fs');document.body.classList.add('fs-lock');
+  function onKey(e){if(e.key==='Escape'){f.classList.remove('fs');document.body.classList.remove('fs-lock');document.removeEventListener('keydown',onKey);}}
+  document.addEventListener('keydown',onKey);
+}
+document.addEventListener('fullscreenchange',function(){
+  if(!document.fullscreenElement){document.querySelectorAll('.cam-frame.fs').forEach(function(f){f.classList.remove('fs');});document.body.classList.remove('fs-lock');}
+});
+
+/* ── Snapshot ── */
+function camSnapshot(id){
+  fetch('/cam-test-api/api/'+encodeURIComponent(id)+'/latest.jpg?t='+Date.now())
+    .then(function(r){return r.blob();})
+    .then(function(b){var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=id+'_'+new Date().toISOString().replace(/[:.]/g,'-')+'.jpg';a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},5000);}).catch(function(){});
+}
+
+
+/* ══════════════════════════════
+   PLAYBACK
+   ══════════════════════════════ */
+var _recInited=false;
+var recSegments=[],recCamId=null,recDayStart=null;
+var selRangeStart=null,selRangeEnd=null,tlDragging=false;
+var _playClipStart=null,_playClipEnd=null,_playRangeEnd=null;
+var MAX_VOD_WINDOW=3600;
+var _hlsPlayer=null,_playRate=1;
+var availableDates=[],dpViewYear=null,dpViewMonth=null,dpSelDate=null;
+var _vodSegs=[];
+
+function _destroyHls(){if(_hlsPlayer){try{_hlsPlayer.destroy();}catch(e){}_hlsPlayer=null;}}
+
+function buildRecCamSelector(){
+  var sel=document.getElementById('rec-cam-sel');
+  sel.innerHTML=CAMS.map(function(c){return '<option value="'+escAttr(c.id)+'">'+escHtml(_displayName(c))+'</option>';}).join('');
+  buildHourLabels();initDp();fetchRecordingSummary();
+}
+
+function buildHourLabels(){
+  var labels=document.getElementById('tl-hour-labels');
+  var html='';
+  for(var h=0;h<24;h+=2)html+='<div class="tl-label" style="width:'+(100/12)+'%">'+String(h).padStart(2,'0')+'h</div>';
+  labels.innerHTML=html;
+}
+
+/* ── Date picker ── */
+function initDp(){
+  var today=new Date();
+  dpViewYear=today.getFullYear();dpViewMonth=today.getMonth();
+  dpSelDate=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  document.getElementById('rec-date-inp').value=dpSelDate;
+  updateDpBtn();renderDpGrid();
+}
+function toggleDp(e){e.stopPropagation();document.getElementById('cam-dp-popup').classList.toggle('hidden');}
+function dpNav(delta){dpViewMonth+=delta;if(dpViewMonth<0){dpViewMonth=11;dpViewYear--;}if(dpViewMonth>11){dpViewMonth=0;dpViewYear++;}renderDpGrid();}
+function renderDpGrid(){
+  var ml=document.getElementById('dp-ml'),grid=document.getElementById('dp-days');
+  if(!ml||!grid)return;
+  var MONTHS=['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
+  ml.textContent=MONTHS[dpViewMonth]+', '+dpViewYear;
+  var first=new Date(dpViewYear,dpViewMonth,1).getDay();
+  var daysInMo=new Date(dpViewYear,dpViewMonth+1,0).getDate();
+  var daysInPrev=new Date(dpViewYear,dpViewMonth,0).getDate();
+  var today=new Date();
+  var todayStr=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  var avail={};availableDates.forEach(function(d){avail[d]=true;});
+  var html='';
+  for(var i=0;i<42;i++){
+    var dayNum=i-first+1;
+    if(dayNum<1){html+='<div class="cam-dp-day out">'+(daysInPrev+dayNum)+'</div>';}
+    else if(dayNum>daysInMo){html+='<div class="cam-dp-day out">'+(dayNum-daysInMo)+'</div>';}
+    else{
+      var ds=dpViewYear+'-'+String(dpViewMonth+1).padStart(2,'0')+'-'+String(dayNum).padStart(2,'0');
+      var cls='cam-dp-day';
+      if(ds===dpSelDate)cls+=' sel';else if(ds===todayStr)cls+=' today';
+      var dot=avail[ds]?'<span class="cam-dot"></span>':'';
+      html+='<div class="'+cls+'" onclick="dpPick(\''+ds+'\')">'+dayNum+dot+'</div>';
+    }
+  }
+  grid.innerHTML=html;
+}
+function dpPick(dateStr){
+  dpSelDate=dateStr;var p=dateStr.split('-');dpViewYear=parseInt(p[0]);dpViewMonth=parseInt(p[1])-1;
+  document.getElementById('rec-date-inp').value=dateStr;updateDpBtn();renderDpGrid();
+  document.getElementById('cam-dp-popup').classList.add('hidden');loadRecordings();
+}
+function updateDpBtn(){var label=document.getElementById('cam-dp-label');if(!label||!dpSelDate)return;var p=dpSelDate.split('-');label.textContent=p[2]+'/'+p[1]+'/'+p[0];}
+document.addEventListener('click',function(e){var w=document.getElementById('cam-dp-wrap');if(w&&!w.contains(e.target)){var pp=document.getElementById('cam-dp-popup');if(pp)pp.classList.add('hidden');}});
+
+function onRecCamChange(){
+  resetPlayer();recSegments=[];recCamId=null;recDayStart=null;selRangeStart=null;selRangeEnd=null;_vodSegs=[];
+  var bar=document.getElementById('tl-bar');if(bar)bar.innerHTML='<div class="tl-empty">Chọn ngày để xem timeline</div>';
+  var rt=document.getElementById('tl-range-text');if(rt)rt.textContent='Kéo timeline hoặc nhập giờ';
+  document.getElementById('tl-from-inp').value='';document.getElementById('tl-to-inp').value='';
+  fetchRecordingSummary();
+}
+
+function fetchRecordingSummary(){
+  var camId=document.getElementById('rec-cam-sel').value;
+  if(!camId)return;
+  availableDates=[];
+  fetch('/cam-test-api/api/'+encodeURIComponent(camId)+'/recordings/summary?timezone='+encodeURIComponent('Asia/Ho_Chi_Minh'))
+    .then(function(r){return r.ok?r.json():Promise.reject(r.status);})
+    .then(function(data){
+      var dates=[];
+      if(Array.isArray(data)){
+        dates=data.filter(function(d){
+          if(!d||typeof d!=='object')return false;
+          if(Array.isArray(d.hours))return d.hours.some(function(h){return (h.duration||0)>0;});
+          return true;
+        }).map(function(d){return d.day||d.date||'';}).filter(Boolean).sort();
+      } else if(data&&typeof data==='object'){
+        dates=Object.keys(data).filter(function(k){return /^\d{4}-\d{2}-\d{2}$/.test(k)&&data[k];}).sort();
+      }
+      availableDates=dates;
+      if(dates.length){var last=dates[dates.length-1];dpViewYear=parseInt(last.slice(0,4));dpViewMonth=parseInt(last.slice(5,7))-1;}
+      renderDpGrid();
+    })
+    .catch(function(){});
+}
+
+function loadRecordings(){
+  var camId=document.getElementById('rec-cam-sel').value;
+  if(!camId)return;
+  var dateVal=document.getElementById('rec-date-inp').value;
+  if(!dateVal)return;
+  var parts=dateVal.split('-');
+  var dayStart=new Date(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]),0,0,0).getTime()/1000;
+  var dayEnd=new Date(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]),23,59,59).getTime()/1000;
+  recCamId=camId;recDayStart=dayStart;selRangeStart=null;selRangeEnd=null;
+  document.getElementById('tl-from-inp').value='';document.getElementById('tl-to-inp').value='';
+  document.getElementById('tl-range-text').textContent='Kéo timeline hoặc nhập giờ';
+  document.getElementById('tl-play-btn').classList.add('hidden');
+  var dlBtn=document.getElementById('tl-dl-btn');if(dlBtn)dlBtn.classList.add('hidden');
+  var btn=document.getElementById('rec-load-btn');btn.disabled=true;btn.textContent='Đang tải...';
+  document.getElementById('tl-bar').innerHTML='<div class="tl-empty">Đang tải...</div>';
+  document.getElementById('tl-msg').textContent='';
+  recSegments=[];resetPlayer();
+  fetch('/cam-test-api/api/'+encodeURIComponent(camId)+'/recordings?after='+dayStart+'&before='+dayEnd)
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+    .then(function(segs){btn.disabled=false;btn.textContent='Tải ghi hình';recSegments=segs||[];renderTimeline(dayStart,dayEnd);})
+    .catch(function(e){btn.disabled=false;btn.textContent='Tải ghi hình';document.getElementById('tl-bar').innerHTML='<div class="tl-empty" style="color:var(--bad)">Lỗi tải: '+escHtml(e.message)+'</div>';});
+}
+
+function renderTimeline(dayStart,dayEnd){
+  var bar=document.getElementById('tl-bar'),msg=document.getElementById('tl-msg');
+  if(!recSegments.length){bar.innerHTML='<div class="tl-empty">Không có ghi hình trong ngày này</div>';msg.textContent='';return;}
+  var dayDur=86400,html='';
+  recSegments.forEach(function(seg){
+    var leftPct=((seg.start_time-dayStart)/dayDur)*100;
+    var widthPct=((seg.end_time-seg.start_time)/dayDur)*100;
+    if(leftPct<0)leftPct=0;if(leftPct+widthPct>100)widthPct=100-leftPct;if(widthPct<0.05)widthPct=0.05;
+    html+='<div class="tl-segment" style="left:'+leftPct.toFixed(3)+'%;width:'+widthPct.toFixed(3)+'%" title="'+fmtTime(seg.start_time)+' → '+fmtTime(seg.end_time)+'"></div>';
+  });
+  html+='<div class="tl-range-overlay" id="tl-range-overlay"></div>';
+  html+='<div class="tl-playhead" id="tl-playhead"><div class="tl-ph-handle" id="tl-ph-handle"></div><div class="tl-ph-tip" id="tl-ph-tip"></div></div>';
+  bar.innerHTML=html;
+  msg.textContent=recSegments.length+' đoạn ghi · Nhấp hoặc kéo timeline để phát';
+  updateRangeOverlay();
+}
+
+function updateRangeOverlay(){
+  var overlay=document.getElementById('tl-range-overlay');
+  if(!overlay||selRangeStart===null||!recDayStart){if(overlay)overlay.style.display='none';return;}
+  var st=Math.min(selRangeStart,selRangeEnd!==null?selRangeEnd:selRangeStart);
+  var et=Math.max(selRangeStart,selRangeEnd!==null?selRangeEnd:selRangeStart);
+  var leftPct=Math.max(0,Math.min(100,((st-recDayStart)/86400)*100));
+  var widthPct=Math.max(0.1,((et-st)/86400)*100);
+  overlay.style.left=leftPct.toFixed(3)+'%';overlay.style.width=widthPct.toFixed(3)+'%';overlay.style.display='block';
+}
+
+function tsToTimeStr(ts){var d=new Date(ts*1000);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');}
+function timeStrToTs(str){if(!recDayStart||!str)return null;var p=str.split(':');return recDayStart+(parseInt(p[0])||0)*3600+(parseInt(p[1])||0)*60+(parseInt(p[2])||0);}
+function onTimeInputChange(){var st=timeStrToTs(document.getElementById('tl-from-inp').value);var et=timeStrToTs(document.getElementById('tl-to-inp').value);if(st===null||et===null)return;selRangeStart=st;selRangeEnd=et;updateRangeOverlay();updateRangeInfo();}
+function syncTimeInputs(){var fi=document.getElementById('tl-from-inp'),ti=document.getElementById('tl-to-inp');if(!fi||!ti||selRangeStart===null||selRangeEnd===null)return;fi.value=tsToTimeStr(Math.min(selRangeStart,selRangeEnd));ti.value=tsToTimeStr(Math.max(selRangeStart,selRangeEnd));}
+
+function updateRangeInfo(){
+  var txt=document.getElementById('tl-range-text'),btn=document.getElementById('tl-play-btn'),dlBtn=document.getElementById('tl-dl-btn');
+  if(!txt)return;
+  if(selRangeStart===null||selRangeEnd===null){txt.textContent='Kéo timeline hoặc nhập giờ';btn.classList.add('hidden');if(dlBtn)dlBtn.classList.add('hidden');return;}
+  var st=Math.min(selRangeStart,selRangeEnd),et=Math.max(selRangeStart,selRangeEnd);
+  var dur=Math.round(et-st),mins=Math.floor(dur/60),secs=dur%60;
+  txt.textContent=(mins>0?mins+'m '+secs+'s':secs+'s');
+  btn.classList.remove('hidden');
+  if(dlBtn&&CAN_DOWNLOAD)dlBtn.classList.remove('hidden');
+}
+
+function downloadSelectedRange(){
+  if(!recCamId||selRangeStart===null||selRangeEnd===null)return;
+  var st=Math.floor(Math.min(selRangeStart,selRangeEnd)),et=Math.ceil(Math.max(selRangeStart,selRangeEnd));
+  var url='/cam-test-api/api/'+encodeURIComponent(recCamId)+'/start/'+st+'/end/'+et+'/clip.mp4?dl=1';
+  var a=document.createElement('a');a.href=url;a.download=recCamId+'_'+st+'_'+et+'.mp4';document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+
+/* ── VOD engine ── */
+function _buildVodSegs(st,et){
+  _vodSegs=recSegments.filter(function(s){return s.end_time>st&&s.start_time<et;})
+    .map(function(s){return{start:Math.max(s.start_time,st),end:Math.min(s.end_time,et)};})
+    .sort(function(a,b){return a.start-b.start;});
+}
+function _wallToVideo(ts){var acc=0;for(var i=0;i<_vodSegs.length;i++){var s=_vodSegs[i];if(ts<s.start)return acc;if(ts<=s.end)return acc+(ts-s.start);acc+=s.end-s.start;}return acc;}
+function _videoToWall(t){var acc=0;for(var i=0;i<_vodSegs.length;i++){var s=_vodSegs[i],d=s.end-s.start;if(t<=acc+d)return s.start+(t-acc);acc+=d;}return _vodSegs.length?_vodSegs[_vodSegs.length-1].end:_playClipStart||0;}
+
+function playSelectedRange(){
+  if(!recCamId||selRangeStart===null||selRangeEnd===null)return;
+  var st=Math.floor(Math.min(selRangeStart,selRangeEnd)),et=Math.ceil(Math.max(selRangeStart,selRangeEnd));
+  _playRangeEnd=et;_startVod(st,Math.min(et,st+MAX_VOD_WINDOW),st);
+}
+
+function playFromTime(ts){
+  if(!recCamId||!recDayStart)return;
+  ts=Math.floor(ts);
+  var dayEnd=recDayStart+86400,now=Math.floor(Date.now()/1000);
+  var rangeEnd=Math.min(dayEnd,now);
+  if(rangeEnd-ts<10)ts=Math.max(recDayStart,rangeEnd-60);
+  var anyAfter=recSegments.some(function(s){return s.end_time>ts;});
+  if(!anyAfter){var info=document.getElementById('rec-player-info');if(info)info.textContent='❌ Không có ghi hình sau '+fmtTime(ts);return;}
+  _playRangeEnd=rangeEnd;selRangeStart=ts;selRangeEnd=Math.min(rangeEnd,ts+MAX_VOD_WINDOW);
+  _startVod(ts,Math.min(rangeEnd,ts+MAX_VOD_WINDOW),ts);
+}
+
+function _startVod(st,et,seekTs){
+  _destroyHls();if(_playRangeEnd===null||_playRangeEnd<et)_playRangeEnd=et;
+  var winEt=Math.min(et,st+MAX_VOD_WINDOW);
+  _playClipStart=st;_playClipEnd=winEt;_buildVodSegs(st,winEt);
+  updateRangeOverlay();syncTimeInputs();updateRangeInfo();
+  var video=document.getElementById('rec-video'),noSel=document.getElementById('rec-no-select'),info=document.getElementById('rec-player-info');
+  noSel.style.display='none';video.style.display='block';
+  var spd=document.getElementById('rec-speed-row');if(spd)spd.style.display='flex';
+  info.textContent=fmtTime(st)+' → '+fmtTime(winEt)+' · Đang tải...';
+  video.ontimeupdate=function(){_updatePlayhead();};
+  video.onended=function(){_autoAdvance();};
+  video.onerror=null;
+  var seekSec=_wallToVideo(seekTs);
+  var hlsUrl='/cam-test-api/vod/'+encodeURIComponent(recCamId)+'/start/'+st+'/end/'+winEt+'/master.m3u8';
+  function begin(){if(seekSec>0.5)video.currentTime=seekSec;video.playbackRate=_playRate;video.play().catch(function(){});info.textContent=fmtTime(st)+' → '+fmtTime(et)+' · ▶ đang phát';}
+  if(typeof Hls!=='undefined'&&Hls.isSupported()){
+    var hls=new Hls({enableWorker:false,maxBufferLength:90,maxMaxBufferLength:300});
+    _hlsPlayer=hls;hls.loadSource(hlsUrl);hls.attachMedia(video);hls.on(Hls.Events.MANIFEST_PARSED,begin);
+    hls.on(Hls.Events.ERROR,function(ev,data){if(data.fatal){_destroyHls();info.textContent='⚠ VOD lỗi — thử MP4...';_playMp4(st,winEt,seekSec);}});
+    return;
+  }
+  if(video.canPlayType('application/vnd.apple.mpegurl')){video.src=hlsUrl;video.load();video.addEventListener('loadedmetadata',function onM(){video.removeEventListener('loadedmetadata',onM);begin();});video.onerror=function(){video.onerror=null;_playMp4(st,winEt,seekSec);};return;}
+  _playMp4(st,winEt,seekSec);
+}
+
+function _playMp4(st,et,seekSec){
+  var video=document.getElementById('rec-video'),info=document.getElementById('rec-player-info');
+  var url='/cam-test-api/api/'+encodeURIComponent(recCamId)+'/start/'+st+'/end/'+et+'/clip.mp4';
+  video.src=url;video.load();
+  video.onerror=function(){info.textContent='❌ Không tìm thấy ghi hình cho khoảng này';};
+  video.oncanplay=function(){video.oncanplay=null;if(seekSec>0.5)video.currentTime=seekSec;video.playbackRate=_playRate;video.play().catch(function(){});info.textContent=fmtTime(st)+' → '+fmtTime(et)+' · ▶ đang phát (MP4)';};
+}
+
+function _autoAdvance(){
+  var info=document.getElementById('rec-player-info');
+  var limit=(_playRangeEnd!=null)?_playRangeEnd:(recDayStart?recDayStart+86400:_playClipEnd);
+  if(_playClipEnd>=limit-1){if(info)info.textContent='⏹ Đã phát hết đoạn đã chọn';return;}
+  var next=null;
+  for(var i=0;i<recSegments.length;i++){if(recSegments[i].end_time>_playClipEnd+1){next=recSegments[i];break;}}
+  if(next&&next.start_time<limit){var startAt=Math.max(next.start_time,_playClipEnd);if(startAt<limit){_startVod(startAt,Math.min(startAt+MAX_VOD_WINDOW,limit),startAt);return;}}
+  if(info)info.textContent='⏹ Đã phát hết';
+}
+
+function setPlayRate(r){
+  _playRate=r;var video=document.getElementById('rec-video');if(video)video.playbackRate=r;
+  document.querySelectorAll('.rec-speed-btn').forEach(function(b){b.classList.toggle('active',parseFloat(b.dataset.rate)===r);});
+}
+
+function _updatePlayhead(){
+  var video=document.getElementById('rec-video');if(!video||_playClipStart===null||!recDayStart)return;
+  var ts=_videoToWall(video.currentTime);
+  var pct=((ts-recDayStart)/86400)*100;
+  var ph=document.getElementById('tl-playhead');if(ph){ph.style.left=pct.toFixed(3)+'%';ph.style.display='block';}
+  var info=document.getElementById('rec-player-info');
+  if(info)info.textContent='▶ '+fmtTime(ts)+' · cửa sổ '+fmtTime(_playClipStart)+' → '+fmtTime(_playClipEnd)+(_playRate!==1?' · '+_playRate+'x':'');
+}
+
+function resetPlayer(){
+  var video=document.getElementById('rec-video'),noSel=document.getElementById('rec-no-select');
+  video.pause();video.ontimeupdate=null;video.onended=null;video.onerror=null;video.oncanplay=null;
+  _destroyHls();video.removeAttribute('src');video.load();video.style.display='none';noSel.style.display='flex';
+  document.getElementById('rec-player-info').textContent='';
+  _playClipStart=null;_playClipEnd=null;_playRangeEnd=null;_vodSegs=[];
+  var spd=document.getElementById('rec-speed-row');if(spd)spd.style.display='none';
+  var ph=document.getElementById('tl-playhead');if(ph)ph.style.display='none';
+}
+
+function stopPlayback(){
+  resetPlayer();recSegments=[];recCamId=null;recDayStart=null;selRangeStart=null;selRangeEnd=null;_vodSegs=[];_playRate=1;
+  var bar=document.getElementById('tl-bar');if(bar)bar.innerHTML='<div class="tl-empty">Chọn camera và ngày để xem timeline</div>';
+  document.getElementById('tl-msg').textContent='';document.getElementById('tl-range-text').textContent='Kéo timeline hoặc nhập giờ';
+  document.getElementById('tl-from-inp').value='';document.getElementById('tl-to-inp').value='';
+  document.getElementById('tl-play-btn').classList.add('hidden');var dlBtn=document.getElementById('tl-dl-btn');if(dlBtn)dlBtn.classList.add('hidden');
+  document.querySelectorAll('.rec-speed-btn').forEach(function(b){b.classList.toggle('active',parseFloat(b.dataset.rate)===1);});
+  var sel=document.getElementById('rec-cam-sel');if(sel)sel.selectedIndex=0;
+  initDp();fetchRecordingSummary();
+}
+
+function fmtTime(ts){return new Date(ts*1000).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});}
+
+/* ── Timeline mouse drag ── */
+(function(){
+  var _downX=0;
+  function getBarPct(e){var bar=document.getElementById('tl-bar');if(!bar)return 0;var rect=bar.getBoundingClientRect();return Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));}
+  document.addEventListener('mousedown',function(e){
+    var bar=document.getElementById('tl-bar');if(!bar||!recDayStart||e.button!==0)return;
+    if(e.target&&e.target.id==='tl-ph-handle')return;
+    var rect=bar.getBoundingClientRect();if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom)return;
+    e.preventDefault();tlDragging=true;_downX=e.clientX;
+    var pct=getBarPct(e);selRangeStart=recDayStart+pct*86400;selRangeEnd=selRangeStart;updateRangeOverlay();
+  });
+  document.addEventListener('mousemove',function(e){if(!tlDragging||!recDayStart)return;selRangeEnd=recDayStart+getBarPct(e)*86400;updateRangeOverlay();});
+  document.addEventListener('mouseup',function(e){
+    if(!tlDragging)return;tlDragging=false;if(!recDayStart)return;
+    selRangeEnd=recDayStart+getBarPct(e)*86400;
+    var isDrag=Math.abs(e.clientX-_downX)>8;
+    if(!isDrag){
+      var clickTs=selRangeStart,video=document.getElementById('rec-video');
+      if(_playClipStart!==null&&_playClipEnd!==null&&clickTs>=_playClipStart&&clickTs<=_playClipEnd&&video&&video.readyState>=2){video.currentTime=_wallToVideo(clickTs);video.play().catch(function(){});}
+      else{playFromTime(clickTs);}
+    } else {
+      if(selRangeEnd<selRangeStart){var t=selRangeStart;selRangeStart=selRangeEnd;selRangeEnd=t;}
+      if(selRangeEnd-selRangeStart<5)selRangeEnd=selRangeStart+30;
+      updateRangeOverlay();syncTimeInputs();updateRangeInfo();playSelectedRange();
+    }
+  });
+  /* Touch */
+  document.addEventListener('touchstart',function(e){
+    var bar=document.getElementById('tl-bar');if(!bar||!recDayStart)return;
+    var t=e.touches[0],rect=bar.getBoundingClientRect();
+    if(t.clientX<rect.left||t.clientX>rect.right||t.clientY<rect.top||t.clientY>rect.bottom)return;
+    e.preventDefault();tlDragging=true;_downX=t.clientX;
+    var pct=Math.max(0,Math.min(1,(t.clientX-rect.left)/rect.width));
+    selRangeStart=recDayStart+pct*86400;selRangeEnd=selRangeStart;updateRangeOverlay();
+  },{passive:false});
+  document.addEventListener('touchmove',function(e){
+    if(!tlDragging||!recDayStart)return;e.preventDefault();
+    var t=e.touches[0],bar=document.getElementById('tl-bar');if(!bar)return;
+    var rect=bar.getBoundingClientRect();
+    selRangeEnd=recDayStart+Math.max(0,Math.min(1,(t.clientX-rect.left)/rect.width))*86400;updateRangeOverlay();
+  },{passive:false});
+  document.addEventListener('touchend',function(e){
+    if(!tlDragging)return;tlDragging=false;if(!recDayStart)return;
+    var isDrag=Math.abs((e.changedTouches[0]&&e.changedTouches[0].clientX)||0-_downX)>8;
+    if(!isDrag){playFromTime(selRangeStart);}
+    else{if(selRangeEnd<selRangeStart){var t=selRangeStart;selRangeStart=selRangeEnd;selRangeEnd=t;}if(selRangeEnd-selRangeStart<5)selRangeEnd=selRangeStart+30;updateRangeOverlay();syncTimeInputs();updateRangeInfo();playSelectedRange();}
+  });
+})();
+
+/* ══════════════════════════════
+   AI Events
+   ══════════════════════════════ */
+function buildAICamChips(){
+  var wrap=document.getElementById('ai-cam');if(!wrap)return;
+  var active=wrap.querySelector('.ai-chip.active');var activeCam=active?active.dataset.cam:'';
+  wrap.innerHTML='<button class="ai-chip'+(activeCam===''?' active':'')+'" data-cam="" onclick="aiPick(\'ai-cam\',this)">Tất cả</button>'
+    +CAMS.map(function(c){return '<button class="ai-chip'+(activeCam===c.id?' active':'')+'" data-cam="'+escAttr(c.id)+'" onclick="aiPick(\'ai-cam\',this)">'+escHtml(_displayName(c))+'</button>';}).join('');
+}
+
+function aiPick(group,btn){
+  document.querySelectorAll('#'+group+' .ai-chip').forEach(function(b){b.classList.remove('active');});btn.classList.add('active');
+}
+function getWhenRange(when){
+  var now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  if(when==='today')return{after:Math.floor(today/1000),before:Math.floor(now/1000)};
+  if(when==='yesterday'){var y=new Date(today);y.setDate(y.getDate()-1);return{after:Math.floor(y/1000),before:Math.floor(today/1000)};}
+  if(when==='7d')return{after:Math.floor((+now-7*86400000)/1000),before:Math.floor(now/1000)};
+  return{};
+}
+function loadAIEvents(){
+  var btn=document.getElementById('ai-search-btn');btn.disabled=true;btn.textContent='Đang tải...';
+  var cam=(document.querySelector('#ai-cam .ai-chip.active')||{}).dataset&&document.querySelector('#ai-cam .ai-chip.active').dataset.cam||'';
+  var when=(document.querySelector('#ai-when .ai-chip.active')||{dataset:{when:'today'}}).dataset.when;
+  var what=(document.querySelector('#ai-what .ai-chip.active')||{dataset:{what:''}}).dataset.what;
+  var limit=parseInt((document.querySelector('#ai-limit .ai-chip.active')||{dataset:{limit:'200'}}).dataset.limit);
+  var range=getWhenRange(when);
+  var url='/cam-test-api/api/events?limit='+limit;
+  if(cam)url+='&camera='+encodeURIComponent(cam);
+  if(range.after)url+='&after='+range.after;
+  if(range.before)url+='&before='+range.before;
+  if(what)url+='&label='+encodeURIComponent(what);
+  var _aiHls=null;
+  fetch(url).then(function(r){return r.ok?r.json():Promise.reject(r.status);}).then(function(data){renderEvents(Array.isArray(data)?data:(data.events||[]));}).catch(function(e){document.getElementById('ai-grid').innerHTML='<div class="ai-empty">Lỗi tải sự kiện ('+escHtml(String(e))+')</div>';document.getElementById('ai-count').textContent='';}).finally(function(){btn.disabled=false;btn.textContent='🔍 Tìm kiếm';});
+}
+function renderEvents(events){
+  document.getElementById('ai-count').textContent='Tìm thấy '+events.length+' sự kiện';
+  if(!events.length){document.getElementById('ai-grid').innerHTML='<div class="ai-empty">Không có sự kiện nào</div>';return;}
+  document.getElementById('ai-grid').innerHTML=events.map(function(e){
+    var label=e.label||'unknown';
+    var cls=label==='person'?'person':(label==='car'||label==='truck'?'car':(label==='motorcycle'||label==='bicycle'?'motorcycle':''));
+    var score=e.top_score?Math.round(e.top_score*100)+'%':'';
+    var snapUrl='/cam-test-api/api/events/'+encodeURIComponent(e.id)+'/snapshot.jpg';
+    var ts=e.start_time?new Date(e.start_time*1000).toLocaleString('vi-VN'):'';
+    return '<div class="ai-card" onclick="playEvent(\''+escAttr(e.id)+'\','+!!e.has_clip+',\''+escAttr(e.camera||'')+'\','+Math.floor(e.start_time||0)+','+Math.ceil(e.end_time||0)+')">'
+      +'<div class="ai-thumb"><img src="'+escAttr(snapUrl)+'" loading="lazy" alt="'+escAttr(label)+'"/>'+(e.has_clip?'<div class="ai-play">▶</div>':'')+'</div>'
+      +'<div class="ai-meta">'
+        +'<div class="ai-label-row"><span class="ai-label '+cls+'">'+escHtml(label)+'</span><span class="ai-score">'+score+'</span></div>'
+        +(e.camera?'<div><span class="ai-cam-tag">'+escHtml(e.camera)+'</span></div>':'')
+        +'<div class="ai-time">'+escHtml(ts)+'</div>'
+      +'</div></div>';
+  }).join('');
+}
+var _aiHlsModal=null;
+function playEvent(id,hasClip,camId,startTime,endTime){
+  if(!hasClip)return;
+  var modal=document.getElementById('ai-modal'),video=document.getElementById('ai-video');
+  modal.classList.remove('hidden');
+  if(_aiHlsModal){try{_aiHlsModal.destroy();}catch(e){}_aiHlsModal=null;}
+  /* VOD HLS qua Frigate (giống Playback tab) */
+  if(camId&&startTime){
+    var st=Math.max(0,startTime-1),et=(endTime||startTime+60)+1;
+    var hlsUrl='/cam-test-api/vod/'+encodeURIComponent(camId)+'/start/'+st+'/end/'+et+'/master.m3u8';
+    if(video.canPlayType('application/vnd.apple.mpegurl')){video.src=hlsUrl;video.load();video.play().catch(function(){});return;}
+    if(typeof Hls!=='undefined'&&Hls.isSupported()){_aiHlsModal=new Hls({maxBufferLength:30});_aiHlsModal.loadSource(hlsUrl);_aiHlsModal.attachMedia(video);_aiHlsModal.on(Hls.Events.MANIFEST_PARSED,function(){video.play().catch(function(){});});return;}
+  }
+  video.src='/cam-test-api/api/events/'+encodeURIComponent(id)+'/clip.mp4';
+  video.play().catch(function(){});
+}
+function closeModal(){
+  var modal=document.getElementById('ai-modal'),video=document.getElementById('ai-video');
+  modal.classList.add('hidden');if(_aiHlsModal){try{_aiHlsModal.destroy();}catch(e){}_aiHlsModal=null;}
+  try{video.pause();video.removeAttribute('src');video.load();}catch(e){}
+}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal();});
+
+/* ── Utils ── */
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function escAttr(s){return String(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
+/* ── Init ── */
+document.addEventListener('DOMContentLoaded',function(){
+  if(CAN_PLAYBACK){document.getElementById('tab-rec-btn').classList.remove('hidden');}
+  initCameras(); /* load tên từ KV + khởi tạo grid */
+});
+</script>
+</body>
+</html>

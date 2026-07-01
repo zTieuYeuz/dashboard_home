@@ -7,6 +7,16 @@
 # Node modules (nếu sau này thêm)
 node_modules/
 
+# ── Local-only folders (KHÔNG lên GitHub) ──
+# Sắp xếp 2026-07-01: gom file lộn xộn ở root vào 3 thư mục.
+# Cloudflare chỉ build từ: worker.js + public/ + wrangler.toml (đều ở root).
+#   _docs/  = NOTES, HANDOVER, TEST_PLAN, GIT_BRANCHING_GUIDE, tài liệu bàn giao
+#   _infra/ = docker/, n8n-workflows/, frigate-config-ai.yml — hạ tầng, credentials
+#   _tools/ = scripts one-off (generate_test_xlsx.py...)
+_docs/
+_infra/
+_tools/
+
 # Env files / local secrets — never commit
 .env
 .env.local
@@ -16,28 +26,20 @@ node_modules/
 import-secrets.ps1
 sp_tmp.json
 dev_tmp.json
+wrangler.staging.toml
 
-# Technical notes — contains sensitive info (IPs, URLs, credentials)
+# ── Defense-in-depth: chặn theo tên kể cả khi file bị tạo lại ở root ──
 NOTES.md
-# Test & docs không liên quan
+HANDOVER.md
+GIT_BRANCHING_GUIDE.md
 TEST_PLAN.md
 TEST_PLAN_Movi_Dashboard.xlsx
 generate_test_xlsx.py
-HANDOVER.md
-GIT_BRANCHING_GUIDE.md
-wrangler.staging.toml
-
-# n8n workflow JSONs — chứa credentials ESXi, không commit
-n8n-workflows/
 frigate-config.yml
 frigate-config-ai.yml
 RUSTDESK-GUIDE.md
-
-# ── Files hạ tầng KHÔNG cần cho Cloudflare build ──
-# Cloudflare chỉ build từ: worker.js + public/ + wrangler.toml
-# Các file dưới vẫn giữ local + trong git history; ẩn khỏi GitHub để repo gọn + không lộ thông tin nội bộ
+scrypted-docker-compose.yaml
 docker/
 n8n/
+n8n-workflows/
 docs/
-scrypted-docker-compose.yaml
-

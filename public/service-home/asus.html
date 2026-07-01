@@ -8,43 +8,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/service-home/_shared/base.css"/>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-:root,[data-theme="dark"]{
-  --bg:oklch(0.18 0.012 250);--surface:oklch(0.22 0.012 250);--surface-2:oklch(0.26 0.012 250);
-  --card:oklch(0.21 0.012 250);--border:oklch(0.31 0.012 250);--border-soft:oklch(0.27 0.012 250);
-  --text:oklch(0.96 0.005 250);--text-2:oklch(0.86 0.008 250);--muted:oklch(0.62 0.012 250);
-  --accent:oklch(0.72 0.18 290);--ok:oklch(0.74 0.16 155);--warn:oklch(0.78 0.16 70);--bad:oklch(0.68 0.20 25);
-  --font-sans:'IBM Plex Sans',system-ui,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,monospace;
-  --radius:12px;--radius-sm:8px;
-  --green:var(--ok);--red:var(--bad);--amber:var(--warn);--purple:oklch(0.72 0.18 310);
-}
-[data-theme="light"]{
-  --bg:oklch(0.985 0.003 250);--surface:oklch(1 0 0);--surface-2:oklch(0.965 0.005 250);
-  --card:oklch(1 0 0);--border:oklch(0.91 0.008 250);--border-soft:oklch(0.94 0.008 250);
-  --text:oklch(0.22 0.015 250);--text-2:oklch(0.36 0.015 250);--muted:oklch(0.55 0.012 250);
-  --accent:oklch(0.55 0.18 290);--ok:oklch(0.52 0.15 155);--warn:oklch(0.62 0.16 70);--bad:oklch(0.55 0.20 25);
-  --green:var(--ok);--red:var(--bad);--amber:var(--warn);--purple:oklch(0.55 0.18 310);
-}
 html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-height:100%;-webkit-font-smoothing:antialiased}
-
-/* ── Topbar ── */
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:52px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;backdrop-filter:blur(12px)}
-.topbar-left{display:flex;align-items:center;gap:28px}
-.topbar-right{display:flex;align-items:center;gap:8px}
-.brand{display:flex;align-items:center;gap:10px}
-.brand-mark{width:30px;height:30px;display:grid;place-items:center;background:var(--accent);color:var(--bg);border-radius:var(--radius-sm)}
-.brand-name{font-weight:600;font-size:14px;line-height:1.1}
-.brand-sub{font-size:11px;color:var(--muted);margin-top:1px}
-.topnav{display:flex;gap:2px}
-.topnav-item{font-size:13px;font-weight:500;color:var(--muted);padding:6px 12px;border-radius:var(--radius-sm);transition:all .12s;text-decoration:none}
-.topnav-item:hover,.topnav-item.active{color:var(--text);background:var(--surface-2)}
-.clock{font-family:var(--font-mono);font-size:13px;color:var(--text-2);padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm)}
-.tbtn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);transition:all .12s;cursor:pointer;font-family:var(--font-sans)}
-.tbtn:hover{color:var(--text);border-color:var(--muted)}
-.tbtn.ghost{background:transparent;border-color:transparent}
-.theme-toggle{width:32px;height:32px;display:grid;place-items:center;padding:0;border:1px solid var(--border);background:var(--surface-2);border-radius:var(--radius-sm);cursor:pointer;color:var(--text-2)}
-.theme-toggle:hover{color:var(--text)}
 
 /* ── Page ── */
 .page{padding:1rem 1.25rem;max-width:1440px;margin:0 auto}
@@ -207,11 +173,8 @@ html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);mi
       </div>
       <div><div class="brand-name">Dashboard SYSTEM</div><div class="brand-sub" id="hdr-sub">ASUS Router · live</div></div>
     </div>
-    <nav class="topnav">
-      <a class="topnav-item" href="/">Overview</a>
-      <a class="topnav-item" href="/bookmarks.html">Bookmarks</a>
-      <a class="topnav-item" id="settings-link" href="/settings.html" style="display:none">⚙ Settings</a>
-    </nav>
+    <nav class="topnav" id="sh-topnav"></nav>
+    <script src="/service-home/_shared/nav.js"></script>
   </div>
   <div class="topbar-right">
     <span class="reboot-msg" id="reboot-msg"></span>
@@ -830,16 +793,8 @@ window.addEventListener('load',()=>{
     document.getElementById('settings-link').style.display='';
 });
 
-(function(){
-  var saved=null;try{saved=localStorage.getItem('dh_theme')}catch(e){}
-  if(saved==='light')document.documentElement.dataset.theme='light';
-  document.getElementById('themeToggle').addEventListener('click',function(){
-    var next=document.documentElement.dataset.theme==='light'?'dark':'light';
-    document.documentElement.dataset.theme=next;
-    try{localStorage.setItem('dh_theme',next)}catch(e){}
-  });
-  setInterval(function(){var c=document.getElementById('clock');if(c)c.textContent=new Date().toLocaleTimeString('vi-VN',{hour12:false});},1000);
-})();
+
 </script>
+<script src="/service-home/_shared/common.js"></script>
 </body>
 </html>
