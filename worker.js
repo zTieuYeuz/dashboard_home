@@ -2758,7 +2758,7 @@ const SERVICES_EMBED_TREE = [
     { name:'n8n', icon:'⚡', url:'https://n8n-home.home-server.id.vn/', embedUrl:'/n8n-proxy/home', perm:'hub-n8n' },
   ]},
   { folder:'Monitor', icon:'📊', sites:[
-    { name:'Frigate NVR', icon:'📷', url:'http://192.168.110.21:5000/', perm:'hub-frigate' },
+    { name:'Frigate NVR', icon:'📷', url:'http://192.168.110.5:5000/', perm:'hub-frigate' },
     { name:'Camera NVR',  icon:'📹', url:'http://192.168.130.3:8088/',  perm:'hub-camera-nvr' },
   ]},
 ];

@@ -350,38 +350,39 @@ function renderEmbedFull(embedUrl){
 /* Tải lại iframe embed (giữ nguyên URL). */
 function _embedReload(){ var f=document.getElementById('embedFrame'); if(f){ var s=f.src; f.src='about:blank'; setTimeout(function(){ f.src=s; }, 60); } }
 
-/* Xác thực site embed lần đầu trong session (Kasm dùng login RIÊNG của app, không phải
-   CF Access edge → KHÔNG thể phát hiện login-xong từ dashboard vì khác origin) — 2026-07-01:
-   - Mở POPUP tới origin để user đăng nhập (trong user-gesture nên không bị chặn).
-   - Nhúng iframe khi: user bấm nút "Đã đăng nhập xong", HOẶC tự động khi user đóng popup
-     (poll .closed) — tín hiệu đáng tin cho mọi kiểu login.
-   - Đặt cờ _kasmEmbedAuth[origin] để lần sau trong session nhúng thẳng, không hỏi lại. */
+/* Tự xác thực Cloudflare Access cho site embed (Kasm) rồi TỰ kết nối:
+   - Mở tab origin để CF Access cấp cookie (gọi trong user-gesture nên không bị chặn popup).
+   - Khi user xác thực xong quay lại dashboard (sự kiện focus) → tự nạp iframe + đóng tab + nhớ flag.
+   - Có nút "Kết nối ngay" làm fallback nếu popup bị chặn / cookie đã sẵn.
+   - _authGen/_authPopup: nếu user đổi service giữa chừng → _cancelAuth hủy flow này. */
 function _embedAutoAuth(origin){
+  // POPUP (không phải tab) → gọn, đóng lại là tự nhúng.
   var w=null; try{ w=window.open(origin+'/','kasmAuth','width=560,height=720,menubar=no,toolbar=no,location=yes'); }catch(e){}
   _authPopup = w;
-  var myGen = _authGen;   // nếu user đổi service, _authGen tăng → vòng lặp này tự dừng
+  var myGen = _authGen;
   var inner=document.getElementById('mainInner');
   inner.style.maxWidth='none'; inner.style.padding='0'; inner.style.height='100%';
-  inner.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;padding:30px;gap:16px;color:var(--text-2);font-size:14px;line-height:1.6">'
-    +'<div style="font-size:34px">🔓</div>'
-    +'<div style="max-width:460px"><b>Đăng nhập dịch vụ trong cửa sổ vừa mở</b><br>Đăng nhập xong → bấm nút bên dưới (hoặc đóng cửa sổ đó lại). Dashboard sẽ tự nhúng dịch vụ vào đây.</div>'
-    +'<button id="_embedAuthBtn" style="padding:10px 26px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font-sans)">✓ Đã đăng nhập xong — nhúng vào dashboard</button>'
-    +'<button id="_embedSkipBtn" style="padding:6px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--font-sans)">Nhúng luôn (nếu đã đăng nhập từ trước)</button>'
+  inner.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;padding:30px;gap:14px;color:var(--text-2);font-size:14px;line-height:1.6">'
+    +'<div style="font-size:30px">🔓</div>'
+    +'<div>Đang xác thực Cloudflare Access cho Kasm…<br>Đăng nhập xong ở cửa sổ vừa mở → <b>đóng cửa sổ đó</b> (hoặc quay lại đây) → Kasm tự nhúng vào.</div>'
+    +'<button id="_embedAuthBtn" style="padding:7px 18px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);font-size:12px;cursor:pointer;font-family:var(--font-sans)">▶ Kết nối ngay</button>'
     +'</div>';
-  var done=false, closePoll=null, giveUp=null;
-  function stop(){ if(closePoll)clearInterval(closePoll); if(giveUp)clearTimeout(giveUp); }
+  var done=false, closePoll=null;
   function finish(){
-    if(done || _authGen!==myGen) return; done=true; stop();
+    if(done || _authGen!==myGen) return; done=true;
+    window.removeEventListener('focus', onFocus);
+    if(closePoll) clearInterval(closePoll);
     try{ if(w && !w.closed) w.close(); }catch(e){}
     if(_authPopup===w) _authPopup=null;
     try{ var a=JSON.parse(sessionStorage.getItem('_kasmEmbedAuth')||'{}'); a[origin]=1; sessionStorage.setItem('_kasmEmbedAuth',JSON.stringify(a)); }catch(e){}
     renderEmbedFull(_embedUrl);
   }
-  // Tự nhúng khi user đóng cửa sổ đăng nhập (tín hiệu đáng tin cho MỌI kiểu login).
-  closePoll=setInterval(function(){ if(_authGen!==myGen){ stop(); return; } if(w && w.closed) finish(); }, 500);
-  giveUp=setTimeout(stop, 300000);   // ngừng theo dõi sau 5' (nút vẫn bấm được)
+  function onFocus(){ if(_authGen!==myGen){ window.removeEventListener('focus', onFocus); return; } finish(); }
+  // Tự nhúng khi user ĐÓNG popup (tín hiệu rõ ràng "đã xong").
+  closePoll=setInterval(function(){ if(_authGen!==myGen){ clearInterval(closePoll); return; } if(w && w.closed) finish(); }, 500);
+  // ...hoặc khi quay lại dashboard (delay để không fire ngay lúc mới mở popup).
+  setTimeout(function(){ window.addEventListener('focus', onFocus); }, 1200);
   var btn=document.getElementById('_embedAuthBtn'); if(btn) btn.onclick=finish;
-  var sk=document.getElementById('_embedSkipBtn'); if(sk) sk.onclick=finish;
 }
 
 /* Nút 🔓 thủ công (khi restore/reload mà cookie hết hạn → iframe "content is blocked"). */
@@ -421,9 +422,7 @@ function reauthPool(){
   try{ var a=JSON.parse(sessionStorage.getItem('_kasmAuth')||'{}'); if(_poolSlot) delete a[_poolSlot.id]; sessionStorage.setItem('_kasmAuth',JSON.stringify(a)); }catch(e){}
   var k=_poolSlot?_poolSlot.kasm:null;
   if(!k){ ensurePoolSlot(); return; }
-  window.open(k,'_blank');
-  _poolMsg('🔓 Tab xác thực Cloudflare Access đã mở.<br>Đăng nhập xong → đóng tab đó → bấm <b>Thử lại</b>.<br><br>'
-    +'<button onclick="_poolConfirmAuth()" style="padding:8px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;cursor:pointer;font-family:var(--font-sans);font-weight:500">▶ Thử lại</button>');
+  _poolAuthPopup(k);
 }
 
 function _poolMsg(t){
@@ -438,9 +437,36 @@ function _poolLoadIframe(slot){
 
 function _poolConfirmAuth(){
   if(!_poolSlot) return;
+  try{ if(_authPopup && !_authPopup.closed) _authPopup.close(); }catch(e){}   // ĐÓNG popup xác thực
+  _authPopup = null;
   try { var a=JSON.parse(sessionStorage.getItem('_kasmAuth')||'{}'); a[_poolSlot.id]=1; sessionStorage.setItem('_kasmAuth',JSON.stringify(a)); } catch(e){}
   _poolLoadIframe(_poolSlot);
   if(_activeSiteUrl) poolNavigate(_activeSiteUrl);
+}
+
+/* Mở POPUP xác thực CF Access cho slot pool. Slot Kasm ĐÃ tắt VNC auth (VNCOPTIONS)
+   → chỉ còn CF Access ở edge → dùng IMAGE PROBE favicon để tự phát hiện login-xong
+   → tự nhúng + tự ĐÓNG popup (không cần bấm gì). Fallback: đóng popup / nút.
+   Dùng chung _authGen/_authPopup: đổi service giữa chừng → _cancelAuth hủy. */
+function _poolAuthPopup(kasmUrl){
+  var w=null; try{ w=window.open(kasmUrl,'kasmPoolAuth','width=560,height=720,menubar=no,toolbar=no,location=yes'); }catch(e){}
+  _authPopup = w;
+  var myGen = _authGen, done=false, poll=null, probeT=null;
+  function stop(){ if(poll)clearInterval(poll); if(probeT)clearTimeout(probeT); }
+  function go(){ if(done||_authGen!==myGen)return; done=true; stop(); _poolConfirmAuth(); }
+  window._poolAuthGo = go;   // cho nút "Kết nối ngay" trong _poolMsg gọi
+  // Probe: favicon kasm-aX chỉ tải được SAU khi có cookie CF Access.
+  function probe(){
+    if(done||_authGen!==myGen){ stop(); return; }
+    var img=new Image();
+    img.onload = go;                                          // authed → tự nhúng + đóng popup
+    img.onerror = function(){ probeT=setTimeout(probe, 1200); };
+    img.src = kasmUrl.replace(/\/+$/,'') + '/favicon.ico?_cfp=' + Date.now();
+  }
+  probeT=setTimeout(probe, 1500);
+  poll=setInterval(function(){ if(_authGen!==myGen){ stop(); return; } if(w && w.closed) go(); }, 500);
+  _poolMsg('🔓 Đăng nhập Cloudflare Access ở cửa sổ vừa mở.<br>Xong là <b>tự kết nối + tự đóng cửa sổ</b> — hoặc tự đóng / bấm nút.<br><br>'
+    +'<button onclick="if(window._poolAuthGo)window._poolAuthGo()" style="padding:8px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;cursor:pointer;font-family:var(--font-sans);font-weight:500">▶ Kết nối ngay</button>');
 }
 
 function ensurePoolSlot(){
@@ -454,13 +480,8 @@ function ensurePoolSlot(){
       if(authed){
         _poolLoadIframe(d.slot);
       } else {
-        // Lần đầu dùng slot này → mở tab xác thực CF Access
-        window.open(d.slot.kasm, '_blank');
-        var s=document.getElementById('poolStream');
-        if(s) s.innerHTML='<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;gap:16px;color:var(--text-2);font-size:14px;line-height:1.6">'
-          +'<div>🔓 Tab xác thực Cloudflare Access đã mở.<br>Đăng nhập xong → đóng tab đó lại → bấm <b>Thử lại</b>.</div>'
-          +'<button onclick="_poolConfirmAuth()" style="padding:8px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;cursor:pointer;font-family:var(--font-sans);font-weight:500">▶ Thử lại</button>'
-          +'</div>';
+        // Lần đầu dùng slot này → mở POPUP xác thực CF Access (đóng popup → tự kết nối)
+        _poolAuthPopup(d.slot.kasm);
       }
       if(_activeSiteUrl) poolNavigate(_activeSiteUrl);
     }
