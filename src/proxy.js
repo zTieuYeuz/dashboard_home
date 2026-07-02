@@ -208,6 +208,82 @@ export async function handleProxy(request, env) {
 }
 
 /* ═══════════════════════════════════════════════
+   OpenClaw Chat — same-origin reverse proxy under /oc/*
+   OpenClaw's Control UI SPA is built with RELATIVE asset paths (./assets/,
+   import.meta.url), so it can be served under any base path. We proxy it under
+   /oc/ on the dashboard origin so all HTTP (html, assets, config, avatar) is
+   SAME-ORIGIN (no CORS — a plain <base>/cross-origin approach fails because
+   openclaw-service sends no CORS headers and X-Frame-Options: DENY).
+   The WebSocket goes DIRECT to wss://openclaw-service (cross-origin WS is not
+   CORS-gated; gateway.controlUi.allowedOrigins must list the dashboard origin).
+   Gateway token is injected as a Bearer header so config.json/avatar authorize.
+   ═══════════════════════════════════════════════ */
+
+const OC_ORIGIN = 'https://openclaw-service.home-server.id.vn';
+const OC_WS_URL = 'wss://openclaw-service.home-server.id.vn/';
+
+export async function handleOpenclawToken(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const token = env.OPENCLAW_GATEWAY_TOKEN ? cleanEnv(env.OPENCLAW_GATEWAY_TOKEN) : '';
+  return json({ ok: !!token, token, wsUrl: OC_WS_URL });
+}
+
+export async function handleOpenclawApp(request, env) {
+  const reqUrl = new URL(request.url);
+  // /oc → /oc/ ; /oc/<rest> → openclaw-service/<rest>
+  let sub = reqUrl.pathname.replace(/^\/oc(?=\/|$)/, '');
+
+  // ── WebSocket upgrade: the SPA connects same-origin to wss://<dash>/oc,
+  //    proxy it straight through to the gateway. Auth rides inside the WS
+  //    connect frame (token from the iframe #hash), so no header injection. ──
+  if ((request.headers.get('Upgrade') || '').toLowerCase() === 'websocket') {
+    const wsTarget = OC_ORIGIN + (sub || '/') + reqUrl.search;
+    return fetch(new Request(wsTarget, request));
+  }
+
+  const session = await getSession(request, env);
+  if (!session) return new Response('Unauthorized', { status: 401 });
+  if (sub === '') return Response.redirect(`${reqUrl.origin}/oc/${reqUrl.search}`, 302);
+  const target = OC_ORIGIN + sub + reqUrl.search;
+
+  const token = env.OPENCLAW_GATEWAY_TOKEN ? cleanEnv(env.OPENCLAW_GATEWAY_TOKEN) : '';
+  // Minimal, clean forward headers — never leak the dashboard session cookie.
+  const fwd = new Headers();
+  for (const h of ['accept', 'accept-language', 'user-agent', 'range', 'content-type']) {
+    const v = request.headers.get(h);
+    if (v) fwd.set(h, v);
+  }
+  if (token) fwd.set('Authorization', `Bearer ${token}`);
+
+  let upstream;
+  try {
+    upstream = await fetch(target, {
+      method: request.method,
+      headers: fwd,
+      body: (request.method === 'GET' || request.method === 'HEAD') ? undefined : request.body,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(20000),
+    });
+  } catch (e) {
+    return new Response(`OpenClaw upstream error: ${e.message}`, { status: 502 });
+  }
+
+  const rh = new Headers(upstream.headers);
+  rh.delete('x-frame-options');
+  const csp = rh.get('content-security-policy');
+  if (csp) {
+    const stripped = csp.replace(/frame-ancestors[^;]*(;|$)/gi, '').trim().replace(/;$/, '');
+    if (stripped) rh.set('content-security-policy', stripped); else rh.delete('content-security-policy');
+  }
+  // Rewrite any redirect Location back through the /oc prefix.
+  const loc = rh.get('location');
+  if (loc && loc.startsWith(OC_ORIGIN)) rh.set('location', '/oc' + loc.slice(OC_ORIGIN.length));
+
+  return new Response(upstream.body, { status: upstream.status, headers: rh });
+}
+
+/* ═══════════════════════════════════════════════
    SSH Movi — Secure Terminal Token Flow
    Bảo vệ bằng short-lived single-use token (KV)
    Nginx trên Movi server gọi /api/ssh-movi/verify

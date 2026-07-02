@@ -166,6 +166,30 @@ body.fs-lock{overflow:hidden}
 .ai-modal video{max-width:100%;max-height:85vh;border-radius:8px;background:#000}
 .ai-modal-close{position:absolute;top:14px;right:18px;width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.14);border:none;color:#fff;font-size:22px;cursor:pointer;display:grid;place-items:center}
 .ai-modal-close:hover{background:rgba(255,255,255,.26)}
+/* ── AI Explore / semantic search ── */
+.ai-search-bar{display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap}
+.ai-search-bar input{flex:1;min-width:220px;font-size:13.5px;padding:10px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface-2);color:var(--text);outline:none}
+.ai-search-bar input:focus{border-color:var(--accent)}
+.ai-back{background:none;border:1px solid var(--border);color:var(--text-2);padding:9px 14px;border-radius:var(--radius);cursor:pointer;font-size:12.5px;white-space:nowrap}
+.ai-back:hover{border-color:var(--accent);color:var(--text)}
+.ai-adv{margin-bottom:14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+.ai-adv>summary{cursor:pointer;padding:10px 14px;font-size:12.5px;color:var(--text-2);user-select:none;list-style:none}
+.ai-adv>summary::-webkit-details-marker{display:none}
+.ai-adv[open]>summary{border-bottom:1px solid var(--border)}
+.ai-adv .ai-filter{border:none;margin:0;background:transparent}
+.ai-row{margin-bottom:22px}
+.ai-row-head{display:flex;align-items:baseline;gap:10px;margin-bottom:9px}
+.ai-row-title{font-size:15px;font-weight:700;color:var(--text)}
+.ai-row-count{font-size:11.5px;color:var(--muted)}
+.ai-row-more{margin-left:auto;font-size:12px;color:var(--accent);background:none;border:none;cursor:pointer;white-space:nowrap}
+.ai-row-more:hover{text-decoration:underline}
+.ai-row-scroll{display:flex;gap:9px;overflow-x:auto;padding-bottom:5px}
+.ai-rcard{flex:0 0 152px;width:152px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color .15s}
+.ai-rcard:hover{border-color:var(--accent)}
+.ai-rthumb{position:relative;width:100%;padding-top:62%;background:#000}
+.ai-rthumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.ai-rmeta{padding:5px 8px;font-size:10px;color:var(--muted);font-family:var(--font-mono);display:flex;justify-content:space-between;gap:4px}
+.ai-row-empty{font-size:12px;color:var(--muted);padding:6px 2px}
 
 /* ── Mobile ── */
 @media(max-width:768px){
@@ -299,42 +323,52 @@ body.fs-lock{overflow:hidden}
 
 <!-- ── AI Events Panel ── -->
 <div class="page hidden" id="panel-ai">
-  <div class="ai-filter">
-    <div class="ai-filter-row">
-      <span class="ai-filter-label">📷 Camera</span>
-      <div class="ai-chips" id="ai-cam">
-        <button class="ai-chip active" data-cam="" onclick="aiPick('ai-cam',this)">Tất cả</button>
-      </div>
-    </div>
-    <div class="ai-filter-row">
-      <span class="ai-filter-label">🕐 Thời gian</span>
-      <div class="ai-chips" id="ai-when">
-        <button class="ai-chip active" data-when="today" onclick="aiPick('ai-when',this)">Hôm nay</button>
-        <button class="ai-chip" data-when="yesterday" onclick="aiPick('ai-when',this)">Hôm qua</button>
-        <button class="ai-chip" data-when="7d" onclick="aiPick('ai-when',this)">7 ngày qua</button>
-        <button class="ai-chip" data-when="all" onclick="aiPick('ai-when',this)">Tất cả</button>
-      </div>
-    </div>
-    <div class="ai-filter-row">
-      <span class="ai-filter-label">🔍 Đối tượng</span>
-      <div class="ai-chips" id="ai-what">
-        <button class="ai-chip active" data-what="" onclick="aiPick('ai-what',this)">Tất cả</button>
-        <button class="ai-chip" data-what="person" onclick="aiPick('ai-what',this)">👤 Người</button>
-        <button class="ai-chip" data-what="car" onclick="aiPick('ai-what',this)">🚗 Xe hơi</button>
-        <button class="ai-chip" data-what="truck" onclick="aiPick('ai-what',this)">🚛 Xe tải</button>
-        <button class="ai-chip" data-what="motorcycle" onclick="aiPick('ai-what',this)">🏍 Xe máy</button>
-      </div>
-    </div>
-    <div class="ai-filter-row">
-      <span class="ai-filter-label">📊 Số lượng</span>
-      <div class="ai-chips" id="ai-limit">
-        <button class="ai-chip" data-limit="50" onclick="aiPick('ai-limit',this)">50</button>
-        <button class="ai-chip active" data-limit="200" onclick="aiPick('ai-limit',this)">200</button>
-        <button class="ai-chip" data-limit="500" onclick="aiPick('ai-limit',this)">500</button>
-      </div>
-    </div>
-    <button class="ai-search-btn" id="ai-search-btn" onclick="loadAIEvents()">🔍 Tìm kiếm</button>
+  <div class="ai-search-bar">
+    <input id="ai-q" type="text" placeholder="🔍 Tìm bằng câu chữ — vd: người mặc áo đỏ, xe máy, con chó..." onkeydown="if(event.key==='Enter')semanticSearch()">
+    <button class="ai-search-btn" onclick="semanticSearch()">Tìm</button>
+    <button class="ai-back hidden" id="ai-back" onclick="showExplore()">← Khám phá</button>
   </div>
+  <details class="ai-adv">
+    <summary>⚙ Bộ lọc nâng cao (camera · thời gian · đối tượng)</summary>
+    <div class="ai-filter">
+      <div class="ai-filter-row">
+        <span class="ai-filter-label">📷 Camera</span>
+        <div class="ai-chips" id="ai-cam">
+          <button class="ai-chip active" data-cam="" onclick="aiPick('ai-cam',this)">Tất cả</button>
+        </div>
+      </div>
+      <div class="ai-filter-row">
+        <span class="ai-filter-label">🕐 Thời gian</span>
+        <div class="ai-chips" id="ai-when">
+          <button class="ai-chip active" data-when="today" onclick="aiPick('ai-when',this)">Hôm nay</button>
+          <button class="ai-chip" data-when="yesterday" onclick="aiPick('ai-when',this)">Hôm qua</button>
+          <button class="ai-chip" data-when="7d" onclick="aiPick('ai-when',this)">7 ngày qua</button>
+          <button class="ai-chip" data-when="all" onclick="aiPick('ai-when',this)">Tất cả</button>
+        </div>
+      </div>
+      <div class="ai-filter-row">
+        <span class="ai-filter-label">🔍 Đối tượng</span>
+        <div class="ai-chips" id="ai-what">
+          <button class="ai-chip active" data-what="" onclick="aiPick('ai-what',this)">Tất cả</button>
+          <button class="ai-chip" data-what="person" onclick="aiPick('ai-what',this)">👤 Người</button>
+          <button class="ai-chip" data-what="car" onclick="aiPick('ai-what',this)">🚗 Xe ô tô</button>
+          <button class="ai-chip" data-what="motorcycle" onclick="aiPick('ai-what',this)">🏍 Xe máy</button>
+          <button class="ai-chip" data-what="dog" onclick="aiPick('ai-what',this)">🐕 Chó</button>
+          <button class="ai-chip" data-what="cat" onclick="aiPick('ai-what',this)">🐈 Mèo</button>
+        </div>
+      </div>
+      <div class="ai-filter-row">
+        <span class="ai-filter-label">📊 Số lượng</span>
+        <div class="ai-chips" id="ai-limit">
+          <button class="ai-chip" data-limit="50" onclick="aiPick('ai-limit',this)">50</button>
+          <button class="ai-chip active" data-limit="200" onclick="aiPick('ai-limit',this)">200</button>
+          <button class="ai-chip" data-limit="500" onclick="aiPick('ai-limit',this)">500</button>
+        </div>
+      </div>
+      <button class="ai-search-btn" id="ai-search-btn" onclick="loadAIEvents()">🔍 Lọc sự kiện</button>
+    </div>
+  </details>
+  <div id="ai-explore"></div>
   <div class="ai-count" id="ai-count"></div>
   <div class="ai-grid" id="ai-grid"></div>
 </div>
@@ -372,6 +406,7 @@ var CAM_DEFAULTS = {
   'cam05': {sub:'Hikvision · H264',          audio:false},
   'cam06': {sub:'Hikvision · H264',          audio:false},
   'cam07': {sub:'H265 → H264/NVENC · audio', audio:true},
+  'cam08': {sub:'H265 → H264/NVENC · audio', audio:true},
 };
 var CAMS = [];
 var _camState = {};
@@ -412,9 +447,11 @@ function switchTab(tab){
   document.getElementById('tab-live-btn').classList.toggle('active',tab==='live');
   document.getElementById('tab-rec-btn').classList.toggle('active',tab==='rec');
   document.getElementById('tab-ai-btn').classList.toggle('active',tab==='ai');
-  if(tab==='ai') loadAIEvents();
+  if(tab==='ai') openAITab();
   if(tab==='rec' && !_recInited){ _recInited=true; buildRecCamSelector(); }
 }
+var _aiInited=false;
+function openAITab(){ if(!_aiInited){_aiInited=true; loadExplore();} }
 
 /* ── Build live grid ── */
 function buildCamGrid(){
@@ -938,6 +975,8 @@ function getWhenRange(when){
   return{};
 }
 function loadAIEvents(){
+  document.getElementById('ai-explore').classList.add('hidden');
+  document.getElementById('ai-back').classList.remove('hidden');
   var btn=document.getElementById('ai-search-btn');btn.disabled=true;btn.textContent='Đang tải...';
   var cam=(document.querySelector('#ai-cam .ai-chip.active')||{}).dataset&&document.querySelector('#ai-cam .ai-chip.active').dataset.cam||'';
   var when=(document.querySelector('#ai-when .ai-chip.active')||{dataset:{when:'today'}}).dataset.when;
@@ -952,13 +991,109 @@ function loadAIEvents(){
   var _aiHls=null;
   fetch(url).then(function(r){return r.ok?r.json():Promise.reject(r.status);}).then(function(data){renderEvents(Array.isArray(data)?data:(data.events||[]));}).catch(function(e){document.getElementById('ai-grid').innerHTML='<div class="ai-empty">Lỗi tải sự kiện ('+escHtml(String(e))+')</div>';document.getElementById('ai-count').textContent='';}).finally(function(){btn.disabled=false;btn.textContent='🔍 Tìm kiếm';});
 }
+/* ── Explore (gom nhóm theo nhãn) + semantic search ── */
+var LABEL_VI={person:{n:'Người',e:'👤'},car:{n:'Xe ô tô',e:'🚗'},truck:{n:'Xe tải',e:'🚛'},
+  motorcycle:{n:'Xe máy',e:'🏍'},bicycle:{n:'Xe đạp',e:'🚲'},dog:{n:'Chó',e:'🐕'},
+  cat:{n:'Mèo',e:'🐈'},bird:{n:'Chim',e:'🐦'}};
+function _relTime(sec){
+  if(!sec)return'';
+  var d=Math.max(0,Date.now()/1000-sec);
+  if(d<60)return Math.floor(d)+' giây trước';
+  if(d<3600)return Math.floor(d/60)+' phút trước';
+  if(d<86400)return Math.floor(d/3600)+' giờ trước';
+  return Math.floor(d/86400)+' ngày trước';
+}
+function _exploreCard(e){
+  var snap='/cam-test-api/api/events/'+encodeURIComponent(e.id)+'/snapshot.jpg';
+  return '<div class="ai-rcard" onclick="playEvent(\''+escAttr(e.id)+'\','+!!e.has_clip+',\''+escAttr(e.camera||'')+'\','+Math.floor(e.start_time||0)+','+Math.ceil(e.end_time||0)+')">'
+    +'<div class="ai-rthumb"><img loading="lazy" src="'+escAttr(snap)+'" alt=""/>'+(e.has_clip?'<div class="ai-play">▶</div>':'')+'</div>'
+    +'<div class="ai-rmeta"><span>'+escHtml(e.camera||'')+'</span><span>'+escHtml(_relTime(e.start_time))+'</span></div></div>';
+}
+function loadExplore(){
+  var box=document.getElementById('ai-explore');
+  document.getElementById('ai-grid').innerHTML='';
+  document.getElementById('ai-count').textContent='';
+  document.getElementById('ai-back').classList.add('hidden');
+  box.classList.remove('hidden');
+  box.innerHTML='<div class="ai-row-empty">Đang tải…</div>';
+  fetch('/cam-test-api/api/labels').then(function(r){return r.ok?r.json():[];}).then(function(labels){
+    labels=(labels||[]).filter(function(l){return l&&l!=='all';});
+    if(!labels.length){box.innerHTML='<div class="ai-empty">Chưa có nhãn AI nào.<br>Kiểm tra Frigate đã bật object detection + semantic search chưa.</div>';return;}
+    box.innerHTML=labels.map(function(l){
+      var m=LABEL_VI[l]||{n:l,e:'🔎'};
+      return '<div class="ai-row"><div class="ai-row-head">'
+        +'<span class="ai-row-title">'+m.e+' '+escHtml(m.n)+'</span>'
+        +'<span class="ai-row-count" id="cnt-'+escAttr(l)+'"></span>'
+        +'<button class="ai-row-more" onclick="drillLabel(\''+escAttr(l)+'\')">Xem tất cả →</button>'
+        +'</div><div class="ai-row-scroll" id="scroll-'+escAttr(l)+'"><div class="ai-row-empty">Đang tải…</div></div></div>';
+    }).join('');
+    labels.forEach(loadExploreRow);
+  }).catch(function(){box.innerHTML='<div class="ai-empty">Lỗi tải danh sách nhãn</div>';});
+}
+function loadExploreRow(label){
+  fetch('/cam-test-api/api/events?labels='+encodeURIComponent(label)+'&limit=14')
+    .then(function(r){return r.ok?r.json():[];})
+    .then(function(evs){
+      evs=Array.isArray(evs)?evs:(evs.events||[]);
+      var sc=document.getElementById('scroll-'+label);if(!sc)return;
+      var cnt=document.getElementById('cnt-'+label);
+      if(!evs.length){sc.innerHTML='<div class="ai-row-empty">Chưa có sự kiện</div>';if(cnt)cnt.textContent='';return;}
+      if(cnt)cnt.textContent=(evs.length>=14?'14+':evs.length)+' gần đây';
+      sc.innerHTML=evs.map(_exploreCard).join('');
+    }).catch(function(){var sc=document.getElementById('scroll-'+label);if(sc)sc.innerHTML='<div class="ai-row-empty">Lỗi tải</div>';});
+}
+function showExplore(){
+  document.getElementById('ai-q').value='';
+  document.getElementById('ai-back').classList.add('hidden');
+  document.getElementById('ai-grid').innerHTML='';
+  document.getElementById('ai-count').textContent='';
+  var box=document.getElementById('ai-explore');box.classList.remove('hidden');
+  if(!box.innerHTML.trim()||box.querySelector('.ai-empty'))loadExplore();
+}
+function _translateVi(q){
+  /* jinav1 chỉ hiểu tiếng Anh → dịch câu tiếng Việt sang Anh trước khi search */
+  return fetch('/api/translate?sl=auto&tl=en&q='+encodeURIComponent(q),{credentials:'include'})
+    .then(function(r){return r.ok?r.json():{text:q};})
+    .then(function(d){return (d&&d.text)?d.text:q;})
+    .catch(function(){return q;});
+}
+function semanticSearch(){
+  var q=(document.getElementById('ai-q').value||'').trim();
+  if(!q){showExplore();return;}
+  document.getElementById('ai-explore').classList.add('hidden');
+  document.getElementById('ai-back').classList.remove('hidden');
+  document.getElementById('ai-count').textContent='Đang dịch & tìm “'+q+'”…';
+  document.getElementById('ai-grid').innerHTML='';
+  _translateVi(q).then(function(en){
+    var url='/cam-test-api/api/events/search?query='+encodeURIComponent(en)+'&limit=100';
+    return fetch(url).then(function(r){return r.ok?r.json():Promise.reject(r.status);})
+      .then(function(data){
+        var evs=Array.isArray(data)?data:(data.events||[]);
+        renderEvents(evs);
+        var note=(en&&en.toLowerCase()!==q.toLowerCase())?' (dịch: “'+escHtml(en)+'”)':'';
+        document.getElementById('ai-count').innerHTML='Kết quả cho “'+escHtml(q)+'”'+note+' — '+evs.length+' sự kiện';
+      });
+  }).catch(function(e){document.getElementById('ai-grid').innerHTML='<div class="ai-empty">Lỗi tìm kiếm ('+escHtml(String(e))+')</div>';document.getElementById('ai-count').textContent='';});
+}
+function drillLabel(label){
+  _setChip('ai-what','what',label);
+  _setChip('ai-when','when','all');
+  loadAIEvents();
+}
+function _setChip(group,attr,val){
+  var chips=document.querySelectorAll('#'+group+' .ai-chip');var matched=false;
+  chips.forEach(function(b){var on=(b.dataset[attr]||'')===val;b.classList.toggle('active',on);if(on)matched=true;});
+  if(!matched&&chips[0])chips[0].classList.add('active');
+}
+
 function renderEvents(events){
   document.getElementById('ai-count').textContent='Tìm thấy '+events.length+' sự kiện';
   if(!events.length){document.getElementById('ai-grid').innerHTML='<div class="ai-empty">Không có sự kiện nào</div>';return;}
   document.getElementById('ai-grid').innerHTML=events.map(function(e){
     var label=e.label||'unknown';
     var cls=label==='person'?'person':(label==='car'||label==='truck'?'car':(label==='motorcycle'||label==='bicycle'?'motorcycle':''));
-    var score=e.top_score?Math.round(e.top_score*100)+'%':'';
+    var _sc=e.top_score||(e.data&&e.data.top_score)||0;
+    var score=_sc?Math.round(_sc*100)+'%':'';
     var snapUrl='/cam-test-api/api/events/'+encodeURIComponent(e.id)+'/snapshot.jpg';
     var ts=e.start_time?new Date(e.start_time*1000).toLocaleString('vi-VN'):'';
     return '<div class="ai-card" onclick="playEvent(\''+escAttr(e.id)+'\','+!!e.has_clip+',\''+escAttr(e.camera||'')+'\','+Math.floor(e.start_time||0)+','+Math.ceil(e.end_time||0)+')">'

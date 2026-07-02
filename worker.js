@@ -97,6 +97,8 @@ import {
   handleFgtPoolAllocate,
   handleFgtPoolOpen,
   handleFgtPoolRelease,
+  handleOpenclawApp,
+  handleOpenclawToken,
   handleProxy
 } from './src/proxy.js';
 import {
@@ -1377,6 +1379,55 @@ async function handleCameraRename(request, env, camId) {
   await logActivity(env, { action: 'camera-rename', username: session.username,
     ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Camera "${camId}" → "${name}"` });
   return json({ success: true });
+}
+
+/* ── Translate proxy (VI→EN) for AI semantic search ──
+   Frigate's jinav1 embedding model only understands English, so Vietnamese
+   queries are translated first. Uses Google's keyless gtx endpoint (fixed
+   host → no SSRF). Session-gated. Falls back to the original text on error. */
+async function handleTranslate(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const u  = new URL(request.url);
+  const q  = (u.searchParams.get('q') || '').slice(0, 500);
+  const tl = (u.searchParams.get('tl') || 'en').replace(/[^a-zA-Z-]/g, '') || 'en';
+  let   sl = (u.searchParams.get('sl') || 'vi').replace(/[^a-zA-Z-]/g, '') || 'vi';
+  if (sl === 'auto') sl = 'vi';
+  if (!q.trim()) return json({ text: '', src: q });
+
+  // 0) KV cache — avoids re-hitting rate-limited free APIs for repeat queries
+  const cacheKey = `xlate:${sl}:${tl}:${q.toLowerCase().trim()}`;
+  try {
+    const cached = await env.DASHBOARD_KV.get(cacheKey);
+    if (cached) return json({ text: cached, src: q, via: 'cache' });
+  } catch (_) { /* ignore */ }
+  const _store = async (t) => { try { await env.DASHBOARD_KV.put(cacheKey, t, { expirationTtl: 2592000 }); } catch (_) {} };
+
+  // 1) MyMemory — keyless translation API, reliable from Worker egress IPs
+  try {
+    const mm = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=${encodeURIComponent(sl + '|' + tl)}`;
+    const r = await fetch(mm, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) });
+    if (r.ok) {
+      const d = await r.json();
+      const t = d && d.responseData && d.responseData.translatedText;
+      if (t && typeof t === 'string') { await _store(t); return json({ text: t, src: q, via: 'mymemory' }); }
+    }
+  } catch (_) { /* fall through */ }
+
+  // 2) Google gtx fallback
+  try {
+    const g = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(q)}`;
+    const r = await fetch(g, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) });
+    if (r.ok) {
+      const data = await r.json();
+      const text = (Array.isArray(data) && Array.isArray(data[0]))
+        ? data[0].map(seg => (seg && seg[0]) || '').join('')
+        : '';
+      if (text) { await _store(text); return json({ text, src: q, via: 'google' }); }
+    }
+  } catch (_) { /* fall through */ }
+
+  return json({ text: q, src: q, fallback: true });
 }
 
 /* ═══════════════════════════════════════════════
@@ -4004,6 +4055,9 @@ export default {
     if (p === '/api/admin/camera-aliases-movi' && m === 'PUT')  return handleSaveCameraAlias(request, env);
     if (p.startsWith('/cpai/'))                  return handleCpaiEmbed(request, env);
     if (p.startsWith('/n8n-proxy'))               return handleN8nHomeProxy(request, env);
+    if (p === '/oc' || p.startsWith('/oc/'))     return handleOpenclawApp(request, env);
+    if (p === '/api/openclaw-token')             return handleOpenclawToken(request, env);
+    if (p === '/api/translate')                  return handleTranslate(request, env);
     if (p === '/api/fgt-pool/allocate')          return handleFgtPoolAllocate(request, env);
     if (p === '/api/fgt-pool/open')              return handleFgtPoolOpen(request, env);
     if (p === '/api/fgt-pool/release')           return handleFgtPoolRelease(request, env);
