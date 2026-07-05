@@ -2804,6 +2804,7 @@ const SERVICES = [
   { id: 'ssh',         name: 'SSH Terminal',   checkUrl: 'https://termix.home-server.id.vn' },
   { id: 'fortigate',   name: 'FortiGate',      checkUrl: null },
   { id: 'asus',        name: 'ASUS Router',    checkUrl: null },
+  { id: 'acer',        name: 'Acer Router',    checkUrl: null },
   { id: 'camera',      name: 'Camera',         checkUrl: 'https://camera.home-server.id.vn' },
   { id: 'rustdesk',    name: 'RustDesk',       checkUrl: 'https://rustdesk.home-server.id.vn' },
 ];
@@ -2816,6 +2817,7 @@ const SERVICES_EMBED_TREE = [
   { folder:'Network', icon:'🌐', sites:[
     { name:'FortiGate',   icon:'🛡️', url:'https://192.168.110.1/',        perm:'hub-fortigate' },
     { name:'Router Asus', icon:'📡', url:'https://192.168.10.1:8443/',    perm:'hub-asus' },
+    { name:'Router Acer', icon:'📶', url:'http://192.168.110.100/',       perm:'hub-asus' },
   ]},
   { folder:'Server', icon:'🖥️', sites:[
     { name:'VMware ESXi', icon:'💾', url:'https://192.168.110.125/',      perm:'hub-esxi' },
