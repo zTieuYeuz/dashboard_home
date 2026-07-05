@@ -77,7 +77,8 @@ input,select,textarea{font:inherit;color:inherit}
 .panel-body{padding:1.25rem 1.5rem}
 
 /* ── Buttons ── */
-.btn{font-size:13px;font-weight:600;padding:7px 16px;border-radius:var(--radius-sm);border:none;cursor:pointer;transition:all .15s;font-family:var(--font-sans);display:inline-flex;align-items:center;gap:6px}
+.btn{font-size:13px;font-weight:600;padding:7px 16px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface-2);color:var(--text);cursor:pointer;transition:all .15s;font-family:var(--font-sans);display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--muted)}
 .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{opacity:.85}
 .btn-danger{background:color-mix(in oklch,var(--bad) 15%,transparent);color:var(--bad);border:1px solid color-mix(in oklch,var(--bad) 30%,transparent)}.btn-danger:hover{background:var(--bad);color:#fff}
 .btn-outline{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-outline:hover{color:var(--text);border-color:var(--muted)}
@@ -310,6 +311,7 @@ select.inp{cursor:pointer}
     <button class="main-tab admin-only"         id="tab-btn-usergroups" onclick="switchTab('usergroups',this)">🗂 User Groups</button>
     <button class="main-tab admin-only"         id="tab-btn-roles"      onclick="switchTab('roles',this)">🔐 Role Management</button>
     <button class="main-tab admin-only"         id="tab-btn-sysconfig"  onclick="switchTab('sysconfig',this)">🔧 System Config</button>
+    <button class="main-tab admin-only"         id="tab-btn-ai"         onclick="switchTab('ai',this)">🤖 AI</button>
     <button class="main-tab"                    id="tab-btn-auditlog"   onclick="switchTab('auditlog',this)">📋 Audit Log</button>
     <button class="main-tab"                    id="tab-btn-account"    onclick="switchTab('account',this)">👤 Tài khoản</button>
   </div>
@@ -668,6 +670,128 @@ select.inp{cursor:pointer}
         <div class="section-label" style="margin-top:16px">Thông tin Runtime</div>
         <div id="cfg-runtime-info" style="color:var(--muted);font-size:12px">Đang tải...</div>
         <div style="margin-top:6px;font-size:11px;color:var(--muted)">💡 Tất cả cài đặt có hiệu lực ngay sau khi lưu. Session TTL &amp; Idle Timeout áp dụng cho phiên đăng nhập mới. Maintenance Mode ảnh hưởng ngay lập tức.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       TAB: AI (hub — cột trái sub-nav + cột phải nội dung)
+       ══════════════════════════════════════════════ -->
+  <style>
+  .ai-hub{display:flex;gap:16px;align-items:flex-start}
+  .ai-hub-nav{flex:0 0 210px;display:flex;flex-direction:column;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:8px}
+  .ai-subtab{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:9px 11px;border:none;background:none;color:var(--text-2);font-size:13px;border-radius:var(--radius-sm);cursor:pointer;transition:all .12s}
+  .ai-subtab:hover{background:var(--surface-2);color:var(--text)}
+  .ai-subtab.active{background:color-mix(in oklch,var(--accent) 12%,transparent);color:var(--accent);font-weight:600}
+  .ai-hub-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:16px}
+  .ai-pane{display:none;flex-direction:column;gap:16px}
+  .ai-pane.active{display:flex}
+  @media(max-width:760px){.ai-hub{flex-direction:column}.ai-hub-nav{flex:none;width:100%;flex-direction:row;overflow-x:auto}.ai-subtab{white-space:nowrap}}
+  </style>
+  <div class="tab-content" id="tc-ai">
+    <div class="ai-hub">
+      <div class="ai-hub-nav">
+        <button class="ai-subtab active" onclick="aiSub('conn',this)">🔌 Kết nối AI</button>
+        <button class="ai-subtab" onclick="aiSub('access',this)">👥 Ai được dùng</button>
+        <button class="ai-subtab" onclick="aiSub('logs',this)">📜 Nhật ký AI</button>
+        <button class="ai-subtab" onclick="aiSub('unresolved',this)">❓ Câu hỏi chưa giải quyết</button>
+        <button class="ai-subtab" onclick="aiSub('train',this)">🎓 Dạy AI</button>
+      </div>
+      <div class="ai-hub-body">
+
+        <!-- Kết nối AI -->
+        <div class="ai-pane active" id="aip-conn">
+          <div class="panel">
+            <div class="panel-header">
+              <div><div class="panel-title">🔌 Ứng dụng AI kết nối (MCP)</div><div class="panel-desc">Cấp token riêng cho từng app, giới hạn công cụ được dùng</div></div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <label class="panel-toggle" style="font-size:12px"><input type="checkbox" id="mcp-enabled" onchange="saveMcpConfig()"> Bật MCP</label>
+                <button class="btn btn-primary" onclick="openAddClient()">+ Thêm ứng dụng</button>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Endpoint: <code id="mcp-endpoint" style="font-family:var(--font-mono)">—</code></div>
+              <div id="mcp-clients" style="display:flex;flex-direction:column;gap:10px"><div class="empty-state">Đang tải...</div></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><div><div class="panel-title">🧰 Kho công cụ</div><div class="panel-desc">Tool MCP (bật/tắt) · Nguồn đọc dash-read theo quyền user · Hành động dash-action (xác nhận + phân quyền)</div></div></div>
+            <div class="panel-body" id="mcp-tools"><div class="empty-state">Đang tải...</div></div>
+          </div>
+        </div>
+
+        <!-- Ai được dùng -->
+        <div class="ai-pane" id="aip-access">
+          <div class="panel">
+            <div class="panel-header">
+              <div><div class="panel-title">👥 Ai được dùng trợ lý AI</div><div class="panel-desc">Ai thấy bong bóng chat và lấy được token</div></div>
+              <button class="btn btn-primary" onclick="saveAiConfig()">💾 Lưu</button>
+            </div>
+            <div class="panel-body" id="ai-body" style="display:flex;flex-direction:column;gap:16px">
+              <div class="panel-row">
+                <label class="panel-toggle" style="font-size:13px"><input type="checkbox" id="ai-enabled"> <b>Bật trợ lý AI toàn hệ thống</b></label>
+                <span style="margin-left:auto;font-size:12px;color:var(--muted)">Model: <b id="ai-model">HomeAI</b></span>
+              </div>
+              <div>
+                <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Ai được dùng</div>
+                <div class="panel-row"><label class="panel-toggle" style="font-size:13px"><input type="checkbox" id="ai-all"> Mọi người dùng đã đăng nhập</label></div>
+                <div style="font-size:11px;color:var(--muted);margin:10px 0 4px">Theo vai trò</div>
+                <div id="ai-roles" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+                <div style="font-size:11px;color:var(--muted);margin:12px 0 4px">Theo người dùng cụ thể</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+                  <input class="search-input" id="ai-user-inp" placeholder="username…" style="max-width:200px" onkeydown="if(event.key==='Enter'){event.preventDefault();aiAddUser();}">
+                  <button class="btn btn-sm" onclick="aiAddUser()">+ Thêm</button>
+                </div>
+                <div id="ai-users" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+              </div>
+              <div style="font-size:11px;color:var(--muted)">Người không được cấp sẽ không thấy bong bóng chat. Quản trị viên luôn được dùng.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Nhật ký AI -->
+        <div class="ai-pane" id="aip-logs">
+          <div class="panel">
+            <div class="panel-header"><div><div class="panel-title">📜 Nhật ký AI</div><div class="panel-desc">Các lần AI gọi công cụ gần đây</div></div></div>
+            <div class="panel-body" id="mcp-audit"><div class="empty-state">Đang tải...</div></div>
+          </div>
+        </div>
+
+        <!-- Câu hỏi chưa giải quyết -->
+        <div class="ai-pane" id="aip-unresolved">
+          <div class="panel">
+            <div class="panel-header"><div><div class="panel-title">❓ Câu hỏi chưa giải quyết</div><div class="panel-desc">AI ghi lại khi không xử lý được — đọc rồi bấm "Đã xử lý" để xoá</div></div></div>
+            <div class="panel-body" id="mcp-unresolved"><div class="empty-state">Đang tải...</div></div>
+          </div>
+        </div>
+
+        <!-- Dạy AI -->
+        <div class="ai-pane" id="aip-train">
+          <div class="panel">
+            <div class="panel-header">
+              <div><div class="panel-title">🎓 Dạy AI (kho kiến thức)</div><div class="panel-desc">Tạo file/thư mục kiến thức cho AI học. Đồng bộ xuống máy OpenClaw để nạp vào bộ nhớ.</div></div>
+              <button class="btn btn-sm" onclick="kbSyncInfo()">⤓ Lệnh đồng bộ</button>
+            </div>
+            <div class="panel-body" style="display:flex;gap:14px;flex-wrap:wrap">
+              <div style="flex:0 0 240px;min-width:220px">
+                <div style="display:flex;gap:6px;margin-bottom:8px">
+                  <input class="search-input" id="kb-newpath" placeholder="vd: network/vlan.md" style="flex:1;min-width:0">
+                  <button class="btn btn-sm" onclick="kbNew()">+ Tạo</button>
+                </div>
+                <div id="kb-tree" style="font-size:13px;border:1px solid var(--border-soft);border-radius:var(--radius-sm);padding:6px;min-height:120px"><div class="empty-state">Đang tải...</div></div>
+              </div>
+              <div style="flex:1;min-width:260px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                  <b id="kb-cur" style="font-family:var(--font-mono);font-size:12px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Chọn hoặc tạo một file…</b>
+                  <button class="btn btn-sm btn-primary" onclick="kbSave()" id="kb-save" disabled>💾 Lưu</button>
+                  <button class="btn btn-sm btn-danger" onclick="kbDelete()" id="kb-del" disabled>🗑</button>
+                </div>
+                <textarea id="kb-content" placeholder="Nội dung kiến thức (markdown)…" style="width:100%;min-height:320px;font-family:var(--font-mono);font-size:12.5px;resize:vertical;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)" disabled></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -1249,6 +1373,7 @@ function switchTab(id, btn) {
   document.getElementById('tc-'+id).classList.add('active');
   if(btn) btn.classList.add('active');
   if(id==='sysconfig' && typeof loadSessions==='function') loadSessions();
+  if(id==='ai' && typeof loadAi==='function') loadAi();
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -3875,6 +4000,317 @@ window.addEventListener('DOMContentLoaded', function(){
     _accMfaEl.addEventListener('keydown', function(e){ if (e.key==='Enter') changeMyPassword(); });
   }
 });
+
+/* ═══════════════════════════════════════════════════════════
+   TRỢ LÝ AI — access config
+   ═══════════════════════════════════════════════════════════ */
+var _AI_ROLES_BASE = ['admin','user','viewer'];
+var _aiCfg = { enabled:true, access:{ all:false, roles:['admin'], users:[] } };
+function loadAiConfig(){
+  fetch('/api/admin/ai-config').then(function(r){return r.json();}).then(function(d){
+    _aiCfg = { enabled:d.enabled!==false, access:d.access||{all:false,roles:['admin'],users:[]} };
+    document.getElementById('ai-enabled').checked = _aiCfg.enabled;
+    document.getElementById('ai-all').checked = !!_aiCfg.access.all;
+    document.getElementById('ai-model').textContent = d.model||'HomeAI';
+    renderAiRoles(); renderAiUsers();
+  }).catch(function(){});
+}
+function renderAiRoles(){
+  var wrap=document.getElementById('ai-roles');
+  var roles=_AI_ROLES_BASE.slice();
+  (_aiCfg.access.roles||[]).forEach(function(r){ if(roles.indexOf(r)<0) roles.push(r); });
+  wrap.innerHTML = roles.map(function(r){
+    var on=(_aiCfg.access.roles||[]).indexOf(r)>=0;
+    return '<button class="btn btn-sm" style="border-color:'+(on?'var(--ok)':'var(--border)')+';color:'+(on?'var(--ok)':'var(--text-2)')+'" onclick="aiToggleRole(\''+esc(r)+'\')">'+(on?'✓ ':'')+esc(r)+'</button>';
+  }).join('');
+}
+function aiToggleRole(r){
+  var a=_aiCfg.access.roles||[]; var i=a.indexOf(r);
+  if(i>=0) a.splice(i,1); else a.push(r);
+  _aiCfg.access.roles=a; renderAiRoles();
+}
+function renderAiUsers(){
+  var wrap=document.getElementById('ai-users');
+  var u=_aiCfg.access.users||[];
+  wrap.innerHTML = u.length ? u.map(function(x){
+    return '<span class="chip" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:4px 10px;border-radius:12px;border:1px solid var(--border);background:var(--surface-2)">'+esc(x)+' <span style="cursor:pointer;color:var(--bad)" onclick="aiRemoveUser(\''+esc(x)+'\')">✕</span></span>';
+  }).join('') : '<span style="font-size:12px;color:var(--muted)">chưa có</span>';
+}
+function aiAddUser(){
+  var inp=document.getElementById('ai-user-inp'); var v=(inp.value||'').trim().toLowerCase();
+  if(!v) return; _aiCfg.access.users=_aiCfg.access.users||[];
+  if(_aiCfg.access.users.indexOf(v)<0) _aiCfg.access.users.push(v);
+  inp.value=''; renderAiUsers();
+}
+function aiRemoveUser(x){ _aiCfg.access.users=(_aiCfg.access.users||[]).filter(function(y){return y!==x;}); renderAiUsers(); }
+function saveAiConfig(){
+  _aiCfg.enabled=document.getElementById('ai-enabled').checked;
+  _aiCfg.access.all=document.getElementById('ai-all').checked;
+  fetch('/api/admin/ai-config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(_aiCfg)})
+    .then(function(r){return r.json();}).then(function(){ toast&&toast('Đã lưu cấu hình Trợ lý AI'); }).catch(function(){});
+}
+
+/* ═══════════════════════════════════════════════════════════
+   KẾT NỐI AI — MCP clients / tools / audit
+   ═══════════════════════════════════════════════════════════ */
+var _mcp = null;
+function loadMcp(){
+  fetch('/api/admin/mcp').then(function(r){return r.json();}).then(function(d){
+    _mcp=d;
+    document.getElementById('mcp-enabled').checked = d.enabled!==false;
+    document.getElementById('mcp-endpoint').textContent = d.endpoint||'—';
+    renderClients(); renderTools(); renderAudit(); renderUnresolved();
+  }).catch(function(){});
+}
+function renderUnresolved(){
+  var wrap=document.getElementById('mcp-unresolved');
+  var list=_mcp.unresolved||[];
+  if(!list.length){ wrap.innerHTML='<div class="empty-state">Chưa có câu hỏi nào. AI sẽ ghi vào đây khi không xử lý được.</div>'; return; }
+  wrap.innerHTML=list.map(function(u){
+    return '<div class="panel-row" style="align-items:flex-start">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">'+esc(u.question)+'</div>'
+      +(u.reason?'<div style="font-size:11px;color:var(--muted);margin-top:2px">Lý do: '+esc(u.reason)+'</div>':'')
+      +'<div style="font-size:10px;color:var(--muted);margin-top:2px">'+_relTimeShort(u.time)+'</div></div>'
+      +'<button class="btn btn-sm btn-danger" onclick="deleteUnresolved(\''+esc(u.id)+'\')">✓ Đã xử lý</button></div>';
+  }).join('');
+}
+function deleteUnresolved(id){
+  fetch('/api/admin/mcp/unresolved/'+encodeURIComponent(id),{method:'DELETE'}).then(function(){ loadMcp(); });
+}
+function saveMcpConfig(){
+  fetch('/api/admin/mcp/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:document.getElementById('mcp-enabled').checked})})
+    .then(function(){ toast&&toast('Đã lưu'); });
+}
+function _relTimeShort(ts){ if(!ts) return 'chưa dùng'; var d=Math.max(0,Date.now()-ts); if(d<60000) return 'vừa xong'; if(d<3600000) return Math.floor(d/60000)+' phút trước'; if(d<86400000) return Math.floor(d/3600000)+' giờ trước'; return Math.floor(d/86400000)+' ngày trước'; }
+function renderClients(){
+  var wrap=document.getElementById('mcp-clients');
+  if(!_mcp.clients.length){ wrap.innerHTML='<div class="empty-state">Chưa có ứng dụng nào. Bấm "+ Thêm ứng dụng" để cấp token.</div>'; return; }
+  wrap.innerHTML=_mcp.clients.map(function(c){
+    var toolChips=_mcp.tools.map(function(t){
+      var on=(c.allowedTools==='*')||(Array.isArray(c.allowedTools)&&c.allowedTools.indexOf(t.name)>=0);
+      return '<label class="panel-toggle" style="font-size:11px;margin-right:10px"><input type="checkbox" '+(on?'checked':'')+' onchange="clientToggleTool(\''+esc(c.id)+'\',\''+esc(t.name)+'\',this.checked)"> '+esc(t.label)+'</label>';
+    }).join('');
+    return '<div style="border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;background:var(--surface)">'
+      +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+        +'<b style="font-size:14px">'+esc(c.name)+'</b>'
+        +'<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:'+(c.enabled?'color-mix(in oklch,var(--ok) 12%,transparent)':'var(--surface-2)')+';color:'+(c.enabled?'var(--ok)':'var(--muted)')+'">'+(c.enabled?'hoạt động':'tắt')+'</span>'
+        +'<span style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">🔑 ••••'+esc(c.tokenHint)+' · '+_relTimeShort(c.lastUsedAt)+'</span>'
+        +'<div style="margin-left:auto;display:flex;gap:6px">'
+          +'<label class="panel-toggle" style="font-size:11px"><input type="checkbox" '+(c.enabled?'checked':'')+' onchange="clientSetEnabled(\''+esc(c.id)+'\',this.checked)"> bật</label>'
+          +'<button class="btn btn-sm" onclick="clientRegen(\''+esc(c.id)+'\')">↻ Token</button>'
+          +'<button class="btn btn-sm btn-danger" onclick="clientDelete(\''+esc(c.id)+'\')">🗑</button>'
+        +'</div>'
+      +'</div>'
+      +'<div style="margin-top:8px;font-size:11px;color:var(--muted)">Công cụ được phép:</div>'
+      +'<div style="margin-top:4px">'+toolChips+'</div>'
+    +'</div>';
+  }).join('');
+}
+function _clientAllowed(c){ if(c.allowedTools==='*') return _mcp.tools.map(function(t){return t.name;}); return (c.allowedTools||[]).slice(); }
+function clientToggleTool(id,tool,on){
+  var c=_mcp.clients.find(function(x){return x.id===id;}); if(!c) return;
+  var a=_clientAllowed(c); var i=a.indexOf(tool);
+  if(on && i<0) a.push(tool); if(!on && i>=0) a.splice(i,1);
+  c.allowedTools=a;
+  _putClient(id,{allowedTools:a});
+}
+function clientSetEnabled(id,on){ var c=_mcp.clients.find(function(x){return x.id===id;}); if(c)c.enabled=on; _putClient(id,{enabled:on}).then(function(){renderClients();}); }
+function _putClient(id,body){ return fetch('/api/admin/mcp/clients/'+encodeURIComponent(id),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json();}); }
+function clientRegen(id){
+  if(!confirm('Tạo token mới? Token cũ sẽ ngừng hoạt động ngay.')) return;
+  fetch('/api/admin/mcp/clients/'+encodeURIComponent(id)+'/token',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    if(d.token) _showToken(d.token); loadMcp();
+  });
+}
+function clientDelete(id){ if(!confirm('Xoá ứng dụng này? App sẽ mất quyền truy cập.')) return; fetch('/api/admin/mcp/clients/'+encodeURIComponent(id),{method:'DELETE'}).then(function(){ loadMcp(); }); }
+function openAddClient(){
+  var name=prompt('Tên ứng dụng AI (vd: OpenClaw):','');
+  if(name===null) return; name=(name||'').trim(); if(!name) return;
+  fetch('/api/admin/mcp/clients',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,allowedTools:_mcp.tools.map(function(t){return t.name;})})})
+    .then(function(r){return r.json();}).then(function(d){ if(d.token) _showToken(d.token,d.client&&d.client.name); loadMcp(); });
+}
+function _showToken(tok,name){
+  window.prompt('🔑 Token cho '+(name||'ứng dụng')+' — COPY NGAY (chỉ hiện 1 lần).\nDùng lệnh trên server OpenClaw:\nopenclaw mcp set <name> \'{"headers":{"Authorization":"Bearer <TOKEN>"}}\'', tok);
+}
+/* Kho công cụ = 3 nhóm: MCP meta (bật/tắt được) + Nguồn ĐỌC dash-read (theo quyền
+   user, hiển thị) + HÀNH ĐỘNG dash-action (theo quyền user + xác nhận, hiển thị). */
+var _aiReadsList=null,_aiActionsList=null;
+function renderTools(){
+  var wrap=document.getElementById('mcp-tools');
+  var html='<div style="font-size:11px;color:var(--muted);margin:2px 0 6px">🔌 <b>Tool MCP (meta)</b> — AI gọi trực tiếp qua server, không chứa dữ liệu nhạy cảm. Bật/tắt được:</div>';
+  html+=_mcp.tools.map(function(t){
+    var badge=t.sensitive?'<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:color-mix(in oklch,var(--warn,#e0a000) 15%,transparent);color:var(--warn,#e0a000)">nhạy cảm</span>':'<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:color-mix(in oklch,var(--ok) 12%,transparent);color:var(--ok)">thường</span>';
+    return '<div class="panel-row"><label class="panel-toggle" style="font-size:13px"><input type="checkbox" '+(t.enabled?'checked':'')+' onchange="saveTools()"> <b>'+esc(t.name)+'</b></label>'
+      +'<span style="font-size:11px;color:var(--muted)">'+esc(t.dataDesc||'')+'</span> '+badge+'</div>';
+  }).join('');
+  html+='<div style="font-size:11px;color:var(--muted);margin:12px 0 6px">📖 <b>Nguồn ĐỌC dữ liệu (dash-read)</b> — AI đọc BẰNG QUYỀN của người đang dùng; thiếu quyền là bị chặn:</div>';
+  html+=(_aiReadsList||[]).map(function(r){
+    return '<div class="panel-row" style="font-size:12px"><b style="font-family:var(--font-mono)">'+esc(r.id)+'</b>'
+      +'<span style="font-size:11px;color:var(--muted)">'+esc(r.desc||r.label||'')+'</span>'
+      +'<span style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:8px;background:var(--surface-2);color:var(--muted)">quyền: '+esc(r.perm||'—')+'</span></div>';
+  }).join('')||'<div class="empty-state">Đang tải…</div>';
+  html+='<div style="font-size:11px;color:var(--muted);margin:12px 0 6px">⚡ <b>HÀNH ĐỘNG (dash-action)</b> — chạy bằng quyền người dùng, việc nguy hiểm LUÔN hỏi xác nhận trên dashboard:</div>';
+  html+=(_aiActionsList||[]).map(function(a){
+    var p=(a.params||[]).map(function(x){return x.name;}).join(', ');
+    return '<div class="panel-row" style="font-size:12px;align-items:flex-start"><div style="min-width:0"><b style="font-family:var(--font-mono)">'+esc(a.id)+'</b>'
+      +'<div style="font-size:11px;color:var(--muted)">'+esc(a.desc||'')+(p?' · tham số: '+esc(p):'')+'</div></div>'
+      +'<span style="margin-left:auto;display:flex;gap:4px;flex-shrink:0">'
+      +(a.adminOnly?'<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:color-mix(in oklch,var(--bad,#d33) 12%,transparent);color:var(--bad,#d33)">chỉ admin</span>':'')
+      +'<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:var(--surface-2);color:var(--muted)">quyền: '+esc(a.perm||'—')+'</span>'
+      +'<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:color-mix(in oklch,var(--warn,#e0a000) 15%,transparent);color:var(--warn,#e0a000)">'+(a.danger==='confirm'?'xác nhận':'an toàn')+'</span></span></div>';
+  }).join('')||'<div class="empty-state">Đang tải…</div>';
+  html+='<div style="font-size:11px;color:var(--muted);margin:12px 0 6px">📋 <b>BIỂU MẪU n8n (form_submit)</b> — AI thu thập theo quy tắc, dashboard validate + user xác nhận rồi mới gửi n8n. Sửa bằng nút bên dưới:</div>';
+  html+=(_aiFormsList||[]).map(function(f){
+    var req=(f.fields||[]).filter(function(x){return x.required;}).map(function(x){return x.name;}).join(', ');
+    return '<div class="panel-row" style="font-size:12px;align-items:flex-start"><div style="min-width:0"><b style="font-family:var(--font-mono)">'+esc(f.id)+'</b>'
+      +'<div style="font-size:11px;color:var(--muted)">'+esc(f.desc||f.label||'')+(req?' · bắt buộc: '+esc(req):'')+'</div></div>'
+      +'<span style="margin-left:auto;display:flex;gap:4px;flex-shrink:0">'
+      +(f.adminOnly?'<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:color-mix(in oklch,var(--bad,#d33) 12%,transparent);color:var(--bad,#d33)">chỉ admin</span>':'')
+      +'<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:var(--surface-2);color:var(--muted)">quyền: '+esc(f.perm||'—')+'</span></span></div>';
+  }).join('')||'<div class="empty-state">Chưa có biểu mẫu.</div>';
+  html+='<div style="margin-top:8px"><button class="btn btn-sm" onclick="openFormsEditor()">✏️ Sửa biểu mẫu (JSON)</button></div>';
+  wrap.innerHTML=html;
+}
+/* Editor JSON biểu mẫu — admin chỉnh id/fields/pattern/rules/webhookEnv */
+function openFormsEditor(){
+  fetch('/api/admin/ai-forms',{credentials:'include'}).then(function(r){return r.json();}).then(function(d){
+    var cur=JSON.stringify(d.forms||[],null,2);
+    var ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;max-width:860px;width:100%;max-height:88vh;display:flex;flex-direction:column;padding:16px">'
+      +'<div style="font-weight:700;margin-bottom:6px">📋 Biểu mẫu n8n (JSON)'+(d.usingDefault?' <span style="font-size:11px;color:var(--warn,#e0a000)">— đang dùng mẫu mặc định, lưu sẽ ghi đè vào KV</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Mỗi form: id, label, desc, perm, adminOnly, webhookEnv (tên secret chứa URL n8n), fields[{name,label,required,pattern,patternDesc,enum,example}], rules (quy tắc chữ cho AI).</div>'
+      +'<textarea id="forms-json" style="flex:1;min-height:340px;font-family:var(--font-mono);font-size:12px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;white-space:pre;overflow:auto"></textarea>'
+      +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn" id="forms-cancel">Huỷ</button><button class="btn btn-primary" id="forms-save">💾 Lưu</button></div></div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#forms-json').value=cur;
+    ov.querySelector('#forms-cancel').onclick=function(){ov.remove();};
+    ov.querySelector('#forms-save').onclick=function(){
+      var v; try{ v=JSON.parse(ov.querySelector('#forms-json').value); }catch(e){ alert('JSON không hợp lệ: '+e.message); return; }
+      fetch('/api/admin/ai-forms',{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({forms:v})})
+        .then(function(r){return r.json();}).then(function(res){
+          if(res.ok){ toast&&toast('Đã lưu '+res.count+' biểu mẫu'); ov.remove(); loadAiToolLists(); }
+          else alert(res.error||'Lỗi lưu');
+        });
+    };
+  });
+}
+var _aiFormsList=null;
+function loadAiToolLists(){
+  Promise.all([
+    fetch('/api/ai/reads',{credentials:'include'}).then(function(r){return r.ok?r.json():{reads:[]};}).catch(function(){return {reads:[]};}),
+    fetch('/api/ai/actions',{credentials:'include'}).then(function(r){return r.ok?r.json():{actions:[]};}).catch(function(){return {actions:[]};}),
+    fetch('/api/ai/forms',{credentials:'include'}).then(function(r){return r.ok?r.json():{forms:[]};}).catch(function(){return {forms:[]};}),
+  ]).then(function(rs){ _aiReadsList=rs[0].reads||[]; _aiActionsList=rs[1].actions||[]; _aiFormsList=rs[2].forms||[]; if(_mcp) renderTools(); });
+}
+function saveTools(){
+  var boxes=document.querySelectorAll('#mcp-tools input[type="checkbox"]');
+  var body={};
+  _mcp.tools.forEach(function(t,i){ body[t.name]=boxes[i]?boxes[i].checked:true; });
+  fetch('/api/admin/mcp/tools',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(){ toast&&toast('Đã lưu công cụ'); });
+}
+function renderAudit(){
+  var wrap=document.getElementById('mcp-audit');
+  if(!_mcp.audit||!_mcp.audit.length){ wrap.innerHTML='<div class="empty-state">Chưa có lần gọi nào.</div>'; return; }
+  wrap.innerHTML=_mcp.audit.map(function(a){
+    return '<div class="panel-row" style="font-size:12px"><span>'+esc(a.clientName||a.clientId||'?')+' gọi <b>'+esc(a.tool||'')+'</b></span>'
+      +'<span style="margin-left:auto;color:var(--muted)">'+_relTimeShort(a.time)+' · <span style="color:'+(a.ok?'var(--ok)':'var(--bad)')+'">'+(a.ok?'ok':'chặn')+'</span></span></div>';
+  }).join('');
+}
+function toast(m){ try{ if(typeof showToast==='function'){showToast(m);return;} }catch(e){} }
+
+/* ═══════════════════════════════════════════════════════════
+   AI HUB — sub-nav + load-all
+   ═══════════════════════════════════════════════════════════ */
+function loadAi(){ loadMcp(); loadAiToolLists(); loadAiConfig(); loadKb(); }
+function aiSub(sub, btn){
+  document.querySelectorAll('#tc-ai .ai-subtab').forEach(function(b){b.classList.remove('active');});
+  document.querySelectorAll('#tc-ai .ai-pane').forEach(function(p){p.classList.remove('active');});
+  if(btn) btn.classList.add('active');
+  var pane=document.getElementById('aip-'+sub); if(pane) pane.classList.add('active');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DẠY AI — kho kiến thức (KB) dạng cây thư mục
+   ═══════════════════════════════════════════════════════════ */
+var _kb=[], _kbCur=null;
+function loadKb(){
+  fetch('/api/admin/mcp/kb').then(function(r){return r.json();}).then(function(d){
+    _kb=(d&&d.files)||[]; renderKbTree();
+  }).catch(function(){});
+}
+function renderKbTree(){
+  var wrap=document.getElementById('kb-tree'); if(!wrap) return;
+  if(!_kb.length){ wrap.innerHTML='<div class="empty-state">Chưa có file. Gõ đường dẫn (vd network/vlan.md) rồi bấm + Tạo.</div>'; return; }
+  // group by folder
+  var groups={};
+  _kb.forEach(function(f){
+    var i=f.path.lastIndexOf('/');
+    var dir=i>=0?f.path.slice(0,i):''; var name=i>=0?f.path.slice(i+1):f.path;
+    (groups[dir]=groups[dir]||[]).push({name:name,path:f.path});
+  });
+  var html='';
+  Object.keys(groups).sort().forEach(function(dir){
+    if(dir) html+='<div style="font-size:11px;color:var(--muted);margin:6px 0 2px">📁 '+esc(dir)+'</div>';
+    groups[dir].forEach(function(f){
+      var on=(_kbCur===f.path);
+      html+='<div onclick="kbOpen(\''+esc(f.path)+'\')" style="padding:4px 8px;border-radius:6px;cursor:pointer;'+(on?'background:color-mix(in oklch,var(--accent) 12%,transparent);color:var(--accent)':'')+(dir?';margin-left:12px':'')+'">📄 '+esc(f.name)+'</div>';
+    });
+  });
+  wrap.innerHTML=html;
+}
+function kbOpen(path){
+  var f=_kb.find(function(x){return x.path===path;});
+  _kbCur=path;
+  document.getElementById('kb-cur').textContent=path;
+  document.getElementById('kb-content').value=f?f.content:'';
+  document.getElementById('kb-content').disabled=false;
+  document.getElementById('kb-save').disabled=false;
+  document.getElementById('kb-del').disabled=!f;
+  renderKbTree();
+}
+function kbNew(){
+  var inp=document.getElementById('kb-newpath'); var p=(inp.value||'').trim();
+  if(!p){ inp.focus(); return; }
+  _kbCur=p; inp.value='';
+  document.getElementById('kb-cur').textContent=p+' (mới — bấm Lưu)';
+  document.getElementById('kb-content').value=''; document.getElementById('kb-content').disabled=false;
+  document.getElementById('kb-save').disabled=false; document.getElementById('kb-del').disabled=true;
+  document.getElementById('kb-content').focus();
+}
+function kbSave(){
+  if(!_kbCur) return;
+  var content=document.getElementById('kb-content').value;
+  fetch('/api/admin/mcp/kb',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:_kbCur,content:content})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.error){ alert(d.error); return; }
+      _kbCur=d.path||_kbCur; toast&&toast('Đã lưu '+_kbCur); loadKb();
+      document.getElementById('kb-cur').textContent=_kbCur;
+      document.getElementById('kb-del').disabled=false;
+    });
+}
+function kbDelete(){
+  if(!_kbCur) return;
+  if(!confirm('Xoá file "'+_kbCur+'"?')) return;
+  fetch('/api/admin/mcp/kb/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:_kbCur})})
+    .then(function(){ _kbCur=null; document.getElementById('kb-cur').textContent='Chọn hoặc tạo một file…';
+      document.getElementById('kb-content').value=''; document.getElementById('kb-content').disabled=true;
+      document.getElementById('kb-save').disabled=true; document.getElementById('kb-del').disabled=true; loadKb(); });
+}
+function kbSyncInfo(){
+  var origin=location.origin;
+  var cmd='# Chạy trên máy OpenClaw (thay <TOKEN> bằng token MCP). Đồng bộ KB → workspace:\n'
+    +'mkdir -p /home/administrator/.openclaw/workspace/kb\n'
+    +'curl -s -H "Authorization: Bearer <TOKEN>" '+origin+'/api/ai/knowledge \\\n'
+    +'  | jq -r \'.files[] | @base64\' | while read r; do\n'
+    +'    p=$(echo "$r"|base64 -d|jq -r .path); c=$(echo "$r"|base64 -d|jq -r .content)\n'
+    +'    mkdir -p "/home/administrator/.openclaw/workspace/kb/$(dirname "$p")"\n'
+    +'    printf \'%s\' "$c" > "/home/administrator/.openclaw/workspace/kb/$p"\n'
+    +'  done\n'
+    +'chown -R administrator:administrator /home/administrator/.openclaw/workspace/kb\n'
+    +'# rồi: sudo systemctl restart openclaw';
+  window.prompt('Lệnh đồng bộ KB xuống máy OpenClaw (copy chạy trên server đó):', cmd);
+}
 </script>
 <script src="/service-home/_shared/chat.js"></script>
 </body>

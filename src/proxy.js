@@ -225,6 +225,15 @@ const OC_WS_URL = 'wss://openclaw-service.home-server.id.vn/';
 export async function handleOpenclawToken(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
+  // AI access gate (Settings → Trợ lý AI). Default: enabled, admins only.
+  let cfg = {}; try { cfg = await env.DASHBOARD_KV.get('ai_config', 'json') || {}; } catch { cfg = {}; }
+  const access  = cfg.access || { all: false, roles: ['admin'], users: [] };
+  const isAdmin = session.role === 'admin';
+  const allowed = isAdmin || !!access.all
+    || (Array.isArray(access.roles) && access.roles.includes(session.role))
+    || (Array.isArray(access.users) && access.users.includes(session.username));
+  if (cfg.enabled === false) return json({ ok: false, error: 'Trợ lý AI đang tắt' }, 403);
+  if (!allowed) return json({ ok: false, error: 'Bạn không có quyền dùng trợ lý AI' }, 403);
   const token = env.OPENCLAW_GATEWAY_TOKEN ? cleanEnv(env.OPENCLAW_GATEWAY_TOKEN) : '';
   return json({ ok: !!token, token, wsUrl: OC_WS_URL });
 }

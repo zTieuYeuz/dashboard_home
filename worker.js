@@ -107,6 +107,26 @@ import {
   handleTermixHomeProxy,
   handleTermixMoviProxy
 } from './src/termix.js';
+import {
+  handleMcp,
+  handleAdminAiConfig,
+  handleAdminMcp,
+  handleAiAction,
+  handleAiGuide,
+  handleAiKnowledge,
+} from './src/ai/mcp.js';
+import {
+  handleAiExec,
+  handleAiActionsList,
+} from './src/ai/actions.js';
+import {
+  handleAiRead,
+  handleAiReadsList,
+} from './src/ai/reads.js';
+import {
+  handleAiFormsList,
+  handleAdminAiForms,
+} from './src/ai/movi.js';
 
 /* ═══════════════════════════════════════════════
    Auth & User Management System
@@ -2729,7 +2749,8 @@ a:hover{background:#4f46e5}</style></head>
   let newHtml = /<\/head>/i.test(htmlPatched)
     ? htmlPatched.replace(/<\/head>/i, userScript + '\n</head>')
     : htmlPatched.replace(/<body/i, userScript + '\n<body');
-  const bodyEnd = WAYFIND_NAV + THEME_TOGGLE + DATA_REFRESH + PANEL_REFRESH;
+  const bodyEnd = WAYFIND_NAV + THEME_TOGGLE + DATA_REFRESH + PANEL_REFRESH
+    + '<script src="/service-home/_shared/chat.js" defer></script>';
   newHtml = /<\/body>/i.test(newHtml)
     ? newHtml.replace(/<\/body>/i, bodyEnd + '\n</body>')
     : newHtml + bodyEnd;
@@ -3923,6 +3944,18 @@ export default {
     // ── SSH Movi verify — fully public, must be FIRST before any session middleware ──
     if (p === '/api/ssh-movi/verify') return handleSshMoviVerify(request, env);
 
+    // ── MCP server for external agents (OpenClaw) — token-authed, no session ──
+    if (p === '/mcp') return handleMcp(request, env);
+    // ── AI action bridge (Phase 1): audit (session) + knowledge guide (token/admin) ──
+    if (p === '/api/ai/action' && m === 'POST') return handleAiAction(request, env);
+    if (p === '/api/ai/guide') return handleAiGuide(request, env);
+    if (p === '/api/ai/knowledge') return handleAiKnowledge(request, env);
+    if (p === '/api/ai/actions' && m === 'GET') return handleAiActionsList(request, env);
+    if (p === '/api/ai/exec' && m === 'POST') return handleAiExec(request, env);
+    if (p === '/api/ai/reads' && m === 'GET') return handleAiReadsList(request, env);
+    if (p === '/api/ai/read' && m === 'POST') return handleAiRead(request, env);
+    if (p === '/api/ai/forms' && m === 'GET') return handleAiFormsList(request, env);
+
     // ── Auth API (public) ──
     if (p === '/api/auth/login')                   return handleLogin(request, env, ctx);
     if (p === '/api/auth/logout')                  return handleLogout(request, env);
@@ -3951,6 +3984,15 @@ export default {
       if (request.method === 'GET')  return handleListUsers(request, env);
       if (request.method === 'POST') return handleCreateUser(request, env);
     }
+    // ── AI / MCP admin (admin only) ──
+    if (p === '/api/admin/ai-config' || p === '/api/admin/ai-forms' || p.startsWith('/api/admin/mcp')) {
+      const _mcpSess = await getSession(request, env);
+      if (!(await isAdminUser(env, _mcpSess))) return json({ error: 'Admin required' }, 403);
+      if (p === '/api/admin/ai-config') return handleAdminAiConfig(request, env);
+      if (p === '/api/admin/ai-forms') return handleAdminAiForms(request, env);
+      return handleAdminMcp(request, env);
+    }
+
     const userPerm = p.match(/^\/api\/admin\/users\/([^/]+)\/permissions$/);
     if (userPerm) return handleUpdatePermissions(request, env, decodeURIComponent(userPerm[1]));
     const userManagePerms = p.match(/^\/api\/admin\/users\/([^/]+)\/manage-perms$/);

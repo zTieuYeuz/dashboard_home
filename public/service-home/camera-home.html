@@ -579,7 +579,15 @@ function renderCam(id){
   }
 }
 
-/* ── Audio ── */
+/* ── Audio ──
+   cam07/cam08 (EZVIZ): stream chính `camXX` giờ CHỈ VIDEO (để không khóa kênh
+   audio 1-đường của EZVIZ → app gọi 2 chiều được khi không ai bật loa).
+   Bật 🔊 → chuyển sang stream `camXX_live` (go2rtc ghép video sẵn có + audio
+   kéo on-demand từ camera — chỉ chiếm kênh audio TRONG LÚC đang nghe). */
+function _audioStream(id){
+  var c=CAM_DEFAULTS[id]||{};
+  return c.audio ? (id+'_live') : id;   // camera có audio → dùng bản _live khi bật loa
+}
 function camToggleAudio(id){
   var st=_camState[id];st.audioOn=!st.audioOn;
   var btn=document.getElementById('unmute-'+id);if(btn)btn.textContent=st.audioOn?'🔊':'🔇';
@@ -589,7 +597,7 @@ function camToggleAudio(id){
   if(st.audioOn){
     // Mobile: dùng HLS thay MSE — HLS buffer 2s/segment, không bị jitter audio như MSE qua 4G
     var audioMode=_isMobile?'hls,mjpeg':_MODE;
-    var src='/cam-test-live/stream.html?src='+encodeURIComponent(id)+'&mode='+audioMode+'&cam_audio=1';
+    var src='/cam-test-live/stream.html?src='+encodeURIComponent(_audioStream(id))+'&mode='+audioMode+'&cam_audio=1';
     ifr.src='about:blank';
     setTimeout(function(){ifr.src=src;},80);
   }else{
@@ -1050,30 +1058,22 @@ function showExplore(){
   var box=document.getElementById('ai-explore');box.classList.remove('hidden');
   if(!box.innerHTML.trim()||box.querySelector('.ai-empty'))loadExplore();
 }
-function _translateVi(q){
-  /* jinav1 chỉ hiểu tiếng Anh → dịch câu tiếng Việt sang Anh trước khi search */
-  return fetch('/api/translate?sl=auto&tl=en&q='+encodeURIComponent(q),{credentials:'include'})
-    .then(function(r){return r.ok?r.json():{text:q};})
-    .then(function(d){return (d&&d.text)?d.text:q;})
-    .catch(function(){return q;});
-}
 function semanticSearch(){
+  /* jinav2 hiểu tiếng Việt native → gửi thẳng câu tiếng Việt, KHÔNG cần dịch */
   var q=(document.getElementById('ai-q').value||'').trim();
   if(!q){showExplore();return;}
   document.getElementById('ai-explore').classList.add('hidden');
   document.getElementById('ai-back').classList.remove('hidden');
-  document.getElementById('ai-count').textContent='Đang dịch & tìm “'+q+'”…';
+  document.getElementById('ai-count').textContent='Đang tìm “'+q+'”…';
   document.getElementById('ai-grid').innerHTML='';
-  _translateVi(q).then(function(en){
-    var url='/cam-test-api/api/events/search?query='+encodeURIComponent(en)+'&limit=100';
-    return fetch(url).then(function(r){return r.ok?r.json():Promise.reject(r.status);})
-      .then(function(data){
-        var evs=Array.isArray(data)?data:(data.events||[]);
-        renderEvents(evs);
-        var note=(en&&en.toLowerCase()!==q.toLowerCase())?' (dịch: “'+escHtml(en)+'”)':'';
-        document.getElementById('ai-count').innerHTML='Kết quả cho “'+escHtml(q)+'”'+note+' — '+evs.length+' sự kiện';
-      });
-  }).catch(function(e){document.getElementById('ai-grid').innerHTML='<div class="ai-empty">Lỗi tìm kiếm ('+escHtml(String(e))+')</div>';document.getElementById('ai-count').textContent='';});
+  var url='/cam-test-api/api/events/search?query='+encodeURIComponent(q)+'&limit=100';
+  fetch(url).then(function(r){return r.ok?r.json():Promise.reject(r.status);})
+    .then(function(data){
+      var evs=Array.isArray(data)?data:(data.events||[]);
+      renderEvents(evs);
+      document.getElementById('ai-count').textContent='Kết quả cho “'+q+'” — '+evs.length+' sự kiện';
+    })
+    .catch(function(e){document.getElementById('ai-grid').innerHTML='<div class="ai-empty">Lỗi tìm kiếm ('+escHtml(String(e))+')</div>';document.getElementById('ai-count').textContent='';});
 }
 function drillLabel(label){
   _setChip('ai-what','what',label);
