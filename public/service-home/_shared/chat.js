@@ -365,8 +365,11 @@
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (d.ok) {
         var js; try { js = JSON.stringify(d.data); } catch (_) { js = ''; }
-        if (js.length > 6000) js = js.slice(0, 6000) + '…(đã cắt bớt)';
-        feedResultToAi('[DỮ LIỆU: ' + meta.label + '] ' + js + '\n\nHãy dùng dữ liệu này trả lời người dùng bằng tiếng Việt, ngắn gọn. KHÔNG bịa thêm.');
+        // Cắt ở mức cao (dữ liệu nên đã được server gom gọn). Nếu vẫn bị cắt thì
+        // BÁO RÕ để AI KHÔNG đưa con số/đếm chính xác từ dữ liệu thiếu.
+        var cut = '';
+        if (js.length > 45000) { js = js.slice(0, 45000); cut = '\n\n⚠️ DỮ LIỆU BỊ CẮT (quá dài) — KHÔNG được đưa con số đếm chính xác từ đây; hãy nói dữ liệu quá lớn, đề nghị user lọc theo AP/SSID/khu vực cụ thể để đọc gọn hơn.'; }
+        feedResultToAi('[DỮ LIỆU: ' + meta.label + '] ' + js + cut + '\n\nHãy dùng ĐÚNG dữ liệu này trả lời người dùng bằng tiếng Việt, ngắn gọn. Nếu dữ liệu có sẵn phần tổng hợp (summary/byAp/bySsid/counts) thì ưu tiên đọc phần đó thay vì tự đếm. KHÔNG bịa thêm.');
       } else if (d.denied) {
         aiNotice('⛔ ' + (d.error || 'Không có quyền'), true);
         feedResultToAi('[ĐỌC] ' + (d.error || 'Không có quyền xem nguồn này.'));

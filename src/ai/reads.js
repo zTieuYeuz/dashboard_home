@@ -18,7 +18,7 @@ import {
   handleFortigateWebhook, handleVmwareHome, handleAsusWebhook,
   handleAsusClients, handleCasaOS, handleRustdesk,
 } from '../home-services.js';
-import { MOVI_READS } from './movi.js';
+import { MOVI_READS, summarizeMerakiClients, summarizeMerakiDevices, summarizeMerakiEvents } from './movi.js';
 
 /* 2 loại nguồn:
    - `handler(request,env)`  : TỰ kiểm quyền bên trong (Meraki/Movi — getSession+hasPerm).
@@ -41,14 +41,14 @@ export const READ_REGISTRY = [
     desc: 'Danh sách máy RustDesk remote desktop: ID, tên, OS, online/offline.' },
 
   // ── Văn phòng Movi — handler TỰ kiểm quyền ──
-  { id: 'meraki_clients',  perm: 'meraki',         label: 'Thiết bị đang kết nối mạng Meraki (Movi)', handler: handleMerakiClients,
-    desc: 'Danh sách client đang kết nối mạng văn phòng Movi (Meraki): tên, IP, MAC, SSID/Wired, online.' },
-  { id: 'meraki_devices',  perm: 'meraki',         label: 'Thiết bị hạ tầng Meraki (AP/Switch)',       handler: handleMerakiDevices,
-    desc: 'Danh sách AP/Switch/Appliance Meraki: model, serial, IP, firmware, trạng thái.' },
+  { id: 'meraki_clients',  perm: 'meraki',         label: 'Thiết bị đang kết nối mạng Meraki (Movi)', handler: handleMerakiClients, aiTransform: summarizeMerakiClients,
+    desc: 'Client đang kết nối Meraki, ĐÃ GOM SẴN: byAp (số client theo từng AP, vd byAp["F2-02"]), bySsid, tổng online/wired/wireless. Dùng cho câu "AP X có bao nhiêu client", "bao nhiêu người đang kết nối".' },
+  { id: 'meraki_devices',  perm: 'meraki',         label: 'Thiết bị hạ tầng Meraki (AP/Switch)',       handler: handleMerakiDevices, aiTransform: summarizeMerakiDevices,
+    desc: 'AP/Switch/Appliance Meraki (đã gom byType + tách thiết bị lỗi): model, serial, IP, firmware, trạng thái.' },
   { id: 'meraki_uplinks',  perm: 'meraki',         label: 'WAN uplinks Meraki',                        handler: handleMerakiUplinks,
     desc: 'Trạng thái các đường WAN uplink của Meraki (Movi).' },
-  { id: 'meraki_events',   perm: 'meraki',         label: 'Sự kiện mạng Meraki',                       handler: handleMerakiEvents,
-    desc: 'Sự kiện mạng gần đây trên Meraki (Movi).' },
+  { id: 'meraki_events',   perm: 'meraki',         label: 'Sự kiện mạng Meraki',                       handler: handleMerakiEvents, aiTransform: summarizeMerakiEvents,
+    desc: 'Sự kiện mạng gần đây trên Meraki (40 dòng gần nhất).' },
   { id: 'meraki_blocked',  perm: 'meraki',         label: 'Thiết bị bị chặn (Meraki)',                 handler: handleMerakiBlockedClients,
     desc: 'Danh sách client đang bị chặn trên Meraki.' },
   { id: 'movi_fortigate',  perm: 'fortigate-movi', label: 'Trạng thái FortiGate Movi',                 handler: handleMoviSystem,
@@ -88,6 +88,8 @@ export async function handleAiRead(request, env) {
   const ip = request.headers.get('CF-Connecting-IP') || '?';
   if (!src) return json({ ok: false, error: 'Nguồn dữ liệu không tồn tại' }, 404);
 
+  // Request giữ nguyên cookie user — dùng cho handler tự-gate + aiTransform
+  const proxied = new Request('https://internal/ai-read', { method: 'GET', headers: request.headers });
   let resp;
   try {
     if (src.homeHandler) {
@@ -100,7 +102,6 @@ export async function handleAiRead(request, env) {
       resp = await src.homeHandler(env);
     } else {
       // Movi/Meraki: handler tự-gate bằng request giữ nguyên cookie user
-      const proxied = new Request('https://internal/ai-read', { method: 'GET', headers: request.headers });
       resp = await src.handler(proxied, env);
     }
   } catch (e) { return json({ ok: false, error: 'Lỗi đọc: ' + ((e && e.message) || e) }, 500); }
@@ -115,6 +116,14 @@ export async function handleAiRead(request, env) {
         error: 'Bạn không có quyền xem "' + src.label + '". Vì AI đọc thay bạn nên cũng không xem được — hãy báo người dùng họ bị giới hạn quyền này.' }, 403);
     }
     return json({ ok: false, source: src.id, error: (data && data.error) || ('Lỗi ' + resp.status) }, 502);
+  }
+
+  // Gom gọn cho AI (nếu nguồn có aiTransform): trả về dữ liệu ĐÃ TỔNG HỢP
+  // (byAp/bySsid/counts…) để AI đọc chính xác, không phải tự đếm trong đống thô,
+  // và không bị cắt cụt. Lỗi transform → fallback dữ liệu gốc.
+  if (src.aiTransform) {
+    try { data = await src.aiTransform(data, env, proxied); }
+    catch (e) { /* giữ data gốc nếu transform lỗi */ }
   }
   return json({ ok: true, source: src.id, label: src.label, data });
 }

@@ -686,7 +686,6 @@ var ALL_SERVICES_DEF = [
   { id:'ssh',         name:'SSH Terminal',    icon:'⌨',  desc:'Web SSH · Termix',                             url:'https://termix.home-server.id.vn',           local:false, detailPage:'/service-home/ssh.html' },
   { id:'fortigate',   name:'FortiGate',       icon:'🛡', desc:'Firewall · security gateway',                  url:'http://192.168.110.1',                       local:true,  detailPage:'/service-home/fortigate.html' },
   { id:'asus',        name:'ASUS Router',     icon:'📡', desc:'ASUS · home network',                          url:'http://192.168.10.1:8443',                   local:true,  detailPage:'/service-home/asus.html' },
-  { id:'acer',        name:'Acer Router',     icon:'📶', desc:'Acer · home network (LAN only)',               url:'http://192.168.110.100',                     local:true },
   { id:'camera',        name:'Camera',          icon:'📷', desc:'Camera system · go2rtc WebRTC',                url:'https://camera.home-server.id.vn',           local:false, detailPage:'/service-home/camera-home.html'},
   { id:'rustdesk',    name:'RustDesk',        icon:'🖥', desc:'Remote desktop · máy nhân viên',               url:'https://rustdesk.home-server.id.vn/_admin/', local:false, detailPage:'/service-home/rustdesk.html' },
   { id:'meraki',        name:'Meraki-Network',  icon:'🌐', desc:'Cisco Meraki · client monitor',                url:'https://dashboard.meraki.com',               local:false, detailPage:'/service-movi/meraki.html',        noCheck:true },
@@ -703,7 +702,7 @@ var ALL_SERVICES_DEF = [
 /* Categories (matches original SERVICE_CATEGORIES) */
 var SERVICE_CATEGORIES = [
   { id:'home', icon:'🏠', name:'Service Home', desc:'Hạ tầng & hệ thống · home-server.id.vn', accent:'var(--accent)',
-    serviceIds: ['services-hub','esxi','n8n','casaos','ssh','fortigate','asus','acer','camera','rustdesk'] },
+    serviceIds: ['services-hub','esxi','n8n','casaos','ssh','fortigate','asus','camera','rustdesk'] },
   { id:'movi', icon:'🎬', name:'Service Movi', desc:'Văn phòng Movi · Meraki & Topology',    accent:'var(--violet)',
     serviceIds: ['meraki','movi','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi','ssh-movi'] },
 ];
@@ -712,7 +711,7 @@ var SERVICE_CATEGORIES = [
    - 'movi' card maps to 'topology' key (server-side matches this too)
    - 'tool-movi' card is visible if user has ANY of the 4 sub-permissions
 */
-var _permMap = { movi:'topology', acer:'asus' };   // acer: router nhà thứ 2 — dùng chung quyền asus
+var _permMap = { movi:'topology' };
 var _TOOL_MOVI_KEYS = ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'];
 var SERVICES = __USER__.isAdmin
   ? ALL_SERVICES_DEF

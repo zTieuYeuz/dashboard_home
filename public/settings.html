@@ -738,11 +738,9 @@ select.inp{cursor:pointer}
                 <div style="font-size:11px;color:var(--muted);margin:10px 0 4px">Theo vai trò</div>
                 <div id="ai-roles" style="display:flex;flex-wrap:wrap;gap:6px"></div>
                 <div style="font-size:11px;color:var(--muted);margin:12px 0 4px">Theo người dùng cụ thể</div>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
-                  <input class="search-input" id="ai-user-inp" placeholder="username…" style="max-width:200px" onkeydown="if(event.key==='Enter'){event.preventDefault();aiAddUser();}">
-                  <button class="btn btn-sm" onclick="aiAddUser()">+ Thêm</button>
-                </div>
-                <div id="ai-users" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+                <input class="search-input" id="ai-user-search" placeholder="🔍 Tìm user theo tên…" style="max-width:280px;margin-bottom:8px" oninput="renderAiUsers()">
+                <div id="ai-users-list" style="max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:6px">Đang tải…</div>
+                <div id="ai-users-selected" style="font-size:11px;color:var(--muted);margin-top:6px"></div>
               </div>
               <div style="font-size:11px;color:var(--muted)">Người không được cấp sẽ không thấy bong bóng chat. Quản trị viên luôn được dùng.</div>
             </div>
@@ -4012,7 +4010,8 @@ function loadAiConfig(){
     document.getElementById('ai-enabled').checked = _aiCfg.enabled;
     document.getElementById('ai-all').checked = !!_aiCfg.access.all;
     document.getElementById('ai-model').textContent = d.model||'HomeAI';
-    renderAiRoles(); renderAiUsers();
+    renderAiRoles();
+    if(_allUsers===null) loadAiUsersList(); else renderAiUsers();
   }).catch(function(){});
 }
 function renderAiRoles(){
@@ -4029,20 +4028,55 @@ function aiToggleRole(r){
   if(i>=0) a.splice(i,1); else a.push(r);
   _aiCfg.access.roles=a; renderAiRoles();
 }
+var _allUsers=null;   // [{username, role}]
+function loadAiUsersList(){
+  fetch('/api/admin/users',{credentials:'include'}).then(function(r){return r.ok?r.json():{users:[]};})
+    .then(function(d){ _allUsers=(d.users||[]).map(function(u){return {username:u.username, role:u.role||'user'};}); renderAiUsers(); })
+    .catch(function(){ _allUsers=[]; renderAiUsers(); });
+}
+var _AI_ROLE_COLOR={admin:'var(--accent)',user:'var(--ok)',viewer:'var(--muted)'};
 function renderAiUsers(){
-  var wrap=document.getElementById('ai-users');
-  var u=_aiCfg.access.users||[];
-  wrap.innerHTML = u.length ? u.map(function(x){
-    return '<span class="chip" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:4px 10px;border-radius:12px;border:1px solid var(--border);background:var(--surface-2)">'+esc(x)+' <span style="cursor:pointer;color:var(--bad)" onclick="aiRemoveUser(\''+esc(x)+'\')">✕</span></span>';
-  }).join('') : '<span style="font-size:12px;color:var(--muted)">chưa có</span>';
+  var wrap=document.getElementById('ai-users-list'); if(!wrap) return;
+  var sel=_aiCfg.access.users||[];
+  if(_allUsers===null){ wrap.innerHTML='<div style="font-size:12px;color:var(--muted);padding:8px">Đang tải danh sách user…</div>'; return; }
+  var q=((document.getElementById('ai-user-search')||{}).value||'').trim().toLowerCase();
+  var byRole={}, known={};
+  _allUsers.forEach(function(u){
+    known[u.username]=1;
+    if(q && u.username.toLowerCase().indexOf(q)<0) return;
+    var r=u.role||'user'; (byRole[r]=byRole[r]||[]).push(u);
+  });
+  // user đã chọn nhưng không còn trong danh sách (đã xoá / gõ tay trước đây)
+  var orphans=sel.filter(function(x){ return !known[x] && (!q || x.toLowerCase().indexOf(q)>=0); });
+  var order=['admin','user','viewer'];
+  Object.keys(byRole).forEach(function(r){ if(order.indexOf(r)<0) order.push(r); });
+  function row(name, role, on){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;'+(on?'background:color-mix(in oklch,var(--accent) 14%,transparent)':'')+'">'
+      +'<input type="checkbox" '+(on?'checked':'')+' onchange="aiToggleUser(\''+esc(name)+'\')">'
+      +'<span style="font-size:13px">'+esc(name)+'</span>'
+      +'<span style="margin-left:auto;font-size:10px;padding:1px 8px;border-radius:8px;background:var(--surface-2);color:'+(_AI_ROLE_COLOR[role]||'var(--muted)')+'">'+esc(role)+'</span></label>';
+  }
+  var html='';
+  order.forEach(function(r){
+    var arr=byRole[r]; if(!arr||!arr.length) return;
+    arr.sort(function(a,b){return a.username.localeCompare(b.username);});
+    html+='<div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:8px 4px 3px">'+esc(r)+' · '+arr.length+'</div>';
+    html+=arr.map(function(u){ return row(u.username, r, sel.indexOf(u.username)>=0); }).join('');
+  });
+  if(orphans.length){
+    html+='<div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--warn,#e0a000);margin:8px 4px 3px">khác (không còn trong danh sách)</div>';
+    html+=orphans.map(function(x){ return row(x,'?',true); }).join('');
+  }
+  wrap.innerHTML = html || '<div style="font-size:12px;color:var(--muted);padding:8px">Không có user khớp.</div>';
+  var sumEl=document.getElementById('ai-users-selected');
+  if(sumEl) sumEl.textContent = sel.length ? ('✅ Đã chọn '+sel.length+' user: '+sel.join(', ')) : 'Chưa chọn user cụ thể nào.';
 }
-function aiAddUser(){
-  var inp=document.getElementById('ai-user-inp'); var v=(inp.value||'').trim().toLowerCase();
-  if(!v) return; _aiCfg.access.users=_aiCfg.access.users||[];
-  if(_aiCfg.access.users.indexOf(v)<0) _aiCfg.access.users.push(v);
-  inp.value=''; renderAiUsers();
+function aiToggleUser(name){
+  _aiCfg.access.users=_aiCfg.access.users||[];
+  var i=_aiCfg.access.users.indexOf(name);
+  if(i>=0) _aiCfg.access.users.splice(i,1); else _aiCfg.access.users.push(name);
+  renderAiUsers();
 }
-function aiRemoveUser(x){ _aiCfg.access.users=(_aiCfg.access.users||[]).filter(function(y){return y!==x;}); renderAiUsers(); }
 function saveAiConfig(){
   _aiCfg.enabled=document.getElementById('ai-enabled').checked;
   _aiCfg.access.all=document.getElementById('ai-all').checked;

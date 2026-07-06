@@ -1032,7 +1032,8 @@ async function handleListGroups(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   // Allow admin, delegated managers, or users with sysPerms.addUser (read-only for group assignment during user creation)
-  if (!(await isAdminUser(env, session))) {
+  const isAdmin = await isAdminUser(env, session);
+  if (!isAdmin) {
     const callerRaw = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
     const delegateSvcs = await getSessionDelegateServices(env, session);
     if (!delegateSvcs.length && !callerRaw?.sysPerms?.addUser) return json({ error: 'Admin required' }, 403);
@@ -1041,7 +1042,8 @@ async function handleListGroups(request, env) {
   const groups = [];
   for (const id of ids) {
     const g = await env.DASHBOARD_KV.get(`policy_group:${id}`, 'json');
-    if (g) groups.push(g);
+    // Delegate/non-admin CHỈ thấy nhóm quyền do chính mình tạo — không thấy nhóm của admin/người khác.
+    if (g && (isAdmin || g.createdBy === session.username)) groups.push(g);
   }
   return json({ groups });
 }
@@ -1089,6 +1091,8 @@ async function handleUpdateGroup(request, env, groupId) {
   if (!isAdmin && (!delegateSvcs || !delegateSvcs.length)) return json({ error: 'Admin required' }, 403);
   const group = await env.DASHBOARD_KV.get(`policy_group:${groupId}`, 'json');
   if (!group) return json({ error: 'Group not found' }, 404);
+  // Delegate chỉ được sửa nhóm quyền do CHÍNH MÌNH tạo (chống sửa nhóm của admin).
+  if (!isAdmin && group.createdBy !== session.username) return json({ error: 'Bạn chỉ sửa được nhóm quyền do mình tạo' }, 403);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   if (isAdmin) {
     if (body.name        !== undefined) group.name        = sanitizeName(String(body.name));
@@ -1143,7 +1147,8 @@ async function handleDeleteGroup(request, env, groupId) {
 async function handleListUserGroups(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await isAdminUser(env, session))) {
+  const isAdmin = await isAdminUser(env, session);
+  if (!isAdmin) {
     const callerRaw = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
     const delegateSvcs = await getSessionDelegateServices(env, session);
     if (!delegateSvcs.length && !callerRaw?.sysPerms?.addUser) return json({ error: 'Admin required' }, 403);
@@ -1152,7 +1157,8 @@ async function handleListUserGroups(request, env) {
   const groups = [];
   for (const id of ids) {
     const g = await env.DASHBOARD_KV.get(`user_group:${id}`, 'json');
-    if (g) groups.push(g);
+    // Delegate/non-admin CHỈ thấy User Group do chính mình tạo.
+    if (g && (isAdmin || g.createdBy === session.username)) groups.push(g);
   }
   return json({ groups });
 }
@@ -1177,6 +1183,7 @@ async function handleCreateUserGroup(request, env) {
     members:    [],
     roleGroups: [],
     created: Date.now(),
+    createdBy: session.username,
   };
   await env.DASHBOARD_KV.put(`user_group:${id}`, JSON.stringify(group));
   const ids = await env.DASHBOARD_KV.get('user_groups', 'json') || [];
@@ -1189,12 +1196,15 @@ async function handleCreateUserGroup(request, env) {
 async function handleUpdateUserGroup(request, env, groupId) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await isAdminUser(env, session))) {
+  const isAdmin = await isAdminUser(env, session);
+  if (!isAdmin) {
     const delegateSvcs = await getSessionDelegateServices(env, session);
     if (!delegateSvcs.length) return json({ error: 'Admin required' }, 403);
   }
   const group = await env.DASHBOARD_KV.get(`user_group:${groupId}`, 'json');
   if (!group) return json({ error: 'User Group not found' }, 404);
+  // Delegate chỉ được sửa User Group do chính mình tạo.
+  if (!isAdmin && group.createdBy !== session.username) return json({ error: 'Bạn chỉ sửa được User Group do mình tạo' }, 403);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
 
   const prevMembers = [...(group.members || [])];
@@ -2804,7 +2814,6 @@ const SERVICES = [
   { id: 'ssh',         name: 'SSH Terminal',   checkUrl: 'https://termix.home-server.id.vn' },
   { id: 'fortigate',   name: 'FortiGate',      checkUrl: null },
   { id: 'asus',        name: 'ASUS Router',    checkUrl: null },
-  { id: 'acer',        name: 'Acer Router',    checkUrl: null },
   { id: 'camera',      name: 'Camera',         checkUrl: 'https://camera.home-server.id.vn' },
   { id: 'rustdesk',    name: 'RustDesk',       checkUrl: 'https://rustdesk.home-server.id.vn' },
 ];
@@ -3968,6 +3977,7 @@ export default {
     // ── Microsoft OIDC SSO (public — no session required) ──
     if (p === '/auth/microsoft')          return handleMicrosoftAuth(request, env);
     if (p === '/auth/microsoft/callback') return handleMicrosoftCallback(request, env, ctx);
+
     if (p === '/auth/microsoft/mfa' && request.method === 'POST') return handleMicrosoftMfaVerify(request, env, ctx);
 
     // ── First-login setup flow (no session required — use setupToken) ──

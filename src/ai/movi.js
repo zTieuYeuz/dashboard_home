@@ -15,7 +15,7 @@ import {
   handleMerakiDeviceStatus, handleMerakiSwitchPorts, handleMerakiSwitchPortConfigs,
   handleMerakiLinkAggregations, handleMerakiL3Routing,
   handleMoviSdwan, handleMoviSdwanRules,
-  handleMerakiUplinks, handleMerakiEvents,
+  handleMerakiUplinks, handleMerakiEvents, handleMerakiDevices,
 } from '../meraki.js';
 import {
   handleMoviInterfaces, handleMoviPolicy, handleMoviDhcp, handleMoviSslVpn,
@@ -23,6 +23,7 @@ import {
   handleMoviFortiviewSource,
 } from '../movi-fortigate.js';
 import { handleMoviVmwareData } from '../home-services.js';
+import { handleToolMoviCreateUser } from '../tool-movi.js';
 
 /* ── 1) Nguồn đọc Movi mở rộng (handler tự-gate: meraki / fortigate-movi) ── */
 export const MOVI_READS = [
@@ -106,6 +107,76 @@ export async function handleMoviNetworkHealth(request, env) {
   });
 }
 
+/* ── 2b) TRANSFORM gom gọn cho AI ──
+   Dữ liệu Meraki thô rất lớn (hàng chục–trăm client) → AI dễ đếm sai + bị cắt cụt.
+   Các hàm dưới TỔNG HỢP sẵn (byAp/bySsid/counts) để AI đọc chính xác 1 phát. */
+
+/* CLIENT theo AP + SSID. Trả về byAp = {"<tên AP>": số client} → trả lời trực tiếp
+   "AP X có bao nhiêu client". Map serial/mac → tên AP bằng danh sách thiết bị. */
+export async function summarizeMerakiClients(data, env, req) {
+  const clients = (data && data.clients) || [];
+  let apBySerial = {}, apByMac = {};
+  try {
+    const dresp = await handleMerakiDevices(req, env);
+    if (dresp.status < 400) {
+      const dd = await dresp.json();
+      for (const d of (dd.devices || [])) {
+        if (d.serial) apBySerial[String(d.serial).toLowerCase()] = d.name;
+        if (d.mac)    apByMac[String(d.mac).toLowerCase()]       = d.name;
+      }
+    }
+  } catch { /* thiếu quyền devices vẫn gom được theo recentDeviceName */ }
+
+  const byAp = {}, bySsid = {};
+  let online = 0, wired = 0, wireless = 0;
+  const compact = [];
+  for (const c of clients) {
+    const isWired = c.recentDeviceConnection === 'Wired' || !c.ssid || c.ssid === 'Wired' || c.ssid === '—';
+    const ap = c.recentDeviceName
+      || (c.recentDeviceSerial && apBySerial[String(c.recentDeviceSerial).toLowerCase()])
+      || (c.recentDeviceMac    && apByMac[String(c.recentDeviceMac).toLowerCase()])
+      || (isWired ? '(Wired/Switch)' : '(không rõ AP)');
+    const ssid = c.ssid || (isWired ? 'Wired' : '—');
+    const on = c.status === 'Online';
+    if (on) online++;
+    if (isWired) wired++; else wireless++;
+    byAp[ap]     = (byAp[ap]     || 0) + 1;
+    bySsid[ssid] = (bySsid[ssid] || 0) + 1;
+    if (compact.length < 400) compact.push({ name: c.name || c.description || c.mac, ip: c.ip || '', ap, ssid, online: on });
+  }
+  const sortDesc = (o) => Object.fromEntries(Object.entries(o).sort((a, b) => b[1] - a[1]));
+  return {
+    _summary: `Tổng ${clients.length} client (online ${online}); wireless ${wireless}, wired ${wired}.`,
+    total: clients.length, online, wireless, wired,
+    byAp:   sortDesc(byAp),
+    bySsid: sortDesc(bySsid),
+    note: 'byAp = {"<tên AP>": số client đang nối AP đó}. Muốn biết AP nào có bao nhiêu client → đọc byAp[<tên AP>] (vd byAp["F2-02"]). Tên AP không phân biệt hoa/thường: user hỏi "f2-02" = key "F2-02". Nếu không thấy key khớp thì AP đó hiện KHÔNG có client. clients[] là danh sách gọn (tối đa 400).',
+    clients: compact,
+  };
+}
+
+/* THIẾT BỊ Meraki: gom theo loại + tách thiết bị không online. */
+export function summarizeMerakiDevices(data) {
+  const devices = (data && data.devices) || [];
+  const byType = {}; const problem = []; let online = 0;
+  for (const d of devices) {
+    byType[d.productType || '?'] = (byType[d.productType || '?'] || 0) + 1;
+    if (d.status === 'online' || d.firmwareOk) online++;
+    else problem.push({ name: d.name, model: d.model, status: d.status });
+  }
+  return {
+    _summary: `Tổng ${devices.length} thiết bị Meraki (online ${online}). Loại: ${Object.entries(byType).map(([k, v]) => k + '=' + v).join(', ')}.`,
+    total: devices.length, online, byType, problem,
+    devices: devices.slice(0, 200).map(d => ({ name: d.name, model: d.model, serial: d.serial, ip: d.lanIp, type: d.productType, status: d.status, firmware: d.firmware })),
+  };
+}
+
+/* SỰ KIỆN mạng: cắt còn 40 dòng gần nhất (đủ để chẩn đoán, không phình). */
+export function summarizeMerakiEvents(data) {
+  const list = (data && (data.events || data.rows)) || (Array.isArray(data) ? data : []);
+  return { total: (list || []).length, events: (list || []).slice(0, 40) };
+}
+
 /* ── 3) FORMS — tool cố định gửi n8n theo quy tắc ──
    KV `ai_forms` = mảng form; trống thì dùng DEFAULT_FORMS. Mỗi form:
    { id, label, desc, perm, adminOnly, webhookEnv (tên secret chứa URL n8n),
@@ -115,21 +186,25 @@ export const DEFAULT_FORMS = [
   {
     id: 'movi_create_user',
     label: 'Tạo user mới trong hệ thống Movi',
-    desc: 'Thu thập thông tin nhân viên mới theo quy tắc Movi rồi gửi n8n xử lý (AD/email/…).',
-    perm: 'fortigate-movi', adminOnly: true,
-    webhookEnv: 'MOVI_WH_AI_CREATE_USER',
+    desc: 'Thu thập thông tin nhân viên mới rồi tạo qua workflow n8n. Dùng CHUNG endpoint + quyền với trang Tool Movi (quyền tool-movi-create-user).',
+    // Khớp đúng hệ phân quyền có sẵn của dashboard: user được cấp quyền
+    // `tool-movi-create-user` là dùng được (không cần là admin).
+    perm: 'tool-movi-create-user', adminOnly: false,
+    builtinHandler: 'tool_movi_create_user',   // gọi handleToolMoviCreateUser (1 nguồn sự thật)
     fields: [
-      { name: 'fullName',   label: 'Họ tên đầy đủ',      required: true,  example: 'Nguyễn Văn A' },
-      { name: 'username',   label: 'Tên đăng nhập',      required: true,  pattern: '^[a-z][a-z0-9._-]{2,31}$', patternDesc: 'chữ thường không dấu, bắt đầu bằng chữ, 3-32 ký tự (a-z 0-9 . _ -)' },
-      { name: 'email',      label: 'Email công ty',      required: true,  pattern: '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$', patternDesc: 'email hợp lệ' },
-      { name: 'department', label: 'Phòng ban',          required: true,  example: 'Kế toán / IT / Kho…' },
-      { name: 'title',      label: 'Chức danh',          required: false },
-      { name: 'phone',      label: 'SĐT nội bộ/di động', required: false, pattern: '^[0-9+ .-]{8,15}$', patternDesc: '8-15 chữ số' },
-      { name: 'manager',    label: 'Quản lý trực tiếp',  required: false },
-      { name: 'startDate',  label: 'Ngày bắt đầu',       required: true,  pattern: '^\\d{4}-\\d{2}-\\d{2}$', patternDesc: 'định dạng YYYY-MM-DD' },
-      { name: 'note',       label: 'Ghi chú thêm',       required: false },
+      { name: 'firstName',     label: 'Tên (First Name)',   required: true,  example: 'An' },
+      { name: 'lastName',      label: 'Họ và tên đệm (Last Name)', required: true, example: 'Nguyễn Văn' },
+      { name: 'email',         label: 'Email User Movi (email công ty sẽ cấp)', required: true, pattern: '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$', patternDesc: 'email hợp lệ' },
+      { name: 'personalEmail', label: 'Email cá nhân',      required: true,  pattern: '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$', patternDesc: 'email cá nhân hợp lệ' },
+      { name: 'group',         label: 'Phòng ban (Phòng Ban)', required: true, example: 'Kế toán / IT / Kho…' },
+      { name: 'jobTitle',      label: 'Chức danh (JobTitle)', required: false },
+      { name: 'department',    label: 'Department',         required: false },
+      { name: 'office',        label: 'Văn phòng (Office)', required: false },
+      { name: 'mobilePhone',   label: 'Điện thoại',         required: false, pattern: '^[0-9+ .-]{8,15}$', patternDesc: '8-15 chữ số' },
+      { name: 'manager',       label: 'Quản lý (Manager)',  required: false },
+      { name: 'company',       label: 'Công ty (Company)',  required: false },
     ],
-    rules: 'Hỏi user từng thông tin còn thiếu (đừng hỏi dồn quá 3 mục 1 lần). username: gợi ý từ họ tên (vd Nguyễn Văn A → anv hoặc a.nguyenvan), phải chữ thường không dấu. Email đuôi công ty nếu user không nói rõ thì hỏi lại. Xác nhận lại TOÀN BỘ thông tin với user trước khi gửi. Chỉ gửi khi user đồng ý.',
+    rules: 'Hỏi user từng thông tin còn thiếu (đừng hỏi dồn quá 3 mục 1 lần). Bắt buộc: firstName, lastName, email công ty (email User Movi), personalEmail (email cá nhân), group (phòng ban). Xác nhận lại TOÀN BỘ thông tin với user trước khi gửi. Chỉ gửi khi user đồng ý.',
   },
 ];
 export async function getForms(env) {
@@ -191,7 +266,24 @@ export async function submitForm(env, session, params, ip) {
       error: 'Dữ liệu chưa đạt quy tắc, KHÔNG gửi: ' + errors.join(' · ') }, 400);
   }
 
-  // Gửi n8n
+  // ── Nếu form dùng handler dashboard có sẵn → gọi thẳng (1 nguồn sự thật:
+  //    cùng webhook + transform + logic với trang Tool Movi) ──
+  if (form.builtinHandler === 'tool_movi_create_user') {
+    const req = new Request('https://internal/ai-form', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(clean),
+    });
+    let resp;
+    try { resp = await handleToolMoviCreateUser(req, env, session); }
+    catch (e) { return json({ ok: false, error: 'Lỗi tạo user: ' + ((e && e.message) || e) }, 502); }
+    const ok = resp.status < 400;
+    let rd = null; try { rd = await resp.json(); } catch { /* non-json */ }
+    await logActivity(env, { action: 'ai-form:' + form.id, username: session.username, ip: ip || '?', success: ok,
+      detail: (form.label + ' ' + JSON.stringify(clean)).slice(0, 200) });
+    if (!ok) return json({ ok: false, error: (rd && rd.error) || ('Lỗi ' + resp.status), result: rd }, 502);
+    return json({ ok: true, form: form.id, label: form.label, result: rd, sent: clean });
+  }
+
+  // Gửi n8n (form tuỳ biến qua webhookEnv)
   const url = cleanEnv(env[form.webhookEnv] || '');
   if (!url) return json({ ok: false, error: 'Webhook cho biểu mẫu này chưa cấu hình (secret ' + form.webhookEnv + '). Báo admin.' }, 503);
   let auth; try { auth = moviN8nAuth(env); } catch (e) { return json({ ok: false, error: e.message }, 503); }
@@ -224,7 +316,8 @@ export async function handleAdminAiForms(request, env) {
     let b; try { b = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
     if (!Array.isArray(b.forms)) return json({ error: 'forms phải là mảng' }, 400);
     for (const f of b.forms) {
-      if (!f.id || !f.label || !f.webhookEnv) return json({ error: 'Mỗi form cần id, label, webhookEnv' }, 400);
+      if (!f.id || !f.label) return json({ error: 'Mỗi form cần id, label' }, 400);
+      if (!f.webhookEnv && !f.builtinHandler) return json({ error: 'form ' + f.id + ' cần webhookEnv hoặc builtinHandler' }, 400);
       if (!Array.isArray(f.fields)) return json({ error: 'form ' + f.id + ' thiếu fields[]' }, 400);
     }
     await env.DASHBOARD_KV.put('ai_forms', JSON.stringify(b.forms.slice(0, 50)));
