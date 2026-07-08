@@ -2711,7 +2711,9 @@ a:hover{background:#4f46e5}</style></head>
   })();
   </script>` + makeIdleScript(idleMs, warnMs) + `<script>(function(){
   var u=window.__USER__;
-  if(!u||!u.isSaml||u.mfaEnabled)return;
+  // Nhắc bật MFA cho MỌI user chưa bật (cả local lẫn Microsoft) — trước đây chỉ
+  // nhắc user Microsoft nên user local tạo với "không yêu cầu MFA" không thấy nhắc.
+  if(!u||u.mfaEnabled)return;
   function _showMfaWarn(){
     if(document.getElementById('_mfaw'))return;
     var d=document.createElement('div');
@@ -2731,9 +2733,9 @@ a:hover{background:#4f46e5}</style></head>
     var ttl=document.createElement('b');
     ttl.textContent='Chưa bật MFA';
     ttl.style.cssText='font-size:13px;color:#fbbf24;display:block;margin-bottom:3px';
-    var txt=document.createTextNode('Bật xác thực 2 bước để bảo mật tài khoản Microsoft. ');
+    var txt=document.createTextNode('Bật xác thực 2 bước (MFA) để bảo mật tài khoản của bạn. ');
     var lnk=document.createElement('a');
-    lnk.href='/settings.html#mfa';
+    lnk.href='/settings.html#setup-mfa';
     lnk.textContent='Bật ngay →';
     lnk.style.cssText='color:#fbbf24;text-decoration:underline;font-weight:600';
     bdy.appendChild(ttl); bdy.appendChild(txt); bdy.appendChild(lnk);

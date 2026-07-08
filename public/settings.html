@@ -3997,6 +3997,15 @@ window.addEventListener('DOMContentLoaded', function(){
     _accMfaEl.addEventListener('input', function(){ this.value = this.value.replace(/\D/g,''); });
     _accMfaEl.addEventListener('keydown', function(e){ if (e.key==='Enter') changeMyPassword(); });
   }
+  // Deep-link từ banner nhắc MFA: /settings.html#setup-mfa → mở tab Tài khoản + bắt đầu thiết lập MFA
+  if (location.hash === '#setup-mfa' || location.hash === '#mfa') {
+    try { switchTab('account'); } catch(_){}
+    setTimeout(function(){
+      var b = document.getElementById('btn-enable-mfa');
+      if (b && b.style.display !== 'none') { try { startMfaSetup(); } catch(_){} }
+      else { var p = document.getElementById('mfa-setup-modal') ? document.querySelector('.panel-title') : null; }
+    }, 400);
+  }
 });
 
 /* ═══════════════════════════════════════════════════════════
