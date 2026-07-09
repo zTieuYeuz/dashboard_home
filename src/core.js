@@ -399,6 +399,7 @@ export const DEFAULT_CAMERAS = [
   { id: 'cam06', name: 'Camera 06',          type: 'ip',      stream: 'cam06' },
   { id: 'cam07', name: 'Camera Phòng Khách', type: 'unknown', stream: null    },
   { id: 'cam08', name: 'Camera 08',          type: 'unknown', stream: null    },
+  { id: 'cam09', name: 'Camera 09',          type: 'unknown', stream: null    },
 ];
 
 export const DEFAULT_CAMERAS_MOVI = [
