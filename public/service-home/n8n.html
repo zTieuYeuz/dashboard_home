@@ -604,7 +604,7 @@ function openDrawer(execId, wfId, wfName) {
       document.getElementById('drawerBody').innerHTML = dHtml;
     })
     .catch(function(e){
-      document.getElementById('drawerBody').innerHTML = '<div class="err-banner">⚠ Không tải được: '+e.message+'</div>';
+      document.getElementById('drawerBody').innerHTML = '<div class="err-banner">⚠ Không tải được: '+esc(e.message)+'</div>';
     });
 }
 function closeDrawer() {
@@ -685,7 +685,7 @@ function scheduleRefresh(seconds) {
 
 function showError(msg) {
   ['wfList','exList'].forEach(function(id){
-    document.getElementById(id).innerHTML = '<div class="err-banner">⚠ '+msg+'</div>';
+    document.getElementById(id).innerHTML = '<div class="err-banner">⚠ '+esc(msg)+'</div>';
   });
 }
 

@@ -254,13 +254,6 @@ export const _sessionCache = new Map(); // token -> { session, exp }
 export const SESSION_CACHE_TTL_MS = 30_000;
 export function _invalidateSessionCache(token) { if (token) _sessionCache.delete(token); }
 
-/* ── Worker-level JPEG cache for latest.jpg snapshot polling ──
-   3 parallel browser workers × N cameras = N×3 requests/sec to Frigate.
-   This cache lets only 1 request per 250ms per camera reach Frigate;
-   the other workers get an instant in-memory response. */
-export const _snapJpgCache = new Map(); // subPath → { bytes: Uint8Array, ct: string, exp: number }
-export const SNAP_JPG_TTL_MS = 250;
-
 export async function computeEffectivePermissions(env, username) {
   const _c = _effCache.get(username);
   if (_c && _c.exp > Date.now()) return _c.eff;

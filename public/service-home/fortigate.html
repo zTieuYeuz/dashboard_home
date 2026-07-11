@@ -121,23 +121,6 @@ html.embed .page{padding-top:.75rem}
 .badge-down{font-size:9px;padding:1px 5px;border-radius:3px;background:#2d0d0d;color:var(--red);border:1px solid #5c1a1a;font-weight:600}
 .badge-on{font-size:9px;padding:1px 5px;border-radius:3px;background:#0d1e2d;color:var(--accent);border:1px solid #1a3a5c;font-weight:600}
 
-/* ── SSL VPN ── */
-.ssl-user{padding:8px 0;border-bottom:1px solid var(--border)}
-.ssl-user:last-child{border-bottom:none}
-.ssl-user-header{display:flex;align-items:center;justify-content:space-between;gap:6px}
-.ssl-user-name{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
-.ssl-user-meta{font-size:11px;color:var(--muted);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap;font-family:var(--mono)}
-.ssl-empty{font-size:12px;color:var(--muted);text-align:center;padding:8px 6px}
-
-/* ── VPN IPSec ── */
-.vpn-item{padding:7px 0;border-bottom:1px solid var(--border)}
-.vpn-item:last-child{border-bottom:none}
-.vpn-header{display:flex;align-items:center;justify-content:space-between;gap:6px}
-.vpn-name{font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px}
-.vpn-rgwy{font-size:10px;color:var(--muted);font-family:var(--mono)}
-.vpn-tunnels{padding-left:10px;margin-top:3px}
-.vpn-tunnel-row{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);padding:2px 0;font-family:var(--mono)}
-
 /* ── BW Chart panel (col 3) ── */
 .bw-panel-card{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;height:100%;display:flex;flex-direction:column}
 .bw-header{padding:9px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:background .15s;flex-shrink:0}
@@ -456,10 +439,6 @@ function fmtBytes(b){
   if(b>=1e3)return(b/1e3).toFixed(0)+' KB';
   return b+' B';
 }
-function fmtDur(s){
-  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;
-  if(h>0)return`${h}h ${m}m`;if(m>0)return`${m}m ${sc}s`;return`${sc}s`;
-}
 function barCls(p){return p>=85?'bar-red':p>=65?'bar-amber':'bar-green';}
 function valCls(p){return p>=85?'c-red':p>=65?'c-amber':'c-green';}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
@@ -531,28 +510,6 @@ function renderSysInfo(sys){
   ).join('')||'<div style="color:var(--muted);font-size:11px">No data</div>';
 }
 
-function renderSSL(ssl){
-  const count=ssl?.activeUsers??0;
-  document.getElementById('ssl-badge').textContent=count?count+' user'+(count!==1?'s':'')+' online':'No users';
-  if(!ssl?.users?.length){
-    document.getElementById('ssl-panel').innerHTML='<div class="ssl-empty">🔒 No users connected</div>';
-    return;
-  }
-  document.getElementById('ssl-panel').innerHTML=ssl.users.map(u=>`
-    <div class="ssl-user">
-      <div class="ssl-user-header">
-        <div class="ssl-user-name">👤 ${esc(u.user)} <span class="badge-on">ONLINE</span></div>
-        <span style="font-size:10px;color:var(--muted)">${fmtDur(u.duration)}</span>
-      </div>
-      <div class="ssl-user-meta">
-        <span>🌐 ${esc(u.remoteHost||'—')}</span>
-        ${u.tunnelIp?`<span>🔗 ${esc(u.tunnelIp)}</span>`:''}
-        ${u.inBytes?`<span>↓${fmtBytes(u.inBytes)}</span>`:''}
-        ${u.outBytes?`<span>↑${fmtBytes(u.outBytes)}</span>`:''}
-      </div>
-    </div>`).join('');
-}
-
 function renderInterfaces(ifaces,stats){
   document.getElementById('iface-badge').textContent=`${stats?.ifaceUp??0} up / ${stats?.ifaceTotal??0}`;
   const panel=document.getElementById('iface-panel');
@@ -573,23 +530,6 @@ function renderInterfaces(ifaces,stats){
       </div>
     </div>`;
   }).join('')+'</div>';
-}
-
-function renderVPN(vpns,stats){
-  document.getElementById('vpn-badge').textContent=`${stats?.vpnUp??0} up / ${stats?.vpnTotal??0}`;
-  if(!vpns?.length){document.getElementById('vpn-panel').innerHTML='<div class="ssl-empty">No VPN tunnels</div>';return;}
-  document.getElementById('vpn-panel').innerHTML=vpns.map(v=>{
-    const badge=v.status==='up'?'<span class="badge-up">UP</span>':'<span class="badge-down">DOWN</span>';
-    const rgwy=v.rgwy?`<div class="vpn-rgwy">${esc(v.rgwy)}</div>`:'';
-    const tunnels=(v.tunnels||[]).map(t=>`<div class="vpn-tunnel-row">
-      <span>${esc(t.name)} ${t.status==='up'?'🟢':'🔴'}</span>
-      <span>↓${fmtBytes(t.inBytes)} ↑${fmtBytes(t.outBytes)}</span>
-    </div>`).join('');
-    return`<div class="vpn-item">
-      <div class="vpn-header"><div class="vpn-name">${esc(v.name)} ${badge}</div>${rgwy}</div>
-      ${tunnels?`<div class="vpn-tunnels">${tunnels}</div>`:''}
-    </div>`;
-  }).join('');
 }
 
 function renderPolicies(policies,stats){
@@ -663,7 +603,7 @@ async function loadAll(){
   try{
     const r=await fetch('/api/fortigate');
     const d=await r.json();
-    if(d.error){document.getElementById('stats-row').innerHTML=`<div class="error-box" style="grid-column:1/-1">⚠️ ${d.error}</div>`;return;}
+    if(d.error){document.getElementById('stats-row').innerHTML=`<div class="error-box" style="grid-column:1/-1">⚠️ ${esc(d.error)}</div>`;return;}
     renderStats(d);renderResources(d.resources);renderSysInfo(d.system);
     renderInterfaces(d.interfaces,d.stats);
     renderPolicies(d.policies,d.stats);
@@ -677,7 +617,7 @@ async function loadAll(){
       document.getElementById('reboot-btn').style.display='inline-flex';
     }
   }catch(e){
-    document.getElementById('stats-row').innerHTML=`<div class="error-box" style="grid-column:1/-1">⚠️ ${e.message}</div>`;
+    document.getElementById('stats-row').innerHTML=`<div class="error-box" style="grid-column:1/-1">⚠️ ${esc(e.message)}</div>`;
   }finally{btn.innerHTML='⟳ Refresh';btn.disabled=false;}
 }
 

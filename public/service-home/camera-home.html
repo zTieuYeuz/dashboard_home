@@ -596,8 +596,10 @@ function camToggleAudio(id){
   var ifr=frame&&frame.querySelector('iframe');
   if(!ifr)return;
   if(st.audioOn){
+    // Bật loa: LOẠI webrtc — WebRTC không phát được audio AAC của camera (trên LAN
+    // nó kết nối được và "thắng" MSE → có hình câm tiếng). MSE phát AAC chuẩn.
     // Mobile: dùng HLS thay MSE — HLS buffer 2s/segment, không bị jitter audio như MSE qua 4G
-    var audioMode=_isMobile?'hls,mjpeg':_MODE;
+    var audioMode=_isMobile?'hls,mjpeg':'mse,hls,mjpeg';
     var src='/cam-test-live/stream.html?src='+encodeURIComponent(_audioStream(id))+'&mode='+audioMode+'&cam_audio=1';
     ifr.src='about:blank';
     setTimeout(function(){ifr.src=src;},80);

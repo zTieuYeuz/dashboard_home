@@ -1,191 +1,15 @@
-﻿<!DOCTYPE html>
-<html lang="vi" data-theme="dark">
-<head>
-<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>VMware Home — Dashboard SYSTEM</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="/service-home/_shared/base.css"/>
-<style>
-.status-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok)}
-
-.container{max-width:1340px;margin:0 auto;padding:1.5rem}
-
-.stats-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:1.25rem}
-.stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem;text-align:center}
-.stat-value{font-size:24px;font-weight:700;line-height:1;margin-bottom:3px}
-.stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-.c-blue{color:var(--accent)}.c-green{color:var(--green)}.c-red{color:var(--red)}.c-amber{color:var(--amber)}.c-purple{color:var(--purple)}
-
-.layout{display:grid;grid-template-columns:340px 1fr;gap:14px;align-items:start}
-
-.panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px}
-.panel-header{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;border-bottom:1px solid var(--border)}
-.panel-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
-.count-badge{font-size:11px;padding:1px 7px;border-radius:20px;background:var(--surface);color:var(--muted);border:1px solid var(--border)}
-
-.info-row{display:flex;align-items:center;justify-content:space-between;padding:.55rem 1rem;border-bottom:1px solid var(--border);font-size:12px}
-.info-row:last-child{border-bottom:none}
-.info-key{color:var(--muted)}
-.info-val{font-weight:500;text-align:right;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-.res-block{padding:.875rem 1rem;border-bottom:1px solid var(--border)}
-.res-block:last-child{border-bottom:none}
-.res-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
-.res-label{font-size:12px;font-weight:500}
-.res-nums{font-size:11px;color:var(--muted)}
-.res-bar{height:6px;background:var(--surface);border-radius:3px;overflow:hidden}
-.res-fill{height:100%;border-radius:3px;transition:width .5s ease}
-.fill-green{background:var(--green)}
-.fill-amber{background:var(--amber)}
-.fill-red{background:var(--red)}
-.fill-blue{background:var(--accent)}
-
-.search-wrap{padding:.625rem 1rem;border-bottom:1px solid var(--border);position:relative}
-.search-input{width:100%;font-size:12px;padding:6px 10px 6px 28px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text);outline:none;transition:border-color .15s}
-.search-input:focus{border-color:var(--accent)}
-.search-icon{position:absolute;left:18px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px;pointer-events:none}
-
-.vm-table{width:100%;border-collapse:collapse}
-.vm-table th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:.5rem 1rem;text-align:left;border-bottom:1px solid var(--border);background:var(--surface);white-space:nowrap}
-.vm-table td{padding:.65rem 1rem;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle}
-.vm-table tr:last-child td{border-bottom:none}
-.vm-table tr:hover td{background:var(--surface-2)}
-.vm-name{font-weight:600;font-size:13px}
-.vm-sub{font-size:10px;color:var(--muted);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
-.power-badge{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:500;white-space:nowrap}
-.power-on{background:var(--green-dim);color:var(--green)}
-.power-off{background:#1e293b;color:#475569}
-.power-sus{background:var(--amber-dim);color:var(--amber)}
-.mini-bar{height:4px;background:var(--surface);border-radius:2px;overflow:hidden;margin-top:3px;min-width:50px}
-.mini-fill{height:100%;border-radius:2px}
-.ip-badge{font-size:10px;padding:1px 7px;border-radius:20px;background:var(--blue-dim);color:var(--accent);border:0.5px solid #1a3a5c;font-family:monospace}
-
-.ds-item{padding:.875rem 1rem;border-bottom:1px solid var(--border)}
-.ds-item:last-child{border-bottom:none}
-.ds-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-.ds-name{font-size:13px;font-weight:600}
-.ds-meta{font-size:11px;color:var(--muted);display:flex;gap:8px;margin-bottom:6px}
-.ds-type{background:var(--surface);border:1px solid var(--border);padding:1px 6px;border-radius:4px;font-size:10px}
-
-.empty{padding:2rem;text-align:center;color:var(--muted);font-size:13px}
-.loading{display:flex;align-items:center;justify-content:center;padding:2.5rem;color:var(--muted);font-size:13px;gap:8px}
-.spin{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.err-banner{margin:1rem;background:var(--red-dim);border:0.5px solid #5a1a1a;border-radius:var(--radius-sm);padding:.875rem 1rem;font-size:13px;color:#f87171}
-.warn-banner{margin:1rem;background:var(--amber-dim);border:0.5px solid #5a3a00;border-radius:var(--radius-sm);padding:.75rem 1rem;font-size:12px;color:var(--amber)}
-
-.power-actions{display:flex;gap:4px;margin-top:6px}
-.btn-power{background:var(--border);border:none;color:var(--text);border-radius:4px;padding:3px 6px;font-size:11px;cursor:pointer;opacity:0.8}
-.btn-power:hover{opacity:1;background:var(--surface)}
-.btn-power:disabled{opacity:0.4;cursor:not-allowed}
-
-::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-@media(max-width:900px){
-  .layout{grid-template-columns:1fr}
-  .stats-row{grid-template-columns:repeat(3,1fr)}
-}
-</style>
-</head>
-<body>
-
-<header class="topbar">
-  <div class="topbar-left">
-    <div class="brand">
-      <div class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 7h.01M6 18h.01"/></svg>
-      </div>
-      <div><div class="brand-name">Dashboard SYSTEM</div><div class="brand-sub" id="esxiVersion">VMware ESXi · Dashboard SYSTEM</div></div>
-    </div>
-    <nav class="topnav" id="sh-topnav"></nav>
-    <script src="/service-home/_shared/nav.js"></script>
-  </div>
-  <div class="topbar-right">
-    <div class="status-dot" id="statusDot"></div>
-    <span style="font-family:var(--font-mono);font-size:12px;color:var(--muted)" id="lastUpdate">&#8212;</span>
-    <button class="tbtn ghost" onclick="loadData()">&#8635; Refresh</button>
-    <a class="tbtn" href="https://esxi.home-server.id.vn/ui/" target="_blank" rel="noopener">&#8599; Mở ESXi UI</a>
-    <div class="clock" id="clock">--:--:--</div>
-    <button class="theme-toggle" id="themeToggle" title="Toggle theme">
-      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"/></svg>
-    </button>
-  </div>
-</header>
-
-<div class="container">
-
-  <div class="stats-row">
-    <div class="stat"><div class="stat-value c-blue"   id="st-total">&#8212;</div><div class="stat-label">Total VMs</div></div>
-    <div class="stat"><div class="stat-value c-green"  id="st-on">&#8212;</div><div class="stat-label">Running</div></div>
-    <div class="stat"><div class="stat-value c-red"    id="st-off">&#8212;</div><div class="stat-label">Stopped</div></div>
-    <div class="stat"><div class="stat-value c-amber"  id="st-sus">&#8212;</div><div class="stat-label">Suspended</div></div>
-    <div class="stat"><div class="stat-value c-purple" id="st-cpu">&#8212;</div><div class="stat-label">CPU Usage</div></div>
-    <div class="stat"><div class="stat-value c-blue"   id="st-mem">&#8212;</div><div class="stat-label">Mem Usage</div></div>
-  </div>
-
-  <div class="layout">
-
-    <div>
-      <div class="panel">
-        <div class="panel-header"><div class="panel-title">&#128421; Host Info</div></div>
-        <div id="hostInfo"><div class="loading"><div class="spin"></div>&#272;ang t&#7843;i...</div></div>
-      </div>
-      <div class="panel">
-        <div class="panel-header"><div class="panel-title">&#128200; Resources</div></div>
-        <div id="hostRes"><div class="loading"><div class="spin"></div>&#272;ang t&#7843;i...</div></div>
-      </div>
-      <div class="panel">
-        <div class="panel-header"><div class="panel-title">&#128190; Datastores <span class="count-badge" id="dsCount">&#8212;</span></div></div>
-        <div id="dsList"><div class="loading"><div class="spin"></div>&#272;ang t&#7843;i...</div></div>
-      </div>
-    </div>
-
-    <div>
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">&#128421; Virtual Machines <span class="count-badge" id="vmCount">&#8212;</span></div>
-        </div>
-        <div class="search-wrap">
-          <span class="search-icon">&#128269;</span>
-          <input class="search-input" id="vmSearch" placeholder="T&#236;m VM theo t&#234;n, IP, OS..." oninput="renderVMs()"/>
-        </div>
-        <div style="overflow-x:auto">
-          <table class="vm-table">
-            <thead><tr>
-              <th>VM Name</th>
-              <th>State</th>
-              <th>Actions</th>
-              <th>OS</th>
-              <th>CPU</th>
-              <th>Memory</th>
-              <th>Storage</th>
-              <th>IP</th>
-              <th>Uptime</th>
-            </tr></thead>
-            <tbody id="vmTableBody">
-              <tr><td colspan="9"><div class="loading"><div class="spin"></div>&#272;ang t&#7843;i...</div></td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<script>
-var HOST_NUM = '01';
-var API_BASE = '/api/vmware-home';
-var ESXI_UI  = 'https://esxi.home-server.id.vn/ui/';
-
+/* ═══════════════════════════════════════════════
+   vmware-movi.js — shared logic for vmware01-movi.html + vmware02-movi.html
+   (tách từ 2 file HTML giống hệt nhau, 2026-07-10 — logic KHÔNG đổi)
+   Trang HTML phải khai báo TRƯỚC khi nạp file này:
+     var API_BASE = '/api/vmware01-movi';   // endpoint API của host
+     var PERM_KEY = 'vmware01-movi';        // key quyền trong __USER__.permissions
+   ═══════════════════════════════════════════════ */
 function _readUserCookie() {
   try { var m = document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/); return m ? JSON.parse(decodeURIComponent(m[1])) : null; } catch(e) { return null; }
 }
 var __USER__ = window.__USER__ || _readUserCookie() || { role:'user', permissions:{}, isAdmin:false };
-var __PERM__  = __USER__.isAdmin ? 'write' : (__USER__.permissions['vmware-home'] || 'read');
+var __PERM__  = __USER__.isAdmin ? 'write' : (__USER__.permissions[PERM_KEY] || 'read');
 var allVMs = [], hostData = null, datastores = [];
 
 function fmtUptime(secs) {
@@ -381,9 +205,15 @@ function loadData() {
 loadData();
 setInterval(loadData, 300000);
 
-
-</script>
-<script src="/service-home/_shared/common.js"></script>
-<script src="/service-home/_shared/chat.js"></script>
-</body>
-</html>
+(function(){
+  var saved=null;try{saved=localStorage.getItem('dh_theme')}catch(e){}
+  if(saved==='light')document.documentElement.dataset.theme='light';
+  document.getElementById('themeToggle').addEventListener('click',function(){
+    var next=document.documentElement.dataset.theme==='light'?'dark':'light';
+    document.documentElement.dataset.theme=next;
+    try{localStorage.setItem('dh_theme',next)}catch(e){}
+  });
+  var sl=document.getElementById('settings-link');
+  if(sl && (__USER__.isAdmin || __USER__.role==='admin'))sl.style.display='';
+  setInterval(function(){var c=document.getElementById('clock');if(c)c.textContent=new Date().toLocaleTimeString('vi-VN',{hour12:false});},1000);
+})();
