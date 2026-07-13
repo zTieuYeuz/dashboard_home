@@ -55,6 +55,27 @@ export const TOOL_CATALOG = [
     },
   },
   {
+    name: 'save_insight',
+    label: 'Ghi điều học được / đề xuất',
+    dataDesc: 'AI tự ghi kiến thức mới hoặc đề xuất cải tiến (admin duyệt mới thành vĩnh viễn)',
+    sensitive: false,
+    description:
+      'Ghi lại 1 ĐIỀU BẠN HỌC ĐƯỢC về hệ thống này (khi user đính chính bạn nói sai, khi phát hiện ' +
+      'quy trình/quy ước/thiết bị mới hữu ích) HOẶC 1 ĐỀ XUẤT cải tiến dashboard (tính năng hay được hỏi ' +
+      'mà chưa có, thao tác lặp lại nên tự động hoá…). Admin sẽ duyệt: được duyệt thì nội dung vào kho ' +
+      'kiến thức vĩnh viễn — bạn sẽ nhớ mãi ở các phiên sau. Viết insight TỰ ĐỨNG ĐƯỢC (người chưa đọc ' +
+      'hội thoại vẫn hiểu), KHÔNG ghi dữ liệu nhạy cảm (mật khẩu, token, thông tin cá nhân).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title:   { type: 'string', description: 'Tiêu đề ngắn gọn (1 dòng)' },
+        insight: { type: 'string', description: 'Nội dung đầy đủ: học được gì / đề xuất gì, vì sao, áp dụng thế nào' },
+        kind:    { type: 'string', enum: ['learning', 'suggestion'], description: 'learning = điều học được · suggestion = đề xuất cải tiến' },
+      },
+      required: ['title', 'insight'], additionalProperties: false,
+    },
+  },
+  {
     name: 'list_dashboard_reads',
     label: 'Danh sách nguồn đọc',
     dataDesc: 'các nguồn dash-read (đọc dữ liệu theo quyền user)',
@@ -72,11 +93,13 @@ export const TOOL_CATALOG = [
     dataDesc: 'các biểu mẫu nghiệp vụ (tạo user Movi…) + trường + quy tắc',
     sensitive: false,
     description:
-      'Liệt kê các BIỂU MẪU nghiệp vụ gửi tới n8n (vd tạo user Movi): id, trường bắt buộc, định dạng, ' +
-      'quy tắc thu thập. Khi user yêu cầu một nghiệp vụ (tạo user, cấp phát…): gọi tool này lấy spec, ' +
-      'HỎI user từng thông tin còn thiếu đúng theo rules, xác nhận lại toàn bộ, rồi in khối ' +
-      '```dash-action {"action":"form_submit","params":{"form":"<id>","data":{...}}} — dashboard sẽ ' +
-      'validate lần cuối + hỏi user bấm Đồng ý mới gửi. Thiếu/sai trường là bị từ chối, đừng gửi bừa.',
+      'Liệt kê các BIỂU MẪU nghiệp vụ gửi tới n8n (vd tạo user Movi): id, TẤT CẢ các trường (cả BẮT BUỘC lẫn ' +
+      'TUỲ CHỌN), định dạng, quy tắc. Khi user yêu cầu một nghiệp vụ (tạo user, cấp phát…): gọi tool này lấy spec, ' +
+      'rồi HỎI USER LẦN LƯỢT ĐỦ MỌI TRƯỜNG trong "fields" — TUYỆT ĐỐI KHÔNG tự ý bỏ qua trường tuỳ chọn. ' +
+      'Nêu rõ trường nào bắt buộc, trường nào tuỳ chọn; với trường tuỳ chọn để user TỰ QUYẾT điền hay bỏ qua ' +
+      '(đừng tự lược bỏ giúp). Thu đủ → ĐỌC LẠI TOÀN BỘ dữ liệu cho user xác nhận → in khối ' +
+      '```dash-action {"action":"form_submit","params":{"form":"<id>","data":{...}}} — dashboard validate ' +
+      'lần cuối + hỏi user bấm Đồng ý mới gửi. Thiếu/sai trường bắt buộc là bị từ chối.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -126,12 +149,24 @@ async function runTool(name, _args, env) {
     await env.DASHBOARD_KV.put('ai_unresolved', JSON.stringify(list.slice(0, 200)));
     return { ok: true, saved: true, note: 'Đã ghi lại cho admin.' };
   }
+  if (name === 'save_insight') {
+    const title   = (_args.title || '').toString().trim().slice(0, 200);
+    const insight = (_args.insight || '').toString().trim().slice(0, 4000);
+    const kind    = _args.kind === 'suggestion' ? 'suggestion' : 'learning';
+    if (!title || !insight) return { ok: false, error: 'thiếu title/insight' };
+    const list = await getJson(env, 'ai_insights', []);
+    list.unshift({ id: 'i_' + newToken().slice(0, 8), title, insight, kind, time: Date.now() });
+    await env.DASHBOARD_KV.put('ai_insights', JSON.stringify(list.slice(0, 200)));
+    return { ok: true, saved: true, note: 'Đã ghi vào hàng chờ — admin duyệt xong bạn sẽ nhớ vĩnh viễn (kho 90-ai-tu-hoc).' };
+  }
   if (name === 'list_dashboard_forms') {
     const forms = await getForms(env);
     return {
       forms: forms.map(f => ({ id: f.id, label: f.label, desc: f.desc, perm: f.perm || null,
         adminOnly: !!f.adminOnly, fields: f.fields || [], rules: f.rules || '' })),
-      howto: 'Thu thập đủ field theo rules → in ```dash-action {"action":"form_submit","params":{"form":"<id>","data":{...}}}```.',
+      howto: 'HỎI user LẦN LƯỢT TẤT CẢ trường trong "fields" của form — CẢ required LẪN tuỳ chọn. Nêu rõ ' +
+        'trường nào bắt buộc, trường nào tuỳ chọn; ĐỪNG bỏ sót trường tuỳ chọn (để user tự điền hoặc nói bỏ qua). ' +
+        'Thu đủ → đọc lại toàn bộ cho user xác nhận → in ```dash-action {"action":"form_submit","params":{"form":"<id>","data":{...}}}```.',
     };
   }
   if (name === 'list_dashboard_reads') {
@@ -362,6 +397,7 @@ export async function handleAdminMcp(request, env) {
       })),
       audit: auditLog.slice(0, 40),
       unresolved: (await getJson(env, 'ai_unresolved', [])).slice(0, 100),
+      insights: (await getJson(env, 'ai_insights', [])).slice(0, 100),
     });
   }
 
@@ -372,6 +408,35 @@ export async function handleAdminMcp(request, env) {
     list = list.filter(x => x.id !== mUn[1]);
     await env.DASHBOARD_KV.put('ai_unresolved', JSON.stringify(list));
     return json({ ok: true });
+  }
+
+  // /api/admin/mcp/insights/:id — POST .../approve = duyệt vào KB (90-ai-tu-hoc), DELETE = bỏ
+  const mIns = p.match(/^\/insights\/([^/]+?)(\/approve)?$/);
+  if (mIns) {
+    let list = await getJson(env, 'ai_insights', []);
+    const it = list.find(x => x.id === mIns[1]);
+    if (mIns[2] && method === 'POST') {
+      if (!it) return json({ error: 'Not found' }, 404);
+      // Duyệt: ghi thành file KB trong thư mục 90-ai-tu-hoc → AI nhớ vĩnh viễn sau lần reload tiếp theo
+      const slug = it.title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || it.id;
+      const path = `90-ai-tu-hoc/${slug}.md`;
+      const content = `# ${it.title}\n\n${it.insight}\n\n_(AI tự ghi ${new Date(it.time).toISOString().slice(0, 10)}${it.kind === 'suggestion' ? ' · đề xuất cải tiến' : ' · điều học được'} — admin đã duyệt)_\n`;
+      let files = await getJson(env, 'ai_knowledge', []);
+      const i = files.findIndex(f => f.path === path);
+      const rec = { path, content, updated: Date.now() };
+      if (i >= 0) files[i] = rec; else files.push(rec);
+      files.sort((a, b2) => a.path.localeCompare(b2.path));
+      await env.DASHBOARD_KV.put('ai_knowledge', JSON.stringify(files.slice(0, 500)));
+      list = list.filter(x => x.id !== mIns[1]);
+      await env.DASHBOARD_KV.put('ai_insights', JSON.stringify(list));
+      return json({ ok: true, path });
+    }
+    if (!mIns[2] && method === 'DELETE') {
+      list = list.filter(x => x.id !== mIns[1]);
+      await env.DASHBOARD_KV.put('ai_insights', JSON.stringify(list));
+      return json({ ok: true });
+    }
   }
 
   // PUT /api/admin/mcp/config  → { enabled }
@@ -558,6 +623,23 @@ Sau khi bạn in khối đó, dashboard sẽ:
 3. Chạy **bằng phiên của người dùng** (không phải quyền riêng của bạn) và báo kết quả lại.
 
 Tuyệt đối KHÔNG in khối \`dash-action\` cho hành động không có trong \`list_dashboard_actions\`.
+
+## TỰ HỌC & ĐỀ XUẤT CẢI TIẾN (giúp bạn thông minh dần theo thời gian)
+Bạn có tool \`save_insight\` để TỰ TÍCH LUỸ hiểu biết về hệ thống này:
+- **Khi HỌC ĐƯỢC điều mới** (user đính chính bạn nói sai; phát hiện quy trình/quy ước/thiết bị/thói quen mới của hệ thống): gọi \`save_insight\` với kind="learning".
+- **Khi THẤY CƠ HỘI cải tiến dashboard** (câu hỏi lặp lại nhiều mà chưa có trang/tính năng; thao tác thủ công nên tự động hoá; dữ liệu nên hiển thị thêm; điểm gây nhầm lẫn cho user): gọi \`save_insight\` với kind="suggestion". CHỦ ĐỘNG đề xuất — đừng chờ được hỏi.
+- Viết insight **TỰ ĐỨNG ĐƯỢC** (người chưa đọc hội thoại vẫn hiểu). **KHÔNG** ghi mật khẩu/token/dữ liệu cá nhân.
+- Admin duyệt → nội dung vào kho kiến thức (thư mục \`90-ai-tu-hoc\`) → bạn **nhớ vĩnh viễn** ở mọi phiên sau. Kiến thức trong mục "Kiến thức do admin dạy" bên dưới chính là những gì đã được duyệt — ưu tiên áp dụng.
+
+## BIỂU MẪU NGHIỆP VỤ (form — vd tạo user Movi)
+Khi user muốn làm nghiệp vụ có biểu mẫu (tạo user, cấp phát…):
+1. Gọi \`list_dashboard_forms\` lấy spec form (danh sách **fields** + rules).
+2. **Trình bày ĐẦY ĐỦ MỌI trường** của form — CẢ **bắt buộc** LẪN **tuỳ chọn**. Đánh dấu rõ trường bắt buộc (⭐) và trường tuỳ chọn.
+3. **Hỏi user lần lượt TỪNG trường — TUYỆT ĐỐI không bỏ sót trường tuỳ chọn.** Với trường tuỳ chọn, để user tự quyết **điền hoặc nói bỏ qua** — bạn KHÔNG được tự ý lược bỏ.
+   - Nếu trường có **danh sách lựa chọn (\`enum\`)** → **LIỆT KÊ các lựa chọn đó** cho user chọn (như dropdown), ĐỪNG để user gõ tự do; giá trị gửi phải nằm trong danh sách.
+4. Thu đủ → **đọc lại TOÀN BỘ dữ liệu** để user xác nhận.
+5. Rồi in \`\`\`dash-action {"action":"form_submit","params":{"form":"<id>","data":{...}}}\`\`\` — dashboard validate + hỏi Đồng ý mới gửi.
+> Sai thường gặp cần TRÁNH: chỉ hỏi vài trường bắt buộc rồi gửi luôn, bỏ qua các trường tuỳ chọn (chức danh, phòng ban, điện thoại, quản lý…). PHẢI liệt kê hết cho user chọn.
 
 _(Tài liệu do dashboard tự sinh — cập nhật khi thêm trang/công cụ. Nạp lại bằng: curl .../api/ai/guide.)_
 `;

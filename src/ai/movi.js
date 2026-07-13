@@ -197,14 +197,17 @@ export const DEFAULT_FORMS = [
       { name: 'email',         label: 'Email User Movi (email công ty sẽ cấp)', required: true, pattern: '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$', patternDesc: 'email hợp lệ' },
       { name: 'personalEmail', label: 'Email cá nhân',      required: true,  pattern: '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$', patternDesc: 'email cá nhân hợp lệ' },
       { name: 'group',         label: 'Phòng ban (Phòng Ban)', required: true, example: 'Kế toán / IT / Kho…' },
-      { name: 'jobTitle',      label: 'Chức danh (JobTitle)', required: false },
-      { name: 'department',    label: 'Department',         required: false },
-      { name: 'office',        label: 'Văn phòng (Office)', required: false },
-      { name: 'mobilePhone',   label: 'Điện thoại',         required: false, pattern: '^[0-9+ .-]{8,15}$', patternDesc: '8-15 chữ số' },
+      { name: 'jobTitle',      label: 'Chức danh (JobTitle)', required: true },
+      { name: 'department',    label: 'Department',         required: true },
+      { name: 'office',        label: 'Văn phòng (Office)', required: true },
+      { name: 'mobilePhone',   label: 'Điện thoại',         required: true, pattern: '^[0-9+ .-]{8,15}$', patternDesc: '8-15 chữ số' },
       { name: 'manager',       label: 'Quản lý (Manager)',  required: false },
-      { name: 'company',       label: 'Công ty (Company)',  required: false },
+      { name: 'company',       label: 'Công ty (Company)',  required: true },
     ],
-    rules: 'Hỏi user từng thông tin còn thiếu (đừng hỏi dồn quá 3 mục 1 lần). Bắt buộc: firstName, lastName, email công ty (email User Movi), personalEmail (email cá nhân), group (phòng ban). Xác nhận lại TOÀN BỘ thông tin với user trước khi gửi. Chỉ gửi khi user đồng ý.',
+    // ⭐ TẤT CẢ trường BẮT BUỘC, chỉ manager (Quản lý) là tuỳ chọn.
+    // Trường có "enum" = dropdown → AI phải liệt kê lựa chọn cho user chọn (không gõ tự do).
+    // (Anh Thoai điền danh sách enum cho group/office/company/department qua "Kho công cụ" hoặc gửi Claude.)
+    rules: 'Hỏi user LẦN LƯỢT ĐỦ MỌI trường (đừng hỏi dồn quá 3 mục 1 lần). BẮT BUỘC TẤT CẢ trường, CHỈ manager (Quản lý) là tuỳ chọn. Trường nào có "enum" (danh sách lựa chọn) thì PHẢI liệt kê các lựa chọn đó cho user chọn, không để user gõ tự do. Xác nhận lại TOÀN BỘ thông tin với user trước khi gửi. Chỉ gửi khi user đồng ý.',
   },
 ];
 export async function getForms(env) {

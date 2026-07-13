@@ -700,6 +700,7 @@ select.inp{cursor:pointer}
         <button class="ai-subtab" onclick="aiSub('access',this)">👥 Ai được dùng</button>
         <button class="ai-subtab" onclick="aiSub('logs',this)">📜 Nhật ký AI</button>
         <button class="ai-subtab" onclick="aiSub('unresolved',this)">❓ Câu hỏi chưa giải quyết</button>
+        <button class="ai-subtab" onclick="aiSub('insights',this)">💡 Đề xuất của AI</button>
         <button class="ai-subtab" onclick="aiSub('train',this)">🎓 Dạy AI</button>
       </div>
       <div class="ai-hub-body">
@@ -765,6 +766,14 @@ select.inp{cursor:pointer}
           <div class="panel">
             <div class="panel-header"><div><div class="panel-title">❓ Câu hỏi chưa giải quyết</div><div class="panel-desc">AI ghi lại khi không xử lý được — đọc rồi bấm "Đã xử lý" để xoá</div></div></div>
             <div class="panel-body" id="mcp-unresolved"><div class="empty-state">Đang tải...</div></div>
+          </div>
+        </div>
+
+        <!-- Đề xuất của AI (hàng chờ tự học) -->
+        <div class="ai-pane" id="aip-insights">
+          <div class="panel">
+            <div class="panel-header"><div><div class="panel-title">💡 Đề xuất của AI</div><div class="panel-desc">AI tự ghi điều học được / ý tưởng cải tiến. Bấm ✅ Duyệt → vào kho "Dạy AI" (90-ai-tu-hoc) → AI nhớ vĩnh viễn sau lần đồng bộ tiếp theo. Bấm 🗑 để bỏ.</div></div></div>
+            <div class="panel-body" id="mcp-insights"><div class="empty-state">Đang tải...</div></div>
           </div>
         </div>
 
@@ -4114,8 +4123,40 @@ function loadMcp(){
     _mcp=d;
     document.getElementById('mcp-enabled').checked = d.enabled!==false;
     document.getElementById('mcp-endpoint').textContent = d.endpoint||'—';
-    renderClients(); renderTools(); renderAudit(); renderUnresolved();
+    renderClients(); renderTools(); renderAudit(); renderUnresolved(); renderInsights();
   }).catch(function(){});
+}
+function renderInsights(){
+  var wrap=document.getElementById('mcp-insights');
+  if(!wrap) return;
+  var list=(_mcp&&_mcp.insights)||[];
+  if(!list.length){ wrap.innerHTML='<div class="empty-state">Chưa có đề xuất nào. AI sẽ tự ghi vào đây khi học được điều mới hoặc có ý tưởng cải tiến.</div>'; return; }
+  wrap.innerHTML=list.map(function(x){
+    var kindChip = x.kind==='suggestion'
+      ? '<span class="chip chip-accent" style="font-size:10px">💡 đề xuất cải tiến</span>'
+      : '<span class="chip chip-ok" style="font-size:10px">🎓 điều học được</span>';
+    return '<div class="panel-row" style="align-items:flex-start">'
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+esc(x.title)+' '+kindChip+'</div>'
+        +'<div style="font-size:12px;color:var(--text-2);margin-top:4px;white-space:pre-wrap;word-break:break-word">'+esc(x.insight)+'</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:3px">'+_relTimeShort(x.time)+'</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px;flex-shrink:0">'
+        +'<button class="btn btn-sm btn-primary" onclick="approveInsight(\''+esc(x.id)+'\')" title="Đưa vào kho Dạy AI — AI nhớ vĩnh viễn">✅ Duyệt</button>'
+        +'<button class="btn btn-sm btn-danger" onclick="deleteInsight(\''+esc(x.id)+'\')" title="Bỏ đề xuất này">🗑</button>'
+      +'</div></div>';
+  }).join('');
+}
+function approveInsight(id){
+  fetch('/api/admin/mcp/insights/'+encodeURIComponent(id)+'/approve',{method:'POST'})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.error){toast('Lỗi: '+d.error,'err');return;}
+      toast('✓ Đã duyệt vào kho Dạy AI ('+(d.path||'')+') — nhớ chạy đồng bộ/reload AI','ok');
+      loadMcp(); if(typeof kbLoad==='function'){try{kbLoad();}catch(e){}}
+    });
+}
+function deleteInsight(id){
+  fetch('/api/admin/mcp/insights/'+encodeURIComponent(id),{method:'DELETE'}).then(function(){ loadMcp(); });
 }
 function renderUnresolved(){
   var wrap=document.getElementById('mcp-unresolved');
