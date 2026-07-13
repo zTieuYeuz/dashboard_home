@@ -1,40 +1,52 @@
 /* ═══════════════════════════════════════════════
-   Shared top navigation — service-home pages ONLY
+   nav.js — NGUỒN DUY NHẤT cho thanh nav trên MỌI trang (2026-07-11).
    ───────────────────────────────────────────────
-   Renders the primary nav links into the placeholder
-   <nav class="topnav" id="sh-topnav"></nav> that each
-   service-home page provides.
+   Mỗi trang chỉ cần đặt <nav class="topnav" id="sh-topnav"></nav> +
+   <script src="/service-home/_shared/nav.js"></script>. nav.js dựng link.
 
-   The link matching the current URL is marked `.active`
-   (so /service-home/services-embed.html highlights "Services").
+   RBAC-aware: CHỈ hiện link user được phép (đọc window.__USER__).
+   ⚠ AN NINH THẬT do SERVER gate (_PAGE_PERM + _ADMIN_ONLY_PAGES trong
+   worker.js injectUser) — nav chỉ là bề mặt UX. Ẩn link KHÔNG thay cho gate:
+   khi thêm trang mới PHẢI thêm cả (a) rule ở LINKS đây, (b) gate ở worker.
 
-   The ⚙ Settings link is emitted hidden by default;
-   worker.js injects a head script that reveals it for admins
-   (see worker.js — "Auto-inject Settings link"). We keep the
-   element here so the worker just flips its display instead of
-   creating it, and there is no duplicate.
+   Thêm mục nav: thêm 1 dòng vào LINKS với rule:
+     'all'         = mọi user đã đăng nhập
+     'admin'       = chỉ admin  (phải kèm _ADMIN_ONLY_PAGES ở worker)
+     '<permKey>'   = cần quyền đó != none (phải kèm _PAGE_PERM ở worker)
 
-   Loaded synchronously right after the placeholder so the nav
-   is populated during parse (no visible flash).
+   Settings emit sẵn (ẩn) — worker.js reveal cho mọi user (trang settings
+   phục vụ hồ sơ/MFA của chính user, không gate).
    ═══════════════════════════════════════════════ */
 (function () {
   var mount = document.getElementById('sh-topnav');
   if (!mount) return;
 
-  var path = location.pathname;
-  var links = [
-    { href: '/', label: 'Overview' },
-    { href: '/bookmarks.html', label: 'Bookmarks' },
-    { href: '/service-home/services-embed.html', label: 'Services' }
+  var U = (window.__USER__ && typeof window.__USER__ === 'object') ? window.__USER__ : {};
+  var isAdmin = !!(U.isAdmin || U.role === 'admin');
+  var perms = (U.permissions && typeof U.permissions === 'object') ? U.permissions : {};
+  function can(key) { return isAdmin || (perms[key] && perms[key] !== 'none'); }
+
+  var LINKS = [
+    { href: '/',                                 label: 'Overview',  rule: 'all' },
+    { href: '/noc.html',                         label: '📡 NOC', rule: 'admin', id: 'noc-link' },
+    { href: '/bookmarks.html',                   label: 'Bookmarks', rule: 'all' },
+    { href: '/service-home/services-embed.html', label: 'Services',  rule: 'services-hub' }
   ];
 
-  var html = links.map(function (l) {
+  var path = location.pathname;
+  var html = LINKS.filter(function (l) {
+    if (l.rule === 'all')   return true;
+    if (l.rule === 'admin') return isAdmin;
+    return can(l.rule);
+  }).map(function (l) {
     var active = (path === l.href) ? ' active' : '';
-    return '<a class="topnav-item' + active + '" href="' + l.href + '">' + l.label + '</a>';
+    var idAttr = l.id ? ' id="' + l.id + '"' : '';
+    return '<a class="topnav-item' + active + '"' + idAttr + ' href="' + l.href + '">' + l.label + '</a>';
   }).join('');
 
-  // Hidden by default — worker.js reveals for admins.
-  html += '<a class="topnav-item" id="settings-link" href="/settings.html" style="display:none">⚙ Settings</a>';
+  // Settings — mọi user (tự quản hồ sơ/MFA). Ẩn sẵn, worker.js reveal.
+  var sActive = (path === '/settings.html') ? ' active' : '';
+  html += '<a class="topnav-item' + sActive + '" id="settings-link" href="/settings.html" style="display:none">⚙ Settings</a>';
 
   mount.innerHTML = html;
 })();

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NOC · Status Wall — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/service-home/_shared/base.css"/>
+<style>
+.wrap{max-width:1340px;margin:0 auto;padding:1.5rem}
+
+/* ── Summary strip ── */
+.head-row{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.page-title{font-size:22px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+.page-sub{font-size:12.5px;color:var(--muted);margin-top:3px}
+.refresh-info{font-size:12px;color:var(--muted);font-family:var(--font-mono);display:flex;align-items:center;gap:10px}
+.dot-live{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 7px var(--ok);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.sum-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;position:relative;overflow:hidden}
+.sum-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--muted)}
+.sum-card.ok::before{background:var(--ok)}.sum-card.bad::before{background:var(--bad)}.sum-card.acc::before{background:var(--accent)}
+.sum-val{font-size:30px;font-weight:700;font-family:var(--font-mono);line-height:1}
+.sum-card.ok .sum-val{color:var(--ok)}.sum-card.bad .sum-val{color:var(--bad)}.sum-card.acc .sum-val{color:var(--accent)}
+.sum-label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:7px}
+@media(max-width:640px){.summary{grid-template-columns:repeat(2,1fr)}}
+
+/* ── Status grid ── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.tile{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:15px 16px;display:flex;flex-direction:column;gap:11px;position:relative;cursor:pointer;transition:transform .12s,border-color .12s;overflow:hidden}
+.tile:hover{transform:translateY(-2px);border-color:var(--muted)}
+.tile::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--muted)}
+.tile.online::before{background:var(--ok)}
+.tile.offline::before{background:var(--bad)}
+.tile.local::before{background:var(--muted)}
+.tile.offline{border-color:color-mix(in oklch,var(--bad) 45%,var(--border));animation:pulse-bad 1.8s infinite}
+@keyframes pulse-bad{0%,100%{box-shadow:0 0 0 0 color-mix(in oklch,var(--bad) 30%,transparent)}50%{box-shadow:0 0 0 4px transparent}}
+.tile-top{display:flex;align-items:center;gap:10px}
+.tile-ico{font-size:20px;line-height:1;flex-shrink:0}
+.tile-name{font-size:14.5px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.status-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;background:var(--muted)}
+.tile.online .status-dot{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.tile.offline .status-dot{background:var(--bad);box-shadow:0 0 8px var(--bad)}
+.tile-mid{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.tile-status{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.tile.online .tile-status{color:var(--ok)}
+.tile.offline .tile-status{color:var(--bad)}
+.tile-ping{font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--text-2)}
+.lat-bar{height:5px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.lat-fill{height:100%;border-radius:3px;transition:width .4s ease;background:var(--ok)}
+
+.note{font-size:11.5px;color:var(--muted);margin-top:18px;padding:10px 14px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm);line-height:1.6}
+.loading{padding:3rem;text-align:center;color:var(--muted)}
+.spin{display:inline-block;width:15px;height:15px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tbtn.spinning svg{animation:spin .7s linear infinite}
+
+/* ── TV / Fullscreen mode ── */
+.tv-header{display:none}
+body.tv .topbar{display:none}
+body.tv .wrap{max-width:100%;padding:2vh 3vw}
+body.tv .head-row,body.tv .note{display:none}
+body.tv .tv-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:2.2vh;flex-wrap:wrap;gap:12px}
+body.tv .tv-title{font-size:2.4vw;font-weight:700;display:flex;align-items:center;gap:12px}
+body.tv .tv-clock{font-family:var(--font-mono);font-size:2vw;color:var(--text-2)}
+body.tv .tv-count{font-family:var(--font-mono);font-size:1.6vw}
+body.tv .tv-count .up{color:var(--ok)}body.tv .tv-count .down{color:var(--bad)}
+body.tv .summary{grid-template-columns:repeat(4,1fr);gap:1vw;margin-bottom:2vh}
+body.tv .sum-val{font-size:3.2vw}
+body.tv .grid{grid-template-columns:repeat(auto-fill,minmax(min(20vw,300px),1fr));gap:1vw}
+body.tv .tile-name{font-size:1.4vw}
+body.tv .tile-ico{font-size:1.8vw}
+body.tv .tile-ping{font-size:1.2vw}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+      </div>
+      <div><div class="brand-name">Home Lab</div><div class="brand-sub">NOC · Status Wall</div></div>
+    </div>
+    <nav class="topnav" id="sh-topnav"></nav>
+    <script src="/service-home/_shared/nav.js"></script>
+  </div>
+  <div class="topbar-right">
+    <button class="tbtn" id="refreshBtn" onclick="loadStatus(true)" title="Làm mới ngay">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3h-3"/></svg>
+      Làm mới
+    </button>
+    <button class="tbtn" onclick="toggleTv()" title="Chế độ TV — treo màn hình lớn">⛶ TV</button>
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="theme-toggle" id="themeToggle" title="Đổi giao diện sáng/tối">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- TV-mode header (chỉ hiện khi bật TV) -->
+  <div class="tv-header">
+    <div class="tv-title">📡 Home Lab · NOC</div>
+    <div class="tv-count" id="tvCount">—</div>
+    <div class="tv-clock" id="tvClock">--:--:--</div>
+  </div>
+
+  <div class="head-row">
+    <div>
+      <div class="page-title">📡 NOC · Tình trạng dịch vụ</div>
+      <div class="page-sub">Giám sát up/down &amp; độ trễ toàn bộ dịch vụ · liếc một cái là biết</div>
+    </div>
+    <div class="refresh-info">
+      <span class="dot-live"></span>
+      <span id="updated">Đang tải…</span>
+      <span>·</span>
+      <span>tự làm mới sau <b id="countdown">20</b>s</span>
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="sum-card ok"><div class="sum-val" id="s-online">–</div><div class="sum-label">🟢 Online</div></div>
+    <div class="sum-card bad"><div class="sum-val" id="s-offline">–</div><div class="sum-label">🔴 Offline</div></div>
+    <div class="sum-card"><div class="sum-val" id="s-local">–</div><div class="sum-label">🏠 LAN (không ping)</div></div>
+    <div class="sum-card acc"><div class="sum-val" id="s-ping">–</div><div class="sum-label">⚡ Ping TB (ms)</div></div>
+  </div>
+
+  <div class="grid" id="grid"><div class="loading"><span class="spin"></span>Đang kiểm tra dịch vụ…</div></div>
+
+  <div class="note">
+    ℹ️ Trang này kiểm tra các dịch vụ Cloudflare tiếp cận được qua HTTPS. <b>FortiGate</b> và <b>ASUS Router</b> chỉ nằm trong LAN nên hiển thị <b>“LAN”</b> (Worker trên cloud không ping trực tiếp được — xem trạng thái chi tiết trong trang riêng của từng thiết bị). Muốn phủ thêm dịch vụ Movi / thiết bị LAN, cần thêm health-check phía server hoặc một agent nội bộ (bước sau).
+  </div>
+</div>
+
+<script>
+/* ── Service metadata (khớp id của /api/status) ── */
+var META = {
+  esxi:      { n:'VMware ESXi',   i:'🖥', p:'/service-home/vmware-home.html' },
+  n8n:       { n:'n8n Automation',i:'⚡', p:'/service-home/n8n.html' },
+  casaos:    { n:'CasaOS',        i:'🏠', p:'/service-home/casaos.html' },
+  ssh:       { n:'SSH Terminal',  i:'⌨',  p:'/service-home/ssh.html' },
+  fortigate: { n:'FortiGate',     i:'🛡', p:'/service-home/fortigate.html' },
+  asus:      { n:'ASUS Router',   i:'📡', p:'/service-home/asus.html' },
+  camera:    { n:'Camera',        i:'📷', p:'/service-home/camera-home.html' },
+  rustdesk:  { n:'RustDesk',      i:'🖥', p:'/service-home/rustdesk.html' }
+};
+var STATUS_ORDER = { offline:0, local:1, online:2 };
+var STATUS_LABEL = { online:'ONLINE', offline:'OFFLINE', local:'LAN' };
+var REFRESH_SEC = 20;
+var _cd = REFRESH_SEC, _cdTimer = null;
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+function pingColor(ms){ return ms==null ? 'var(--muted)' : ms<200 ? 'var(--ok)' : ms<600 ? 'var(--warn)' : 'var(--bad)'; }
+
+function render(data){
+  var svc = data.services || {};
+  var ids = Object.keys(svc);
+  var rows = ids.map(function(id){
+    var r = svc[id] || {};
+    var m = META[id] || { n:id, i:'📦', p:null };
+    return { id:id, status:r.status||'offline', ping:(typeof r.ping==='number'?r.ping:null), n:m.n, i:m.i, p:m.p };
+  });
+  // Down trước, rồi LAN, rồi online — trong cùng nhóm sắp theo tên
+  rows.sort(function(a,b){
+    var d=(STATUS_ORDER[a.status]??9)-(STATUS_ORDER[b.status]??9);
+    return d!==0 ? d : a.n.localeCompare(b.n);
+  });
+
+  var online=0, offline=0, local=0, pings=[];
+  rows.forEach(function(r){
+    if(r.status==='online'){online++; if(r.ping!=null)pings.push(r.ping);}
+    else if(r.status==='offline') offline++;
+    else local++;
+  });
+  var avg = pings.length ? Math.round(pings.reduce(function(a,b){return a+b;},0)/pings.length) : null;
+
+  document.getElementById('s-online').textContent  = online;
+  document.getElementById('s-offline').textContent = offline;
+  document.getElementById('s-local').textContent   = local;
+  document.getElementById('s-ping').textContent    = avg==null ? '–' : avg;
+  document.getElementById('tvCount').innerHTML =
+    '<span class="up">'+online+' UP</span> / <span class="down">'+offline+' DOWN</span> · '+ids.length+' dịch vụ';
+
+  document.getElementById('grid').innerHTML = rows.map(function(r){
+    var pingTxt = r.ping==null ? (r.status==='local'?'—':'timeout') : (r.ping+' ms');
+    var barW = r.ping==null ? (r.status==='online'?100:0) : Math.min(100, Math.max(4, r.ping/10));
+    var barC = pingColor(r.ping);
+    var onclick = r.p ? ' onclick="location.href=\''+esc(r.p)+'\'"' : '';
+    return '<div class="tile '+r.status+'"'+onclick+' title="'+esc(r.n)+'">'
+      + '<div class="tile-top"><span class="tile-ico">'+r.i+'</span>'
+        + '<span class="tile-name">'+esc(r.n)+'</span><span class="status-dot"></span></div>'
+      + '<div class="tile-mid"><span class="tile-status">'+(STATUS_LABEL[r.status]||r.status)+'</span>'
+        + '<span class="tile-ping">'+pingTxt+'</span></div>'
+      + '<div class="lat-bar"><div class="lat-fill" style="width:'+barW+'%;background:'+barC+'"></div></div>'
+    + '</div>';
+  }).join('');
+}
+
+function loadStatus(manual){
+  var btn = document.getElementById('refreshBtn');
+  if(manual) btn.classList.add('spinning');
+  fetch('/api/status', { cache:'no-store', signal:AbortSignal.timeout(15000) })
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(data){
+      render(data);
+      var t = new Date();
+      document.getElementById('updated').textContent =
+        'Cập nhật ' + t.toLocaleTimeString('vi-VN', { hour12:false });
+      _cd = REFRESH_SEC;
+    })
+    .catch(function(e){
+      document.getElementById('updated').textContent = 'Lỗi tải trạng thái (' + esc(String(e)) + ')';
+    })
+    .finally(function(){ if(manual) setTimeout(function(){ btn.classList.remove('spinning'); }, 500); });
+}
+
+/* Đếm ngược + tự làm mới */
+function tickCountdown(){
+  _cd--;
+  if(_cd<=0){ loadStatus(false); _cd = REFRESH_SEC; }
+  var el = document.getElementById('countdown');
+  if(el) el.textContent = _cd;
+}
+
+/* ── TV / Fullscreen mode ── */
+function toggleTv(){
+  if(document.fullscreenElement){ document.exitFullscreen && document.exitFullscreen(); }
+  else { (document.documentElement.requestFullscreen && document.documentElement.requestFullscreen()) || document.body.classList.toggle('tv'); }
+}
+document.addEventListener('fullscreenchange', function(){
+  document.body.classList.toggle('tv', !!document.fullscreenElement);
+});
+/* Đồng hồ cho TV header */
+setInterval(function(){
+  var c = document.getElementById('tvClock');
+  if(c) c.textContent = new Date().toLocaleTimeString('vi-VN', { hour12:false });
+}, 1000);
+
+loadStatus(false);
+_cdTimer = setInterval(tickCountdown, 1000);
+</script>
+<script src="/service-home/_shared/common.js"></script>
+</body>
+</html>

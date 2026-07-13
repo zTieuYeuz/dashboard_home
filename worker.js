@@ -523,14 +523,18 @@ async function handleListUsers(request, env) {
   const hasSysBlockUser  = !!(callerUser?.sysPerms?.blockUser);
   if (!canManage.length && !hasSysAddUser && !hasSysResetMfa && !hasSysBlockUser) return json({ error: 'Admin required' }, 403);
 
-  // Return filtered list: basic info + only the managed service permissions
+  // Return filtered list: basic info + only the managed service permissions.
+  // Dùng EFFECTIVE permissions (gộp cả quyền user nhận từ policy group) — nếu chỉ đọc
+  // d.permissions trực tiếp thì user lấy quyền qua nhóm sẽ hiện "none" (bug: không thấy quyền thật).
   const users = [];
   for (const u of list) {
     if (u === session.username) continue; // skip self
     const d = await env.DASHBOARD_KV.get(`user:${u}`, 'json');
     if (!d) continue;
+    const eff = await computeEffectivePermissions(env, u);
+    const effPerms = (eff && eff.permissions) || d.permissions || {};
     const filteredPerms = {};
-    for (const svc of canManage) filteredPerms[svc] = (d.permissions || {})[svc] || 'none';
+    for (const svc of canManage) filteredPerms[svc] = effPerms[svc] || 'none';
     users.push({
       username:    u,
       role:        d.role,
@@ -543,6 +547,7 @@ async function handleListUsers(request, env) {
       blocked:     !!d.blocked,
       blockedAt:   d.blockedAt || null,
       blockedBy:   d.blockedBy || null,
+      createdBy:   d.createdBy || null,   // để frontend hiện nút Xóa cho user do CHÍNH delegate tạo
     });
   }
   return json({ users, delegateMode: true, canManagePerms: canManage, sysPerms: sanitizeSysPerms(callerUser?.sysPerms || {}) });
@@ -586,6 +591,7 @@ async function handleCreateUser(request, env) {
     const requireMfa = body?.requireMfa !== false; // mặc định true, false chỉ khi truyền rõ requireMfa:false
     await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify({
       password: hashed, role, groups, userGroups: [], permissions: {}, panels: {}, cameras: [], created: Date.now(),
+      createdBy: session.username, // ai tạo user này → delegate chỉ được xóa/sửa user do MÌNH tạo
       mustChangePassword: true,   // Force password change on first login
       mustSetupMfa: requireMfa,   // Admin có thể tắt MFA khi tạo viewer accounts
     }));
@@ -698,8 +704,17 @@ async function handleSetSysPerms(request, env, username) {
 
 async function handleDeleteUser(request, env, username) {
   const session = await getSession(request, env);
-  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
   if (username === 'admin') return json({ error: 'Không thể xoá admin' }, 400);
+  const isAdmin = await isAdminUser(env, session);
+  if (!isAdmin) {
+    // Delegate: phải có quyền tạo user (sysPerms.addUser) VÀ chỉ xóa được user do CHÍNH MÌNH tạo.
+    const callerRaw = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
+    if (!callerRaw?.sysPerms?.addUser) return json({ error: 'Admin required' }, 403);
+    const target = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+    if (!target) return json({ error: 'User not found' }, 404);
+    if (target.createdBy !== session.username) return json({ error: 'Bạn chỉ xóa được user do chính mình tạo' }, 403);
+  }
   await invalidateUserSessions(env, username);   // xóa session trước khi xóa user
   await env.DASHBOARD_KV.delete(`user:${username}`);
   const list = (await env.DASHBOARD_KV.get('userlist', 'json') || []).filter(u => u !== username);
@@ -1128,7 +1143,16 @@ async function handleUpdateGroup(request, env, groupId) {
 
 async function handleDeleteGroup(request, env, groupId) {
   const session = await getSession(request, env);
-  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const isAdmin = await isAdminUser(env, session);
+  if (!isAdmin) {
+    const delegateSvcs = await getSessionDelegateServices(env, session);
+    if (!delegateSvcs.length) return json({ error: 'Admin required' }, 403);
+    // Delegate chỉ xóa được Role Group do CHÍNH MÌNH tạo (đồ của admin → chỉ view).
+    const grp = await env.DASHBOARD_KV.get(`policy_group:${groupId}`, 'json');
+    if (!grp) return json({ error: 'Group not found' }, 404);
+    if (grp.createdBy !== session.username) return json({ error: 'Bạn chỉ xóa được Role Group do mình tạo' }, 403);
+  }
   await env.DASHBOARD_KV.delete(`policy_group:${groupId}`);
   const ids = (await env.DASHBOARD_KV.get('policy_groups', 'json') || []).filter(id => id !== groupId);
   await env.DASHBOARD_KV.put('policy_groups', JSON.stringify(ids));
@@ -1257,9 +1281,16 @@ async function handleUpdateUserGroup(request, env, groupId) {
 
 async function handleDeleteUserGroup(request, env, groupId) {
   const session = await getSession(request, env);
-  if (!session || !(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const isAdmin = await isAdminUser(env, session);
+  if (!isAdmin) {
+    const delegateSvcs = await getSessionDelegateServices(env, session);
+    if (!delegateSvcs.length) return json({ error: 'Admin required' }, 403);
+  }
   const group = await env.DASHBOARD_KV.get(`user_group:${groupId}`, 'json');
   if (!group) return json({ error: 'User Group not found' }, 404);
+  // Delegate chỉ xóa được User Group do CHÍNH MÌNH tạo (đồ của admin → chỉ view).
+  if (!isAdmin && group.createdBy !== session.username) return json({ error: 'Bạn chỉ xóa được User Group do mình tạo' }, 403);
   // Remove userGroups ref from all member users
   for (const uname of (group.members || [])) {
     const u = await env.DASHBOARD_KV.get(`user:${uname}`, 'json');
@@ -2603,6 +2634,12 @@ a:hover{background:#4f46e5}</style></head>
   // Admins bypass all checks. Non-admin users are redirected to home
   // if they try to access a page they don't have permission for.
   if (!isAdmin) {
+    // ── Admin-only pages: non-admin KHÔNG bao giờ được vào (kể cả gõ thẳng URL) ──
+    // Thêm trang admin mới vào đây để tự động chặn server-side (nav chỉ ẩn link là chưa đủ).
+    const _ADMIN_ONLY_PAGES = new Set(['/noc.html']);
+    if (_ADMIN_ONLY_PAGES.has(url.pathname)) {
+      return Response.redirect(new URL('/', request.url).toString(), 302);
+    }
     const _PAGE_PERM = {
       '/service-movi/meraki.html': 'meraki',
       '/service-movi/topology.html': 'topology',
