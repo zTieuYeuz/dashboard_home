@@ -6,7 +6,7 @@
    ═══════════════════════════════════════════════ */
 export const SESSION_COOKIE    = 'dh_session';
 export const SESSION_TTL       = 60 * 60 * 8;      // default fallback only — runtime reads from KV system_config
-export const ALL_SERVICES      = ['esxi','n8n','casaos','fortigate','asus','ssh','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','nas','frigate','openclaw','kasm','services-hub','hub-fortigate','hub-asus','hub-esxi','hub-nas','hub-casaos','hub-kasm','hub-openclaw','hub-n8n','hub-frigate','hub-camera-nvr','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
+export const ALL_SERVICES      = ['esxi','n8n','casaos','fortigate','asus','ssh','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','nas','frigate','openclaw','kasm','services-hub','hub-fortigate','hub-asus','hub-esxi','hub-nas','hub-casaos','hub-kasm','hub-openclaw','hub-n8n','hub-frigate','hub-camera-nvr','hub-pnetlab','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
 
 /* ── Strip BOM + trim any env/config string value ── */
 export function cleanEnv(v) { return (v || '').replace(/^﻿/, '').trim(); }

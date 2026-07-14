@@ -1260,7 +1260,7 @@ var DELEGATE_SVC_LABELS = {
 
   'services-hub':'Services Hub (Internal)',
   'hub-fortigate':'Hub · FortiGate','hub-asus':'Hub · Router Asus','hub-esxi':'Hub · VMware ESXi','hub-nas':'Hub · NAS','hub-casaos':'Hub · CasaOS','hub-kasm':'Hub · Kasm',
-  'hub-openclaw':'Hub · OpenClaw','hub-n8n':'Hub · n8n','hub-frigate':'Hub · Frigate NVR','hub-camera-nvr':'Hub · Camera NVR',
+  'hub-openclaw':'Hub · OpenClaw','hub-n8n':'Hub · n8n','hub-frigate':'Hub · Frigate NVR','hub-camera-nvr':'Hub · Camera NVR','hub-pnetlab':'Hub · PNetLab',
   /* ── Service Movi ── */
   'meraki':'Meraki Network','topology':'Movi Map Network',
   'fortigate-movi':'FortiGate Movi','camera-movi':'Camera Movi',
@@ -1271,7 +1271,7 @@ var DELEGATE_SVC_LABELS = {
   'tool-movi-fg-policy-lan':'Tool: FG Policy LAN','tool-movi-fg-policy-wifi':'Tool: FG Policy WiFi',
   'ssh-movi':'Termix Movi',
 };
-var _DELEGATE_HOME = ['esxi','n8n','casaos','fortigate','asus','ssh','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','services-hub','hub-fortigate','hub-asus','hub-esxi','hub-nas','hub-casaos','hub-kasm','hub-openclaw','hub-n8n','hub-frigate','hub-camera-nvr'];
+var _DELEGATE_HOME = ['esxi','n8n','casaos','fortigate','asus','ssh','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','services-hub','hub-fortigate','hub-asus','hub-esxi','hub-nas','hub-casaos','hub-kasm','hub-openclaw','hub-n8n','hub-frigate','hub-camera-nvr','hub-pnetlab'];
 var _DELEGATE_MOVI = ['meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
 /* tool-movi sub-keys — needed to restore parent group visibility in delegate filter */
 var _TOOL_MOVI_SUB = ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'];
@@ -3278,6 +3278,9 @@ var SERVICES_HUB_TREE = [
   ]},
   { folder:'Automation', icon:'⚡', sites:[
     { name:'n8n', icon:'⚡', perm:'hub-n8n' },
+  ]},
+  { folder:'Lab', icon:'🧪', sites:[
+    { name:'PNetLab', icon:'🧪', perm:'hub-pnetlab' },
   ]},
   { folder:'Monitor', icon:'📊', sites:[
     { name:'Frigate NVR', icon:'📷', perm:'hub-frigate' },

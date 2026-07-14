@@ -2849,6 +2849,12 @@ const SERVICES_EMBED_TREE = [
   { folder:'Automation', icon:'⚡', sites:[
     { name:'n8n', icon:'⚡', url:'https://n8n-home.home-server.id.vn/', embedUrl:'/n8n-proxy/home', perm:'hub-n8n' },
   ]},
+  { folder:'Lab', icon:'🧪', sites:[
+    // Mở qua Chrome Pool (KasmVNC), KHÔNG iframe: PNetLab online bám authen.pnetlab.com
+    // + framebust → iframe trắng bóc (giống FortiGate). Pooled Chrome ở LAN mở thẳng IP,
+    // nuốt cert tự ký, không cần CF Access. Có captcha → login thủ công 1 lần.
+    { name:'PNetLab', icon:'🧪', url:'https://192.168.110.16/', perm:'hub-pnetlab' },
+  ]},
   { folder:'Monitor', icon:'📊', sites:[
     { name:'Frigate NVR', icon:'📷', url:'http://192.168.110.5:5000/', perm:'hub-frigate' },
     { name:'Camera NVR',  icon:'📹', url:'http://192.168.130.3:8088/',  perm:'hub-camera-nvr' },
