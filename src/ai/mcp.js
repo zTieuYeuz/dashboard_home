@@ -15,6 +15,7 @@ import { json, getSession, logActivity } from '../core.js';
 import { ACTION_REGISTRY } from './actions.js';
 import { READ_REGISTRY } from './reads.js';
 import { getForms } from './movi.js';
+import { runDailySelfReview } from './review.js';
 
 const MCP_PROTOCOL = '2024-11-05';
 const SERVER_INFO  = { name: 'dashboard-mcp', version: '1.0.0' };
@@ -68,11 +69,11 @@ export const TOOL_CATALOG = [
     inputSchema: {
       type: 'object',
       properties: {
-        title:   { type: 'string', description: 'Tiêu đề ngắn gọn (1 dòng)' },
-        insight: { type: 'string', description: 'Nội dung đầy đủ: học được gì / đề xuất gì, vì sao, áp dụng thế nào' },
-        kind:    { type: 'string', enum: ['learning', 'suggestion'], description: 'learning = điều học được · suggestion = đề xuất cải tiến' },
+        insight: { type: 'string', description: 'Nội dung đầy đủ: học được gì / đề xuất gì, vì sao, áp dụng thế nào (bắt buộc)' },
+        title:   { type: 'string', description: 'Tiêu đề ngắn 1 dòng (không bắt buộc — thiếu thì tự lấy từ dòng đầu insight)' },
+        kind:    { type: 'string', description: '"learning" = điều học được · "suggestion" = đề xuất cải tiến' },
       },
-      required: ['title', 'insight'], additionalProperties: false,
+      required: ['insight'],
     },
   },
   {
@@ -150,10 +151,13 @@ async function runTool(name, _args, env) {
     return { ok: true, saved: true, note: 'Đã ghi lại cho admin.' };
   }
   if (name === 'save_insight') {
-    const title   = (_args.title || '').toString().trim().slice(0, 200);
-    const insight = (_args.insight || '').toString().trim().slice(0, 4000);
-    const kind    = _args.kind === 'suggestion' ? 'suggestion' : 'learning';
-    if (!title || !insight) return { ok: false, error: 'thiếu title/insight' };
+    // BAO DUNG với client MCP: nhận nhiều tên field khác nhau (client có thể cầm
+    // schema cũ/lệch); chỉ fail khi không có nội dung gì. Thiếu title → tự sinh.
+    const insight = ((_args.insight ?? _args.content ?? _args.text ?? _args.note ?? _args.body ?? _args.message ?? '') + '').trim().slice(0, 4000);
+    let   title   = ((_args.title ?? _args.subject ?? '') + '').trim().slice(0, 200);
+    const kind    = ((_args.kind ?? _args.type ?? '') + '').toLowerCase().indexOf('sugg') >= 0 ? 'suggestion' : 'learning';
+    if (!insight) return { ok: false, error: 'thiếu nội dung (insight) — gửi lại với field "insight" chứa nội dung đầy đủ' };
+    if (!title) title = insight.split('\n')[0].slice(0, 80);
     const list = await getJson(env, 'ai_insights', []);
     list.unshift({ id: 'i_' + newToken().slice(0, 8), title, insight, kind, time: Date.now() });
     await env.DASHBOARD_KV.put('ai_insights', JSON.stringify(list.slice(0, 200)));
@@ -408,6 +412,12 @@ export async function handleAdminMcp(request, env) {
     list = list.filter(x => x.id !== mUn[1]);
     await env.DASHBOARD_KV.put('ai_unresolved', JSON.stringify(list));
     return json({ ok: true });
+  }
+
+  // POST /api/admin/mcp/run-review — chạy tự-rà-soát NGAY (nút bấm) thay vì chờ cron hằng ngày
+  if (p === '/run-review' && method === 'POST') {
+    const r = await runDailySelfReview(env, { manual: true });
+    return json({ ok: true, ...r });
   }
 
   // /api/admin/mcp/insights/:id — POST .../approve = duyệt vào KB (90-ai-tu-hoc), DELETE = bỏ

@@ -18,3 +18,7 @@ id = "ebad8682cfe24bbda0a4cf04b3e97210"
 [[routes]]
 pattern = "dashboard.home-server.id.vn"
 custom_domain = true
+
+# ── Cron: tự rà soát hệ thống hằng ngày 06:00 giờ VN (23:00 UTC) ──
+[triggers]
+crons = ["0 23 * * *"]

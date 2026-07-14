@@ -134,6 +134,7 @@ import {
   handleCamTestApiEmbed,
   handleCpaiEmbed,
 } from './src/camera-home.js';
+import { runDailySelfReview } from './src/ai/review.js';
 
 /* ═══════════════════════════════════════════════
    Auth & User Management System
@@ -4176,5 +4177,13 @@ export default {
       if (isApi) return json({ error: 'Internal server error', detail: e.message }, 500);
       return new Response('Internal Server Error', { status: 500 });
     }
+  },
+
+  // ── Cron: tự rà soát hệ thống hằng ngày (Mechanism B) ──
+  // Lịch chạy khai trong wrangler.toml [triggers] crons (06:00 giờ VN = 23:00 UTC).
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(
+      runDailySelfReview(env).catch(e => console.error('daily self-review failed:', e && e.message))
+    );
   },
 };

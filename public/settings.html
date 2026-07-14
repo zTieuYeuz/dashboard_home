@@ -772,7 +772,10 @@ select.inp{cursor:pointer}
         <!-- Đề xuất của AI (hàng chờ tự học) -->
         <div class="ai-pane" id="aip-insights">
           <div class="panel">
-            <div class="panel-header"><div><div class="panel-title">💡 Đề xuất của AI</div><div class="panel-desc">AI tự ghi điều học được / ý tưởng cải tiến. Bấm ✅ Duyệt → vào kho "Dạy AI" (90-ai-tu-hoc) → AI nhớ vĩnh viễn sau lần đồng bộ tiếp theo. Bấm 🗑 để bỏ.</div></div></div>
+            <div class="panel-header">
+            <div><div class="panel-title">💡 Đề xuất của AI</div><div class="panel-desc">AI tự ghi điều học được / ý tưởng cải tiến + bản tự rà soát hằng ngày (🔍). Bấm ✅ Duyệt → vào kho "Dạy AI" (90-ai-tu-hoc). Bấm 🗑 để bỏ.</div></div>
+            <button class="btn btn-sm" onclick="runReviewNow()" title="Chạy tự rà soát hệ thống ngay (không chờ cron 6h sáng)">🔄 Rà soát ngay</button>
+          </div>
             <div class="panel-body" id="mcp-insights"><div class="empty-state">Đang tải...</div></div>
           </div>
         </div>
@@ -4134,7 +4137,9 @@ function renderInsights(){
   wrap.innerHTML=list.map(function(x){
     var kindChip = x.kind==='suggestion'
       ? '<span class="chip chip-accent" style="font-size:10px">💡 đề xuất cải tiến</span>'
-      : '<span class="chip chip-ok" style="font-size:10px">🎓 điều học được</span>';
+      : x.kind==='observation'
+        ? '<span class="chip chip-warn" style="font-size:10px">🔍 tự rà soát</span>'
+        : '<span class="chip chip-ok" style="font-size:10px">🎓 điều học được</span>';
     return '<div class="panel-row" style="align-items:flex-start">'
       +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+esc(x.title)+' '+kindChip+'</div>'
@@ -4157,6 +4162,14 @@ function approveInsight(id){
 }
 function deleteInsight(id){
   fetch('/api/admin/mcp/insights/'+encodeURIComponent(id),{method:'DELETE'}).then(function(){ loadMcp(); });
+}
+function runReviewNow(){
+  toast('Đang rà soát hệ thống…','info');
+  fetch('/api/admin/mcp/run-review',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    if(d.error){toast('Lỗi: '+d.error,'err');return;}
+    toast(d.added ? ('✓ Đã tạo bản rà soát '+d.date+' — '+d.count+' điểm cần chú ý') : ('✓ Rà soát xong: '+(d.note||'không có gì đáng chú ý')), d.added?'ok':'info');
+    loadMcp();
+  }).catch(function(e){ toast('Lỗi: '+e.message,'err'); });
 }
 function renderUnresolved(){
   var wrap=document.getElementById('mcp-unresolved');
@@ -4313,7 +4326,8 @@ function renderAudit(){
       +'<span style="margin-left:auto;color:var(--muted)">'+_relTimeShort(a.time)+' · <span style="color:'+(a.ok?'var(--ok)':'var(--bad)')+'">'+(a.ok?'ok':'chặn')+'</span></span></div>';
   }).join('');
 }
-function toast(m){ try{ if(typeof showToast==='function'){showToast(m);return;} }catch(e){} }
+/* (đã gỡ hàm toast no-op — nó đè hàm toast thật ở trên khiến MỌI thông báo trên
+   trang Settings bị câm. Giờ dùng chung hàm toast(msg,cls) hiển thị #toast.) */
 
 /* ═══════════════════════════════════════════════════════════
    AI HUB — sub-nav + load-all
