@@ -105,7 +105,8 @@ import {
   handleSshMoviToken,
   handleSshMoviVerify,
   handleTermixHomeProxy,
-  handleTermixMoviProxy
+  handleTermixMoviProxy,
+  handleTermixLlm
 } from './src/termix.js';
 import {
   handleMcp,
@@ -3768,6 +3769,10 @@ export default {
     //    Tự bảo vệ bằng Origin allowlist + rate-limit trong handlePnetLlm. ──
     if (p === '/api/pnet-llm') return handlePnetLlm(request, env);
     if (p === '/api/pnet-console') return handlePnetConsole(request, env);
+
+    // ── Termix AI proxy → 9Router: gác bằng SESSION dashboard + quyền 'ssh' (Termix chạy
+    //    same-origin qua /proxy/termix-home nên có cookie dh_session). An toàn hơn Origin check. ──
+    if (p === '/api/termix-llm') return handleTermixLlm(request, env);
 
     // ── MCP server for external agents (OpenClaw) — token-authed, no session ──
     if (p === '/mcp') return handleMcp(request, env);

@@ -275,9 +275,14 @@ function _exitEmbedMode(){
 }
 document.addEventListener('click', function(e){
   var sb = document.querySelector('.sidebar');
-  if (sb && sb.classList.contains('collapsed') && sb.classList.contains('expanded') && !sb.contains(e.target)) {
-    sb.classList.remove('expanded');
-  }
+  if (!sb || !sb.classList.contains('collapsed') || !sb.classList.contains('expanded')) return;
+  // QUAN TRỌNG: bấm vào nhóm/thư mục trong sidebar sẽ gọi renderSidebar() vẽ lại danh sách,
+  // khiến phần tử vừa bấm (e.target) bị GỠ khỏi DOM → sb.contains(e.target) thành false →
+  // tưởng nhầm là bấm-ra-ngoài rồi thu lại (bug phải bấm 2 lần). Dùng composedPath() — đường
+  // đi của sự kiện được chụp NGAY lúc bấm, còn nguyên sidebar dù DOM đã vẽ lại sau đó.
+  var path = (e.composedPath && e.composedPath()) || [];
+  var inside = (path.indexOf(sb) !== -1) || sb.contains(e.target);
+  if (!inside) sb.classList.remove('expanded');
 });
 
 /* ══════════════════════════════════════

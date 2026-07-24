@@ -10,6 +10,66 @@ import {
   logActivity
 } from './core.js';
 
+/* ═══════════════════════════════════════════════════════════════════
+   Termix AI proxy → 9Router (cho nút 🤖 nhúng trong Termix qua patcher)
+   -------------------------------------------------------------------
+   Khác /api/pnet-llm (khóa theo Origin pnetlab): assistant Termix chạy
+   SAME-ORIGIN với dashboard (trang Termix phục vụ qua /proxy/termix-home),
+   nên gác bằng SESSION dashboard + quyền 'ssh' — chặt hơn và không cần
+   Origin allowlist. Chỉ forward tới 9Router + ép model allowlist + rate-limit.
+   ═══════════════════════════════════════════════════════════════════ */
+const TERMIX_NINE_ROUTER = 'https://9router.home-server.id.vn/v1/chat/completions';
+const TERMIX_LLM_MODELS  = new Set(['pnetlab', 'AI-Home']);   // alias 9Router của anh
+const TERMIX_LLM_RL_MAX  = 60;                                 // request / 5 phút / user
+
+export async function handleTermixLlm(request, env) {
+  const j = (obj, status) => new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json' } });
+  if (request.method !== 'POST') return j({ error: 'method' }, 405);
+
+  // ── CSRF hardening: chỉ nhận gọi SAME-ORIGIN từ chính trang dashboard. Chặn site lạ lừa
+  //    trình duyệt anh gọi hộ (dù response không đọc được cross-origin, vẫn chặn từ gốc). ──
+  const sfs = request.headers.get('Sec-Fetch-Site');
+  if (sfs && sfs !== 'same-origin') return j({ error: 'forbidden: cross-site request bị chặn' }, 403);
+  const origin = request.headers.get('Origin');
+  if (origin) {
+    try { if (new URL(origin).host !== new URL(request.url).host) return j({ error: 'forbidden: origin mismatch' }, 403); }
+    catch { return j({ error: 'bad origin' }, 403); }
+  }
+
+  // Gác: phải có session dashboard + quyền ssh (giống trang Termix)
+  const session = await getSession(request, env);
+  if (!session) return j({ error: 'Chưa đăng nhập dashboard' }, 401);
+  if (!(await hasPerm(env, session, 'ssh'))) return j({ error: 'Không có quyền SSH Terminal' }, 403);
+
+  const key = env.NINE_ROUTER_KEY;
+  if (!key) return j({ error: 'Chưa cấu hình NINE_ROUTER_KEY (wrangler secret put NINE_ROUTER_KEY).' }, 503);
+
+  // Rate-limit theo user (KV, cửa sổ 5 phút)
+  const rlKey = 'termixllm:rl:' + session.username;
+  const cnt = parseInt((await env.DASHBOARD_KV.get(rlKey)) || '0', 10);
+  if (cnt >= TERMIX_LLM_RL_MAX) return j({ error: 'Quá nhiều yêu cầu, thử lại sau ít phút.' }, 429);
+  await env.DASHBOARD_KV.put(rlKey, String(cnt + 1), { expirationTtl: 300 });
+
+  let body; try { body = await request.json(); } catch { return j({ error: 'bad json' }, 400); }
+  const model = TERMIX_LLM_MODELS.has(body.model) ? body.model : 'pnetlab';
+  const payload = Object.assign({}, body, { model, stream: true });
+
+  let upstream;
+  try {
+    upstream = await fetch(TERMIX_NINE_ROUTER, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) { return j({ error: '9Router không phản hồi: ' + ((e && e.message) || e) }, 502); }
+
+  // Stream thẳng SSE về browser (same-origin, không cần CORS)
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache' },
+  });
+}
+
 export async function handleSshMoviToken(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
@@ -382,18 +442,87 @@ export async function handleTermixProxy(request, env, opts) {
     return u;
   }
   var _W=window.WebSocket;
+  // [AI assistant] Cầu nối cho nút 🤖: bắt socket SSH đang dùng + HỌC "khung gói" input từ
+  // chính phím user gõ (mọi phiên bản Termix → không phụ thuộc schema cứng) để sau này chèn
+  // lệnh vào ĐÚNG định dạng. Chỉ đọc, không đổi hành vi gõ tay của user.
+  // Rút text terminal từ 1 message server→client (raw string, JSON envelope, hoặc binary).
+  function _termixOutText(d){
+    try{
+      if(typeof d==='string'){
+        if(d.charAt(0)==='{'){ try{ var o=JSON.parse(d); var v=(o&&(o.data!=null?o.data:(o.output!=null?o.output:o.d))); return (typeof v==='string')?v:''; }catch(e){ return d; } }
+        return d;
+      }
+      if(d instanceof ArrayBuffer) return new TextDecoder().decode(new Uint8Array(d));
+      if(d&&d.buffer instanceof ArrayBuffer) return new TextDecoder().decode(d);
+    }catch(e){}
+    return '';
+  }
+  function _termixHookSsh(sock){
+    window.__TERMIX_SSH__=sock;                 // socket SSH mới nhất
+    var _s=sock.send;
+    sock.send=function(d){
+      try{
+        if(typeof d==='string'&&d.length>0&&d.length<8000){
+          window.__TERMIX_SSH__=sock;           // socket vừa gửi = tab user đang gõ (active)
+          if(d.charAt(0)==='{'){
+            var o=JSON.parse(d);
+            if(o&&typeof o==='object'){
+              var kd=('data'in o)?'data':('input'in o)?'input':('d'in o)?'d':null;
+              if(kd&&typeof o[kd]==='string') sock.__inTpl={key:kd,shape:o};  // học mẫu 1 lần
+            }
+          }
+        }
+      }catch(e){}
+      return _s.apply(this,arguments);
+    };
+    // GOM toàn bộ output server gửi về (ring ~400KB) → AI đọc được cả phần đã cuộn khỏi màn
+    // hình (output/log dài), không cần user bấm Space cuộn tay. Chỉ đọc, không đổi hành vi.
+    try{
+      sock.addEventListener('message',function(ev){
+        try{ var t=_termixOutText(ev.data); if(t){ var b=(sock.__out||'')+t; if(b.length>400000) b=b.slice(-400000); sock.__out=b; } }catch(e){}
+      });
+    }catch(e){}
+  }
   window.WebSocket=function(u,p){
     var r=rw(u,true);
     r=r.replace(/[?&]undefined$/,''); // strip ?undefined appended by Termix new version bug
     // For SSH websocket: append JWT as ?token= so verifyClient can auth
     // [H2 fix] JWT is injected server-side (__JWT), NOT read from document.cookie (HttpOnly)
-    if(r.indexOf('/ssh/websocket')!==-1){
+    var _isSsh=r.indexOf('/ssh/websocket')!==-1;
+    if(_isSsh){
       var _tk=__JWT||(localStorage.getItem('token')||localStorage.getItem('jwt')||localStorage.getItem('authToken')||'');
       if(_tk)r+=(r.indexOf('?')===-1?'?':'&')+'token='+_tk;
       else console.warn('[proxy-patcher] SSH WS: no JWT found');
     }
     if(r!==u)console.log('[proxy-patcher] WS',u,'->',r);
-    return p!=null?new _W(r,p):new _W(r);
+    var _sock=p!=null?new _W(r,p):new _W(r);
+    if(_isSsh){ try{ _termixHookSsh(_sock); }catch(e){} }
+    return _sock;
+  };
+  // AI đọc TOÀN BỘ output đã gom của socket đang active (raw — assistant tự lọc mã ANSI).
+  window.__termixReadFull=function(){ var ws=window.__TERMIX_SSH__; return (ws&&ws.__out)?ws.__out:''; };
+  // AI gọi hàm này để ĐẶT lệnh lên dòng lệnh (KHÔNG kèm Enter — user tự xem rồi bấm chạy).
+  // Chèn qua ĐƯỜNG NHẬP LIỆU của chính xterm (giả lập paste vào .xterm-helper-textarea) →
+  // đi qua bộ xử lý input của Termix nên gói WS luôn ĐÚNG định dạng, KHÔNG tự dựng frame bắn
+  // thẳng vào socket (cách cũ đoán sai định dạng → đứt luồng → màn hình đen). Lỗi thì chỉ
+  // "không chèn được", KHÔNG phá terminal.
+  window.__termixInsert=function(text){
+    try{
+      if(typeof text!=='string'||!text) return {ok:false,reason:'lệnh rỗng'};
+      var tas=Array.prototype.slice.call(document.querySelectorAll('.xterm-helper-textarea'));
+      if(!tas.length) return {ok:false,reason:'không tìm thấy ô nhập của terminal (chưa mở/kết nối phiên SSH?)'};
+      var ta=null;
+      for(var i=tas.length-1;i>=0;i--){ if(tas[i].offsetParent!==null){ ta=tas[i]; break; } }  // ưu tiên terminal đang hiển thị
+      if(!ta) ta=tas[tas.length-1];
+      try{ ta.focus(); }catch(e){}
+      var dt=null; try{ dt=new DataTransfer(); dt.setData('text/plain',text); }catch(e){ dt=null; }
+      var ev;
+      try{ ev=new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true}); }
+      catch(e){ ev=new Event('paste',{bubbles:true,cancelable:true}); }
+      if(dt&&!ev.clipboardData){ try{ Object.defineProperty(ev,'clipboardData',{value:dt,configurable:true}); }catch(e){} }
+      ta.dispatchEvent(ev);
+      return {ok:true,method:'xterm-paste'};
+    }catch(e){ return {ok:false,reason:String(e&&e.message||e)}; }
   };
   window.WebSocket.prototype=_W.prototype;
   for(var k in _W)try{window.WebSocket[k]=_W[k];}catch(e){}
@@ -496,11 +625,18 @@ export async function handleTermixProxy(request, env, opts) {
   console.log('[proxy-patcher] ready — WS+fetch+XHR+location+history patched');
 })();
 <\/script>`;
+    // [AI assistant] Nhúng loader nút 🤖 (chỉ khi opts.aiAssistant). Script phục vụ same-origin
+    // từ dashboard (/termix-assistant.js) → dùng globals do patcher phơi ra (__TERMIX_SSH__…).
+    let aiLoader = '';
+    if (opts.aiAssistant) {
+      const dashOrigin = new URL(request.url).origin;
+      aiLoader = '<script src="' + dashOrigin + '/termix-assistant.js" defer></' + 'script>';
+    }
     // Inject at very FIRST position inside <head> so it runs before any other script
     if (/<head(\s[^>]*)?>/i.test(html)) {
-      html = html.replace(/<head(\s[^>]*)?>/i, function(m){ return m + patch; });
+      html = html.replace(/<head(\s[^>]*)?>/i, function(m){ return m + patch + aiLoader; });
     } else {
-      html = patch + html;
+      html = patch + aiLoader + html;
     }
     rh.set('Content-Type', 'text/html; charset=utf-8');
     return new Response(html, { status: upstream.status, headers: rh });
@@ -555,6 +691,7 @@ export function handleTermixHomeProxy(request, env) {
     cfSecret: cleanEnv(env.TERMIX_HOME_CF_CLIENT_SECRET),
     secret:   cleanEnv(env.TERMIX_HOME_SECRET),
     wsMode:   'direct',  // WS đi thẳng tới termix.home (+?token=jwt) — CF Worker không proxy WS qua CF Tunnel được
+    aiAssistant: true,   // nhúng nút 🤖 trợ lý SSH (đọc màn hình + gợi ý lệnh, user tự Enter)
   });
 }
 
