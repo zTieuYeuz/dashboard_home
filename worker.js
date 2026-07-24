@@ -135,6 +135,7 @@ import {
   handleCpaiEmbed,
 } from './src/camera-home.js';
 import { runDailySelfReview } from './src/ai/review.js';
+import { handlePnetLlm, handlePnetConsole } from './src/pnetlab.js';
 
 /* ═══════════════════════════════════════════════
    Auth & User Management System
@@ -2841,19 +2842,18 @@ const SERVICES_EMBED_TREE = [
     { name:'VMware ESXi', icon:'💾', url:'https://192.168.110.125/',      perm:'hub-esxi' },
     { name:'NAS',         icon:'🗄️', url:'https://192.168.110.126:5001/', perm:'hub-nas' },
     { name:'CasaOS',      icon:'🏠', url:'http://192.168.110.21:4434/',   perm:'hub-casaos' },
-    { name:'Kasm',        icon:'🖥️', url:'https://kasm-service.home-server.id.vn/', embedUrl:'https://kasm-service.home-server.id.vn/?fps=24&quality=6&compression=9', perm:'hub-kasm' },
-  ]},
-  { folder:'AI', icon:'🤖', sites:[
-    { name:'OpenClaw', icon:'🤖', url:'http://192.168.110.5:18789/', perm:'hub-openclaw' },
+    { name:'Kasm',        icon:'🖥️', url:'https://kasm-service.home-server.id.vn/', embedUrl:'https://kasm-service.home-server.id.vn/?fps=24&quality=6&compression=9', cfAccess:true, perm:'hub-kasm' },
   ]},
   { folder:'Automation', icon:'⚡', sites:[
     { name:'n8n', icon:'⚡', url:'https://n8n-home.home-server.id.vn/', embedUrl:'/n8n-proxy/home', perm:'hub-n8n' },
   ]},
   { folder:'Lab', icon:'🧪', sites:[
-    // Mở qua Chrome Pool (KasmVNC), KHÔNG iframe: PNetLab online bám authen.pnetlab.com
-    // + framebust → iframe trắng bóc (giống FortiGate). Pooled Chrome ở LAN mở thẳng IP,
-    // nuốt cert tự ký, không cần CF Access. Có captcha → login thủ công 1 lần.
-    { name:'PNetLab', icon:'🧪', url:'https://192.168.110.16/', perm:'hub-pnetlab' },
+    // Nhúng iframe qua tunnel. PNETLab KHÔNG gửi X-Frame-Options và không có code framebust
+    // (comment cũ ghi "framebust" là từ hồi còn chế độ ONLINE — authen.pnetlab.com mới là thứ đá ra).
+    // ⚠ app.js của PNETLab đã phải vá lỗi statusText (chết dưới HTTP/2 của Cloudflare) — xem memory
+    //   pnetlab_cloudflare_http2. Update PNETLab sẽ ghi đè bản vá → trắng trang trở lại.
+    { name:'Pnetlab-network', icon:'🧪', url:'https://pnetlab.home-server.id.vn/',
+      embedUrl:'https://pnetlab.home-server.id.vn/store/public/admin/main/view', perm:'hub-pnetlab' },
   ]},
   { folder:'Monitor', icon:'📊', sites:[
     { name:'Frigate NVR', icon:'📷', url:'http://192.168.110.5:5000/', perm:'hub-frigate' },
@@ -2871,6 +2871,7 @@ async function handleServicesEmbedConfig(env, session) {
       .map(function(s) {
         const out = { name: s.name, icon: s.icon, url: s.url };
         if (s.embedUrl) out.embedUrl = s.embedUrl;
+        if (s.cfAccess) out.cfAccess = true;   // site sau Cloudflare Access → cần vòng xác thực trước khi nhúng
         return out;
       });
     return { folder: folder.folder, icon: folder.icon, sites: sites };
@@ -3762,6 +3763,11 @@ export default {
 
     // ── SSH Movi verify — fully public, must be FIRST before any session middleware ──
     if (p === '/api/ssh-movi/verify') return handleSshMoviVerify(request, env);
+
+    // ── PNETLab AI proxy → 9Router: PUBLIC (gọi từ browser PNETLab, không có cookie dashboard).
+    //    Tự bảo vệ bằng Origin allowlist + rate-limit trong handlePnetLlm. ──
+    if (p === '/api/pnet-llm') return handlePnetLlm(request, env);
+    if (p === '/api/pnet-console') return handlePnetConsole(request, env);
 
     // ── MCP server for external agents (OpenClaw) — token-authed, no session ──
     if (p === '/mcp') return handleMcp(request, env);

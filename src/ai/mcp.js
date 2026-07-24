@@ -610,6 +610,16 @@ KHÔNG tự ý chuyển trang. Hãy **đưa link markdown** tới đường dẫ
 ## XEM thông tin (dữ liệu sống → dash-read, theo quyền user)
 Để lấy dữ liệu THẬT của bất kỳ dịch vụ nào, in khối \`\`\`dash-read {"source":"<id>"}\`\`\` — dashboard đọc bằng quyền của user rồi trả về (xem KB "07-doc-du-lieu-per-user" để biết danh sách nguồn). Ví dụ hỏi trạng thái firewall nhà → \`dash-read {"source":"fortigate_home"}\`. MCP tool chỉ còn tool META: \`list_dashboard_reads\` (danh sách nguồn đọc), \`list_dashboard_pages\`, \`list_dashboard_actions\`, \`log_unresolved\` — KHÔNG còn tool đọc dữ liệu get_*.
 
+## PNETLAB (lab mạng ảo) — đọc danh sách/config tĩnh QUA TÀI KHOẢN RIÊNG (không phải lab user đang mở)
+⚠️ Các nguồn này chạy bằng tài khoản kỹ thuật riêng (ai-agent), có **PHIÊN LAB RIÊNG** — KHÔNG phải lab mà user đang mở trên màn hình họ. Đừng dùng để trả lời "lab tôi đang chạy thế nào" — dữ liệu có thể sai khác (node trong phiên ai-agent có thể đang stopped dù user đang thấy nó chạy). Với câu hỏi về **lab đang mở của chính user**, hãy bảo user dùng nút 🤖 nhúng ngay trong PNETLab (nó chạy trong phiên của họ, luôn đúng).
+Dùng nguồn này khi: liệt kê danh sách lab có sẵn, hoặc xem nhanh startup-config đã lưu (tĩnh) của 1 lab bất kỳ.
+1. \`dash-read {"source":"pnetlab_labs"}\` → danh sách lab, mỗi lab có **path** (vd \`/CCNA/lab1.unl\`).
+2. \`dash-read {"source":"pnetlab_topology","params":{"lab":"<path>"}}\` → nodes + kết nối (trong phiên ai-agent, có thể khác trạng thái thật user đang thấy).
+3. \`dash-read {"source":"pnetlab_config","params":{"lab":"<path>","node_id":<id>}}\` → xem startup config đã lưu.
+- Điều khiển (cần user xác nhận): \`pnetlab_start_node\`, \`pnetlab_stop_node\`, \`pnetlab_export_config\` (lưu config từ node đang chạy vào lab).
+- KHÔNG có cách nào để bạn tự GHI/SỬA startup-config qua đây (đã thử nghiệm, API PNETLab không hỗ trợ). Nếu user muốn cấu hình (hostname, VLAN, port-channel…): soạn lệnh CLI cho họ tự gõ vào console (qua nút 🤖 trong PNETLab hoặc console trực tiếp), rồi "write memory", rồi export_config để lưu.
+- Mọi thứ gác quyền \`hub-pnetlab\` — user không có quyền thì bạn cũng bị chặn.
+
 ## KHI KHÔNG LÀM ĐƯỢC (quan trọng)
 Nếu bạn **không trả lời được**, **không có công cụ phù hợp**, hoặc yêu cầu **vượt quá khả năng/quyền**: gọi tool \`log_unresolved\` với \`question\` (yêu cầu của user) + \`reason\` (vì sao chưa làm được). Rồi báo người dùng: "Mình chưa xử lý được, đã ghi lại để admin xem giúp bạn." ĐỪNG bịa câu trả lời khi không chắc.
 

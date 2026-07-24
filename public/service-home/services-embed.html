@@ -47,65 +47,72 @@ html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);he
 .sb-fld-hd.open .fcaret{transform:rotate(90deg)}
 .sb-site.sub{padding:6px 14px 6px 44px}
 .sidebar.collapsed .sb-fld-hd{height:0;padding:0;margin:0;opacity:0;overflow:hidden}
-.sidebar.collapsed:hover .sb-fld-hd,
-.sidebar.collapsed:focus-within .sb-fld-hd{height:auto;padding:5px 14px 3px 28px;opacity:1}
-.sidebar.collapsed:hover .sb-site.sub,
-.sidebar.collapsed:focus-within .sb-site.sub{padding:6px 14px 6px 44px}
+.sidebar.collapsed.expanded .sb-fld-hd{height:auto;padding:5px 14px 3px 28px;opacity:1}
+.sidebar.collapsed.expanded .sb-site.sub{padding:6px 14px 6px 44px}
 .sb-site{display:flex;align-items:center;gap:8px;padding:6px 14px 6px 34px;margin:0 6px;font-size:13px;cursor:pointer;transition:background .1s;border-radius:7px;color:var(--text-2);user-select:none}
 .sb-site:hover{background:var(--surface-2);color:var(--text)}
 .sb-site.active{background:color-mix(in oklch,var(--accent) 15%,var(--bg));color:var(--accent);font-weight:500}
-/* Thu gọn (rail) + bung khi hover/focus — khớp với .sb-item */
+/* Thu gọn: ẩn nội dung; bung khi có class .expanded — khớp với .sb-item */
 .sidebar.collapsed .sb-allsite-hd,.sidebar.collapsed .sb-site{justify-content:center;gap:0;padding:9px 0;margin:3px 8px}
 .sidebar.collapsed .sb-allsite-hd .caret{display:none}
 .sidebar.collapsed .sb-site-fld{height:0;padding:0;margin:0;opacity:0;overflow:hidden}
-.sidebar.collapsed:hover .sb-allsite-hd,.sidebar.collapsed:hover .sb-site,
-.sidebar.collapsed:focus-within .sb-allsite-hd,.sidebar.collapsed:focus-within .sb-site{justify-content:flex-start;gap:9px;padding:7px 14px;margin:0 6px}
-.sidebar.collapsed:hover .sb-site,
-.sidebar.collapsed:focus-within .sb-site{padding:6px 14px 6px 34px}
-.sidebar.collapsed:hover .sb-allsite-hd .caret,
-.sidebar.collapsed:focus-within .sb-allsite-hd .caret{display:inline}
-.sidebar.collapsed:hover .sb-site-fld,
-.sidebar.collapsed:focus-within .sb-site-fld{height:auto;padding:6px 14px 3px 32px;opacity:1}
+.sidebar.collapsed.expanded .sb-allsite-hd,.sidebar.collapsed.expanded .sb-site{justify-content:flex-start;gap:9px;padding:7px 14px;margin:0 6px}
+.sidebar.collapsed.expanded .sb-site{padding:6px 14px 6px 34px}
+.sidebar.collapsed.expanded .sb-allsite-hd .caret{display:inline}
+.sidebar.collapsed.expanded .sb-site-fld{height:auto;padding:6px 14px 3px 32px;opacity:1}
 /* Header nhóm dạng dropdown */
 .sb-group-hd{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;padding:8px 14px 4px;cursor:pointer;user-select:none}
 .sb-group-hd:hover{color:var(--text-2)}
 .sb-group-hd .gcaret{font-size:9px;width:9px;flex-shrink:0;transition:transform .15s}
 .sb-group-hd.open .gcaret{transform:rotate(90deg)}
 .sidebar.collapsed .sb-group-hd{height:0;padding:0;margin:0;opacity:0;overflow:hidden}
-.sidebar.collapsed:hover .sb-group-hd,
-.sidebar.collapsed:focus-within .sb-group-hd{height:auto;padding:8px 14px 4px;opacity:1}
+.sidebar.collapsed.expanded .sb-group-hd{height:auto;padding:8px 14px 4px;opacity:1}
 .sb-dot.online{background:var(--green)}
 .sb-dot.offline{background:var(--red)}
 
-/* ── Collapsed icon-rail mode (khi đang xem 1 service nhúng) ──
-   Sidebar thu nhỏ còn 1 dải icon; hover (hoặc focus) thì bung 240px dạng overlay,
-   đè lên iframe — KHÔNG đẩy main reflow (main giữ margin-left 56px cố định). */
-.sidebar.collapsed{position:absolute;left:0;top:0;height:100%;width:56px;z-index:60;box-shadow:1px 0 0 var(--border);transition:width .18s ease,box-shadow .18s ease}
-.sidebar.collapsed .sb-search{display:none}
-.sidebar.collapsed .sb-group-label{height:0;padding:0;margin:0;opacity:0;overflow:hidden}
-.sidebar.collapsed .sb-list{overflow:hidden}
-.sidebar.collapsed .sb-name,
-.sidebar.collapsed .sb-dot{opacity:0;transition:opacity .12s}
-.sidebar.collapsed .sb-item{justify-content:center;gap:0;padding:9px 0;margin:3px 8px}
-.sidebar.collapsed .sb-icon{font-size:17px;width:22px}
-.sidebar.collapsed:hover,
-.sidebar.collapsed:focus-within{width:240px;box-shadow:6px 0 28px rgba(0,0,0,.45)}
-.sidebar.collapsed:hover .sb-search,
-.sidebar.collapsed:focus-within .sb-search{display:block}
-.sidebar.collapsed:hover .sb-group-label,
-.sidebar.collapsed:focus-within .sb-group-label{height:auto;padding:8px 14px 4px;margin:0;opacity:1}
-.sidebar.collapsed:hover .sb-list,
-.sidebar.collapsed:focus-within .sb-list{overflow-y:auto}
-.sidebar.collapsed:hover .sb-name,
-.sidebar.collapsed:hover .sb-dot,
-.sidebar.collapsed:focus-within .sb-name,
-.sidebar.collapsed:focus-within .sb-dot{opacity:1}
-.sidebar.collapsed:hover .sb-item,
-.sidebar.collapsed:focus-within .sb-item{justify-content:flex-start;gap:9px;padding:7px 14px;margin:0 6px}
-.sidebar.collapsed:hover .sb-icon,
-.sidebar.collapsed:focus-within .sb-icon{font-size:14px;width:18px}
-/* khi rail-mode bật, main chừa 56px bên trái cho dải icon (không reflow lúc hover) */
-.main.rail{margin-left:56px}
+/* ── Collapsed mode (khi đang xem 1 service nhúng) ──
+   Sidebar ẨN HẲN (width 0) → nội dung nhúng tràn SÁT mép trái màn hình, không còn dải icon.
+   Chỉ còn 1 tay nắm nhỏ .rail-handle ở mép trái để bấm mở. Bung 240px dạng overlay CHỈ khi
+   bấm tay nắm (class .expanded) — KHÔNG dùng :focus-within (nó giữ mở kẹt khi ô tìm kiếm còn
+   focus, khiến bấm đóng không ăn — đã gặp bug này). */
+.sidebar.collapsed{position:absolute;left:0;top:0;height:100%;width:0;z-index:60;box-shadow:none;overflow:hidden;transition:width .18s ease,box-shadow .18s ease}
+.sidebar.collapsed.expanded{width:240px;box-shadow:6px 0 28px rgba(0,0,0,.45)}
+/* rail-mode: nội dung nhúng SÁT mép trái, không chừa lề */
+.main.rail{margin-left:0}
+/* ── Ẩn header trên cùng khi đang xem service nhúng (CHỈ trang này — không đụng base.css) ──
+   Header base.css cao 52px dùng chung mọi trang; ở đây override qua class body.embed-mode để
+   iframe cao HẾT màn hình. Bấm tay nắm .topbar-handle (mép trên, giữa) để hiện lại header. */
+body.embed-mode .topbar{display:none}
+body.embed-mode .layout{height:100vh}
+body.embed-mode.topbar-open .topbar{display:flex}
+body.embed-mode.topbar-open .layout{height:calc(100vh - 52px)}
+.topbar-handle{display:none}
+body.embed-mode .topbar-handle{
+  display:flex;align-items:center;justify-content:center;
+  position:fixed;top:0;left:50%;transform:translateX(-50%);
+  width:54px;height:15px;border:none;padding:0;
+  border-radius:0 0 8px 8px;background:var(--surface-2);color:var(--muted);
+  font-size:11px;line-height:1;cursor:pointer;z-index:55;
+  box-shadow:0 1px 5px rgba(0,0,0,.28);
+  transition:background .15s,color .15s,transform .18s ease,top .18s ease;
+}
+body.embed-mode .topbar-handle:hover{background:var(--accent);color:#fff}
+body.embed-mode.topbar-open .topbar-handle{top:52px;transform:translateX(-50%) rotate(180deg)}
+/* Tay nắm mở/đóng — nằm NGOÀI sidebar (sibling) nên không bị overflow:hidden cắt.
+   Ghim sát mép trái, nhỏ gọn, không viền; hiện khi sidebar đang ở chế độ collapsed. */
+.rail-handle{display:none}
+.sidebar.collapsed ~ .rail-handle{
+  display:flex;align-items:center;justify-content:center;
+  position:absolute;left:0;top:50%;transform:translateY(-50%);
+  width:15px;height:52px;border:none;padding:0;margin:0;
+  border-radius:0 8px 8px 0;background:var(--surface-2);color:var(--muted);
+  font-size:12px;line-height:1;cursor:pointer;z-index:62;
+  box-shadow:1px 0 5px rgba(0,0,0,.28);
+  transition:left .18s ease,background .15s,color .15s,transform .18s ease;
+}
+.sidebar.collapsed ~ .rail-handle:hover{background:var(--accent);color:#fff}
+/* Khi đang mở: tay nắm dời tới mép phải panel 240px + xoay thành ‹ để bấm đóng */
+.sidebar.collapsed.expanded ~ .rail-handle{left:240px;transform:translateY(-50%) rotate(180deg)}
 .sb-dot.local{background:var(--amber)}
 @keyframes sbpulse{0%,100%{opacity:1}50%{opacity:.3}}
 .sb-dot.loading{animation:sbpulse .9s ease-in-out infinite}
@@ -216,6 +223,8 @@ html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);he
   </div>
 </header>
 
+<button type="button" class="topbar-handle" id="topbarHandle" onclick="toggleTopbar(event)" title="Ẩn/hiện thanh trên">▾</button>
+
 <div class="layout">
   <nav class="sidebar">
     <div class="sb-search">
@@ -226,6 +235,7 @@ html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);he
     </div>
     <div class="sb-list" id="sbList"></div>
   </nav>
+  <button type="button" class="rail-handle" id="railHandle" onclick="toggleRailSidebar(event)" title="Mở menu" aria-label="Mở menu">›</button>
 
   <main class="main">
     <div class="main-inner" id="mainInner"></div>
@@ -240,6 +250,35 @@ var SVCS = [];
 var CATS = {};
 
 function effCat(s){ return s.cat || 'monitor'; }
+
+/* Sidebar ẩn (collapsed) — bung/đóng CHỈ bằng bấm tay nắm .rail-handle (không hover/focus),
+   và tự đóng lại khi bấm ra ngoài sidebar (giống pattern dropdown thông thường). */
+function toggleRailSidebar(e){
+  if (e) e.stopPropagation();
+  var sb = document.querySelector('.sidebar');
+  if (sb) sb.classList.toggle('expanded');
+}
+/* Ẩn/hiện header khi đang xem service nhúng. */
+function toggleTopbar(e){
+  if (e) e.stopPropagation();
+  document.body.classList.toggle('topbar-open');
+}
+/* Vào chế độ xem service nhúng: ẩn header (bắt đầu ẩn), thu sidebar. */
+function _enterEmbedMode(){
+  document.body.classList.add('embed-mode');
+  document.body.classList.remove('topbar-open');
+}
+/* Thoát chế độ nhúng (về overview / trang thường): trả header + sidebar. */
+function _exitEmbedMode(){
+  document.body.classList.remove('embed-mode');
+  document.body.classList.remove('topbar-open');
+}
+document.addEventListener('click', function(e){
+  var sb = document.querySelector('.sidebar');
+  if (sb && sb.classList.contains('collapsed') && sb.classList.contains('expanded') && !sb.contains(e.target)) {
+    sb.classList.remove('expanded');
+  }
+});
 
 /* ══════════════════════════════════════
    State
@@ -300,7 +339,7 @@ function selectSite(url){
   }
 }
 
-function selectSiteEmbed(embedUrl, siteUrl){
+function selectSiteEmbed(embedUrl, siteUrl, cfAccess){
   _cancelAuth();
   _selected = '__allsite__';
   _embedUrl = embedUrl;
@@ -308,34 +347,38 @@ function selectSiteEmbed(embedUrl, siteUrl){
   // Hash riêng cho site iframe → reload/quay lại vẫn mở iframe, KHÔNG rơi về Chrome Pool.
   window.location.hash = 'embed=' + encodeURIComponent(embedUrl);
   renderSidebar();
-  // CF Access: site ngoài (Kasm) lần ĐẦU trong session → tự xác thực rồi mới nhúng
+  // CF Access: CHỈ site được đánh dấu cfAccess (Kasm) mới chạy vòng xác thực lần ĐẦU trong session
   // (tránh "content is blocked" phải bấm 🔓 thủ công). Lần sau cookie đã có → nhúng thẳng.
-  var isExternal = /^https?:\/\//i.test(embedUrl);
+  // Site không sau CF Access (vd Pnetlab-network) → nhúng thẳng, không hiện màn hình xác thực.
   var origin=''; try{ origin=new URL(embedUrl, location.href).origin; }catch(e){}
   var authed=false; try{ authed=!!JSON.parse(sessionStorage.getItem('_kasmEmbedAuth')||'{}')[origin]; }catch(e){}
-  if(isExternal && origin && !authed){ _embedAutoAuth(origin); }
+  if(cfAccess && origin && !authed){ _embedAutoAuth(origin); }
   else { renderEmbedFull(embedUrl); }
 }
 
-/* Tìm url gốc của site theo embedUrl — để highlight đúng item trong sidebar khi restore. */
-function _siteUrlByEmbed(embedUrl){
+/* Tìm site theo embedUrl — để highlight đúng item trong sidebar khi restore
+   và biết site có nằm sau Cloudflare Access không. */
+function _siteByEmbed(embedUrl){
   for (var i=0;i<ALL_SITE_TREE.length;i++){
     var ss=ALL_SITE_TREE[i].sites;
-    for (var j=0;j<ss.length;j++){ if(ss[j].embedUrl===embedUrl) return ss[j].url; }
+    for (var j=0;j<ss.length;j++){ if(ss[j].embedUrl===embedUrl) return ss[j]; }
   }
-  return '';
+  return null;
 }
+function _siteUrlByEmbed(embedUrl){ var s=_siteByEmbed(embedUrl); return s ? s.url : ''; }
 
 /* Dựng iframe full-page cho site embed (dùng chung cho click & restore khi reload). */
 function renderEmbedFull(embedUrl){
+  _enterEmbedMode();
   var sb=document.querySelector('.sidebar'), mn=document.querySelector('.main');
-  if(sb){ sb.style.display=''; sb.classList.add('collapsed'); }
+  if(sb){ sb.style.display=''; sb.classList.add('collapsed'); sb.classList.remove('expanded'); }
   if(mn) mn.classList.add('rail');
   var inner=document.getElementById('mainInner');
   inner.style.maxWidth='none'; inner.style.padding='0'; inner.style.height='100%';
-  // Site ngoài (https://...) có thể nằm sau Cloudflare Access → khi cookie hết hạn,
-  // iframe hiện "This content is blocked". Hiện nút 🔓 để đăng nhập lại CF Access.
-  var isExternal = /^https?:\/\//i.test(embedUrl);
+  // Site sau Cloudflare Access → khi cookie hết hạn iframe hiện "This content is blocked".
+  // Hiện nút 🔓 để đăng nhập lại CF Access. Tree chưa nạp (lúc restore sau reload) → tạm suy từ URL.
+  var _st = _siteByEmbed(embedUrl);
+  var isExternal = _st ? !!_st.cfAccess : /^https?:\/\//i.test(embedUrl);
   var tools = '<div style="position:absolute;top:8px;right:10px;z-index:5;display:flex;gap:6px">'
     +'<button onclick="_embedReload()" title="Tải lại" style="width:30px;height:30px;border:none;border-radius:7px;background:rgba(0,0,0,.55);color:#fff;font-size:14px;cursor:pointer">🔄</button>'
     +(isExternal?'<button onclick="_embedReauth()" title="Đăng nhập lại Cloudflare Access (khi hiện \'content is blocked\')" style="width:30px;height:30px;border:none;border-radius:7px;background:rgba(0,0,0,.55);color:#fff;font-size:14px;cursor:pointer">🔓</button>':'')
@@ -393,9 +436,10 @@ function _embedReauth(){
 }
 
 function renderAllSite(){
-  // Cho sidebar thu gọn (rail) + hover bung — như các dịch vụ embed khác.
+  // Cho sidebar thu gọn (rail), bung khi bấm nút toggle — như các dịch vụ embed khác.
+  _enterEmbedMode();
   var sb=document.querySelector('.sidebar'), mn=document.querySelector('.main');
-  if(sb){ sb.style.display=''; sb.classList.add('collapsed'); }
+  if(sb){ sb.style.display=''; sb.classList.add('collapsed'); sb.classList.remove('expanded'); }
   if(mn) mn.classList.add('rail');
   var inner = document.getElementById('mainInner');
   inner.style.maxWidth='none'; inner.style.padding='0'; inner.style.height='100%';
@@ -569,7 +613,7 @@ function renderSidebar() {
         if (s.wip) {
           onclick = '';
         } else if (s.embedUrl) {
-          onclick = ' onclick="selectSiteEmbed(\''+s.embedUrl.replace(/'/g,"\\'")+'\',\''+s.url.replace(/'/g,"\\'")+'\''+')"';
+          onclick = ' onclick="selectSiteEmbed(\''+s.embedUrl.replace(/'/g,"\\'")+'\',\''+s.url.replace(/'/g,"\\'")+'\','+(s.cfAccess?1:0)+')"';
         } else {
           onclick = ' onclick="selectSite(\''+s.url.replace(/'/g,"\\'")+'\''+')"';
         }
@@ -631,9 +675,10 @@ function renderMain() {
 }
 
 function _restoreSidebar() {
+  _exitEmbedMode();
   var sb = document.querySelector('.sidebar');
   var mn = document.querySelector('.main');
-  if (sb) { sb.style.display = ''; sb.classList.remove('collapsed'); }
+  if (sb) { sb.style.display = ''; sb.classList.remove('collapsed'); sb.classList.remove('expanded'); }
   if (mn) mn.classList.remove('rail');
 }
 
@@ -663,7 +708,7 @@ function renderOverview() {
       var onclick = '';
       if (!s.wip) {
         onclick = s.embedUrl
-          ? ' onclick="selectSiteEmbed(\''+s.embedUrl.replace(/'/g,"\\'")+'\',\''+s.url.replace(/'/g,"\\'")+'\''+')"'
+          ? ' onclick="selectSiteEmbed(\''+s.embedUrl.replace(/'/g,"\\'")+'\',\''+s.url.replace(/'/g,"\\'")+'\','+(s.cfAccess?1:0)+')"'
           : ' onclick="selectSite(\''+s.url.replace(/'/g,"\\'")+'\''+')"';
       }
       var badge = s.wip ? '🚧' : (s.embedUrl ? 'iframe' : 'pool');
@@ -689,9 +734,10 @@ function renderDetail(svc) {
   var main    = document.querySelector('.main');
   var inner   = document.getElementById('mainInner');
 
-  /* ── Embedded service: thu sidebar thành dải icon (hover bung ra), iframe lấp phần còn lại ── */
+  /* ── Embedded service: thu sidebar thành dải icon (bấm nút mới bung), iframe lấp phần còn lại ── */
   if (svc.embedUrl) {
-    if (sidebar) { sidebar.style.display = ''; sidebar.classList.add('collapsed'); }
+    _enterEmbedMode();
+    if (sidebar) { sidebar.style.display = ''; sidebar.classList.add('collapsed'); sidebar.classList.remove('expanded'); }
     main.classList.add('rail');
     main.style.overflow  = 'hidden';
     inner.style.maxWidth = 'none';
@@ -708,6 +754,7 @@ function renderDetail(svc) {
   }
 
   /* ── Restore sidebar và reset styles khi chuyển sang service không có embed ── */
+  _exitEmbedMode();
   if (sidebar) { sidebar.style.display = ''; sidebar.classList.remove('collapsed'); }
   main.classList.remove('rail');
   main.style.overflow  = '';

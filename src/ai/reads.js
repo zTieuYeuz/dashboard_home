@@ -19,6 +19,7 @@ import {
   handleAsusClients, handleCasaOS, handleRustdesk,
 } from '../home-services.js';
 import { MOVI_READS, summarizeMerakiClients, summarizeMerakiDevices, summarizeMerakiEvents } from './movi.js';
+import { pnetReadLabs, pnetReadTopology, pnetReadNodeConfig } from '../pnetlab.js';
 
 /* 2 loại nguồn:
    - `handler(request,env)`  : TỰ kiểm quyền bên trong (Meraki/Movi — getSession+hasPerm).
@@ -54,6 +55,14 @@ export const READ_REGISTRY = [
   { id: 'movi_fortigate',  perm: 'fortigate-movi', label: 'Trạng thái FortiGate Movi',                 handler: handleMoviSystem,
     desc: 'Trạng thái FortiGate văn phòng Movi: CPU/RAM, phiên bản, uptime…' },
 
+  // ── PNETLab (lab mạng) — homeHandler(env, params); bridge tự kiểm quyền hub-pnetlab ──
+  { id: 'pnetlab_labs',    perm: 'hub-pnetlab', label: 'Danh sách lab PNETLab',           homeHandler: pnetReadLabs,
+    desc: 'Cây folder + danh sách lab trên PNETLab (mỗi lab có "path"). Dùng path này cho các nguồn/hành động PNETLab khác.' },
+  { id: 'pnetlab_topology', perm: 'hub-pnetlab', label: 'Topology 1 lab PNETLab',          homeHandler: pnetReadTopology, needsParams: true,
+    desc: 'Nodes (id, tên, template, trạng thái running/stopped) + kết nối mạng của 1 lab. THAM SỐ: lab (path lab, vd /CCNA/lab1.unl).' },
+  { id: 'pnetlab_config',  perm: 'hub-pnetlab', label: 'Startup config 1 node PNETLab',   homeHandler: pnetReadNodeConfig, needsParams: true,
+    desc: 'Startup config của 1 node router/switch. THAM SỐ: lab (path lab) + node_id (số, lấy từ pnetlab_topology).' },
+
   // ── Movi network mở rộng + chẩn đoán + ESXi Movi (module riêng src/ai/movi.js) ──
   ...MOVI_READS,
 ];
@@ -75,7 +84,7 @@ export async function handleAiReadsList(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   return json({
-    reads: READ_REGISTRY.map(r => ({ id: r.id, perm: r.perm, label: r.label, desc: r.desc })),
+    reads: READ_REGISTRY.map(r => ({ id: r.id, perm: r.perm, label: r.label, desc: r.desc, needsParams: !!r.needsParams })),
   });
 }
 
@@ -85,6 +94,7 @@ export async function handleAiRead(request, env) {
   if (!session) return json({ ok: false, error: 'Unauthorized' }, 401);
   let b; try { b = await request.json(); } catch { return json({ ok: false, error: 'Invalid JSON' }, 400); }
   const src = _byId[(b.source || '').toString()];
+  const params = (b.params && typeof b.params === 'object') ? b.params : {};
   const ip = request.headers.get('CF-Connecting-IP') || '?';
   if (!src) return json({ ok: false, error: 'Nguồn dữ liệu không tồn tại' }, 404);
 
@@ -99,7 +109,8 @@ export async function handleAiRead(request, env) {
         return json({ ok: false, denied: true, source: src.id,
           error: 'Bạn không có quyền xem "' + src.label + '" (cần quyền ' + src.perm + '). Vì AI đọc thay bạn nên cũng không xem được — hãy báo người dùng họ bị giới hạn quyền này.' }, 403);
       }
-      resp = await src.homeHandler(env);
+      // homeHandler(env) hoặc homeHandler(env, params) — handler cũ bỏ qua tham số 2 (tương thích ngược)
+      resp = await src.homeHandler(env, params);
     } else {
       // Movi/Meraki: handler tự-gate bằng request giữ nguyên cookie user
       resp = await src.handler(proxied, env);

@@ -361,7 +361,7 @@
     fetch('/api/ai/read', {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: o.source }),
+      body: JSON.stringify({ source: o.source, params: (o.params && typeof o.params === 'object') ? o.params : {} }),
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (d.ok) {
         var js; try { js = JSON.stringify(d.data); } catch (_) { js = ''; }

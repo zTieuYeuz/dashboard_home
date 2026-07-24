@@ -10,6 +10,7 @@
 import { json, getSession, logActivity, isAdminUser, computeEffectivePermissions } from '../core.js';
 import { handleFortigateReboot, handleVmwareHomePower, handleAsusReboot, handleCasaosAppState, handleMoviVmwarePower } from '../home-services.js';
 import { submitForm } from './movi.js';
+import { pnetStartNode, pnetStopNode, pnetExportConfig } from '../pnetlab.js';
 
 /* danger: 'safe' = làm ngay | 'confirm' = phải xác nhận trong dashboard
    perm: khoá quyền dịch vụ user cần | adminOnly: chỉ admin */
@@ -67,6 +68,37 @@ export const ACTION_REGISTRY = [
       { name: 'host',   desc: 'Số host Movi: 1 hoặc 2', required: true },
       { name: 'vmId',   desc: 'ID máy ảo', required: true },
       { name: 'action', desc: 'powerOn | powerOff | reset | suspend | shutdownGuest | rebootGuest', required: true },
+    ],
+  },
+  // ── PNETLab (lab mạng) — perm hub-pnetlab, đều cần xác nhận ──
+  {
+    id: 'pnetlab_start_node',
+    label: 'Bật node trong lab PNETLab',
+    perm: 'hub-pnetlab', adminOnly: false, danger: 'confirm',
+    desc: 'Khởi động 1 node (router/switch/PC) trong lab. Lấy lab + node_id từ nguồn pnetlab_topology.',
+    params: [
+      { name: 'lab',     desc: 'Path lab, vd /CCNA/lab1.unl', required: true },
+      { name: 'node_id', desc: 'ID node (số)', required: true },
+    ],
+  },
+  {
+    id: 'pnetlab_stop_node',
+    label: 'Tắt node trong lab PNETLab',
+    perm: 'hub-pnetlab', adminOnly: false, danger: 'confirm',
+    desc: 'Dừng 1 node trong lab.',
+    params: [
+      { name: 'lab',     desc: 'Path lab, vd /CCNA/lab1.unl', required: true },
+      { name: 'node_id', desc: 'ID node (số)', required: true },
+    ],
+  },
+  {
+    id: 'pnetlab_export_config',
+    label: 'Lưu config lab PNETLab (write mem)',
+    perm: 'hub-pnetlab', adminOnly: false, danger: 'confirm',
+    desc: 'Export running-config → startup-config (tương đương write memory). Bỏ trống node_id = lưu tất cả node.',
+    params: [
+      { name: 'lab',     desc: 'Path lab, vd /CCNA/lab1.unl', required: true },
+      { name: 'node_id', desc: 'ID node (số) — bỏ trống để lưu TẤT CẢ node', required: false },
     ],
   },
   {
@@ -155,6 +187,12 @@ export async function handleAiExec(request, env) {
         body: JSON.stringify({ vmId: params.vmId, action: params.action }),
       });
       resp = await handleMoviVmwarePower(req, env, host);
+    } else if (action.id === 'pnetlab_start_node') {
+      resp = await pnetStartNode(env, params);
+    } else if (action.id === 'pnetlab_stop_node') {
+      resp = await pnetStopNode(env, params);
+    } else if (action.id === 'pnetlab_export_config') {
+      resp = await pnetExportConfig(env, params);
     } else if (action.id === 'form_submit') {
       // submitForm tự kiểm quyền theo form + validate + audit riêng (ai-form:*)
       return await submitForm(env, session, params, ip);
