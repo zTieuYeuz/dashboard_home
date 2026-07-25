@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Web Console (Serial)</title>
+<link rel="stylesheet" href="/service-home/_shared/base.css"/>
+<link rel="stylesheet" href="/vendor/xterm/xterm.min.css"/>
+<style>
+html,body{height:100%;overflow:hidden;font-family:var(--font-sans);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+.topnav-item:hover{color:var(--text);background:var(--surface-2)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);transition:all .12s;cursor:pointer;white-space:nowrap}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn:hover{color:var(--text);border-color:var(--muted)}
+.btn.accent{color:var(--accent);border-color:color-mix(in oklch,var(--accent) 35%,transparent)}
+.btn.accent:hover{background:color-mix(in oklch,var(--accent) 10%,transparent)}
+.btn:disabled{opacity:.45;cursor:default;pointer-events:none}
+.btn.warn{color:#f5a623;border-color:color-mix(in oklch,#f5a623 35%,transparent)}
+.btn.warn:hover{background:color-mix(in oklch,#f5a623 10%,transparent)}
+
+/* ── Toolbar ── */
+.cs-toolbar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap}
+.cs-sel{font-size:12px;padding:5px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:var(--font-mono)}
+.cs-badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;padding:4px 10px;border-radius:20px;background:var(--surface-2);color:var(--muted);border:1px solid var(--border-soft)}
+.cs-badge .dot{width:7px;height:7px;border-radius:50%;background:var(--border)}
+.cs-badge.on .dot{background:var(--ok, #2ecc71)}
+.cs-badge.on{color:var(--text)}
+.cs-sep{flex:1}
+.cs-hint{font-size:11px;color:var(--muted)}
+
+/* ── Terminal ── */
+.cs-term-wrap{flex:1;min-height:0;background:#0b0e14;padding:10px 14px}
+#term{width:100%;height:100%}
+
+/* ── Empty-state overlay khi chưa kết nối ── */
+.cs-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--muted);text-align:center;padding:2rem;background:#0b0e14;pointer-events:none}
+.cs-empty .ic{font-size:44px}
+.cs-empty b{color:var(--text-2);font-size:15px}
+.cs-empty-note{font-size:12px;max-width:440px;line-height:1.7}
+
+/* ── AI assistant (giống pattern Termix, đổi tông màu cam cho "thiết bị vật lý") ── */
+#csai-btn{position:fixed;bottom:20px;right:20px;height:50px;width:auto;padding:0 16px;display:inline-flex;align-items:center;gap:6px;
+  border:none;border-radius:25px;cursor:pointer;background:linear-gradient(135deg,#f6a93c,#f76b1c);color:#3a1c00;font-size:15px;font-weight:700;
+  box-shadow:0 3px 14px rgba(0,0,0,.4);z-index:2147483000;transition:transform .12s}
+#csai-btn:hover{transform:translateY(-1px)}
+#csai-panel{position:fixed;bottom:84px;right:20px;width:390px;max-width:calc(100vw - 30px);height:560px;max-height:calc(100vh - 120px);
+  background:#1a130b;border:1px solid rgba(255,255,255,.12);border-radius:14px;z-index:2147483000;display:none;flex-direction:column;overflow:hidden;
+  box-shadow:0 10px 44px rgba(0,0,0,.6);font-family:"Segoe UI",system-ui,sans-serif}
+#csai-panel.open{display:flex}
+#csai-hd{background:linear-gradient(135deg,#7a3b0a,#5a2a08);padding:11px 14px;display:flex;justify-content:space-between;align-items:center;color:#fff;font-weight:700;font-size:14px}
+#csai-hd .x{cursor:pointer;opacity:.7;font-size:16px}#csai-hd .x:hover{opacity:1}
+#csai-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px}
+.csm{max-width:88%;padding:9px 12px;border-radius:13px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.csm-u{align-self:flex-end;background:linear-gradient(135deg,#7a3b0a,#5a2a08);color:#fff2e6;border-bottom-right-radius:4px}
+.csm-a{align-self:flex-start;background:rgba(255,255,255,.06);color:#ffe6cc;border-bottom-left-radius:4px}
+.csm-t{align-self:flex-start;background:rgba(246,169,60,.1);border:1px solid rgba(246,169,60,.28);color:#ffbf69;font-size:11.5px;padding:6px 10px;border-radius:9px}
+#csai-in{display:flex;gap:7px;padding:10px;border-top:1px solid rgba(255,255,255,.09)}
+#csai-in textarea{flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:8px 10px;color:#fff2e6;font-size:13px;resize:none;outline:none;font-family:inherit;height:38px}
+#csai-in button{background:linear-gradient(135deg,#f6a93c,#f76b1c);border:none;border-radius:9px;width:42px;color:#3a1c00;font-size:16px;cursor:pointer}
+#csai-in button:disabled{opacity:.5;cursor:default}
+.cs-wc{color:#c99a6a;font-size:12.5px;text-align:center;padding:14px 8px;line-height:1.6}
+
+/* Ẩn nút chuyển sáng/tối nổi CHUNG toàn site (#__themeFab, worker.js tiêm mọi trang,
+   góc trái-dưới) — CHỈ trên trang này vì nó che khuất nội dung terminal. Không đụng
+   tới widget chung ở worker.js nên các trang khác không bị ảnh hưởng. */
+#__themeFab{display:none!important}
+
+/* ── Console Relay: "🙋 Nhờ hỗ trợ" / "Vào hỗ trợ" ── */
+#shareBanner{display:none;align-items:center;gap:10px;padding:7px 14px;background:#5a1a1a;color:#ffd6d6;font-size:12.5px;font-weight:600;border-bottom:1px solid #7a2626}
+#shareBanner.on{display:flex}
+#shareBanner .sep{flex:1}
+#shareBanner button{font-size:11.5px;padding:4px 10px;border-radius:6px;background:rgba(255,255,255,.12);color:#fff}
+#shareBanner button:hover{background:rgba(255,255,255,.2)}
+
+.cs-modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2147483200;display:none;align-items:center;justify-content:center}
+.cs-modal.open{display:flex}
+.cs-modal-box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px 32px;max-width:380px;width:calc(100vw - 40px);text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.cs-modal-box h3{font-size:16px;margin-bottom:6px;color:var(--text)}
+.cs-modal-box p{font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:16px}
+.cs-share-code{font-size:40px;font-weight:700;letter-spacing:6px;font-family:var(--font-mono);color:var(--accent);background:var(--surface-2);border-radius:10px;padding:14px 10px;margin-bottom:16px}
+.cs-modal-actions{display:flex;gap:8px;justify-content:center}
+.cs-join-input{font-size:22px;letter-spacing:6px;text-align:center;font-family:var(--font-mono);padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:100%;margin-bottom:14px}
+
+#relayCmdRow{display:none;gap:8px;padding:8px 14px;border-top:1px solid var(--border);background:var(--surface)}
+#relayCmdRow.on{display:flex}
+#relayCmdInput{flex:1;font-size:13px;padding:7px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:var(--font-mono)}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="9" width="16" height="7" rx="1.5"/><path d="M8 9V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3M7 20v-2M12 20v-2M17 20v-2"/></svg>
+      </div>
+      <div><div class="brand-name">Web Console</div><div class="brand-sub">Serial · dây console switch/router</div></div>
+    </div>
+    <nav class="topnav" id="sh-topnav"></nav>
+    <script src="/service-home/_shared/nav.js"></script>
+  </div>
+  <div class="topbar-right"></div>
+</header>
+
+<div id="shareBanner">
+  <span id="shareBannerText"></span>
+  <span class="sep"></span>
+  <button type="button" id="stopShareBtn">✕ Dừng chia sẻ</button>
+</div>
+
+<div class="cs-toolbar">
+  <button class="btn accent" id="btnConnect">🔌 Kết nối cổng COM</button>
+  <button class="btn" id="btnDisconnect" disabled>⏹ Ngắt kết nối</button>
+  <select class="cs-sel" id="baudSel" title="Tốc độ baud">
+    <option value="9600" selected>9600 (mặc định — hầu hết switch/router)</option>
+    <option value="1200">1200</option>
+    <option value="2400">2400</option>
+    <option value="4800">4800</option>
+    <option value="19200">19200</option>
+    <option value="38400">38400</option>
+    <option value="57600">57600</option>
+    <option value="115200">115200</option>
+  </select>
+  <button class="btn warn" id="btnBreak" disabled title="Gửi tín hiệu BREAK — dùng cho quy trình reset password (vd Cisco: ngắt boot vào ROMMON)">⚡ Gửi Break</button>
+  <button class="btn" id="btnShare" title="Cho người khác join vào xem/hỗ trợ từ xa">🙋 Nhờ hỗ trợ</button>
+  <button class="btn" id="btnJoin" title="Nhập mã để vào hỗ trợ phiên console của người khác">🙋 Vào hỗ trợ</button>
+  <span class="cs-badge" id="statusBadge"><span class="dot"></span><span id="statusText">Chưa kết nối</span></span>
+  <span class="cs-sep"></span>
+  <span class="cs-hint">Chrome/Edge trên máy tính · cắm dây console rồi bấm Kết nối</span>
+</div>
+
+<div class="cs-term-wrap" style="position:relative">
+  <div id="term" style="height:100%"></div>
+  <div class="cs-empty" id="csEmpty">
+    <div class="ic">🔌</div>
+    <b>Chưa kết nối cổng console</b>
+    <div class="cs-empty-note">Cắm dây console (USB-to-Serial) vào máy, bấm <b>"Kết nối cổng COM"</b> ở trên, rồi chọn đúng cổng trong hộp thoại của trình duyệt.<br><br>Chỉ hoạt động trên <b>Chrome hoặc Edge (máy tính)</b> — không hỗ trợ Firefox/Safari/điện thoại.<br><br>Không có dây console trong tay? Nhờ người có mã <b>"🙋 Vào hỗ trợ"</b> để xem/gõ lệnh giúp từ xa.</div>
+  </div>
+</div>
+
+<div id="relayCmdRow">
+  <input type="text" id="relayCmdInput" placeholder="Gõ lệnh gửi từ xa vào console của người hiện trường…"/>
+  <button class="btn accent" id="relayCmdBtn">▶ Gửi</button>
+</div>
+
+<div class="cs-modal" id="shareOverlay">
+  <div class="cs-modal-box">
+    <h3 id="shareModalTitle">🙋 Đang chờ hỗ trợ</h3>
+    <p id="shareModalDesc">Đọc mã này qua điện thoại/chat cho người sẽ hỗ trợ anh. Họ nhập mã vào ô "Vào hỗ trợ" trên trang của họ.</p>
+    <div class="cs-share-code" id="shareCodeText">------</div>
+    <p style="margin-bottom:16px">Người hiện trường luôn được ưu tiên — lệnh họ gửi từ xa sẽ KHÔNG chèn vào khi anh đang tự gõ.</p>
+    <div class="cs-modal-actions">
+      <button class="btn accent" id="shareModalCloseBtn">Đã đọc mã, ẩn thông báo</button>
+    </div>
+  </div>
+</div>
+
+<div class="cs-modal" id="joinModal">
+  <div class="cs-modal-box">
+    <h3>🙋 Vào hỗ trợ</h3>
+    <p>Nhập mã 6 số do người hiện trường đọc cho anh.</p>
+    <input type="text" class="cs-join-input" id="joinCodeInput" maxlength="6" inputmode="numeric" placeholder="000000"/>
+    <div class="cs-modal-actions">
+      <button class="btn" id="joinCancelBtn">Huỷ</button>
+      <button class="btn accent" id="joinConfirmBtn">Vào hỗ trợ</button>
+    </div>
+  </div>
+</div>
+
+<button type="button" id="csai-btn" title="Trợ lý cấu hình AI">🤖 <span>AI</span></button>
+<div id="csai-panel">
+  <div id="csai-hd"><span>🤖 Trợ lý cấu hình thiết bị</span><span class="x" title="Đóng">✕</span></div>
+  <div id="csai-msgs"><div class="cs-wc">Chào anh! Mình đọc được console đang kết nối và gợi ý lệnh (đa hãng: Cisco/Juniper/MikroTik/FortiGate…).<br><br>Mình <b>không tự chạy</b> — chỉ đặt lệnh lên dòng lệnh, anh xem rồi tự Enter.<br><br>Thử: <i>"đọc console xem đang ở đâu"</i> · <i>"hướng dẫn reset password Cisco"</i> · <i>"switch này là hãng gì"</i>.</div></div>
+  <div id="csai-in"><textarea placeholder="Hỏi về thiết bị đang cấu hình…" rows="1"></textarea><button title="Gửi">▶</button></div>
+</div>
+
+<script src="/vendor/xterm/xterm.min.js"></script>
+<script src="/vendor/xterm/addon-fit.min.js"></script>
+<script>
+/* ══════════════════════════════════════
+   Quyền — chặn phía client (an ninh thật do server _PAGE_PERM gate)
+   ══════════════════════════════════════ */
+(function(){
+  function _readUserCookie(){try{var m=document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/);return m?JSON.parse(decodeURIComponent(m[1])):null;}catch(e){return null;}}
+  var U=window.__USER__||_readUserCookie()||{role:'user',permissions:{},isAdmin:false};
+  var perm=U.isAdmin?'write':(U.permissions&&U.permissions['console-serial']||'none');
+  if(perm==='none'){
+    document.addEventListener('DOMContentLoaded',function(){
+      document.body.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:12px;color:#71717a"><div style="font-size:48px">🔒</div><div style="font-size:17px;font-weight:600;color:#f4f4f5">Không có quyền truy cập</div><div style="font-size:13px">Trang Web Console (Serial) yêu cầu quyền truy cập.<br>Liên hệ admin để được cấp quyền.</div><a href="/" style="margin-top:8px;font-size:13px;color:#3b82f6;text-decoration:none">← Về trang chủ</a></div>';
+    });
+  }
+})();
+
+/* Theme: đọc từ localStorage 'dh_theme' đã được script chung của dashboard áp dụng
+   sớm (trước paint, trong <head>) — không cần đọc lại ở đây. Nút chuyển sáng/tối
+   dùng widget nổi CHUNG toàn site (#__themeFab, góc trái-dưới) — trang này ẨN nó
+   (xem CSS #__themeFab ở trên) vì che khuất terminal; xterm vẫn tự đồng bộ đúng
+   theme đã lưu qua applyTermTheme() gọi lúc khởi tạo term bên dưới. */
+
+/* ══════════════════════════════════════
+   xterm.js — hiển thị terminal
+   ══════════════════════════════════════ */
+var THEME_DARK  = { background:'#0b0e14', foreground:'#e6edf3', cursor:'#f6a93c', selectionBackground:'#33415580' };
+var THEME_LIGHT = { background:'#ffffff', foreground:'#1c2128', cursor:'#f76b1c', selectionBackground:'#b8d4ff80' };
+function applyTermTheme(){ term.options.theme = (document.documentElement.dataset.theme==='light') ? THEME_LIGHT : THEME_DARK; }
+
+var term = new Terminal({ cursorBlink:true, fontFamily:'IBM Plex Mono, Consolas, monospace', fontSize:13, theme:THEME_DARK, scrollback:20000 });
+var fitAddon = new FitAddon.FitAddon();
+term.loadAddon(fitAddon);
+term.open(document.getElementById('term'));
+applyTermTheme();
+fitAddon.fit();
+window.addEventListener('resize', function(){ try{ fitAddon.fit(); }catch(e){} });
+
+/* ══════════════════════════════════════
+   Web Serial API — kết nối cổng COM
+   ══════════════════════════════════════ */
+var port=null, reader=null, readableStreamClosed=null;
+var RAW_BUF='';   // gom toàn bộ output thô (để AI đọc lại — kể cả phần đã cuộn khỏi màn hình)
+var _shareOutQueue='';   // hàng đợi output CHƯA gửi qua relay (chỉ dùng khi đang "Nhờ hỗ trợ")
+
+var CHIP_MAP = [
+  { vid:0x0403, label:'FTDI (hay dùng cho Cisco/Juniper/nhiều hãng)' },
+  { vid:0x10C4, label:'Silicon Labs CP210x' },
+  { vid:0x1A86, label:'WCH CH340/CH341' },
+  { vid:0x067B, label:'Prolific PL2303' },
+];
+function identifyChip(info){
+  if(!info || info.usbVendorId==null) return 'Cổng serial';
+  var hit = CHIP_MAP.find(function(c){ return c.vid===info.usbVendorId; });
+  return hit ? hit.label : ('Chip USB-Serial (VID 0x'+info.usbVendorId.toString(16)+')');
+}
+
+var btnConnect=document.getElementById('btnConnect'), btnDisconnect=document.getElementById('btnDisconnect'),
+    btnBreak=document.getElementById('btnBreak'), baudSel=document.getElementById('baudSel'),
+    badge=document.getElementById('statusBadge'), statusText=document.getElementById('statusText'),
+    csEmpty=document.getElementById('csEmpty');
+
+function setStatus(connected, label){
+  badge.classList.toggle('on', !!connected);
+  statusText.textContent = connected ? ('Đã kết nối · '+label+' · '+baudSel.value+' baud') : 'Chưa kết nối';
+  btnConnect.disabled = !!connected;
+  btnDisconnect.disabled = !connected;
+  btnBreak.disabled = !connected;
+  baudSel.disabled = !!connected;
+  csEmpty.style.display = connected ? 'none' : 'flex';
+}
+
+function pushBuf(text){
+  RAW_BUF += text; if(RAW_BUF.length>400000) RAW_BUF = RAW_BUF.slice(-400000);
+  if(RELAY && RELAY.role==='field') _shareOutQueue += text;   // đang chia sẻ → gom để relay đẩy đi
+}
+
+async function connectSerial(){
+  if(!('serial' in navigator)){
+    term.writeln('\r\n\x1b[31m[Lỗi] Trình duyệt này không hỗ trợ Web Serial API.\x1b[0m');
+    term.writeln('\x1b[33mDùng Chrome hoặc Edge trên MÁY TÍNH (không phải điện thoại, không phải Firefox/Safari).\x1b[0m\r\n');
+    return;
+  }
+  var chosen;
+  try{ chosen = await navigator.serial.requestPort(); }
+  catch(e){ return; }   // user bấm Cancel ở hộp thoại chọn cổng
+  try{
+    await chosen.open({ baudRate: parseInt(baudSel.value,10), dataBits:8, parity:'none', stopBits:1, flowControl:'none' });
+  }catch(e){
+    term.writeln('\r\n\x1b[31m[Lỗi mở cổng] '+(e&&e.message||e)+'\x1b[0m\r\n');
+    return;
+  }
+  port = chosen;
+  var label = identifyChip(port.getInfo());
+  setStatus(true, label);
+  term.writeln('\x1b[32m[Đã kết nối · '+label+' · '+baudSel.value+' baud]\x1b[0m');
+  term.writeln('\x1b[90mGõ Enter nếu chưa thấy prompt — 1 số thiết bị cần bấm Enter để hiện dòng lệnh.\x1b[0m\r\n');
+  startReadLoop();
+  term.focus();
+}
+
+/* Tô màu "network profile" (giống MobaXterm): IP/MAC nổi bật, trạng thái tốt/xấu
+   khác màu — CHỈ tô lúc hiển thị, buffer AI (RAW_BUF) vẫn giữ text gốc không màu. */
+var HILITE_RULES = [
+  { re: /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, code:'36' },                                   // IPv4 — cyan
+  { re: /\b[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\b/g, code:'35' },                        // MAC dạng Cisco — tím
+  { re: /\b(down|error|fail(?:ed)?|denied|invalid|disabled?|shutdown)\b/gi, code:'31;1' },         // đỏ đậm — xấu
+  { re: /\b(up|enabled?|success(?:ful)?|connected|ok)\b/gi, code:'32' },                           // xanh lá — tốt
+  { re: /\bwarn(?:ing)?\b/gi, code:'33' },                                                          // vàng — cảnh báo
+];
+function colorizeChunk(text){
+  for(var i=0;i<HILITE_RULES.length;i++){
+    var rule = HILITE_RULES[i];
+    text = text.replace(rule.re, function(m){ return '\x1b['+rule.code+'m'+m+'\x1b[0m'; });
+  }
+  return text;
+}
+
+/* Dữ liệu serial tới theo TỪNG MẨU RỜI RẠC (chunk) — 1 từ khoá (vd "down") có thể bị cắt
+   làm đôi giữa 2 mẩu liên tiếp. Gom PEND tới khi có \n (dòng đã đủ) mới tô màu — CHẮC CHẮN
+   đúng vì luôn tô trên dòng ĐÃ HOÀN CHỈNH. Phần dở dang (sau \n cuối — dòng lệnh đang gõ/
+   prompt đang chờ, CHƯA chắc đã tới hết) chỉ xả khi dữ liệu đã YÊN ~40ms (debounce — HẸN
+   GIỜ LẠI mỗi lần có mẩu mới tới, KHÔNG xả cố định theo nhịp). Bản trước dùng setInterval
+   cố định 20ms → tự xả nhầm ngay giữa lúc 1 từ chưa tới đủ (vd mới có "do", "wn" chưa kịp
+   tới) → chữ đó vĩnh viễn hết cơ hội khớp lại, gây tô màu không đều (bug đã gặp thực tế). */
+var PEND = '';
+var pendTimer = null;
+function feedTerm(raw){
+  PEND += raw;
+  var lastNl = PEND.lastIndexOf('\n');
+  if(lastNl !== -1){
+    var complete = PEND.slice(0, lastNl+1);
+    PEND = PEND.slice(lastNl+1);
+    term.write(colorizeChunk(complete));
+  }
+  clearTimeout(pendTimer);
+  if(PEND) pendTimer = setTimeout(function(){ if(PEND){ term.write(colorizeChunk(PEND)); PEND=''; } }, 40);
+}
+
+async function startReadLoop(){
+  var decoderStream = new TextDecoderStream();
+  readableStreamClosed = port.readable.pipeTo(decoderStream.writable).catch(function(){});
+  reader = decoderStream.readable.getReader();
+  try{
+    while(true){
+      var res = await reader.read();
+      if(res.done) break;
+      if(res.value){ feedTerm(res.value); pushBuf(res.value); }
+    }
+  }catch(e){
+    term.writeln('\r\n\x1b[31m[Mất kết nối] '+(e&&e.message||e)+'\x1b[0m\r\n');
+  }finally{
+    try{ reader.releaseLock(); }catch(e){}
+  }
+}
+
+term.onData(function(data){
+  if(!port || !port.writable) return;
+  reportFieldActivity();   // đang được ai đó hỗ trợ từ xa → báo "mình vừa tự gõ" để lệnh remote không chèn đè
+  var w = port.writable.getWriter();
+  w.write(new TextEncoder().encode(data)).catch(function(){}).finally(function(){ try{ w.releaseLock(); }catch(e){} });
+});
+
+async function disconnectSerial(){
+  try{ if(reader) await reader.cancel(); }catch(e){}
+  try{ if(readableStreamClosed) await readableStreamClosed; }catch(e){}
+  try{ if(port) await port.close(); }catch(e){}
+  port=null; reader=null;
+  setStatus(false);
+  term.writeln('\r\n\x1b[33m[Đã ngắt kết nối]\x1b[0m\r\n');
+}
+
+async function sendBreak(){
+  if(!port) return;
+  try{
+    await port.setSignals({ break:true });
+    await new Promise(function(r){ setTimeout(r,300); });
+    await port.setSignals({ break:false });
+    term.writeln('\r\n\x1b[33m[Đã gửi tín hiệu BREAK]\x1b[0m\r\n');
+  }catch(e){
+    term.writeln('\r\n\x1b[31m[Lỗi gửi Break] '+(e&&e.message||e)+' — thiết bị/driver có thể không hỗ trợ.\x1b[0m\r\n');
+  }
+}
+
+btnConnect.onclick = connectSerial;
+btnDisconnect.onclick = disconnectSerial;
+btnBreak.onclick = sendBreak;
+setStatus(false);
+
+/* Ngắt gọn khi rời trang (best-effort, tránh giữ cổng bị khoá cho lần mở tiếp theo) */
+window.addEventListener('beforeunload', function(){ try{ if(port) port.close(); }catch(e){} });
+
+/* ══════════════════════════════════════
+   Console Relay — "🙋 Nhờ hỗ trợ" (chia sẻ) / "🙋 Vào hỗ trợ" (join từ xa)
+   -------------------------------------------------------------------
+   Vì sao cần: Web Serial là phần cứng LOCAL — 2 trình duyệt ở 2 nơi khác
+   nhau KHÔNG tự "thấy" nhau. Relay đi qua Worker (KV, poll ~1s) để mirror
+   output + chuyển lệnh 2 chiều. Người hiện trường LUÔN được ưu tiên tuyệt
+   đối — xem reportFieldActivity() + logic "field_busy" phía server.
+   ══════════════════════════════════════ */
+var RELAY = null;   // null | {role:'field', sid, token, code, pollT} | {role:'helper', sid, owner, pollT}
+var RELAY_BASE = location.origin + '/api/console-relay/';
+
+/* QUAN TRỌNG: relayFetch KHÔNG BAO GIỜ được để promise reject ra ngoài — nếu fetch() thất
+   bại (mất mạng, CORS...) mà không có .catch() ở đây, mọi nơi gọi nó (vòng lặp field/helper,
+   gửi lệnh...) sẽ vỡ chuỗi promise ÂM THẦM, không dòng nào hiện ra (đã gặp thật: bấm "Gửi"
+   không có phản ứng gì). Luôn resolve về {error:...} để nơi gọi CHẮC CHẮN xử lý được. */
+function relayFetch(path, body){
+  var opts = { credentials:'include', headers:{'Content-Type':'application/json'} };
+  if(body!==undefined){ opts.method='POST'; opts.body=JSON.stringify(body); }
+  return fetch(RELAY_BASE+path, opts)
+    .then(function(r){ return r.json().catch(function(){ return { error:'bad_response', message:'Phản hồi không hợp lệ (HTTP '+r.status+')' }; }); })
+    .catch(function(e){ return { error:'network', message:'Không gọi được server: '+(e && e.message || e) }; });
+}
+
+var shareBtn=document.getElementById('btnShare'), shareOverlay=document.getElementById('shareOverlay'),
+    shareCodeEl=document.getElementById('shareCodeText'), shareBanner=document.getElementById('shareBanner'),
+    shareBannerText=document.getElementById('shareBannerText'), stopShareBtn=document.getElementById('stopShareBtn'),
+    shareModalTitle=document.getElementById('shareModalTitle'), shareModalDesc=document.getElementById('shareModalDesc'),
+    shareModalCloseBtn=document.getElementById('shareModalCloseBtn'),
+    joinBtn=document.getElementById('btnJoin'), joinModal=document.getElementById('joinModal'),
+    joinCodeInput=document.getElementById('joinCodeInput'), joinConfirmBtn=document.getElementById('joinConfirmBtn'),
+    joinCancelBtn=document.getElementById('joinCancelBtn'),
+    relayCmdRow=document.getElementById('relayCmdRow'), relayCmdInput=document.getElementById('relayCmdInput'), relayCmdBtn=document.getElementById('relayCmdBtn');
+
+/* Banner/ô nhập lệnh xuất hiện thêm làm KHÔNG GIAN terminal thay đổi, nhưng xterm không tự
+   biết — canvas vẫn giữ kích thước cũ, đẩy phần tử phía dưới (relayCmdRow) ra ngoài vùng
+   nhìn thấy (trang khoá overflow:hidden nên không cuộn được tới). Gọi lại fit() mỗi khi
+   layout đổi (bật/tắt banner, bật/tắt ô nhập lệnh) để xterm tính lại đúng kích thước. */
+function refitTerm(){ setTimeout(function(){ try{ fitAddon.fit(); }catch(e){} }, 30); }
+
+/* ---- Người hiện trường: bật/tắt chia sẻ ---- */
+function startShare(){
+  relayFetch('create', {}).then(function(res){
+    if(!res || !res.ok){ alert('Không tạo được phiên hỗ trợ: '+(res&&res.error||'?')); return; }
+    RELAY = { role:'field', sid:res.sid, token:res.token, code:res.code };
+    shareCodeEl.textContent = res.code;
+    shareModalTitle.textContent = '🙋 Đang chờ hỗ trợ';
+    shareModalDesc.textContent = 'Đọc mã này qua điện thoại/chat cho người sẽ hỗ trợ anh. Họ nhập mã vào ô "Vào hỗ trợ" trên trang của họ.';
+    shareOverlay.classList.add('open');
+    shareBanner.classList.add('on');
+    shareBannerText.textContent = '🔴 Đang chia sẻ phiên hỗ trợ — mã '+res.code+' · chưa ai vào';
+    shareBtn.disabled = true; joinBtn.disabled = true;
+    _relayFieldLoop();
+    refitTerm();
+  });
+}
+function stopShare(){
+  if(!RELAY || RELAY.role!=='field') return;
+  relayFetch('stop', { sid:RELAY.sid, token:RELAY.token }).catch(function(){});
+  clearInterval(RELAY.pollT);
+  RELAY = null;
+  shareOverlay.classList.remove('open');
+  shareBanner.classList.remove('on');
+  shareBtn.disabled = false; joinBtn.disabled = false;
+  refitTerm();
+}
+var _helperNotified = false;
+var _lastCmdTsSeen = 0;   // con trỏ cục bộ — phân biệt lệnh MỚI vs lệnh đã chèn rồi (server chỉ ĐỌC, không "xoá")
+function _relayFieldLoop(){
+  var sid=RELAY.sid, token=RELAY.token;
+  _helperNotified = false;
+  _lastCmdTsSeen = 0;
+  RELAY.pollT = setInterval(function(){
+    if(!RELAY || RELAY.sid!==sid) return;
+    var chunk = _shareOutQueue; _shareOutQueue='';
+    // 1 request DUY NHẤT/giây: vừa đẩy output mới (nếu có) vừa đọc lệnh helper gửi —
+    // gộp lại để tránh 2 request riêng ghi/đọc gần như đồng thời (nguồn gây race đã gặp).
+    relayFetch('field-sync', { sid:sid, token:token, text:chunk }).then(function(res){
+      if(!res) return;
+      if(res.command && res.ts > _lastCmdTsSeen){
+        _lastCmdTsSeen = res.ts;
+        insertCommandLocal(res.command);
+        term.writeln('\r\n\x1b[36m[Lệnh từ xa đã chèn: '+res.command+']\x1b[0m');
+      }
+      // Báo cho field tech biết NGAY khi có người vào — field-sync tiện thể trả kèm
+      // thông tin này (đọc chung với sess đã cần đọc để xác thực token, không tốn thêm gì).
+      if(res.helperJoined && !_helperNotified){
+        _helperNotified = true;
+        shareBannerText.textContent = '🔴 Đang chia sẻ — 🙋 '+(res.helperUsername||'người hỗ trợ')+' đã vào';
+        if(shareOverlay.classList.contains('open')){
+          shareModalTitle.textContent = '✅ '+(res.helperUsername||'Người hỗ trợ')+' đã vào!';
+          shareModalDesc.textContent = 'Họ đang xem console của anh và có thể gửi lệnh hỗ trợ. Anh có thể đóng thông báo này để tiếp tục thao tác.';
+        }
+      }
+    }).catch(function(){ if(chunk) _shareOutQueue = chunk + _shareOutQueue; });   // lỗi mạng → giữ lại để gửi lần sau, khỏi mất output
+  }, 1000);
+}
+var _lastActivitySent = 0;
+function reportFieldActivity(){
+  if(!RELAY || RELAY.role!=='field') return;
+  var now = Date.now();
+  if(now - _lastActivitySent < 500) return;
+  _lastActivitySent = now;
+  relayFetch('field-activity', { sid:RELAY.sid, token:RELAY.token }).catch(function(){});
+}
+
+/* ---- Helper (anh Thoại): vào hỗ trợ bằng mã ---- */
+function openJoinModal(){ joinModal.classList.add('open'); joinCodeInput.value=''; joinCodeInput.focus(); }
+function closeJoinModal(){ joinModal.classList.remove('open'); }
+function joinSupport(){
+  var code = (joinCodeInput.value||'').replace(/\D/g,'');
+  if(code.length!==6){ alert('Mã phải gồm 6 chữ số.'); return; }
+  relayFetch('join', { code:code }).then(function(res){
+    if(!res || !res.ok){ alert('Không vào được: '+(res&&res.error||'?')); return; }
+    RELAY = { role:'helper', sid:res.sid, owner:res.owner };
+    closeJoinModal();
+    btnConnect.disabled = true; shareBtn.disabled = true; joinBtn.disabled = true;
+    shareBanner.classList.add('on');
+    shareBannerText.textContent = '🙋 Đang hỗ trợ từ xa phiên của '+res.owner;
+    csEmpty.style.display='none';
+    relayCmdRow.classList.add('on');
+    term.writeln('\x1b[32m[Đã vào hỗ trợ phiên của '+res.owner+']\x1b[0m\r\n');
+    _relayHelperLoop();
+    refitTerm();
+  });
+}
+/* Khi field tech bấm "Dừng chia sẻ" (hoặc phiên hết hạn tự nhiên sau 1 giờ), server xoá
+   phiên → pull-output sẽ báo lỗi "không còn tồn tại" MÃI MÃI, nhưng trước đây helper không
+   có cách nào PHÁT HIỆN việc này để báo — cứ đứng yên như đang còn hỗ trợ. Đếm lỗi LIÊN TIẾP
+   (không phải 1 lần — tránh báo nhầm vì 1 lần mất mạng thoáng qua) rồi bật popup + tự dọn
+   giao diện về trạng thái bình thường khi chắc chắn phiên đã kết thúc thật. */
+var _helperSeenLen = 0;   // con trỏ độ dài đã hiển thị — server trả FULL buffer mỗi lần (read-only,
+                           // không xoá) nên tự cắt lấy phần MỚI ở đây, tránh lặp lại nội dung cũ.
+var _helperFailCount = 0;
+function _onHelperSessionEnded(){
+  if(!RELAY || RELAY.role!=='helper') return;
+  clearInterval(RELAY.pollT);
+  RELAY = null;
+  shareBanner.classList.remove('on');
+  relayCmdRow.classList.remove('on');
+  btnConnect.disabled = false; shareBtn.disabled = false; joinBtn.disabled = false;
+  csEmpty.style.display = 'flex';
+  refitTerm();
+  term.writeln('\r\n\x1b[33m[Phiên hỗ trợ đã kết thúc — người hiện trường đã dừng chia sẻ (hoặc phiên hết hạn).]\x1b[0m\r\n');
+  alert('🛑 Phiên hỗ trợ đã kết thúc — người hiện trường đã dừng chia sẻ (hoặc phiên hết hạn sau 1 giờ không dùng).');
+}
+function _relayHelperLoop(){
+  var sid = RELAY.sid;
+  _helperSeenLen = 0;
+  _helperFailCount = 0;
+  RELAY.pollT = setInterval(function(){
+    if(!RELAY || RELAY.sid!==sid) return;
+    relayFetch('pull-output?sid='+encodeURIComponent(sid)).then(function(res){
+      if(!res || typeof res.text!=='string'){
+        _helperFailCount++;
+        if(_helperFailCount>=3) _onHelperSessionEnded();
+        return;
+      }
+      _helperFailCount = 0;
+      if(res.text.length < _helperSeenLen) _helperSeenLen = 0;   // buffer server bị cắt bớt (hiếm) → tự đồng bộ lại
+      var delta = res.text.slice(_helperSeenLen);
+      if(delta){ feedTerm(delta); pushBuf(delta); }
+      _helperSeenLen = res.text.length;
+    }).catch(function(){});
+  }, 1000);
+}
+function sendRelayCommand(){
+  if(!RELAY || RELAY.role!=='helper'){
+    term.writeln('\r\n\x1b[31m[Chưa ở chế độ hỗ trợ — bấm "🙋 Vào hỗ trợ" và nhập mã trước đã.]\x1b[0m');
+    return;
+  }
+  var cmd=(relayCmdInput.value||'').trim(); if(!cmd) return;
+  relayCmdInput.value='';
+  term.writeln('\r\n\x1b[90m[Đang gửi lệnh "'+cmd+'"…]\x1b[0m');
+  relayFetch('push-command', { sid:RELAY.sid, command:cmd }).then(function(res){
+    if(!res || !res.ok){
+      term.writeln('\r\n\x1b[31m[Không gửi được: '+((res&&res.message)||(res&&res.error)||'phản hồi trống, không rõ lý do')+']\x1b[0m');
+    } else {
+      term.writeln('\r\n\x1b[32m[Đã gửi — hệ thống sẽ chèn khi người hiện trường rảnh tay (~1-4 giây).]\x1b[0m');
+    }
+  });
+}
+
+shareBtn.onclick = startShare;
+stopShareBtn.onclick = stopShare;
+shareModalCloseBtn.onclick = function(){ shareOverlay.classList.remove('open'); refitTerm(); };
+joinBtn.onclick = openJoinModal;
+joinCancelBtn.onclick = closeJoinModal;
+joinConfirmBtn.onclick = joinSupport;
+joinCodeInput.onkeydown = function(e){ if(e.key==='Enter'){ e.preventDefault(); joinSupport(); } };
+relayCmdBtn.onclick = sendRelayCommand;
+relayCmdInput.onkeydown = function(e){ if(e.key==='Enter'){ e.preventDefault(); sendRelayCommand(); } };
+
+/* ══════════════════════════════════════
+   AI assistant — đọc console + gợi ý lệnh (KHÔNG tự chạy)
+   ══════════════════════════════════════ */
+var MODEL = 'pnetlab';
+var MAX_TOOL_LOOPS = 12;
+var LLM_URL = location.origin + '/api/console-serial-llm';
+
+function stripAnsi(s){
+  return String(s)
+    .replace(/\x1b\][\s\S]*?(\x07|\x1b\\)/g,'')
+    .replace(/\x1b[\[\]][0-9;?]*[ -\/]*[@-~]/g,'')
+    .replace(/\x1b[@-Z\\-_]/g,'')
+    .replace(/\r\n/g,'\n').replace(/\r/g,'\n')
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g,'')
+    .replace(/[ \t]+\n/g,'\n');
+}
+
+/* Che secret trước khi gửi lên LLM — cùng bộ luật với termix-assistant.js */
+var _redacted=false;
+function _mask(){ _redacted=true; return '[ĐÃ CHE]'; }
+function redact(s){
+  if(!s) return s;
+  _redacted=false;
+  return String(s)
+    .replace(/-----BEGIN [^-\n]*PRIVATE KEY-----[\s\S]*?-----END [^-\n]*PRIVATE KEY-----/g, function(){ return _mask()+' (private key)'; })
+    .replace(/\b((?:password|secret))(\s+\d\s+)(\S+)/gi, function(m,k,mid){ return k+mid+_mask(); })
+    .replace(/([a-z0-9_.\-]*(?:pass(?:word|wd|phrase)?|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|private[_-]?key|auth[_-]?token))(\s*[:=]\s*)(["']?)([^\s"'&]{3,})(\3)/gi,
+      function(m,k,sep,q){ return k+sep+q+_mask()+q; })
+    .replace(/\b((?:password|passwd|secret|passphrase))(\s+)(?!\d\s)(\S{3,})/gi, function(m,k,sp){ return k+sp+_mask(); })
+    .replace(/(Authorization\s*:\s*(?:Bearer|Basic)\s+)(\S+)/gi, function(m,p1){ return p1+_mask(); })
+    .replace(/\bAKIA[0-9A-Z]{16}\b/g, function(){ return _mask()+' (AWS)'; });
+}
+
+/* Đọc màn hình hiện tại qua xterm buffer API (đáng tin hơn DOM scraping vì đây LÀ instance của mình) */
+function readVisibleScreen(){
+  var buf = term.buffer.active, lines=[];
+  var rows = term.rows;
+  for(var i=0;i<rows;i++){
+    var line = buf.getLine(buf.viewportY + i);
+    if(line) lines.push(line.translateToString(true));
+  }
+  while(lines.length && lines[lines.length-1].trim()==='') lines.pop();
+  return lines.join('\n');
+}
+
+function readTerminal(){
+  var isHelper = RELAY && RELAY.role==='helper';
+  if(!port && !isHelper) return { ok:false, error:'Chưa kết nối cổng console — bấm "Kết nối cổng COM" ở trên rồi thử lại (hoặc "Vào hỗ trợ" nếu đang hỗ trợ từ xa).' };
+  var full = stripAnsi(RAW_BUF).replace(/\n{3,}/g,'\n\n').trim();
+  var vis  = readVisibleScreen();
+  var res = { ok:true };
+  var anyRedacted=false;
+  if(full){
+    var rf = redact(full.slice(-24000)); anyRedacted = anyRedacted || _redacted;
+    res.full_output = rf;
+    res.hint = 'full_output = TOÀN BỘ output đã gom từ lúc kết nối (kể cả phần cuộn khỏi màn hình). visible_screen chỉ là phần đang thấy.';
+  } else {
+    res.hint = 'Console chưa có output nào — thử gõ Enter trong terminal trước.';
+  }
+  var vs = redact(vis || '(màn hình trống)'); anyRedacted = anyRedacted || _redacted;
+  res.visible_screen = vs;
+  if(anyRedacted) res.note_baomat = 'Một số chuỗi nhạy cảm (mật khẩu/key/token) đã bị CHE [ĐÃ CHE] trước khi gửi cho bạn. ĐỪNG yêu cầu user gõ lại các giá trị đó.';
+  return res;
+}
+
+/* Chèn lệnh vào console: ghi bytes THẲNG vào cổng serial, KHÔNG kèm \r — thiết bị (chạy chế độ
+   dòng lệnh chuẩn) sẽ echo lại từng ký tự đúng như user tự gõ, chờ Enter thật mới submit. */
+function insertCommandLocal(cmd){
+  if(typeof cmd!=='string' || !cmd) return Promise.resolve({ ok:false, error:'Thiếu command.' });
+  if(!port || !port.writable) return Promise.resolve({ ok:false, error:'Chưa kết nối cổng console.' });
+  cmd = cmd.replace(/\r?\n/g,' ').trim();
+  var w = port.writable.getWriter();
+  return w.write(new TextEncoder().encode(cmd)).then(function(){
+    return { ok:true, inserted:cmd, note:'Đã đặt lệnh lên dòng lệnh console. Anh XEM lại rồi tự bấm Enter trên bàn phím thật để chạy — mình không tự gửi Enter.' };
+  }).catch(function(e){
+    return { ok:false, error:'Ghi cổng serial lỗi: '+(e&&e.message||e) };
+  }).finally(function(){ try{ w.releaseLock(); }catch(e){} });
+}
+
+/* AI gọi hàm NÀY (tool insert_command) — tự chuyển hướng theo vai trò: đang hỗ trợ từ xa
+   (helper, không có cổng COM local) → gửi qua relay để MÁY HIỆN TRƯỜNG tự chèn; bình thường
+   (hoặc đang là người chia sẻ/field) → ghi thẳng cổng serial cục bộ như cũ. */
+function insertCommand(cmd){
+  if(typeof cmd!=='string' || !cmd) return Promise.resolve({ ok:false, error:'Thiếu command.' });
+  cmd = cmd.replace(/\r?\n/g,' ').trim();
+  if(RELAY && RELAY.role==='helper'){
+    return relayFetch('push-command', { sid:RELAY.sid, command:cmd }).then(function(res){
+      if(!res || !res.ok) return { ok:false, error:(res&&res.message)||(res&&res.error)||'Gửi lệnh thất bại.' };
+      return { ok:true, inserted:cmd, note:'Đã gửi lệnh qua relay tới máy hiện trường — hệ thống chỉ chèn khi họ đang rảnh tay (không tự gõ). Họ vẫn cần tự bấm Enter để chạy.' };
+    });
+  }
+  return insertCommandLocal(cmd);
+}
+
+var TOOLS = {
+  read_terminal:  function(){ return Promise.resolve(readTerminal()); },
+  insert_command: function(p){ return Promise.resolve(insertCommand(p && p.command)); },
+};
+
+var SYS = [
+  'Bạn là kỹ sư mạng trợ lý AI tích hợp trong "Web Console" — công cụ giúp anh Thoại cấu hình switch/router/firewall TẠI HIỆN TRƯỜNG qua dây console (USB-to-Serial), không qua mạng.',
+  'Trả lời tiếng Việt, ngắn gọn, chính xác kỹ thuật.',
+  '',
+  '⚠️ ĐÂY LÀ THIẾT BỊ VẬT LÝ THẬT tại hiện trường — gõ sai có thể khoá quản trị, xoá config, hoặc BRICK thiết bị. Vì vậy:',
+  '- Bạn KHÔNG BAO GIỜ tự chạy lệnh. Bạn chỉ ĐẶT lệnh lên dòng lệnh console (insert_command) — anh Thoại tự xem và tự bấm Enter trên bàn phím thật.',
+  '- TUYỆT ĐỐI cảnh báo to trước các lệnh nguy hiểm: erase/format, write erase, no shutdown sai cổng, reload/reset khi chưa lưu config, xoá VLAN/route đang dùng, đổi config-register sai giá trị.',
+  '- Trước khi chèn 1 lệnh, giải thích NGẮN lệnh đó làm gì.',
+  '',
+  'CÔNG CỤ — in MỘT khối mã đúng định dạng rồi DỪNG chờ kết quả:',
+  '```ssh',
+  '{"tool":"<tên>", ...tham số}',
+  '```',
+  '- read_terminal → đọc output console: full_output (toàn bộ từ lúc kết nối, kể cả phần cuộn khỏi màn hình) + visible_screen (đang thấy). KHÔNG tham số. DÙNG ĐẦU TIÊN để biết đang ở prompt/hãng/trạng thái nào — đừng đoán mò.',
+  '- insert_command {"command":"..."} → ĐẶT 1 lệnh lên dòng lệnh console (không kèm Enter). Mỗi lần CHỈ 1 lệnh.',
+  '',
+  'NHẬN DIỆN HÃNG THIẾT BỊ trước khi ra lệnh (nhìn banner/prompt từ read_terminal đầu tiên — gõ Enter suông nếu màn hình trống):',
+  '- Cisco IOS: prompt "Router>"/"Switch#", banner có "Cisco IOS Software".',
+  '- Cisco ROMMON (chế độ boot, dùng cho password recovery): prompt "rommon 1 >".',
+  '- Juniper JunOS: chữ "JUNOS", prompt "user@host>".',
+  '- MikroTik RouterOS: prompt "[admin@MikroTik] >".',
+  '- Fortinet FortiGate: prompt "hostname #", lệnh kiểu "config system interface".',
+  '- HP/Aruba: prompt "Switch#" tương tự Cisco nhưng lệnh "show running-config" khác cú pháp đôi chỗ.',
+  'ĐỪNG mặc định Cisco IOS nếu banner không khớp — mỗi hãng có bộ lệnh riêng, tự suy ra lệnh đúng theo hệ điều hành đã nhận diện.',
+  '',
+  'QUY TRÌNH RESET PASSWORD (khi user yêu cầu, hoặc thiết bị bị khoá không vào được) — dẫn dắt TỪNG BƯỚC, chờ xác nhận mỗi bước:',
+  '⚠️ PHÂN BIỆT RÕ router vs switch Catalyst trước khi hướng dẫn — DÙNG SAI THỦ TỤC sẽ không có tác dụng (đã xảy ra thật: user test Break trên switch WS-C2960 — không hoạt động vì switch KHÔNG dùng break, đã lãng phí công sức reload nhiều lần). Nhìn banner "show version"/lúc boot để phân biệt: banner có "cisco WS-C" hoặc "Catalyst" + tên interface kiểu FastEthernet/GigabitEthernet đánh số cổng (0/1, 0/2...) → SWITCH CỐ ĐỊNH (fixed-configuration), dùng quy trình MODE BUTTON bên dưới. Banner là router/ISR (vd 1900, 2900, 4000 series) hoặc thấy "rommon" từng xuất hiện được → ROUTER thật, dùng quy trình BREAK/ROMMON.',
+  '- ROUTER Cisco (có ROMMON thật): (1) Yêu cầu user RÚT NGUỒN thiết bị (thao tác vật lý). (2) Cắm điện lại, NGAY khi mới bật (trong ~5-60 giây đầu) bấm nút "⚡ Gửi Break" trên toolbar để ngắt boot vào ROMMON. (3) Ở prompt "rommon 1 >": insert_command "confreg 0x2142" (bỏ qua NVRAM khi khởi động lại) rồi "reset". (4) Sau khi boot xong (bỏ qua startup-config), vào enable: "enable" → "configure terminal" → đặt password mới ("enable secret ...", hoặc "line con 0"/"line vty..." nếu cần) → "end". (5) QUAN TRỌNG: "copy startup-config running-config" để khôi phục config cũ (nếu có) TRƯỚC KHI ghi đè, rồi mới sửa/lưu — nếu bỏ qua bước này sẽ MẤT toàn bộ config cũ. (6) Đưa config-register về mặc định: "configure terminal" → "config-register 0x2102" → "end" → "write memory". (7) Xác nhận lại bằng read_terminal + "show version" (xem lại config-register) và "show running-config" (xem password mới đã áp dụng).',
+  '- SWITCH Catalyst cố định (2960/3560/2950...) — KHÔNG có ROMMON, KHÔNG dùng Break: (1) Rút nguồn switch. (2) Yêu cầu user BẤM VÀ GIỮ nút "MODE" (nút vật lý mặt trước switch) — thao tác PHẦN CỨNG, không làm qua console được, nói rõ cho user. (3) Cắm điện lại TRONG KHI vẫn giữ nút MODE, giữ tới khi đèn SYST chuyển từ vàng nhấp nháy sang xanh (vài giây) rồi thả nút. (4) Máy vào prompt "switch:" (khác "rommon"). Đọc lại bằng read_terminal để xác nhận đúng prompt này trước khi tiếp. (5) insert_command "flash_init", rồi "load_helper" (một số bản không cần), rồi "dir flash:" xem tên file config. (6) "rename flash:config.text flash:config.old" (đổi tên để bỏ qua config cũ lúc boot — KHÔNG xoá hẳn, giữ lại để khôi phục sau). (7) "boot" — máy boot lên KHÔNG có config cũ, prompt hỏi setup dialog thì gõ "no"/Ctrl-C bỏ qua. (8) Vào enable, đặt password mới, rồi "rename flash:config.old flash:config.text" + "copy flash:config.text running-config" để LẤY LẠI config cũ (không mất gì), sửa password xong "write memory" để lưu.',
+  '- MikroTik: cần bấm nút reset vật lý trên máy (giữ nút lúc cấp nguồn) — đây là thao tác PHẦN CỨNG, không làm qua console được, nói rõ cho user.',
+  '- FortiGate: có quy trình "maintainer account" khi mất mật khẩu admin, cần biết đúng số serial + thao tác trong cửa sổ thời gian giới hạn lúc boot — hỏi rõ model trước khi hướng dẫn chi tiết vì mỗi dòng FortiGate hơi khác nhau.',
+  '- Luôn NHẮC user: reset password xong nhớ đặt lại password MẠNH, và nếu vừa bỏ qua startup-config (Cisco), phải backup/khôi phục config cũ cẩn thận kẻo mất toàn bộ cấu hình đang chạy.',
+  '',
+  'CHẨN ĐOÁN CẤU HÌNH THIẾT BỊ MỚI (khi user setup máy mới, không phải password recovery):',
+  '- Bắt đầu bằng read_terminal xem banner + prompt hiện tại (đã cấu hình gì chưa, factory-default hay không).',
+  '- Đi từ vật lý/interface → VLAN/trunk (L2) → routing (L3), tương tự phương pháp OSI bottom-up: xem interface trước, rồi VLAN, rồi định tuyến.',
+  '- Luôn đọc lại output SAU khi gõ lệnh xác nhận đổi đúng — đừng chỉ tin đã gõ lệnh là xong.',
+  '',
+  'QUY TẮC:',
+  '- Mỗi lượt chỉ in 1 khối ```ssh```. Sau [KẾT QUẢ TOOL], phân tích rồi tiếp tục hoặc trả lời.',
+  '- Với quy trình nhiều bước (như reset password): làm TỪNG BƯỚC MỘT, không dồn nhiều lệnh — chờ user xác nhận đã bấm Enter/đã làm xong bước vật lý (rút nguồn, bấm Break) trước khi sang bước kế.',
+].join('\n');
+
+/* ── UI ── */
+var panel = document.getElementById('csai-panel');
+var msgs = panel.querySelector('#csai-msgs');
+var ta = panel.querySelector('textarea');
+var send = panel.querySelector('#csai-in button');
+var chatHistory = [];   // KHÔNG đặt tên 'history' — đụng độ window.history (native History API) gây lỗi im lặng
+var busy = false;
+var btnAi = document.getElementById('csai-btn');
+
+btnAi.onclick = function(){ panel.classList.toggle('open'); if(panel.classList.contains('open')) ta.focus(); };
+panel.querySelector('.x').onclick = function(){ panel.classList.remove('open'); };
+ta.onkeydown = function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); doSend(); } };
+send.onclick = doSend;
+
+function addMsg(cls, text){ var d=document.createElement('div'); d.className='csm '+cls; d.textContent=text; msgs.appendChild(d); msgs.scrollTop=msgs.scrollHeight; return d; }
+function note(text){ addMsg('csm-t', text); }
+
+function doSend(){
+  var q=(ta.value||'').trim(); if(!q || busy) return;
+  var wc = msgs.querySelector('.cs-wc'); if(wc) wc.remove();
+  ta.value=''; addMsg('csm-u', q); chatHistory.push({role:'user', content:q});
+  runLoop();
+}
+
+function runLoop(){
+  busy=true; send.disabled=true;
+  var loops=0;
+  var bubble = addMsg('csm-a', '…');
+  step();
+
+  function step(){
+    streamLLM(function onDelta(full){ bubble.textContent = full || '…'; msgs.scrollTop = msgs.scrollHeight; })
+      .then(function(full){
+        var tool = parseTool(full);
+        chatHistory.push({role:'assistant', content:full});
+        if(!tool || loops>=MAX_TOOL_LOOPS){
+          if(tool && loops>=MAX_TOOL_LOOPS) note('⚠️ Đã đạt giới hạn số bước tool.');
+          finish(); return;
+        }
+        bubble.textContent = full.replace(/```ssh[\s\S]*?```/g,'').trim() || '⚙️ đang xử lý…';
+        loops++;
+        execTool(tool).then(function(res){
+          note((res.__denied ? '⛔ ' : '⚙️ ') + tool.tool + (res.__denied ? ' (bỏ qua)' : ' ✓'));
+          chatHistory.push({role:'user', content:'[KẾT QUẢ TOOL '+tool.tool+']\n'+JSON.stringify(res)});
+          bubble = addMsg('csm-a', '…');
+          step();
+        });
+      })
+      .catch(function(e){ bubble.textContent = '⚠️ Lỗi: '+(e && e.message || e); finish(); });
+  }
+  function finish(){ busy=false; send.disabled=false; ta.focus(); }
+}
+
+function parseTool(text){
+  var m = text.match(/```ssh\s*([\s\S]*?)```/);
+  if(!m) return null;
+  try{ var o=JSON.parse(m[1].trim()); return (o && o.tool && TOOLS[o.tool]) ? o : null; }catch(e){ return null; }
+}
+
+function execTool(tool){
+  if(tool.tool==='insert_command'){
+    var cmd = (typeof tool.command==='string') ? tool.command : '';
+    var ok = window.confirm('AI muốn ĐẶT lệnh này lên dòng lệnh console (anh vẫn phải tự bấm Enter):\n\n  '+cmd+'\n\nĐồng ý đặt vào?');
+    if(!ok) return Promise.resolve({ __denied:true, message:'Người dùng từ chối chèn lệnh này.' });
+  }
+  try{ return Promise.resolve(TOOLS[tool.tool](tool)).catch(function(e){ return { ok:false, error:String(e && e.message || e) }; }); }
+  catch(e){ return Promise.resolve({ ok:false, error:String(e && e.message || e) }); }
+}
+
+function streamLLM(onDelta){
+  var body = { model:MODEL, messages:[{role:'system', content:SYS}].concat(chatHistory), stream:true };
+  return fetch(LLM_URL, { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+    .then(function(r){
+      if(!r.ok) return r.text().then(function(t){ var e; try{ e=JSON.parse(t).error; }catch(_){ } throw new Error(e || ('HTTP '+r.status)); });
+      var reader=r.body.getReader(), dec=new TextDecoder(), buf='', full='';
+      return (function pump(){
+        return reader.read().then(function(res){
+          if(res.done) return full;
+          buf += dec.decode(res.value, {stream:true});
+          var lines = buf.split('\n'); buf = lines.pop();
+          for(var i=0;i<lines.length;i++){
+            var ln = lines[i].trim(); if(ln.indexOf('data:')!==0) continue;
+            var payload = ln.slice(5).trim(); if(payload==='[DONE]') continue;
+            try{
+              var jj = JSON.parse(payload);
+              var delta = jj.choices && jj.choices[0] && jj.choices[0].delta;
+              if(delta && delta.content){ full += delta.content; onDelta(full); }
+            }catch(e){}
+          }
+          return pump();
+        });
+      })();
+    });
+}
+</script>
+</body>
+</html>

@@ -680,6 +680,7 @@ var ALL_SERVICES_DEF = [
   { id:'n8n',         name:'n8n Automation',  icon:'⚡', desc:'Workflow & bot automation',                    url:'https://n8n-home.home-server.id.vn',         local:false, detailPage:'/service-home/n8n.html' },
   { id:'casaos',      name:'CasaOS',          icon:'🏠', desc:'Home server OS dashboard',                     url:'https://casaos.home-server.id.vn',           local:false, detailPage:'/service-home/casaos.html' },
   { id:'ssh',         name:'SSH Terminal',    icon:'⌨',  desc:'Web SSH · Termix',                             url:'https://termix.home-server.id.vn',           local:false, detailPage:'/service-home/ssh.html' },
+  { id:'console-serial', name:'Web Console (Serial)', icon:'🔌', desc:'Cấu hình switch/router qua dây console · AI hỗ trợ', url:'/service-home/console-serial.html', local:true, detailPage:'/service-home/console-serial.html', noCheck:true },
   { id:'fortigate',   name:'FortiGate',       icon:'🛡', desc:'Firewall · security gateway',                  url:'http://192.168.110.1',                       local:true,  detailPage:'/service-home/fortigate.html' },
   { id:'asus',        name:'ASUS Router',     icon:'📡', desc:'ASUS · home network',                          url:'http://192.168.10.1:8443',                   local:true,  detailPage:'/service-home/asus.html' },
   { id:'camera',        name:'Camera',          icon:'📷', desc:'Camera system · go2rtc WebRTC',                url:'https://camera.home-server.id.vn',           local:false, detailPage:'/service-home/camera-home.html'},
@@ -698,7 +699,7 @@ var ALL_SERVICES_DEF = [
 /* Categories (matches original SERVICE_CATEGORIES) */
 var SERVICE_CATEGORIES = [
   { id:'home', icon:'🏠', name:'Service Home', desc:'Hạ tầng & hệ thống · home-server.id.vn', accent:'var(--accent)',
-    serviceIds: ['services-hub','esxi','n8n','casaos','ssh','fortigate','asus','camera','rustdesk'] },
+    serviceIds: ['services-hub','esxi','n8n','casaos','ssh','console-serial','fortigate','asus','camera','rustdesk'] },
   { id:'movi', icon:'🎬', name:'Service Movi', desc:'Văn phòng Movi · Meraki & Topology',    accent:'var(--violet)',
     serviceIds: ['meraki','movi','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi','ssh-movi'] },
 ];

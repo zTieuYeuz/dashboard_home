@@ -109,6 +109,16 @@ import {
   handleTermixLlm
 } from './src/termix.js';
 import {
+  handleConsoleSerialLlm,
+  handleConsoleRelayCreate,
+  handleConsoleRelayJoin,
+  handleConsoleRelayFieldSync,
+  handleConsoleRelayPullOutput,
+  handleConsoleRelayFieldActivity,
+  handleConsoleRelayPushCommand,
+  handleConsoleRelayStop,
+} from './src/console-serial.js';
+import {
   handleMcp,
   handleAdminAiConfig,
   handleAdminMcp,
@@ -2292,6 +2302,7 @@ const WAYFIND_NAV = `<style>
   {i:'\\u26A1',n:'n8n Automation',d:'Workflow & bot automation',h:'/service-home/n8n.html',p:'n8n'},
   {i:'\\uD83D\\uDCF7',n:'Camera',d:'Hệ thống camera · Frigate NVR',h:'/service-home/camera-home.html',p:'camera'},
   {i:'\\uD83D\\uDDA7',n:'SSH Terminal',d:'Web SSH · Termix',h:'/service-home/ssh.html',p:'ssh'},
+  {i:'\\uD83D\\uDD0C',n:'Web Console (Serial)',d:'Cấu hình switch/router qua dây console · AI hỗ trợ',h:'/service-home/console-serial.html',p:'console-serial'},
   {i:'\\uD83D\\uDDA5',n:'RustDesk',d:'Remote desktop · máy nhân viên',h:'/service-home/rustdesk.html',p:'rustdesk'},
   {i:'\\uD83D\\uDDA7',n:'Termix Movi',d:'SSH Movi · token auth',h:'/service-movi/ssh-movi.html',p:'ssh-movi'},
   {i:'\\uD83C\\uDFE0',n:'ALL Service Home',d:'Chrome Pool · FortiGate · ESXi · NAS · n8n · Frigate…',h:'/service-home/services-embed.html',p:null},
@@ -2394,6 +2405,7 @@ const DATA_REFRESH = `<style>
   '/service-home/fortigate.html':['load'],'/service-home/vmware-home.html':['loadData'],'/service-home/casaos.html':['loadData'],
   '/service-home/asus.html':['load'],'/service-home/n8n.html':['loadData'],
   '/service-home/camera-home.html':[],'/service-home/ssh.html':['loadData'],
+  '/service-home/console-serial.html':[],
   '/service-home/rustdesk.html':['loadDevices'],
   '/bookmarks.html':['loadData'],'/settings.html':['loadSettings']};
  var path=location.pathname.replace(/\\/index\\.html$/,'/');
@@ -2660,6 +2672,7 @@ a:hover{background:#4f46e5}</style></head>
       '/service-home/n8n.html': 'n8n',
       '/service-home/camera-home.html': ['camera','camera_playback','camera_download','app_camera','camera_autoopen'],
       '/service-home/ssh.html': 'ssh',
+      '/service-home/console-serial.html': 'console-serial',
       '/service-home/rustdesk.html': 'rustdesk',
       '/service-home/services-embed.html': 'services-hub',
       // '/settings.html' intentionally NOT gated — all authenticated users can access own profile/MFA settings
@@ -2794,7 +2807,9 @@ a:hover{background:#4f46e5}</style></head>
       // (những thứ đó làm hư CF Access session — xem services_embed_hub memory 2026-06-29).
       'Permissions-Policy': (url.pathname === '/service-home/services-embed.html'
         ? 'camera=(self "https://kasm-service.home-server.id.vn"), microphone=(self "https://kasm-service.home-server.id.vn")'
-        : 'camera=(), microphone=()') + ', geolocation=(), payment=(), usb=(), interest-cohort=()',
+        : 'camera=(), microphone=()') + ', geolocation=(), payment=(), usb=(), interest-cohort=()' +
+        // [Web Console Serial] Web Serial API (đọc/ghi cổng COM dây console) — chỉ same-origin.
+        ', serial=(self)',
       // App is heavily inline-scripted; 'unsafe-inline' is required to avoid
       // breakage, but external script/object/frame sources are locked down.
       'Content-Security-Policy':
@@ -3773,6 +3788,20 @@ export default {
     // ── Termix AI proxy → 9Router: gác bằng SESSION dashboard + quyền 'ssh' (Termix chạy
     //    same-origin qua /proxy/termix-home nên có cookie dh_session). An toàn hơn Origin check. ──
     if (p === '/api/termix-llm') return handleTermixLlm(request, env);
+
+    // ── Web Console (Serial) AI proxy → 9Router: gác session + quyền 'console-serial' riêng
+    //    (khác 'ssh' — đây là thao tác trên THIẾT BỊ VẬT LÝ tại hiện trường qua dây console). ──
+    if (p === '/api/console-serial-llm') return handleConsoleSerialLlm(request, env);
+
+    // ── Console Relay ("🙋 Nhờ hỗ trợ" — anh Thoại join phiên console của người hiện
+    //    trường từ xa). Mọi endpoint tự gác session+quyền bên trong handler. ──
+    if (p === '/api/console-relay/create')        return handleConsoleRelayCreate(request, env);
+    if (p === '/api/console-relay/join')          return handleConsoleRelayJoin(request, env);
+    if (p === '/api/console-relay/field-sync')    return handleConsoleRelayFieldSync(request, env);
+    if (p === '/api/console-relay/pull-output')    return handleConsoleRelayPullOutput(request, env);
+    if (p === '/api/console-relay/field-activity') return handleConsoleRelayFieldActivity(request, env);
+    if (p === '/api/console-relay/push-command')   return handleConsoleRelayPushCommand(request, env);
+    if (p === '/api/console-relay/stop')           return handleConsoleRelayStop(request, env);
 
     // ── MCP server for external agents (OpenClaw) — token-authed, no session ──
     if (p === '/mcp') return handleMcp(request, env);
