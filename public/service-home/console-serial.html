@@ -44,11 +44,11 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .cs-empty-note{font-size:12px;max-width:440px;line-height:1.7}
 
 /* ── AI assistant (giống pattern Termix, đổi tông màu cam cho "thiết bị vật lý") ── */
-#csai-btn{position:fixed;bottom:20px;right:20px;height:50px;width:auto;padding:0 16px;display:inline-flex;align-items:center;gap:6px;
+#csai-btn{position:fixed;bottom:20px;left:20px;height:50px;width:auto;padding:0 16px;display:inline-flex;align-items:center;gap:6px;
   border:none;border-radius:25px;cursor:pointer;background:linear-gradient(135deg,#f6a93c,#f76b1c);color:#3a1c00;font-size:15px;font-weight:700;
   box-shadow:0 3px 14px rgba(0,0,0,.4);z-index:2147483000;transition:transform .12s}
 #csai-btn:hover{transform:translateY(-1px)}
-#csai-panel{position:fixed;bottom:84px;right:20px;width:390px;max-width:calc(100vw - 30px);height:560px;max-height:calc(100vh - 120px);
+#csai-panel{position:fixed;bottom:84px;left:20px;width:390px;max-width:calc(100vw - 30px);height:560px;max-height:calc(100vh - 120px);
   background:#1a130b;border:1px solid rgba(255,255,255,.12);border-radius:14px;z-index:2147483000;display:none;flex-direction:column;overflow:hidden;
   box-shadow:0 10px 44px rgba(0,0,0,.6);font-family:"Segoe UI",system-ui,sans-serif}
 #csai-panel.open{display:flex}
@@ -566,7 +566,7 @@ relayCmdInput.onkeydown = function(e){ if(e.key==='Enter'){ e.preventDefault(); 
 /* ══════════════════════════════════════
    AI assistant — đọc console + gợi ý lệnh (KHÔNG tự chạy)
    ══════════════════════════════════════ */
-var MODEL = 'pnetlab';
+var MODEL = 'console';   // alias 9Router RIÊNG cho Console Serial (instance administrator, 2026-07-25)
 var MAX_TOOL_LOOPS = 12;
 var LLM_URL = location.origin + '/api/console-serial-llm';
 
@@ -774,10 +774,16 @@ function execTool(tool){
   catch(e){ return Promise.resolve({ ok:false, error:String(e && e.message || e) }); }
 }
 
-function streamLLM(onDelta){
+function streamLLM(onDelta, attempt){
+  attempt = attempt || 1;
   var body = { model:MODEL, messages:[{role:'system', content:SYS}].concat(chatHistory), stream:true };
   return fetch(LLM_URL, { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
     .then(function(r){
+      // HTTP 524 = Cloudflare Edge timeout (9Router thỉnh thoảng chọn backend chậm) — tự thử lại.
+      if (r.status === 524 && attempt < 3) {
+        onDelta('⏳ 9Router phản hồi chậm (524), đang thử lại (' + (attempt + 1) + '/3)…');
+        return streamLLM(onDelta, attempt + 1);
+      }
       if(!r.ok) return r.text().then(function(t){ var e; try{ e=JSON.parse(t).error; }catch(_){ } throw new Error(e || ('HTTP '+r.status)); });
       var reader=r.body.getReader(), dec=new TextDecoder(), buf='', full='';
       return (function pump(){

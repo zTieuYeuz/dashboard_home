@@ -20,7 +20,7 @@
   'use strict';
   if (window.__TERMIX_AI__) return; window.__TERMIX_AI__ = 1;
 
-  var MODEL = 'pnetlab';          // alias 9Router của anh (chỉ là tên định tuyến — đổi ở đây nếu muốn model khác)
+  var MODEL = 'termix';          // alias 9Router RIÊNG cho Termix (instance administrator, 2026-07-25)
   var MAX_TOOL_LOOPS = 12;
 
   function proxyBase() { try { return location.origin; } catch (e) { return 'https://dashboard.home-server.id.vn'; } }
@@ -279,10 +279,16 @@
   }
 
   /* Gọi proxy 9Router, đọc SSE, trả full text; onDelta(full) mỗi lần có thêm chữ */
-  function streamLLM(onDelta) {
+  function streamLLM(onDelta, attempt) {
+    attempt = attempt || 1;
     var body = { model: MODEL, messages: [{ role: 'system', content: SYS }].concat(history), stream: true };
     return fetch(LLM_URL, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (r) {
+        // HTTP 524 = Cloudflare Edge timeout (9Router thỉnh thoảng chọn backend chậm) — tự thử lại.
+        if (r.status === 524 && attempt < 3) {
+          onDelta('⏳ 9Router phản hồi chậm (524), đang thử lại (' + (attempt + 1) + '/3)…');
+          return streamLLM(onDelta, attempt + 1);
+        }
         if (!r.ok) return r.text().then(function (t) { var e; try { e = JSON.parse(t).error; } catch (_) {} throw new Error(e || ('HTTP ' + r.status)); });
         var reader = r.body.getReader(), dec = new TextDecoder(), buf = '', full = '';
         return (function pump() {

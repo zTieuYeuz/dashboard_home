@@ -147,6 +147,7 @@ import {
 } from './src/camera-home.js';
 import { runDailySelfReview } from './src/ai/review.js';
 import { handlePnetLlm, handlePnetConsole } from './src/pnetlab.js';
+import { handleN8nAiLlm, handleN8nAiReadWorkflow, handleN8nAiUpdateWorkflow, handleN8nAiCheckExecutions, handleN8nAiDocs } from './src/n8n-ai.js';
 
 /* ═══════════════════════════════════════════════
    Auth & User Management System
@@ -3490,7 +3491,8 @@ setTimeout(_show,6000);
   // which collapses the inner CSS-grid `1fr` rows to 0 → the workflow list (50 cards ARE in the DOM)
   // gets clipped to height 0 and shows blank. Force the canonical full-viewport height on #app.
   html = html.replace('</head>',
-    '<style id="n8n-proxy-fix">html,body{height:100%;margin:0}#app{height:100vh}</style></head>');
+    '<style id="n8n-proxy-fix">html,body{height:100%;margin:0}#app{height:100vh}</style>'
+    + '<script src="' + new URL(request.url).origin + '/n8n-assistant.js" defer></' + 'script></head>');
 
   rh.set('Content-Type', ct);
   return new Response(html, { status: upstream.status, headers: rh });
@@ -3802,6 +3804,13 @@ export default {
     if (p === '/api/console-relay/field-activity') return handleConsoleRelayFieldActivity(request, env);
     if (p === '/api/console-relay/push-command')   return handleConsoleRelayPushCommand(request, env);
     if (p === '/api/console-relay/stop')           return handleConsoleRelayStop(request, env);
+
+    // ── n8n AI assistant — nút 🤖 nhúng trong n8n qua /n8n-proxy (xem handleN8nHomeProxy) ──
+    if (p === '/api/n8n-ai-llm')       return handleN8nAiLlm(request, env);
+    if (p === '/api/n8n-ai/workflow' && request.method === 'GET')  return handleN8nAiReadWorkflow(request, env);
+    if (p === '/api/n8n-ai/workflow' && request.method === 'POST') return handleN8nAiUpdateWorkflow(request, env);
+    if (p === '/api/n8n-ai/executions') return handleN8nAiCheckExecutions(request, env);
+    if (p === '/api/n8n-ai/docs')       return handleN8nAiDocs(request, env);
 
     // ── MCP server for external agents (OpenClaw) — token-authed, no session ──
     if (p === '/mcp') return handleMcp(request, env);

@@ -19,7 +19,9 @@ import {
    Origin allowlist. Chỉ forward tới 9Router + ép model allowlist + rate-limit.
    ═══════════════════════════════════════════════════════════════════ */
 const TERMIX_NINE_ROUTER = 'https://9router.home-server.id.vn/v1/chat/completions';
-const TERMIX_LLM_MODELS  = new Set(['pnetlab', 'AI-Home']);   // alias 9Router của anh
+// [2026-07-25] 9Router chuyển từ instance root → administrator: alias + secret RIÊNG
+// cho Termix (trước dùng chung NINE_ROUTER_KEY với pnetlab/console-serial).
+const TERMIX_LLM_MODELS  = new Set(['termix']);
 const TERMIX_LLM_RL_MAX  = 60;                                 // request / 5 phút / user
 
 export async function handleTermixLlm(request, env) {
@@ -41,8 +43,8 @@ export async function handleTermixLlm(request, env) {
   if (!session) return j({ error: 'Chưa đăng nhập dashboard' }, 401);
   if (!(await hasPerm(env, session, 'ssh'))) return j({ error: 'Không có quyền SSH Terminal' }, 403);
 
-  const key = env.NINE_ROUTER_KEY;
-  if (!key) return j({ error: 'Chưa cấu hình NINE_ROUTER_KEY (wrangler secret put NINE_ROUTER_KEY).' }, 503);
+  const key = env.TERMIX_9ROUTER_KEY;
+  if (!key) return j({ error: 'Chưa cấu hình TERMIX_9ROUTER_KEY (wrangler secret put TERMIX_9ROUTER_KEY).' }, 503);
 
   // Rate-limit theo user (KV, cửa sổ 5 phút)
   const rlKey = 'termixllm:rl:' + session.username;
@@ -51,7 +53,7 @@ export async function handleTermixLlm(request, env) {
   await env.DASHBOARD_KV.put(rlKey, String(cnt + 1), { expirationTtl: 300 });
 
   let body; try { body = await request.json(); } catch { return j({ error: 'bad json' }, 400); }
-  const model = TERMIX_LLM_MODELS.has(body.model) ? body.model : 'pnetlab';
+  const model = TERMIX_LLM_MODELS.has(body.model) ? body.model : 'termix';
   const payload = Object.assign({}, body, { model, stream: true });
 
   let upstream;

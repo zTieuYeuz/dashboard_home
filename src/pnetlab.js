@@ -235,7 +235,10 @@ export async function pnetExportConfig(env, params) {
    ═══════════════════════════════════════════════════════════════════ */
 const NINE_ROUTER = 'https://9router.home-server.id.vn/v1/chat/completions';
 const PNET_ORIGIN = 'https://pnetlab.home-server.id.vn';
-const LLM_MODELS = new Set(['pnetlab', 'AI-Home']);   // chỉ cho các alias của anh
+// [2026-07-25] 9Router chuyển từ instance root → administrator: MỖI tính năng giờ có
+// alias + secret RIÊNG (trước đây dùng chung NINE_ROUTER_KEY + allowlist 2 tên) — tránh
+// 1 key hỏng làm chết cả 3 tính năng, và anh dễ theo dõi/thu hồi riêng từng cái.
+const LLM_MODELS = new Set(['pnetlab']);
 const LLM_RL_MAX = 60;                                  // request / 5 phút / IP
 
 function _cors(origin) {
@@ -256,8 +259,8 @@ export async function handlePnetLlm(request, env) {
   if (request.method !== 'POST') return cjson({ error: 'method' }, 405);
   if (origin !== PNET_ORIGIN) return cjson({ error: 'forbidden origin' }, 403);
 
-  const key = env.NINE_ROUTER_KEY;
-  if (!key) return cjson({ error: 'Chưa cấu hình NINE_ROUTER_KEY (wrangler secret put NINE_ROUTER_KEY).' }, 503);
+  const key = env.PNETLAB_9ROUTER_KEY;
+  if (!key) return cjson({ error: 'Chưa cấu hình PNETLAB_9ROUTER_KEY (wrangler secret put PNETLAB_9ROUTER_KEY).' }, 503);
 
   // Rate-limit theo IP (KV, cửa sổ 5 phút)
   const ip = request.headers.get('CF-Connecting-IP') || '?';

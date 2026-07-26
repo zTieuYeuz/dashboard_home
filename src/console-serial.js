@@ -17,7 +17,9 @@
 import { getSession, hasPerm, logActivity } from './core.js';
 
 const CS_NINE_ROUTER = 'https://9router.home-server.id.vn/v1/chat/completions';
-const CS_LLM_MODELS  = new Set(['pnetlab', 'AI-Home']);
+// [2026-07-25] 9Router chuyển từ instance root → administrator: alias + secret RIÊNG
+// cho Console Serial (trước dùng chung NINE_ROUTER_KEY với pnetlab/termix).
+const CS_LLM_MODELS  = new Set(['console']);
 const CS_LLM_RL_MAX  = 60;   // request / 5 phút / user
 
 export async function handleConsoleSerialLlm(request, env) {
@@ -37,8 +39,8 @@ export async function handleConsoleSerialLlm(request, env) {
   if (!session) return j({ error: 'Chưa đăng nhập dashboard' }, 401);
   if (!(await hasPerm(env, session, 'console-serial'))) return j({ error: 'Không có quyền Web Console (Serial)' }, 403);
 
-  const key = env.NINE_ROUTER_KEY;
-  if (!key) return j({ error: 'Chưa cấu hình NINE_ROUTER_KEY (wrangler secret put NINE_ROUTER_KEY).' }, 503);
+  const key = env.CONSOLE_9ROUTER_KEY;
+  if (!key) return j({ error: 'Chưa cấu hình CONSOLE_9ROUTER_KEY (wrangler secret put CONSOLE_9ROUTER_KEY).' }, 503);
 
   const rlKey = 'conserialllm:rl:' + session.username;
   const cnt = parseInt((await env.DASHBOARD_KV.get(rlKey)) || '0', 10);
@@ -46,7 +48,7 @@ export async function handleConsoleSerialLlm(request, env) {
   await env.DASHBOARD_KV.put(rlKey, String(cnt + 1), { expirationTtl: 300 });
 
   let body; try { body = await request.json(); } catch { return j({ error: 'bad json' }, 400); }
-  const model = CS_LLM_MODELS.has(body.model) ? body.model : 'pnetlab';
+  const model = CS_LLM_MODELS.has(body.model) ? body.model : 'console';
   const payload = Object.assign({}, body, { model, stream: true });
 
   let upstream;

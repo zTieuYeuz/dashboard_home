@@ -83,6 +83,9 @@ html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);he
    Header base.css cao 52px dùng chung mọi trang; ở đây override qua class body.embed-mode để
    iframe cao HẾT màn hình. Bấm tay nắm .topbar-handle (mép trên, giữa) để hiện lại header. */
 body.embed-mode .topbar{display:none}
+/* n8n có theme + nút nổi riêng của nó; nút Sáng/Tối của dashboard (góc trái dưới, chèn chung
+   cho mọi trang) chỉ đè lên giao diện n8n mà không đổi được gì bên trong iframe → ẩn khi xem n8n. */
+body.embed-n8n #__themeFab{display:none!important}
 body.embed-mode .layout{height:100vh}
 body.embed-mode.topbar-open .topbar{display:flex}
 body.embed-mode.topbar-open .layout{height:calc(100vh - 52px)}
@@ -263,15 +266,20 @@ function toggleTopbar(e){
   if (e) e.stopPropagation();
   document.body.classList.toggle('topbar-open');
 }
-/* Vào chế độ xem service nhúng: ẩn header (bắt đầu ẩn), thu sidebar. */
-function _enterEmbedMode(){
+/* Vào chế độ xem service nhúng: ẩn header (bắt đầu ẩn), thu sidebar.
+   embedUrl (tuỳ chọn): n8n có giao diện + nút nổi riêng của nó, nút Sáng/Tối của dashboard
+   nằm đè lên góc trái dưới của n8n mà lại không đổi được theme bên trong iframe → gắn cờ
+   để CSS ẩn riêng nút đó khi đang xem n8n (các service khác giữ nguyên). */
+function _enterEmbedMode(embedUrl){
   document.body.classList.add('embed-mode');
   document.body.classList.remove('topbar-open');
+  document.body.classList.toggle('embed-n8n', /\/n8n-proxy/.test(embedUrl || ''));
 }
 /* Thoát chế độ nhúng (về overview / trang thường): trả header + sidebar. */
 function _exitEmbedMode(){
   document.body.classList.remove('embed-mode');
   document.body.classList.remove('topbar-open');
+  document.body.classList.remove('embed-n8n');
 }
 document.addEventListener('click', function(e){
   var sb = document.querySelector('.sidebar');
@@ -374,7 +382,7 @@ function _siteUrlByEmbed(embedUrl){ var s=_siteByEmbed(embedUrl); return s ? s.u
 
 /* Dựng iframe full-page cho site embed (dùng chung cho click & restore khi reload). */
 function renderEmbedFull(embedUrl){
-  _enterEmbedMode();
+  _enterEmbedMode(embedUrl);
   var sb=document.querySelector('.sidebar'), mn=document.querySelector('.main');
   if(sb){ sb.style.display=''; sb.classList.add('collapsed'); sb.classList.remove('expanded'); }
   if(mn) mn.classList.add('rail');
@@ -741,7 +749,7 @@ function renderDetail(svc) {
 
   /* ── Embedded service: thu sidebar thành dải icon (bấm nút mới bung), iframe lấp phần còn lại ── */
   if (svc.embedUrl) {
-    _enterEmbedMode();
+    _enterEmbedMode(svc.embedUrl);
     if (sidebar) { sidebar.style.display = ''; sidebar.classList.add('collapsed'); sidebar.classList.remove('expanded'); }
     main.classList.add('rail');
     main.style.overflow  = 'hidden';
