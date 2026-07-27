@@ -308,5 +308,6 @@ function loadSettings() {
   loadSysConfig();
   loadAuditLog();
   loadMfaStatus();
+  loadPasskeys();
 }
 

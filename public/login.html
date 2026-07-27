@@ -64,6 +64,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </svg>
       Đăng nhập với Microsoft
     </button>
+    <!-- Passkey / Vân tay / FaceID — ẩn tự động nếu trình duyệt không hỗ trợ -->
+    <button class="btn-microsoft" onclick="doPasskeyLogin()" id="btnPasskey" type="button" style="display:none;margin-top:8px">
+      🔐 Đăng nhập bằng Passkey / Vân tay
+    </button>
+    <div class="err" id="passkeyErr" style="margin-top:8px"></div>
     <div class="divider">hoặc</div>
     <form onsubmit="doLogin(event)">
       <div class="form-group">
@@ -176,6 +181,88 @@ async function loginRedirect() {
     }
   } catch(e) {}
   window.location.href = '/';
+}
+
+/* ── Passkey / Vân tay / FaceID (WebAuthn) ──────────────────────────────────
+   Vanilla JS thuần (đúng phong cách toàn dự án, không kéo thư viện browser
+   riêng) — chỉ cần 2 hàm chuyển đổi base64url ↔ ArrayBuffer vì WebAuthn API
+   của trình duyệt làm việc với ArrayBuffer còn server trả/nhận JSON. */
+function _b64urlToBuf(s) {
+  var b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) b64 += '=';
+  var bin = atob(b64), buf = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf.buffer;
+}
+function _bufToB64url(buf) {
+  var bin = ''; var bytes = new Uint8Array(buf);
+  for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function doPasskeyLogin() {
+  var errEl = document.getElementById('passkeyErr'); errEl.className = 'err'; errEl.textContent = '';
+  var btn = document.getElementById('btnPasskey'); btn.disabled = true;
+  try {
+    var r1 = await fetch('/api/auth/webauthn/login-options', { method: 'POST' });
+    var d1 = await r1.json();
+    if (!r1.ok) throw new Error(d1.error || 'Không lấy được tuỳ chọn đăng nhập');
+
+    var opts = d1.options;
+    opts.challenge = _b64urlToBuf(opts.challenge);
+    if (opts.allowCredentials) {
+      opts.allowCredentials = opts.allowCredentials.map(function(c) { return Object.assign({}, c, { id: _b64urlToBuf(c.id) }); });
+    }
+
+    var cred = await navigator.credentials.get({ publicKey: opts });
+
+    var response = {
+      id: cred.id, rawId: _bufToB64url(cred.rawId), type: cred.type,
+      response: {
+        clientDataJSON: _bufToB64url(cred.response.clientDataJSON),
+        authenticatorData: _bufToB64url(cred.response.authenticatorData),
+        signature: _bufToB64url(cred.response.signature),
+        userHandle: cred.response.userHandle ? _bufToB64url(cred.response.userHandle) : null,
+      },
+      clientExtensionResults: cred.getClientExtensionResults ? cred.getClientExtensionResults() : {},
+    };
+
+    var r2 = await fetch('/api/auth/webauthn/login-verify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: d1.token, response: response }),
+    });
+    var d2 = await r2.json();
+    if (!r2.ok || !d2.success) throw new Error(d2.error || 'Đăng nhập thất bại');
+    loginRedirect();
+  } catch (e) {
+    // Người dùng bấm Huỷ trên hộp thoại vân tay → không phải lỗi thật, im lặng.
+    // KHÔNG được im lặng bỏ qua NotAllowedError — lỗi này xảy ra cả khi user bấm
+    // Huỷ LẪN khi ceremony thất bại vì lý do khác (timeout, thiết bị lạ, v.v. —
+    // đặc biệt hay gặp trên Safari di động). Im lặng khiến người dùng thấy "quay
+    // về trang đăng nhập mà không rõ vì sao" — luôn hiện thông báo để còn biết
+    // đường báo lại chính xác lỗi gì.
+    errEl.className = 'err show';
+    errEl.textContent = (e && e.name === 'NotAllowedError')
+      ? 'Không xác thực được (có thể do bạn huỷ, hết thời gian, hoặc thiết bị/trình duyệt chưa hỗ trợ đúng cách). Thử lại hoặc dùng mật khẩu.'
+      : 'Lỗi: ' + (e && e.message || e);
+    btn.disabled = false;
+  }
+}
+
+// Passkey CHỈ hiện trên desktop. Đã tự test thật trên iPhone Safari 2026-07-27:
+// cả Bitwarden lẫn iCloud Keychain (native, không qua app thứ 3) đều gặp
+// NotAllowedError khi hoàn tất ceremony — lỗi nằm ở tương tác WebAuthn/iOS
+// Safari nói chung, không phải riêng 1 trình quản lý mật khẩu nào. Anh Thoại
+// quyết định (2026-07-27): ẩn hẳn trên mobile thay vì cố sửa tiếp, tránh user
+// gặp lỗi khó hiểu. `data-mobile="1"` do SERVER gắn vào <html> (worker.js
+// applyMobilePatch, dựa vào CF-Device-Type + User-Agent — đáng tin hơn tự dò
+// User-Agent phía client). Vẫn giữ nguyên toàn bộ code phía dưới — mobile
+// browser tương lai xử lý tốt hơn thì chỉ cần bỏ điều kiện này, không cần viết
+// lại gì.
+if (window.PublicKeyCredential && document.documentElement.dataset.mobile !== '1') {
+  document.addEventListener('DOMContentLoaded', function() {
+    var b = document.getElementById('btnPasskey'); if (b) b.style.display = '';
+  });
 }
 
 // Nhận postMessage từ popup callback — khi Microsoft auth thành công (fallback)

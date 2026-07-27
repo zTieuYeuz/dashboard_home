@@ -104,6 +104,10 @@ function renderUsers() {
     var resetMfaBtn = (_canResetMfa && !isRootAdmin && u.mfaEnabled)
       ? '<button class="btn btn-outline btn-sm" onclick="resetUserMfa(\''+esc(u.username)+'\')" style="color:var(--warn);border-color:color-mix(in oklch,var(--warn) 30%,transparent)" title="Xóa MFA — user phải thiết lập lại khi đăng nhập">🔑 Reset MFA</button>'
       : '';
+    // Tái dùng CHÍNH XÁC quyền resetMfa — Passkey/MFA cùng nhóm "khôi phục đăng nhập"
+    var resetPasskeyBtn = (_canResetMfa && !isRootAdmin && u.webauthnCount > 0)
+      ? '<button class="btn btn-outline btn-sm" onclick="resetUserWebauthn(\''+esc(u.username)+'\')" style="color:var(--warn);border-color:color-mix(in oklch,var(--warn) 30%,transparent)" title="Xóa tất cả Passkey — dùng khi user mất/quên hết thiết bị">🔐 Reset Passkey ('+u.webauthnCount+')</button>'
+      : '';
     var blockBtn = (_canBlockUser && !isRootAdmin)
       ? (u.blocked
           ? '<button class="btn btn-outline btn-sm" onclick="blockUser(\''+esc(u.username)+'\',true)" style="color:var(--ok);border-color:color-mix(in oklch,var(--ok) 30%,transparent)" title="Bỏ chặn user này">✅ Bỏ chặn</button>'
@@ -119,6 +123,7 @@ function renderUsers() {
       : '<td style="text-align:right"><div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">'
           +unlockBtn
           +resetMfaBtn
+          +resetPasskeyBtn
           +blockBtn
           +editPermsDeleteBtns
         +'</div></td>';
@@ -153,6 +158,19 @@ function resetUserMfa(username) {
       toast('✓ Đã reset MFA cho '+username+'. User sẽ thiết lập lại khi đăng nhập.', 'ok');
       var u = allUsers.find(function(x){ return x.username===username; });
       if (u) { u.mfaEnabled=false; renderUsers(); }
+    })
+    .catch(function(e){ toast('Lỗi: '+e.message, 'err'); });
+}
+
+function resetUserWebauthn(username) {
+  if (!confirm('Xoá TẤT CẢ passkey của "'+username+'"?\n\nUser sẽ không đăng nhập bằng vân tay/FaceID được nữa cho tới khi đăng ký lại. Mật khẩu vẫn dùng bình thường.\n\nDùng khi user mất hết thiết bị / quên.')) return;
+  fetch('/api/admin/users/'+encodeURIComponent(username)+'/reset-webauthn', { method:'POST' })
+    .then(_apiJson).then(function(d){
+      if (!d) return;
+      if (d.error) { toast('Lỗi: '+d.error, 'err'); return; }
+      toast('✓ Đã xoá '+d.removed+' passkey của '+username+'.', 'ok');
+      var u = allUsers.find(function(x){ return x.username===username; });
+      if (u) { u.webauthnCount=0; renderUsers(); }
     })
     .catch(function(e){ toast('Lỗi: '+e.message, 'err'); });
 }

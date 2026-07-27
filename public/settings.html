@@ -981,6 +981,23 @@ select.inp{cursor:pointer}
         </div>
       </div>
     </div>
+
+    <!-- Passkey / Vân tay / FaceID -->
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">🔐 Passkey (Vân tay / FaceID / Windows Hello)</div>
+          <div class="panel-desc">Đăng nhập nhanh không cần gõ mật khẩu — dùng song song, không thay thế mật khẩu</div>
+        </div>
+      </div>
+      <div class="panel-body">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6">
+          Mỗi thiết bị (laptop, điện thoại) đăng ký riêng. Mất thiết bị thì xoá passkey đó tại đây — mật khẩu vẫn dùng bình thường.
+        </p>
+        <div id="passkey-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem"></div>
+        <button class="btn btn-primary" onclick="registerPasskey()">➕ Thêm Passkey mới</button>
+      </div>
+    </div>
   </div>
   </div><!-- /settings-panes -->
   </div><!-- /settings-shell -->

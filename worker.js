@@ -148,6 +148,11 @@ import {
 import { runDailySelfReview } from './src/ai/review.js';
 import { handlePnetLlm, handlePnetConsole } from './src/pnetlab.js';
 import { handleN8nAiLlm, handleN8nAiReadWorkflow, handleN8nAiUpdateWorkflow, handleN8nAiCheckExecutions, handleN8nAiDocs } from './src/n8n-ai.js';
+import {
+  handleWebauthnRegisterOptions, handleWebauthnRegisterVerify,
+  handleWebauthnList, handleWebauthnDelete,
+  handleWebauthnLoginOptions, handleWebauthnLoginVerify,
+} from './src/webauthn.js';
 import { PERMISSION_REGISTRY, buildPagePermMap, buildPermLabels, buildDelegateKeys } from './src/permissions-registry.js';
 
 /* Bảng gác trang, tính 1 lần lúc khởi động worker (registry là hằng số). */
@@ -529,6 +534,7 @@ async function handleListUsers(request, env) {
       sessionTtlHours:  d.sessionTtlHours || 0,
       microsoftEmail:   d.microsoftEmail || null,
       mfaEnabled:       !!d.mfaEnabled,
+      webauthnCount:    (d.webauthnCredentials || []).length,
     })).filter(Boolean);
     return json({ users });
   }
@@ -562,6 +568,7 @@ async function handleListUsers(request, env) {
       groups:      d.groups || [],
       userGroups:  d.userGroups || [],
       mfaEnabled:  !!d.mfaEnabled,
+      webauthnCount: (d.webauthnCredentials || []).length,
       blocked:     !!d.blocked,
       blockedAt:   d.blockedAt || null,
       blockedBy:   d.blockedBy || null,
@@ -777,6 +784,28 @@ async function handleAdminResetMfa(request, env, username) {
   await logActivity(env, { action: 'admin-reset-mfa', username: session.username,
     ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Reset MFA for: ${username}` });
   return json({ success: true });
+}
+
+/* ── Admin xoá TOÀN BỘ passkey của 1 user (mất hết thiết bị / quên) ──
+   Tái dùng CHÍNH XÁC quyền resetMfa có sẵn (không thêm sysPerm mới) — cùng
+   nhóm "hành động khôi phục đăng nhập" nên gộp chung hợp lý, tránh phình quyền. */
+async function handleAdminResetWebauthn(request, env, username) {
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Unauthorized' }, 401);
+  const isAdmin = await isAdminUser(env, session);
+  const callerRaw = isAdmin ? null : await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
+  if (!isAdmin && !callerRaw?.sysPerms?.resetMfa) return json({ error: 'Admin required' }, 403);
+  const user = await env.DASHBOARD_KV.get(`user:${username}`, 'json');
+  if (!user) return json({ error: 'User not found' }, 404);
+  if (!isAdmin && (user.role === 'admin' || username === 'admin')) return json({ error: 'Không thể reset tài khoản admin' }, 403);
+  const creds = user.webauthnCredentials || [];
+  if (!creds.length) return json({ error: 'User này chưa đăng ký passkey nào.' }, 400);
+  await Promise.all(creds.map(c => env.DASHBOARD_KV.delete(`webauthn_owner:${c.id}`).catch(() => {})));
+  user.webauthnCredentials = [];
+  await env.DASHBOARD_KV.put(`user:${username}`, JSON.stringify(user));
+  await logActivity(env, { action: 'admin-reset-webauthn', username: session.username,
+    ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Xoá ${creds.length} passkey của: ${username}` });
+  return json({ success: true, removed: creds.length });
 }
 
 async function handleBlockUser(request, env, username) {
@@ -3844,6 +3873,17 @@ export default {
     if (p === '/api/auth/mfa/enable') return handleMfaEnable(request, env);
     if (p === '/api/auth/mfa/disable')return handleMfaDisable(request, env);
 
+    // ── Passkey / WebAuthn — đăng nhập thứ 2 song song mật khẩu (2026-07-27) ──
+    // register-*/list/delete cần session (tự quản trong Settings); login-*
+    // KHÔNG cần session (như /api/auth/login) vì đây chính là bước đăng nhập.
+    if (p === '/api/auth/webauthn/register-options') return handleWebauthnRegisterOptions(request, env);
+    if (p === '/api/auth/webauthn/register-verify')  return handleWebauthnRegisterVerify(request, env);
+    if (p === '/api/auth/webauthn/credentials' && request.method === 'GET')    return handleWebauthnList(request, env);
+    const webauthnDel = p.match(/^\/api\/auth\/webauthn\/credentials\/([^/]+)$/);
+    if (webauthnDel && request.method === 'DELETE') return handleWebauthnDelete(request, env, decodeURIComponent(webauthnDel[1]));
+    if (p === '/api/auth/webauthn/login-options') return handleWebauthnLoginOptions(request, env);
+    if (p === '/api/auth/webauthn/login-verify')  return handleWebauthnLoginVerify(request, env, ctx);
+
     // ── Admin API ──
     if (p === '/api/admin/users') {
       if (request.method === 'GET')  return handleListUsers(request, env);
@@ -3874,6 +3914,8 @@ export default {
     if (userUnlock && request.method === 'POST') return handleUnlockUser(request, env, decodeURIComponent(userUnlock[1]));
     const userResetMfa = p.match(/^\/api\/admin\/users\/([^/]+)\/reset-mfa$/);
     if (userResetMfa && request.method === 'POST') return handleAdminResetMfa(request, env, decodeURIComponent(userResetMfa[1]));
+    const userResetWebauthn = p.match(/^\/api\/admin\/users\/([^/]+)\/reset-webauthn$/);
+    if (userResetWebauthn && request.method === 'POST') return handleAdminResetWebauthn(request, env, decodeURIComponent(userResetWebauthn[1]));
     const userBlock = p.match(/^\/api\/admin\/users\/([^/]+)\/block$/);
     if (userBlock && request.method === 'POST') return handleBlockUser(request, env, decodeURIComponent(userBlock[1]));
     const userLoginTime = p.match(/^\/api\/admin\/users\/([^/]+)\/login-time$/);

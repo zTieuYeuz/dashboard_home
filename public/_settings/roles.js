@@ -1048,6 +1048,109 @@ function confirmDisableMfa() {
   .catch(function(){ err.textContent = 'Lỗi kết nối'; err.classList.add('show'); });
 }
 
+/* ── Passkey Management (WebAuthn) — 2026-07-27 ────────────────────────────
+   Vanilla JS, không thư viện — cùng phong cách với login.html. Base64url
+   helper lặp lại ở đây thay vì file dùng chung vì settings.html/login.html
+   không có cơ chế share JS module giữa 2 trang (đúng convention hiện có của
+   toàn bộ _settings/*.js — mỗi file tự chứa, không import lẫn nhau). */
+function _pkB64urlToBuf(s) {
+  var b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) b64 += '=';
+  var bin = atob(b64), buf = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf.buffer;
+}
+function _pkBufToB64url(buf) {
+  var bin = ''; var bytes = new Uint8Array(buf);
+  for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function loadPasskeys() {
+  var list = document.getElementById('passkey-list');
+  if (!list) return;
+  // Passkey CHỈ hỗ trợ trên desktop — đã tự test thật trên iPhone Safari
+  // 2026-07-27: cả Bitwarden lẫn iCloud Keychain đều lỗi NotAllowedError khi
+  // ĐĂNG KÝ (không chỉ đăng nhập). Chặn luôn ở đây để không ai đăng ký hỏng
+  // trên điện thoại rồi thắc mắc — xem giải thích đầy đủ ở login.html.
+  if (!window.PublicKeyCredential || document.documentElement.dataset.mobile === '1') {
+    list.innerHTML = '<div style="font-size:12.5px;color:var(--muted)">Passkey hiện chỉ hỗ trợ trên máy tính (desktop). Dùng trình duyệt trên PC/laptop để đăng ký.</div>';
+    var addBtn = list.nextElementSibling; if (addBtn) addBtn.style.display = 'none';
+    return;
+  }
+  fetch('/api/auth/webauthn/credentials')
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      var creds = d.credentials || [];
+      if (!creds.length) { list.innerHTML = '<div style="font-size:12.5px;color:var(--muted)">Chưa đăng ký thiết bị nào.</div>'; return; }
+      list.innerHTML = creds.map(function(c) {
+        var d2 = new Date(c.createdAt);
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">'
+          + '<div><div style="font-size:13px;font-weight:600">🔑 ' + esc(c.deviceName) + '</div>'
+          + '<div style="font-size:11.5px;color:var(--muted)">Thêm ngày ' + d2.toLocaleDateString('vi-VN') + '</div></div>'
+          + '<button class="btn btn-danger" style="padding:5px 10px;font-size:12px" onclick="deletePasskey(\'' + c.id.replace(/'/g, "\\'") + '\')">Xoá</button>'
+          + '</div>';
+      }).join('');
+    })
+    .catch(function(){ list.innerHTML = '<div style="font-size:12.5px;color:var(--bad)">Không tải được danh sách.</div>'; });
+}
+
+function registerPasskey() {
+  if (!window.PublicKeyCredential) { toast('Trình duyệt này không hỗ trợ Passkey', 'err'); return; }
+  var deviceName = prompt('Đặt tên cho thiết bị này (vd: "Vân tay laptop", "FaceID iPhone"):', '');
+  if (deviceName === null) return; // bấm Huỷ
+  deviceName = deviceName.trim() || 'Thiết bị không tên';
+
+  fetch('/api/auth/webauthn/register-options', { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (d.error) throw new Error(d.error);
+      var opts = d.options;
+      opts.challenge = _pkB64urlToBuf(opts.challenge);
+      opts.user.id = _pkB64urlToBuf(opts.user.id);
+      if (opts.excludeCredentials) {
+        opts.excludeCredentials = opts.excludeCredentials.map(function(c) { return Object.assign({}, c, { id: _pkB64urlToBuf(c.id) }); });
+      }
+      return navigator.credentials.create({ publicKey: opts });
+    })
+    .then(function(cred) {
+      var response = {
+        id: cred.id, rawId: _pkBufToB64url(cred.rawId), type: cred.type,
+        response: {
+          clientDataJSON: _pkBufToB64url(cred.response.clientDataJSON),
+          attestationObject: _pkBufToB64url(cred.response.attestationObject),
+          transports: cred.response.getTransports ? cred.response.getTransports() : [],
+        },
+        clientExtensionResults: cred.getClientExtensionResults ? cred.getClientExtensionResults() : {},
+      };
+      return fetch('/api/auth/webauthn/register-verify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceName: deviceName, response: response }),
+      }).then(function(r){ return r.json(); });
+    })
+    .then(function(d) {
+      if (!d.success) throw new Error(d.error || 'Đăng ký thất bại');
+      toast('✓ Đã thêm passkey "' + deviceName + '"', 'ok');
+      loadPasskeys();
+    })
+    .catch(function(e) {
+      if (e && e.name === 'NotAllowedError') return; // bấm Huỷ trên hộp thoại thiết bị — không phải lỗi
+      toast('Lỗi: ' + (e && e.message || e), 'err');
+    });
+}
+
+function deletePasskey(id) {
+  if (!confirm('Xoá passkey này? Thiết bị đó sẽ không đăng nhập bằng vân tay/FaceID được nữa.')) return;
+  fetch('/api/auth/webauthn/credentials/' + encodeURIComponent(id), { method: 'DELETE' })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (!d.success) throw new Error(d.error || 'Xoá thất bại');
+      toast('✓ Đã xoá passkey', 'ok');
+      loadPasskeys();
+    })
+    .catch(function(e){ toast('Lỗi: ' + (e && e.message || e), 'err'); });
+}
+
 function startMfaSetup(isReset) {
   _mfaIsReset = !!isReset;
   fetch('/api/auth/mfa/setup', { method: 'POST' })

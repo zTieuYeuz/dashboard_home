@@ -259,6 +259,7 @@ window.addEventListener('DOMContentLoaded', function(){
     }
     if (_sp.systemConfig) loadSysConfig();
     loadMfaStatus();
+    loadPasskeys();
     loadAuditLog();
   }
   // Điều chỉnh panel "Đổi mật khẩu" theo loại tài khoản
