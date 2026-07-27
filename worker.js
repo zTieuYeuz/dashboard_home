@@ -148,6 +148,10 @@ import {
 import { runDailySelfReview } from './src/ai/review.js';
 import { handlePnetLlm, handlePnetConsole } from './src/pnetlab.js';
 import { handleN8nAiLlm, handleN8nAiReadWorkflow, handleN8nAiUpdateWorkflow, handleN8nAiCheckExecutions, handleN8nAiDocs } from './src/n8n-ai.js';
+import { PERMISSION_REGISTRY, buildPagePermMap, buildPermLabels, buildDelegateKeys } from './src/permissions-registry.js';
+
+/* Bảng gác trang, tính 1 lần lúc khởi động worker (registry là hằng số). */
+const _REGISTRY_PAGE_PERM = buildPagePermMap();
 
 /* ═══════════════════════════════════════════════
    Auth & User Management System
@@ -2285,6 +2289,9 @@ const WAYFIND_NAV = `<style>
  if(location.pathname==='/login.html')return;
  var U=(window.__USER__||{}), adm=!!U.isAdmin, P=U.permissions||{};
  var _TMK=['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'];
+ /* Camera Home mở được bằng BẤT KỲ quyền camera con nào — phải khớp đúng _PAGE_PERM phía server,
+    nếu không user chỉ có quyền Playback/Download sẽ vào được trang nhưng menu lại giấu link. */
+ var _CAMK=['camera','camera_playback','camera_download','app_camera','camera_autoopen'];
  function _hp(pk){if(!pk)return true;if(Array.isArray(pk))return pk.some(function(k){return(P[k]||'none')!=='none';});return(P[pk]||'none')!=='none';}
  var _ALL=[
   {i:'\\u2316',n:'Dashboard',d:'Trang chủ · tất cả dịch vụ',h:'/',p:null},
@@ -2301,12 +2308,12 @@ const WAYFIND_NAV = `<style>
   {i:'\\uD83C\\uDFE0',n:'CasaOS',d:'Home server OS',h:'/service-home/casaos.html',p:'casaos'},
   {i:'\\uD83D\\uDCE1',n:'ASUS Router',d:'Home network router',h:'/service-home/asus.html',p:'asus'},
   {i:'\\u26A1',n:'n8n Automation',d:'Workflow & bot automation',h:'/service-home/n8n.html',p:'n8n'},
-  {i:'\\uD83D\\uDCF7',n:'Camera',d:'Hệ thống camera · Frigate NVR',h:'/service-home/camera-home.html',p:'camera'},
+  {i:'\\uD83D\\uDCF7',n:'Camera',d:'Hệ thống camera · Frigate NVR',h:'/service-home/camera-home.html',p:_CAMK},
   {i:'\\uD83D\\uDDA7',n:'SSH Terminal',d:'Web SSH · Termix',h:'/service-home/ssh.html',p:'ssh'},
   {i:'\\uD83D\\uDD0C',n:'Web Console (Serial)',d:'Cấu hình switch/router qua dây console · AI hỗ trợ',h:'/service-home/console-serial.html',p:'console-serial'},
   {i:'\\uD83D\\uDDA5',n:'RustDesk',d:'Remote desktop · máy nhân viên',h:'/service-home/rustdesk.html',p:'rustdesk'},
   {i:'\\uD83D\\uDDA7',n:'Termix Movi',d:'SSH Movi · token auth',h:'/service-movi/ssh-movi.html',p:'ssh-movi'},
-  {i:'\\uD83C\\uDFE0',n:'ALL Service Home',d:'Chrome Pool · FortiGate · ESXi · NAS · n8n · Frigate…',h:'/service-home/services-embed.html',p:null},
+  {i:'\\uD83C\\uDFE0',n:'ALL Service Home',d:'Chrome Pool · FortiGate · ESXi · NAS · n8n · Frigate…',h:'/service-home/services-embed.html',p:'services-hub'},
   {i:'\\uD83D\\uDD16',n:'Bookmarks',d:'Liên kết nhanh',h:'/bookmarks.html',p:null}
  ];
  if(adm){_ALL.push({i:'\\u2699',n:'Settings',d:'Cài đặt hệ thống · User · Audit · Role · MFA (admin)',h:'/settings.html',p:null});}
@@ -2656,29 +2663,11 @@ a:hover{background:#4f46e5}</style></head>
     if (_ADMIN_ONLY_PAGES.has(url.pathname)) {
       return Response.redirect(new URL('/', request.url).toString(), 302);
     }
-    const _PAGE_PERM = {
-      '/service-movi/meraki.html': 'meraki',
-      '/service-movi/topology.html': 'topology',
-      '/service-movi/fortigate-movi.html': 'fortigate-movi',
-      '/service-movi/camera-movi.html': 'camera-movi',
-      '/service-movi/n8n-movi.html': 'n8n-movi',
-      '/service-movi/tool-movi.html': ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'],
-      '/service-movi/vmware01-movi.html': 'vmware01-movi',
-      '/service-movi/vmware02-movi.html': 'vmware02-movi',
-      '/service-movi/ssh-movi.html': 'ssh-movi',
-      '/service-home/fortigate.html': 'fortigate',
-      '/service-home/vmware-home.html': 'esxi',
-      '/service-home/casaos.html': 'casaos',
-      '/service-home/asus.html': 'asus',
-      '/service-home/n8n.html': 'n8n',
-      '/service-home/camera-home.html': ['camera','camera_playback','camera_download','app_camera','camera_autoopen'],
-      '/service-home/ssh.html': 'ssh',
-      '/service-home/console-serial.html': 'console-serial',
-      '/service-home/rustdesk.html': 'rustdesk',
-      '/service-home/services-embed.html': 'services-hub',
-      // '/settings.html' intentionally NOT gated — all authenticated users can access own profile/MFA settings
-      '/policy.html': '_mgmt',
-    };
+    /* Gác trang ở SERVER — sinh từ src/permissions-registry.js (khai báo `page` của
+       mỗi service). Không sửa tay ở đây nữa: thêm service vào registry là trang tự
+       được gác. '/settings.html' cố ý KHÔNG gác (ai đăng nhập cũng vào xem hồ sơ/MFA
+       của chính mình); '/policy.html' dùng cờ riêng '_mgmt' cho người được uỷ quyền. */
+    const _PAGE_PERM = { ..._REGISTRY_PAGE_PERM, '/policy.html': '_mgmt' };
     const _reqPerm = _PAGE_PERM[url.pathname];
     if (_reqPerm) {
       let _allowed = false;
@@ -2700,7 +2689,18 @@ a:hover{background:#4f46e5}</style></head>
   const idleMs  = idleMin * 60 * 1000;
   const warnMs  = Math.max(60_000, idleMs - 5 * 60 * 1000);
   const dashTitle = (sysCfg.dashboardTitle || '').trim();
-  const userScript = `<script>window.__USER__=${JSON.stringify({
+  /* Registry quyền — chỉ bơm cho trang Settings (nơi duy nhất cần dựng editor phân
+     quyền). Đây là DANH MỤC service, không phải quyền của user, nên không lộ gì thêm;
+     dù vậy vẫn giới hạn đúng trang cần để không phình mọi trang khác. */
+  const permRegistryScript = url.pathname === '/settings.html'
+    ? `<script>window.__PERM_REGISTRY__=${JSON.stringify({
+        services: PERMISSION_REGISTRY,
+        labels: buildPermLabels(),
+        delegateHome: buildDelegateKeys('home'),
+        delegateMovi: buildDelegateKeys('movi'),
+      })};</` + `script>`
+    : '';
+  const userScript = permRegistryScript + `<script>window.__USER__=${JSON.stringify({
     username: session.username,
     role: session.role,
     permissions: isAdmin ? {} : effPerms.permissions,

@@ -4,9 +4,15 @@
    rate-limit, json/escHtml, logActivity. Logic UNCHANGED — pure move.
    Imported by worker.js and every domain module.
    ═══════════════════════════════════════════════ */
+import { buildAllServices } from './permissions-registry.js';
+
 export const SESSION_COOKIE    = 'dh_session';
 export const SESSION_TTL       = 60 * 60 * 8;      // default fallback only — runtime reads from KV system_config
-export const ALL_SERVICES      = ['esxi','n8n','casaos','fortigate','asus','ssh','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','nas','frigate','openclaw','kasm','services-hub','hub-fortigate','hub-asus','hub-esxi','hub-nas','hub-casaos','hub-kasm','hub-openclaw','hub-n8n','hub-frigate','hub-camera-nvr','hub-pnetlab','meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
+/* ⚠️ BỘ LỌC CUỐI CÙNG khi lưu quyền (sanitizePermissions/sanitizePanels): key KHÔNG có
+   ở đây bị XOÁ ÂM THẦM lúc admin bấm Lưu → cấp quyền xong user vẫn bị chặn, không lỗi gì.
+   KHÔNG sửa tay danh sách này nữa — nó được SINH từ src/permissions-registry.js, khai báo
+   service mới ở đó là đủ. (Bug 2026-07-27: thiếu 'console-serial' → cấp quyền xong vô hiệu.) */
+export const ALL_SERVICES      = buildAllServices();
 
 /* ── Strip BOM + trim any env/config string value ── */
 export function cleanEnv(v) { return (v || '').replace(/^﻿/, '').trim(); }

@@ -54,7 +54,10 @@ input,select,textarea{font:inherit;color:inherit}
 .user-tag{font-size:10px;padding:2px 6px;background:color-mix(in oklch,var(--accent) 15%,transparent);color:var(--accent);border-radius:4px;font-weight:600;letter-spacing:.03em;text-transform:uppercase}
 
 /* ── Page Layout ── */
-.container{max-width:1300px;margin:0 auto;padding:2rem 1.5rem;display:flex;flex-direction:column;gap:20px}
+/* Dùng TOÀN BỘ chiều ngang màn hình (anh Thoại chốt 2026-07-27: bỏ 2 dải trống 2 bên).
+   Vẫn chặn ở 2200px để trên màn siêu rộng chữ không bị kéo dài quá khó đọc. */
+.container{max-width:2200px;margin:0 auto;padding:1.5rem 2rem;display:flex;flex-direction:column;gap:20px}
+@media(max-width:820px){.container{padding:1.25rem 1rem}}
 .page-title{font-size:22px;font-weight:600;letter-spacing:-.02em}
 .page-sub{font-size:13px;color:var(--muted);margin-top:4px}
 
@@ -120,6 +123,8 @@ select.inp{cursor:pointer}
 
 /* ── Role Management Layout ── */
 .role-layout{display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start}
+/* Màn rộng: danh sách nhóm rộng hơn chút cho dễ đọc tên dài */
+@media(min-width:1600px){.role-layout{grid-template-columns:340px 1fr}}
 .group-sidebar{display:flex;flex-direction:column;gap:8px}
 .group-item{padding:.875rem 1rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);cursor:pointer;transition:all .15s}
 .group-item:hover{border-color:var(--muted)}
@@ -131,6 +136,14 @@ select.inp{cursor:pointer}
 .editor-title{font-size:16px;font-weight:700}
 
 /* ── Permission Sections ── */
+/* Màn rộng: 2 khu vực (Service Home / Service Movi) xếp CẠNH NHAU thay vì chồng dọc,
+   tận dụng chiều ngang vừa mở rộng — bớt phải cuộn khi phân quyền. */
+@media(min-width:1500px){
+  #user-perm-editor,#grp-perm-editor{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  /* Mọi thứ KHÔNG phải khối service (cảnh báo, thông báo lỗi, trạng thái rỗng)
+     vẫn chiếm trọn bề ngang để không bị ép thành cột hẹp khó đọc. */
+  #user-perm-editor > :not(.svc-section),#grp-perm-editor > :not(.svc-section){grid-column:1 / -1}
+}
 .svc-section{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
 .svc-section-head{display:flex;align-items:center;justify-content:space-between;padding:.875rem 1rem;background:var(--surface-2);cursor:pointer;user-select:none;border-bottom:1px solid var(--border)}
 .svc-section-head:hover{background:color-mix(in oklch,var(--accent) 6%,var(--surface-2))}
@@ -1251,8 +1264,16 @@ function _readUserCookie() {
 }
 var __USER__ = window.__USER__ || _readUserCookie() || { username:'?', role:'user', isAdmin:false };
 
+/* ═══════════════════════════════════════════════════════════════════════
+   NGUỒN QUYỀN: src/permissions-registry.js (server bơm vào __PERM_REGISTRY__).
+   Thêm service mới → khai báo Ở ĐÓ, KHÔNG sửa các danh sách trong file này.
+   Các biến dưới đây chỉ là bản dựng lại từ registry; nhánh fallback giữ nguyên
+   danh sách cũ để trang vẫn chạy nếu vì lý do nào đó registry chưa được bơm.
+   ═══════════════════════════════════════════════════════════════════════ */
+var _REG = (window.__PERM_REGISTRY__ || null);
+
 /* Human-readable names for all service IDs — must be declared BEFORE initUI() runs */
-var DELEGATE_SVC_LABELS = {
+var DELEGATE_SVC_LABELS = _REG ? _REG.labels : {
   /* ── Service Home ── */
   'esxi':'VMware ESXi','n8n':'n8n Automation','casaos':'CasaOS',
   'fortigate':'FortiGate','asus':'ASUS Router',
@@ -1271,8 +1292,8 @@ var DELEGATE_SVC_LABELS = {
   'tool-movi-fg-policy-lan':'Tool: FG Policy LAN','tool-movi-fg-policy-wifi':'Tool: FG Policy WiFi',
   'ssh-movi':'Termix Movi',
 };
-var _DELEGATE_HOME = ['esxi','n8n','casaos','fortigate','asus','ssh','console-serial','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','services-hub','hub-fortigate','hub-asus','hub-esxi','hub-nas','hub-casaos','hub-kasm','hub-openclaw','hub-n8n','hub-frigate','hub-camera-nvr','hub-pnetlab'];
-var _DELEGATE_MOVI = ['meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
+var _DELEGATE_HOME = _REG ? _REG.delegateHome : ['esxi','n8n','casaos','fortigate','asus','ssh','console-serial','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','services-hub','hub-fortigate','hub-asus','hub-esxi','hub-nas','hub-casaos','hub-kasm','hub-openclaw','hub-n8n','hub-frigate','hub-camera-nvr','hub-pnetlab'];
+var _DELEGATE_MOVI = _REG ? _REG.delegateMovi : ['meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
 /* tool-movi sub-keys — needed to restore parent group visibility in delegate filter */
 var _TOOL_MOVI_SUB = ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'];
 /* tool-movi virtual key kept for group-editor compatibility only, not shown in delegate list */
@@ -1416,7 +1437,34 @@ function closeModal(id){document.getElementById(id).classList.add('hidden');}
       camClass  – (required if hasCameras) unique CSS class for the checkboxes
    3. That's it — renderPermEditor & collectPermissions iterate these arrays dynamically.
    ═══════════════════════════════════════════════════════════ */
-var SERVICE_HOME_PAGES = [
+/* Chuyển 1 mục registry → dạng mà renderPermEditor/collectPermissions đang dùng.
+   Nhờ vậy thêm service mới chỉ cần khai báo trong permissions-registry.js, KHÔNG
+   phải sửa file này nữa. Các nhóm có giao diện riêng (Services Hub, Camera Home,
+   Tool Movi) giữ nguyên `type` cũ để tái dùng đúng code render đã chạy ổn định. */
+function _regToPage(svc) {
+  if (svc.customUI === 'camera-home-group') return { type:'camera-home-group', id:'camera-home-group', icon:svc.icon, name:svc.name };
+  if (svc.featureGroups)                    return { type:'services-hub-group', id:'services-hub-group', icon:svc.icon, name:svc.name };
+  var perms = svc.access === 'rw' ? ['none','read','write']
+            : svc.access === 'toggle-read' ? ['none','read']
+            : ['none','write'];
+  var page = { id:svc.id, name:svc.name, icon:svc.icon, perms:perms };
+  if (svc.access !== 'rw') page.permLabels = svc.access === 'toggle-read'
+    ? {'none':'Không truy cập','read':'Truy cập'}
+    : {'none':'Không truy cập','write':'Truy cập'};
+  if (svc.customUI === 'tool-group') {
+    page.type = 'tool-group';
+    page.tools = (svc.features||[]).map(function(f){ return {id:f.id, name:f.name, icon:f.icon}; });
+    return page;
+  }
+  if (svc.panels) page.panels = svc.panels;
+  if (svc.hasCameras) { page.hasCameras = true; page.camClass = svc.camClass || (svc.id + '-cam-cb'); }
+  return page;
+}
+function _regPages(section) {
+  return (_REG.services || []).filter(function(s){ return s.section === section; }).map(_regToPage);
+}
+
+var SERVICE_HOME_PAGES = _REG ? _regPages('home') : [
   {id:'esxi',        name:'VMware ESXi',    icon:'🖥', perms:['none','read','write']},
   {id:'n8n',         name:'n8n Automation', icon:'⚡', perms:['none','read','write']},
   {id:'casaos',      name:'CasaOS',         icon:'🏠', perms:['none','read','write']},
@@ -1430,7 +1478,7 @@ var SERVICE_HOME_PAGES = [
   {type:'camera-home-group', id:'camera-home-group', icon:'📷', name:'Camera Home'}
 ];
 
-var SERVICE_MOVI_PAGES = [
+var SERVICE_MOVI_PAGES = _REG ? _regPages('movi') : [
   {id:'meraki', name:'Meraki Network', icon:'🌐', perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'},
    panels:[
     {id:'meraki.clients',  name:'Clients đang kết nối + Thiết bị bị chặn'},
@@ -3263,7 +3311,11 @@ function onHubAccessChange(pfx) {
   if (sub) sub.style.display = (radio && radio.value !== 'none') ? '' : 'none';
 }
 
-var SERVICES_HUB_TREE = [
+var SERVICES_HUB_TREE = _REG
+  ? ((_REG.services || []).find(function(s){ return s.featureGroups; }) || {featureGroups:[]}).featureGroups
+      .map(function(g){ return { folder:g.folder, icon:g.icon,
+        sites:g.features.map(function(f){ return { name:f.name, icon:f.icon, perm:f.id }; }) }; })
+  : [
   { folder:'Network', icon:'🌐', sites:[
     { name:'FortiGate',   icon:'🛡️', perm:'hub-fortigate' },
     { name:'Router Asus', icon:'📡', perm:'hub-asus' },
