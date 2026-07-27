@@ -974,204 +974,189 @@ function wHi(k){
     g.style.opacity = rel ? '1' : '0.3';
   });
 }
-/* ═══ Wiring layout engines — Tree & Bus (toggle) ═══ */
-var _wMode = 'tree', _wLastSwitches = null;
-try { var _wm0 = localStorage.getItem('wMode'); if (_wm0==='bus'||_wm0==='tree') _wMode=_wm0; } catch(e){}
-function setWMode(m){
-  if (m!=='bus' && m!=='tree') return;
-  _wMode = m;
-  try { localStorage.setItem('wMode', m); } catch(e){}
-  if (_wLastSwitches) renderWiringDiagram(_wLastSwitches);
-}
+/* ═══ WIRING — sơ đồ theo tầng (redesign) ═══ */
+var _wLastSwitches = null, _wSelKey = null, _wHoverKey = '', _wSpeed = 'all';
+var _wByK = {}, _wConn = {}, _wAdj = {};
+var W_CARD = 200, H_CARD = 90, W_GX = 22, W_GY = 18, W_PADX = 96, W_LANEGAP = 62, W_COLS = 5;
+var W_SPD = { '10G':'oklch(0.78 0.14 200)', '1G':'var(--ok)', '100M':'var(--warn)', '10M':'var(--bad)', 'other':'var(--muted)' };
 function _wNatSort(a,b){ return String(a).replace(/\d+/g,function(n){return n.padStart(3,'0');}).localeCompare(String(b).replace(/\d+/g,function(n){return n.padStart(3,'0');})); }
-
-/* Tree layout: nhóm switch theo core uplink, mỗi nhóm xếp GRID wrap nhiều dòng
-   (gọn chiều ngang, không trải 1 hàng dài). Core đặt giữa phía trên nhóm. */
-function _wLayoutTree(byK, TOP, REST, adjMap){
-  var NW=186, NH=64, CH=64, GX=16, GY=20, PAD=28, TOPY=66, GRP_GAP=40, GRP_PADX=14, COLS=4;
-  /* BFS từ core: gán level, parent, rootCore (core gốc của mỗi switch) */
-  var level={}, parent={}, rootCore={};
-  var q=[]; TOP.forEach(function(k){ level[k]=0; rootCore[k]=k; q.push(k); });
-  while(q.length){
-    var u=q.shift();
-    (adjMap[u]||[]).slice().sort(_wNatSort).forEach(function(v){
-      if(!byK[v] || level[v]!==undefined) return;
-      level[v]=level[u]+1; parent[v]=u; rootCore[v]=rootCore[u]; q.push(v);
-    });
+function _wSpdClass(spd){
+  var s = String(spd||'');
+  if (s.indexOf('10 G') !== -1 || s.indexOf('10G') !== -1) return '10G';
+  if (s.indexOf('1 G') !== -1 || s.indexOf('1G') !== -1) return '1G';
+  if (s.indexOf('100') !== -1 && s.indexOf('1000') === -1) return '100M';
+  if (s.indexOf('10 M') !== -1 || s.indexOf('10M') !== -1) return '10M';
+  return 'other';
+}
+function _wLaneOf(k){
+  if (['CoreSW-01','CoreSW-02','XEN-SW'].indexOf(k) >= 0) return 'core';
+  var m = String(k).match(/^F(\d)/i);
+  return m ? ('F' + m[1]) : 'other';
+}
+function _wRole(k){
+  if (String(k).indexOf('Core') === 0) return 'var(--accent)';
+  if (k === 'XEN-SW') return 'oklch(0.78 0.14 200)';
+  return 'var(--ok)';
+}
+function _wSafe(k){ return String(k).replace(/[^a-z0-9]/gi,''); }
+function _wOrth(A, B, slot){
+  var r = 9;
+  if (Math.abs(A.y - B.y) < 2) {
+    var dip = A.y + A.h + 16 + slot * 6, x1 = A.cx, x2 = B.cx, d1 = x2 > x1 ? 1 : -1;
+    if (Math.abs(x1 - x2) < 3) return 'M' + x1 + ',' + (A.y + A.h) + ' L' + x2 + ',' + (B.y + B.h);
+    return 'M' + x1 + ',' + (A.y + A.h) + ' L' + x1 + ',' + (dip - r) + ' Q' + x1 + ',' + dip + ' ' + (x1 + d1 * r) + ',' + dip
+      + ' L' + (x2 - d1 * r) + ',' + dip + ' Q' + x2 + ',' + dip + ' ' + x2 + ',' + (dip - r) + ' L' + x2 + ',' + (B.y + B.h);
   }
-  var orphans = REST.filter(function(k){ return level[k]===undefined; }).sort(_wNatSort);
-  var pos={}, decor={boxes:[], labels:[]};
-  var memberY = TOPY + CH + 46;      // hàng grid bắt đầu dưới core
-  var groupX = PAD, maxBottom = memberY;
-
-  function layoutGroup(core, members){
-    members = members.slice().sort(function(a,b){ return (level[a]-level[b]) || _wNatSort(a,b); });
-    var n = members.length;
-    var cols = Math.max(1, Math.min(COLS, n || 1));
-    var rows = Math.max(1, Math.ceil(n/cols));
-    var gridW = cols*NW + (cols-1)*GX;
-    var gx0 = groupX + GRP_PADX;
-    members.forEach(function(k,i){
-      var col=i%cols, row=Math.floor(i/cols);
-      var x=gx0+col*(NW+GX), y=memberY+row*(NH+GY);
-      pos[k]={x:x, y:y, w:NW, h:NH};
-      if(y+NH>maxBottom) maxBottom=y+NH;
-    });
-    var boxBottom = memberY + rows*NH + (rows-1)*GY + 12;
-    if(boxBottom>maxBottom) maxBottom=boxBottom;
-    if(core){
-      var ccx = groupX + GRP_PADX + gridW/2 - NW/2;
-      pos[core]={x:ccx, y:TOPY, w:NW, h:CH};
-    }
-    /* khung mờ + nhãn nhóm */
-    var boxW = gridW + GRP_PADX*2;
-    decor.boxes.push('<rect x="'+groupX+'" y="'+(memberY-14)+'" width="'+boxW+'" height="'+(boxBottom-(memberY-14))+'" rx="12" fill="#1a1430" stroke="#2e2552" stroke-width="1" stroke-dasharray="5 4" opacity="0.55"/>');
-    groupX += boxW + GRP_GAP;
-  }
-
-  TOP.forEach(function(core){
-    layoutGroup(core, REST.filter(function(k){ return rootCore[k]===core; }));
+  var hi = A.y < B.y ? A : B, lo = A.y < B.y ? B : A;
+  var hx = hi.cx, lx = lo.cx, chan = hi.y + hi.h + 22 + slot * 6, d2 = lx > hx ? 1 : -1;
+  if (Math.abs(hx - lx) < 3) return 'M' + hx + ',' + (hi.y + hi.h) + ' L' + lx + ',' + lo.y;
+  return 'M' + hx + ',' + (hi.y + hi.h) + ' L' + hx + ',' + (chan - r) + ' Q' + hx + ',' + chan + ' ' + (hx + d2 * r) + ',' + chan
+    + ' L' + (lx - d2 * r) + ',' + chan + ' Q' + lx + ',' + chan + ' ' + lx + ',' + (chan + r) + ' L' + lx + ',' + lo.y;
+}
+function setWSpeed(sp){ _wSpeed = sp; if (_wLastSwitches) renderWiringDiagram(_wLastSwitches); }
+function wHover(k){ _wHoverKey = k || ''; _wHighlight(); }
+function wSelect(k){ _wSelKey = k; _wDetail(); _wHighlight(); }
+function _wHighlight(){
+  var box = document.getElementById('wiringContainer'); if (!box) return;
+  var k = _wHoverKey || _wSelKey || '';
+  box.querySelectorAll('.wpath').forEach(function(p){
+    var a = p.getAttribute('data-a'), b = p.getAttribute('data-b');
+    var spOk = _wSpeed === 'all' || p.getAttribute('data-spd') === _wSpeed;
+    var on = k && (a === k || b === k);
+    p.style.opacity = !spOk ? '0.05' : (k ? (on ? '1' : '0.14') : '0.42');
+    p.setAttribute('stroke-width', on && spOk ? '2.8' : '1.6');
   });
-  if(orphans.length){
-    var ox=groupX;
-    layoutGroup(null, orphans);
-    decor.labels.push('<text x="'+(ox+GRP_PADX)+'" y="'+(memberY-20)+'" font-size="9" fill="#6b5a8a" font-weight="700" letter-spacing="1.2">CHƯA RÕ UPLINK</text>');
-  }
-
-  var maxX=900;
-  Object.keys(pos).forEach(function(k){ var P=pos[k]; P.cx=P.x+P.w/2; P.cy=P.y+P.h/2; P.top=(level[k]===0); if(P.x+P.w>maxX)maxX=P.x+P.w; });
-  var svgW=maxX+PAD, svgH=maxBottom+26;
-  var decorArr = decor.boxes.slice();
-  decorArr.push('<text x="'+PAD+'" y="'+(TOPY-24)+'" font-size="9" fill="#5a4a85" font-weight="700" letter-spacing="1.5">CORE / SERVER</text>');
-  decorArr.push('<text x="'+PAD+'" y="'+(memberY-30)+'" font-size="9" fill="#5a4a85" font-weight="700" letter-spacing="1.5">SWITCHES — nhóm theo core uplink · rê chuột card để xem cáp</text>');
-  decor.labels.forEach(function(s){ decorArr.push(s); });
-  return {pos:pos, svgW:svgW, svgH:svgH, decor:decorArr, busY:null, mode:'tree'};
+  box.querySelectorAll('.wlbl').forEach(function(l){
+    var a = l.getAttribute('data-a'), b = l.getAttribute('data-b');
+    var spOk = _wSpeed === 'all' || l.getAttribute('data-spd') === _wSpeed;
+    l.style.display = (k && spOk && (a === k || b === k)) ? 'flex' : 'none';
+  });
+  box.querySelectorAll('.wcard').forEach(function(c){
+    var ck = c.getAttribute('data-k'), adj = (c.getAttribute('data-adj') || '').split('|');
+    var rel = !k || ck === k || adj.indexOf(k) >= 0;
+    c.style.opacity = rel ? '1' : '0.35';
+    c.style.borderColor = (ck === (_wSelKey || '')) ? _wRole(ck) : 'var(--border)';
+  });
 }
-
-/* Bus layout: core row on top, a trunk bus, access switches below — orthogonal stubs */
-function _wLayoutBus(byK, TOP, REST){
-  var PAD=28, CW=150, CH=60, CGAP=30, NW=118, NH=60, HGAP=16, TOPY=58;
-  var rest=REST.slice().sort(_wNatSort);
-  var coreTotal=TOP.length*CW+(TOP.length-1)*CGAP;
-  var accTotal=rest.length*NW+(rest.length-1)*HGAP;
-  var svgW=Math.max(PAD*2+accTotal, PAD*2+coreTotal, 900);
-  var pos={};
-  var cx0=(svgW-coreTotal)/2;
-  TOP.forEach(function(k,i){ var x=cx0+i*(CW+CGAP); pos[k]={x:x,y:TOPY,w:CW,h:CH,cx:x+CW/2,cy:TOPY+CH/2,top:true}; });
-  var busY=TOPY+CH+44, accY=busY+44;
-  var ax0=(svgW-accTotal)/2;
-  rest.forEach(function(k,i){ var x=ax0+i*(NW+HGAP); pos[k]={x:x,y:accY,w:NW,h:NH,cx:x+NW/2,cy:accY+NH/2,top:false}; });
-  var svgH=accY+NH+26;
-  var decor=[];
-  decor.push('<text x="'+PAD+'" y="'+(TOPY-18)+'" font-size="9" fill="#5a4a85" font-weight="700" letter-spacing="1.5">CORE / SERVER</text>');
-  decor.push('<line x1="'+PAD+'" y1="'+busY+'" x2="'+(svgW-PAD)+'" y2="'+busY+'" stroke="#5a4a8a" stroke-width="2.5" stroke-linecap="round"/>');
-  decor.push('<text x="'+PAD+'" y="'+(busY-7)+'" font-size="9" fill="#8b7ab8" font-weight="700" letter-spacing="1.5">TRUNK BUS</text>');
-  decor.push('<text x="'+PAD+'" y="'+(accY-12)+'" font-size="9" fill="#5a4a85" font-weight="700" letter-spacing="1.5">SWITCHES — rê chuột card để xem cáp</text>');
-  return {pos:pos, svgW:svgW, svgH:svgH, decor:decor, busY:busY, mode:'bus'};
-}
-
-/* Shared switch-card renderer (pushes SVG into out[]) */
-function _wCard(out, k, byK, pos, connMap, adjMap){
-  var sw = byK[k], P = pos[k]; if (!P) return;
-  var rx=P.x, ry=P.y, W=P.w, H=P.h;
-  var roleC = k.indexOf('Core')===0 ? '#a78bfa' : (k==='XEN-SW' ? '#22d3ee' : '#34d399');
-  var nc='#a0a0c0', brd='#3a2f5a', pct=0;
-  if (sw) {
-    pct = sw.totalPorts ? sw.connectedPorts/sw.totalPorts : 0;
-    if (sw.connectedPorts===0) { nc='#f87171'; brd='rgba(248,113,113,.5)'; }
-    else if (pct>=0.5) { nc='#34d399'; brd='rgba(52,211,153,.4)'; }
-    else { nc='#fbbf24'; brd='rgba(251,191,36,.4)'; }
-  }
-  var cs = connMap[k] || [];
-  out.push('<g class="wnd" data-k="'+esc(k)+'" data-adj="'+esc((adjMap[k]||[]).join('|'))+'" style="cursor:pointer" onmouseover="wHi(\''+esc(k)+'\')" onmouseout="wHi(\'\')">');
-  out.push('<rect x="'+rx+'" y="'+ry+'" width="'+W+'" height="'+H+'" rx="9" fill="#1c1633" stroke="'+brd+'" stroke-width="1.5" filter="url(#wSh)"/>');
-  out.push('<rect x="'+rx+'" y="'+ry+'" width="4.5" height="'+H+'" rx="2.2" fill="'+roleC+'"/>');
-  var nm = sw ? sw.switchName : k; if (nm.length>24) nm=nm.slice(0,23)+'…';
-  out.push('<text x="'+(rx+14)+'" y="'+(ry+24)+'" font-size="12.5" fill="'+nc+'" font-family="IBM Plex Mono,monospace" font-weight="700">'+escSvg(nm)+'</text>');
-  if (sw) {
-    out.push('<text x="'+(rx+W-12)+'" y="'+(ry+24)+'" text-anchor="end" font-size="10.5" fill="'+nc+'" font-family="IBM Plex Mono,monospace" font-weight="700">'+sw.connectedPorts+'/'+sw.totalPorts+'</text>');
-    out.push('<text x="'+(rx+14)+'" y="'+(ry+41)+'" font-size="8.5" fill="#7a6c92" font-family="IBM Plex Mono,monospace">'+escSvg(sw.switchModel||'?')+'</text>');
-    out.push('<text x="'+(rx+W-12)+'" y="'+(ry+41)+'" text-anchor="end" font-size="8.5" fill="#b89aff" font-family="IBM Plex Mono,monospace">'+cs.length+' dây</text>');
-    var bw=W-20, bx2=rx+10, byp=ry+H-11, fc=pct>=0.5?'#34d399':pct>0?'#fbbf24':'#f87171';
-    out.push('<rect x="'+bx2+'" y="'+byp+'" width="'+bw+'" height="3.5" rx="1.7" fill="#15102a"/>');
-    out.push('<rect x="'+bx2+'" y="'+byp+'" width="'+(bw*pct).toFixed(1)+'" height="3.5" rx="1.7" fill="'+fc+'"/>');
-  } else {
-    out.push('<text x="'+(rx+14)+'" y="'+(ry+41)+'" font-size="8.5" fill="#7a6c92" font-family="IBM Plex Mono,monospace">'+cs.length+' dây</text>');
-  }
-  out.push('</g>');
+function _wDetail(){
+  var el = document.getElementById('wDetail'); if (!el) return;
+  var k = _wSelKey;
+  if (!k) { el.innerHTML = '<div class="wd-hint">Bấm vào 1 switch trên sơ đồ để xem toàn bộ cáp của nó.</div>'; return; }
+  var sw = _wByK[k], cs = _wConn[k] || [];
+  var total = sw ? sw.totalPorts : 0, used = sw ? sw.connectedPorts : 0;
+  var lane = _wLaneOf(k);
+  var sub = (sw ? (sw.switchModel || '?') : 'không rõ model') + ' · ' + (lane === 'core' ? 'Core / Server' : lane === 'other' ? 'Chưa rõ vị trí' : 'Tầng ' + lane.slice(1));
+  var rows = cs.map(function(c){
+    var cls = _wSpdClass(c.sp), col = W_SPD[cls];
+    return '<li class="wd-link">'
+      + '<div class="wd-link-top"><span class="wd-port">' + esc(c.tp) + '</span>'
+      + '<span class="wd-spd" style="color:' + col + ';border-color:' + col + '">' + esc(c.sp || '—') + '</span></div>'
+      + '<div class="wd-remote">↳ ' + esc(c.other || c.oKey || '?') + '</div>'
+      + '<div class="wd-rport">port ' + esc(c.op) + '</div></li>';
+  }).join('') || '<li class="wd-hint">Switch này chưa thấy cáp nào (CDP/LLDP).</li>';
+  el.innerHTML = '<div class="wd-eyebrow">Chi tiết switch</div>'
+    + '<div class="wd-name">' + esc(sw ? sw.switchName : k) + '</div>'
+    + '<div class="wd-sub">' + esc(sub) + '</div>'
+    + '<div class="wd-kpis"><div class="wd-kpi"><span>Port dùng</span><b style="color:var(--ok)">' + used + '</b></div>'
+    + '<div class="wd-kpi"><span>Port trống</span><b style="color:var(--muted)">' + Math.max(0, total - used) + '</b></div></div>'
+    + '<div class="wd-eyebrow" style="margin-top:4px">Cáp đấu nối · ' + cs.length + '</div>'
+    + '<ul class="wd-list">' + rows + '</ul>';
 }
 
 function renderWiringDiagram(switches){
   _wLastSwitches = switches;
   _wCables = buildCables(switches);
-  var byK = {};
-  switches.forEach(function(sw){ byK[matchTopoKey(sw.switchName)] = sw; });
-  var TOP = ['CoreSW-01','CoreSW-02','XEN-SW'].filter(function(k){ return byK[k]; });
-  var REST = Object.keys(byK).filter(function(k){ return TOP.indexOf(k) < 0; }).sort(function(a,b){
-    return a.replace(/\d+/g, function(n){return n.padStart(3,'0');}).localeCompare(b.replace(/\d+/g, function(n){return n.padStart(3,'0');}));
-  });
+  var byK = {}; switches.forEach(function(sw){ byK[matchTopoKey(sw.switchName)] = sw; });
+  _wByK = byK;
+  var keys = Object.keys(byK);
+
   function connsOf(k){
     var out = [];
     _wCables.forEach(function(c){
-      if (c.srcKey === k)      out.push({ other:c.dstName || c.dst, oKey:c.dstKey, tp:c.srcPort, op:c.dstPort, sp:c.speed, res:c.resolved });
-      else if (c.dstKey === k) out.push({ other:c.src, oKey:c.srcKey, tp:c.dstPort, op:c.srcPort, sp:c.speed, res:true });
+      if (c.srcKey === k)      out.push({ other:c.dstName || c.dst, oKey:c.dstKey, tp:c.srcPort, op:c.dstPort, sp:c.speed });
+      else if (c.dstKey === k) out.push({ other:c.src, oKey:c.srcKey, tp:c.dstPort, op:c.srcPort, sp:c.speed });
     });
     return out;
   }
   var connMap = {}, adjMap = {};
-  Object.keys(byK).forEach(function(k){
+  keys.forEach(function(k){
     var cs = connsOf(k); connMap[k] = cs;
     var adj = {}; cs.forEach(function(c){ if (c.oKey && byK[c.oKey]) adj[c.oKey] = 1; });
     adjMap[k] = Object.keys(adj);
   });
+  _wConn = connMap; _wAdj = adjMap;
 
-  var _L = (_wMode === 'bus') ? _wLayoutBus(byK, TOP, REST) : _wLayoutTree(byK, TOP, REST, adjMap);
-  var pos = _L.pos, svgW = _L.svgW, svgH = _L.svgH;
+  /* ── lanes: core trước, rồi từng tầng, cuối cùng là chưa rõ ── */
+  var laneDefs = [], floors = {};
+  keys.forEach(function(k){ var L = _wLaneOf(k); if (L !== 'core' && L !== 'other') floors[L] = 1; });
+  if (keys.some(function(k){ return _wLaneOf(k) === 'core'; })) laneDefs.push({ id:'core', label:'CORE / SERVER' });
+  Object.keys(floors).sort().forEach(function(f){ laneDefs.push({ id:f, label:'TẦNG ' + f.slice(1) }); });
+  if (keys.some(function(k){ return _wLaneOf(k) === 'other'; })) laneDefs.push({ id:'other', label:'CHƯA RÕ VỊ TRÍ' });
 
-  var p = [];
-  p.push('<defs><pattern id="wGrid" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M30 0H0V30" fill="none" stroke="#1c1830" stroke-width="1"/></pattern>'
-    + '<filter id="wSh" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.4"/></filter></defs>');
-  p.push('<rect x="0" y="0" width="'+svgW+'" height="'+svgH+'" fill="#15102a"/>');
-  p.push('<rect x="0" y="0" width="'+svgW+'" height="'+svgH+'" fill="url(#wGrid)" opacity="0.5"/>');
-  (_L.decor || []).forEach(function(s){ p.push(s); });
+  var pos = {}, lanes = [], y = 40;
+  laneDefs.forEach(function(L){
+    var items = keys.filter(function(k){ return _wLaneOf(k) === L.id; }).sort(_wNatSort);
+    if (!items.length) return;
+    var rows = Math.ceil(items.length / W_COLS), cardsY = y + 22;
+    items.forEach(function(k, idx){
+      var col = idx % W_COLS, row = Math.floor(idx / W_COLS);
+      pos[k] = { x: W_PADX + col * (W_CARD + W_GX), y: cardsY + row * (H_CARD + W_GY), w: W_CARD, h: H_CARD };
+    });
+    var laneH = rows * H_CARD + (rows - 1) * W_GY;
+    lanes.push({ label:L.label, bx:W_PADX - 26, by:cardsY - 16, bw:W_COLS * W_CARD + (W_COLS - 1) * W_GX + 52, bh:laneH + 32, lx:W_PADX - 26, ly:cardsY - 34 });
+    y = cardsY + laneH + W_LANEGAP;
+  });
+  keys.forEach(function(k){ var P = pos[k]; if (P) { P.cx = P.x + P.w / 2; P.cy = P.y + P.h / 2; } });
+  var svgW = W_PADX + W_COLS * W_CARD + (W_COLS - 1) * W_GX + 40;
+  var svgH = Math.max(240, y - W_LANEGAP + 26);
 
-  /* Cables */
-  var drawn = {};
-  Object.keys(byK).forEach(function(k){
+  /* ── svg: dải tầng + đường cáp ── */
+  var sp = [], labels = [], slots = {}, drawn = {};
+  lanes.forEach(function(L){
+    sp.push('<rect x="' + L.bx + '" y="' + L.by + '" width="' + L.bw + '" height="' + L.bh + '" rx="14" fill="color-mix(in oklch, var(--surface) 70%, transparent)" stroke="var(--border-soft)"/>');
+    labels.push('<div class="wlane-lbl" style="left:' + L.lx + 'px;top:' + L.ly + 'px">' + esc(L.label) + '</div>');
+  });
+  keys.forEach(function(k){
     (connMap[k] || []).forEach(function(c){
       if (!c.oKey || !pos[c.oKey] || !pos[k]) return;
       var uid = [k, c.oKey].sort().join('|') + '|' + [c.tp, c.op].sort().join('-');
       if (drawn[uid]) return; drawn[uid] = 1;
-      var A = pos[k], B = pos[c.oKey], sc = _spdColor(c.sp), d, lx, ly;
-      if (_L.mode === 'bus') {
-        var aE = A.top ? A.y + A.h : A.y, bE = B.top ? B.y + B.h : B.y;
-        var ax = A.cx, bx = B.cx, busY = _L.busY;
-        d = 'M'+ax+','+aE+' L'+ax+','+busY+' L'+bx+','+busY+' L'+bx+','+bE;
-        lx = (ax+bx)/2; ly = busY - 13;
-      } else if (A.top && B.top) {
-        var L2 = A.cx < B.cx ? A : B, R2 = A.cx < B.cx ? B : A;
-        var x1 = L2.x + L2.w, y1 = L2.cy, x2 = R2.x, y2 = R2.cy, topB = Math.min(A.y,B.y) - 26;
-        d = 'M'+x1+','+y1+' C'+(x1+34)+','+topB+' '+(x2-34)+','+topB+' '+x2+','+y2;
-        lx = (x1+x2)/2; ly = topB + 4;
-      } else {
-        var hi = A.y <= B.y ? A : B, lo = A.y <= B.y ? B : A;
-        var x1b = hi.cx, y1b = hi.y + hi.h, x2b = lo.cx, y2b = lo.y;
-        if (Math.abs(A.y - B.y) < 2) { y1b = hi.cy; y2b = lo.cy; }
-        var midY = (y1b + y2b) / 2;
-        d = 'M'+x1b+','+y1b+' C'+x1b+','+midY+' '+x2b+','+midY+' '+x2b+','+y2b;
-        lx = (x1b+x2b)/2; ly = midY;
-      }
+      var A = pos[k], B = pos[c.oKey], cls = _wSpdClass(c.sp), col = W_SPD[cls];
+      var band = Math.min(A.y, B.y); slots[band] = (slots[band] || 0) + 1;
+      var slot = slots[band] - 1;
+      var d = _wOrth(A, B, slot);
       var ttl = k + ' ' + c.tp + '  ⟷  ' + (c.other || c.oKey) + ' ' + c.op + (c.sp ? '  ·  ' + c.sp : '');
-      p.push('<g class="wln" data-k="'+esc(k+'|'+c.oKey)+'" style="opacity:0.45"><title>'+escSvg(ttl)+'</title>');
-      p.push('<path d="'+d+'" fill="none" stroke="'+sc+'" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>');
-      var lbl = c.tp + ' ↔ ' + c.op, lw = lbl.length * 5.6 + 10;
-      p.push('<g class="wln-lbl" style="display:none"><rect x="'+(lx-lw/2)+'" y="'+(ly-8)+'" width="'+lw+'" height="16" rx="4" fill="#0d0a1c" stroke="'+sc+'"/><text x="'+lx+'" y="'+(ly+4)+'" text-anchor="middle" font-size="9" fill="'+sc+'" font-family="IBM Plex Mono,monospace" font-weight="700">'+escSvg(lbl)+'</text></g>');
-      p.push('</g>');
+      sp.push('<path class="wpath" data-a="' + esc(k) + '" data-b="' + esc(c.oKey) + '" data-spd="' + cls + '" d="' + d + '" fill="none" stroke="' + col + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.42"><title>' + escSvg(ttl) + '</title></path>');
+      var lbl = c.tp + ' ↔ ' + c.op, lw = lbl.length * 5.8 + 14;
+      var mx = (A.cx + B.cx) / 2;
+      var my = (Math.min(A.y, B.y) === A.y ? A.y + A.h : B.y + B.h) + (Math.abs(A.y - B.y) < 2 ? 16 : 22) + slot * 6;
+      labels.push('<div class="wlbl" data-a="' + esc(k) + '" data-b="' + esc(c.oKey) + '" data-spd="' + cls + '" style="left:' + (mx - lw / 2) + 'px;top:' + (my - 8.5) + 'px;border-color:' + col + ';color:' + col + '">' + esc(lbl) + '</div>');
     });
   });
 
-  TOP.forEach(function(k){ _wCard(p, k, byK, pos, connMap, adjMap); });
-  REST.forEach(function(k){ _wCard(p, k, byK, pos, connMap, adjMap); });
+  /* ── thẻ switch ── */
+  var cards = [];
+  keys.sort(_wNatSort).forEach(function(k){
+    var P = pos[k]; if (!P) return;
+    var sw = byK[k], total = sw ? sw.totalPorts : 0, used = sw ? sw.connectedPorts : 0;
+    var pct = total ? used / total : 0;
+    var roleC = used === 0 ? 'var(--bad)' : _wRole(k);
+    var portC = used === 0 ? 'var(--bad)' : pct >= 0.5 ? 'var(--ok)' : 'var(--warn)';
+    var on = Math.max(0, Math.min(12, Math.round(pct * 12)));
+    var cells = '';
+    for (var ci = 0; ci < 12; ci++) cells += '<span class="wcell" style="' + (ci < on ? 'background:' + roleC : '') + '"></span>';
+    var nm = sw ? sw.switchName : k; if (nm.length > 22) nm = nm.slice(0, 21) + '…';
+    var nc = (connMap[k] || []).length;
+    var freeTxt = used === 0 ? 'không có port nào lên' : Math.max(0, total - used) + ' port trống';
+    cards.push('<div class="wcard" data-k="' + esc(k) + '" data-adj="' + esc((adjMap[k] || []).join('|')) + '" style="left:' + P.x + 'px;top:' + P.y + 'px"'
+      + ' onmouseenter="wHover(\'' + esc(k) + '\')" onmouseleave="wHover(\'\')" onclick="wSelect(\'' + esc(k) + '\')">'
+      + '<span class="wcard-stripe" style="background:' + roleC + '"></span>'
+      + '<div class="wcard-r1"><span class="wcard-name">' + esc(nm) + '</span><span class="wcard-ports" style="color:' + portC + '">' + used + '/' + total + '</span></div>'
+      + '<div class="wcard-r2"><span>' + esc(sw ? (sw.switchModel || '?') : '?') + '</span><span class="wcard-cab">' + nc + ' dây</span></div>'
+      + '<div class="wcard-strip">' + cells + '</div>'
+      + '<div class="wcard-free">' + esc(freeTxt) + '</div>'
+      + '</div>');
+  });
 
   var nPairs = Object.keys(drawn).length;
   var nUnres = _wCables.filter(function(c){ return !c.resolved; }).length;
@@ -1181,7 +1166,41 @@ function renderWiringDiagram(switches){
     + '#wiringContainer.wfs{position:fixed;inset:0;z-index:9999;background:var(--bg);overflow:auto;padding:18px}'
     + '.wfs-exit-btn{display:none;position:fixed;top:12px;right:16px;z-index:10001;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:12px;font-weight:600;padding:6px 16px;cursor:pointer;font-family:inherit}'
     + '#wiringContainer.wfs .wfs-exit-btn{display:block}'
-    + '.wmap-svg{display:block;min-width:'+svgW+'px;background:#15102a;border:1px solid var(--border);border-radius:var(--radius-sm)}'
+    + '.wgrid{display:grid;grid-template-columns:1fr 300px;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--card)}'
+    + '.wstage-wrap{overflow:auto;padding:16px;background:var(--bg);border-right:1px solid var(--border-soft)}'
+    + '.wstage{position:relative;width:' + svgW + 'px;height:' + svgH + 'px}'
+    + '.wstage svg{position:absolute;inset:0;display:block}'
+    + '.wlane-lbl{position:absolute;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.14em;color:var(--muted)}'
+    + '.wlbl{position:absolute;display:none;align-items:center;height:17px;padding:0 6px;border-radius:5px;background:var(--card);border:1px solid;font-family:var(--font-mono);font-size:9.5px;font-weight:600;white-space:nowrap;pointer-events:none}'
+    + '.wcard{position:absolute;width:' + W_CARD + 'px;height:' + H_CARD + 'px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px 10px 15px;cursor:pointer;overflow:hidden;transition:opacity .15s,border-color .15s}'
+    + '.wcard:hover{border-color:var(--muted)}'
+    + '.wcard-stripe{position:absolute;left:0;top:0;bottom:0;width:4px}'
+    + '.wcard-r1{display:flex;align-items:baseline;justify-content:space-between;gap:8px}'
+    + '.wcard-name{font-family:var(--font-mono);font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap}'
+    + '.wcard-ports{font-family:var(--font-mono);font-size:10.5px;font-weight:600}'
+    + '.wcard-r2{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:3px;font-family:var(--font-mono);font-size:9.5px;color:var(--muted)}'
+    + '.wcard-cab{color:var(--accent)}'
+    + '.wcard-strip{display:flex;gap:2px;margin-top:11px}'
+    + '.wcell{flex:1;height:9px;border-radius:2px;background:var(--surface-2);border:1px solid var(--border-soft)}'
+    + '.wcard-free{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);margin-top:6px}'
+    + '.wdetail{padding:16px 18px;display:flex;flex-direction:column;gap:12px;background:var(--card)}'
+    + '.wd-eyebrow{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em}'
+    + '.wd-name{font-family:var(--font-mono);font-size:16px;font-weight:600;color:var(--text);margin-top:4px}'
+    + '.wd-sub{font-size:12px;color:var(--muted);margin-top:2px}'
+    + '.wd-kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}'
+    + '.wd-kpi{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm);padding:10px 12px}'
+    + '.wd-kpi span{display:block;font-family:var(--font-mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}'
+    + '.wd-kpi b{display:block;font-family:var(--font-mono);font-size:20px;font-weight:500;letter-spacing:-.03em;margin-top:4px}'
+    + '.wd-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:320px;overflow:auto}'
+    + '.wd-link{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm);padding:9px 11px}'
+    + '.wd-link-top{display:flex;align-items:center;justify-content:space-between;gap:8px}'
+    + '.wd-port{font-family:var(--font-mono);font-size:11.5px;font-weight:600;color:var(--accent)}'
+    + '.wd-spd{font-family:var(--font-mono);font-size:10px;font-weight:600;padding:1px 7px;border-radius:4px;border:1px solid}'
+    + '.wd-remote{font-size:12px;color:var(--text);margin-top:4px}'
+    + '.wd-rport{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);margin-top:1px}'
+    + '.wd-hint{font-size:12px;color:var(--muted);line-height:1.6}'
+    + '.wchips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px}'
+    + '.wchip{padding:5px 12px;border-radius:999px;font-size:11.5px;font-weight:600;font-family:var(--font-mono);cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--muted)}'
     + '.wmap-sec{font-size:10px;font-weight:700;letter-spacing:.09em;color:var(--muted);margin:18px 0 12px;text-transform:uppercase;display:flex;align-items:center;gap:8px}'
     + '.wmap-sec::after{content:"";flex:1;height:1px;background:var(--border)}'
     + '.wmap-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}'
@@ -1202,20 +1221,19 @@ function renderWiringDiagram(switches){
     + '.wt-c{text-align:center}'
     + '.wt-spd{font-family:var(--font-mono);font-size:11px;font-weight:600;border:1px solid;border-radius:4px;padding:2px 7px}'
     + '.wt-pr{color:var(--muted);font-family:var(--font-mono);font-size:11px}'
-    + '.wt-dev-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;'
-    + 'padding:1px 6px;border-radius:4px;border:1px solid;margin-left:6px;vertical-align:middle;'
-    + 'color:oklch(0.78 0.14 200);border-color:oklch(0.78 0.14 200 / 0.4);'
-    + 'background:oklch(0.78 0.14 200 / 0.08);cursor:help}'
+    + '.wt-dev-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;border:1px solid;margin-left:6px;vertical-align:middle;color:oklch(0.78 0.14 200);border-color:oklch(0.78 0.14 200 / 0.4);background:oklch(0.78 0.14 200 / 0.08);cursor:help}'
     + '</style>');
   H.push('<button class="wfs-exit-btn" onclick="wiringFullscreen()">✕ Thu nhỏ</button>');
-  var _segOn = 'background:var(--accent);color:#fff;border-color:var(--accent)';
-  var _segOff = 'background:var(--surface);color:var(--muted);border-color:var(--border)';
-  H.push('<div style="display:flex;gap:6px;margin-bottom:12px;align-items:center;flex-wrap:wrap">'
-    + '<span style="font-size:11px;color:var(--muted);margin-right:2px">Kiểu sơ đồ:</span>'
-    + '<button onclick="setWMode(\'tree\')" style="padding:6px 14px;border-radius:7px;border:1px solid;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'+(_wMode==='tree'?_segOn:_segOff)+'">🌳 Cây kết nối</button>'
-    + '<button onclick="setWMode(\'bus\')" style="padding:6px 14px;border-radius:7px;border:1px solid;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'+(_wMode==='bus'?_segOn:_segOff)+'">🚌 Bus phân tầng</button>'
-    + '</div>');
-  H.push('<svg id="wiringSvg" class="wmap-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'">'+p.join('')+'</svg>');
+  var chips = ['all','10G','1G','100M'].map(function(spd){
+    var col = spd === 'all' ? 'var(--accent)' : W_SPD[spd];
+    var onSt = _wSpeed === spd ? 'border-color:' + col + ';color:' + col + ';background:color-mix(in oklch, ' + col + ' 14%, transparent)' : '';
+    return '<button class="wchip" style="' + onSt + '" onclick="setWSpeed(\'' + spd + '\')">' + (spd === 'all' ? 'Tất cả' : spd) + '</button>';
+  }).join('');
+  H.push('<div class="wchips"><span style="font-size:11px;color:var(--muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.1em">Lọc tốc độ</span>' + chips + '</div>');
+  H.push('<div class="wgrid"><div class="wstage-wrap"><div class="wstage">'
+    + '<svg id="wiringSvg" xmlns="http://www.w3.org/2000/svg" width="' + svgW + '" height="' + svgH + '">' + sp.join('') + '</svg>'
+    + labels.join('') + cards.join('')
+    + '</div></div><aside class="wdetail" id="wDetail"></aside></div>');
 
   H.push('<div class="wmap-sec">Bảng cáp vật lý — Nguồn ⟷ Đích (đúng từng port)</div>');
   H.push('<div class="wmap-tools"><input class="wmap-search" placeholder="🔍 Lọc switch · port · tốc độ…" oninput="wFilter(this.value)"><span class="wmap-stat" id="wStat"></span></div>');
@@ -1232,18 +1250,24 @@ function renderWiringDiagram(switches){
   document.getElementById('wiringContainer').innerHTML = H.join('');
   _wSort = { col:'src', dir:1 }; _wQ = '';
   _wRender();
+  if (!_wSelKey || !byK[_wSelKey]) _wSelKey = keys.filter(function(k){ return _wLaneOf(k) === 'core'; })[0] || keys[0] || null;
+  _wDetail();
+  _wHighlight();
   document.getElementById('btnWiringFs').style.display = '';
   var b = document.getElementById('badge-wiring');
   b.textContent = nPairs + ' link · ' + _wCables.length + ' cáp';
   b.className = 'panel-badge tone-ok';
   document.getElementById('wiringCount').textContent = nPairs + ' link' + (nUnres ? ' · ' + nUnres + ' chưa định danh' : '');
   document.getElementById('wiringLegend').innerHTML =
-    '<span><span style="display:inline-block;width:18px;height:3px;border-radius:2px;background:#22d3ee;margin-right:4px"></span>10G</span>'
-    + '<span><span style="display:inline-block;width:18px;height:3px;border-radius:2px;background:#34d399;margin-right:4px"></span>1G</span>'
-    + '<span><span style="display:inline-block;width:18px;height:3px;border-radius:2px;background:#fbbf24;margin-right:4px"></span>100M</span>'
-    + '<span><span style="display:inline-block;width:18px;height:3px;border-radius:2px;background:#f87171;margin-right:4px"></span>10M</span>'
+    '<span><span style="display:inline-block;width:18px;height:3px;border-radius:2px;background:' + W_SPD['10G'] + ';margin-right:4px"></span>10G</span>'
+    + '<span><span style="display:inline-block;width:18px;height:3px;border-radius:2px;background:var(--ok);margin-right:4px"></span>1G</span>'
+    + '<span><span style="display:inline-block;width:18px;height:3px;border-radius:2px;background:var(--warn);margin-right:4px"></span>100M</span>'
     + '<span style="width:1px;height:14px;background:var(--border);display:inline-block"></span>'
-    + '<span style="color:var(--muted)">Rê chuột vào 1 switch → hiện cable của nó · bảng bên dưới tra cứu đầy đủ</span>';
+    + '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--accent);margin-right:4px"></span>Core</span>'
+    + '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + W_SPD['10G'] + ';margin-right:4px"></span>Server</span>'
+    + '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--ok);margin-right:4px"></span>Access</span>'
+    + '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--bad);margin-right:4px"></span>Không có port nào lên</span>'
+    + '<span style="color:var(--muted)">Ô sáng trên thẻ = port đang dùng · rê chuột để soi cáp · bấm để ghim vào panel phải</span>';
 }
 
 /* ── OLD floor-based code removed, reverted to original 4-col layout ── */
