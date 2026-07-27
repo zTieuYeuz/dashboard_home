@@ -2665,21 +2665,17 @@ a:hover{background:#4f46e5}</style></head>
     }
     /* Gác trang ở SERVER — sinh từ src/permissions-registry.js (khai báo `page` của
        mỗi service). Không sửa tay ở đây nữa: thêm service vào registry là trang tự
-       được gác. '/settings.html' cố ý KHÔNG gác (ai đăng nhập cũng vào xem hồ sơ/MFA
-       của chính mình); '/policy.html' dùng cờ riêng '_mgmt' cho người được uỷ quyền. */
-    const _PAGE_PERM = { ..._REGISTRY_PAGE_PERM, '/policy.html': '_mgmt' };
+       được gác. '/settings.html' cố ý KHÔNG gác — ai đăng nhập cũng vào xem hồ sơ/MFA
+       của chính mình, còn các khu vực quản trị bên trong tự kiểm quyền riêng.
+       (policy.html đã gỡ 2026-07-27: trang cũ quản user/group, chức năng đã nằm hết
+       trong settings.html và không còn lối vào nào từ giao diện.) */
+    const _PAGE_PERM = _REGISTRY_PAGE_PERM;
     const _reqPerm = _PAGE_PERM[url.pathname];
     if (_reqPerm) {
-      let _allowed = false;
-      if (_reqPerm === '_mgmt') {
-        // Admin-area pages: allow if user is a delegated manager
-        _allowed = (effPerms.canManagePerms || []).length > 0;
-      } else {
-        const _perms = effPerms.permissions || {};
-        const _keys = Array.isArray(_reqPerm) ? _reqPerm : [_reqPerm];
-        _allowed = _keys.some(k => (_perms[k] || 'none') !== 'none');
-      }
-      if (!_allowed) {
+      const _perms = effPerms.permissions || {};
+      const _keys = Array.isArray(_reqPerm) ? _reqPerm : [_reqPerm];
+      // Mở được trang nếu có BẤT KỲ quyền nào trong danh sách (trang gồm nhiều tính năng con)
+      if (!_keys.some(k => (_perms[k] || 'none') !== 'none')) {
         return Response.redirect(new URL('/', request.url).toString(), 302);
       }
     }
@@ -4201,6 +4197,24 @@ export default {
       return handleVmwareHomePower(request, env);
     }
     if (p === '/proxy')           return handleProxy(request, env);
+
+    /* ── JS của trang Settings: chỉ cho người ĐÃ ĐĂNG NHẬP ──────────────────
+       Phần JS này trước đây nằm trong settings.html (được gác đăng nhập). Khi
+       tách ra file rời (2026-07-27) nó thành asset công khai — ai cũng tải được
+       và đọc ra toàn bộ đường dẫn API quản trị, giúp kẻ tấn công dò dễ hơn.
+       Không được để việc dọn code làm yếu bảo mật → gác lại đúng như cũ.
+       (Chỉ chặn ĐỌC FILE; quyền thật vẫn do từng API tự kiểm.) */
+    if (p.startsWith('/_settings/')) {
+      const _s = await getSession(request, env);
+      if (!_s) return new Response('Unauthorized', { status: 401 });
+      /* Bắt buộc 'private': nếu để CDN cache công khai, bản đã tải về một lần sẽ
+         được phục vụ cho cả người CHƯA đăng nhập → vô hiệu hoá chính lớp gác này
+         (đã quan sát thấy thật khi test). 'private' = chỉ trình duyệt user cache. */
+      const _r = await env.ASSETS.fetch(request);
+      const _h = new Headers(_r.headers);
+      _h.set('Cache-Control', 'private, max-age=300');
+      return new Response(_r.body, { status: _r.status, headers: _h });
+    }
 
     // ── HTML pages: inject user or redirect to login ──
     if (p === '/' || p.endsWith('.html')) return injectUser(request, env);

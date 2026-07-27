@@ -246,10 +246,36 @@ function _cors(origin) {
   return {
     'Access-Control-Allow-Origin': ok ? PNET_ORIGIN : 'null',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Pnet-Key',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };
+}
+
+/* ── Khoá bí mật dùng chung cho 2 route AI của PNETLab (2026-07-27) ──────────
+   VÌ SAO CẦN: 2 route này KHÔNG có session dashboard (PNETLab ở origin khác nên
+   trình duyệt không gửi cookie), trước đây chỉ chặn bằng header `Origin` — mà
+   header đó GIẢ MẠO ĐƯỢC bằng curl. Ai biết URL là gọi được → xài chùa API trả
+   phí của anh Thoại. Giờ đòi thêm header `X-Pnet-Key` khớp secret PNET_AI_KEY.
+
+   Khoá đặt trong default.js TRÊN MÁY PNETLab — cụ thể là dòng loader cuối file
+   `/opt/unetlab/html/store/public/assets/js/default.js` (chính dòng chèn thẻ
+   <script src=".../pnet-assistant.js">, xem [[pnetlab_cloudflare_http2]]) —
+   không nằm trong public/ của dashboard, muốn lấy được phải qua được đăng nhập
+   PNETLab trước.
+
+   TƯƠNG THÍCH NGƯỢC CÓ CHỦ Ý: nếu secret CHƯA được cấu hình thì vẫn cho qua như
+   cũ (chỉ chặn Origin). Nhờ vậy deploy không làm chết AI PNETLab đang chạy; khi
+   nào anh set secret + sửa default.js thì việc kiểm khoá tự động có hiệu lực.
+   So khớp theo kiểu thời-gian-cố-định để không lộ khoá qua việc đo thời gian. */
+function _pnetKeyOk(request, env) {
+  const want = (env.PNET_AI_KEY || '').trim();
+  if (!want) return true;                       // chưa bật — giữ hành vi cũ
+  const got = (request.headers.get('X-Pnet-Key') || '').trim();
+  if (got.length !== want.length) return false;
+  let diff = 0;
+  for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ got.charCodeAt(i);
+  return diff === 0;
 }
 
 export async function handlePnetLlm(request, env) {
@@ -258,6 +284,7 @@ export async function handlePnetLlm(request, env) {
   const cjson = (obj, status) => new Response(JSON.stringify(obj), { status, headers: Object.assign({ 'Content-Type': 'application/json' }, _cors(origin)) });
   if (request.method !== 'POST') return cjson({ error: 'method' }, 405);
   if (origin !== PNET_ORIGIN) return cjson({ error: 'forbidden origin' }, 403);
+  if (!_pnetKeyOk(request, env)) return cjson({ error: 'forbidden: thiếu hoặc sai X-Pnet-Key' }, 403);
 
   const key = env.PNETLAB_9ROUTER_KEY;
   if (!key) return cjson({ error: 'Chưa cấu hình PNETLAB_9ROUTER_KEY (wrangler secret put PNETLAB_9ROUTER_KEY).' }, 503);
@@ -309,6 +336,7 @@ export async function handlePnetConsole(request, env) {
   const cjson = (obj, status) => new Response(JSON.stringify(obj), { status, headers: Object.assign({ 'Content-Type': 'application/json' }, _cors(origin)) });
   if (request.method !== 'POST') return cjson({ error: 'method' }, 405);
   if (origin !== PNET_ORIGIN) return cjson({ error: 'forbidden origin' }, 403);
+  if (!_pnetKeyOk(request, env)) return cjson({ error: 'forbidden: thiếu hoặc sai X-Pnet-Key' }, 403);
 
   const bridgeUrl = env.PNET_CONSOLE_URL;      // vd https://pnetlab-console.home-server.id.vn/exec
   const secret = env.PNET_CONSOLE_SECRET;

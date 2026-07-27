@@ -32,6 +32,19 @@
   var LLM_URL = proxyBase() + '/api/pnet-llm';
   var CONSOLE_URL = proxyBase() + '/api/pnet-console';
 
+  /* Khoá bí mật chứng minh "lời gọi này xuất phát từ PNETLab thật".
+     KHÔNG đặt trong file này (file này public, ai cũng tải được) — dòng loader
+     cuối default.js TRÊN MÁY PNETLab gán window.__PNET_AI_KEY__ trước khi tạo
+     thẻ <script> nạp file này. Muốn lấy khoá phải qua được đăng nhập PNETLab.
+     Chưa cấu hình thì gửi rỗng, server vẫn chấp nhận như cũ (xem _pnetKeyOk
+     trong src/pnetlab.js). */
+  function aiHeaders() {
+    var h = { 'Content-Type': 'application/json' };
+    var k = window.__PNET_AI_KEY__;
+    if (k) h['X-Pnet-Key'] = k;
+    return h;
+  }
+
   /* ── Helpers gọi PNETLab same-origin ── */
   function xsrf() { try { var m = document.cookie.match(/XSRF-TOKEN=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; } catch (e) { return ''; } }
   function pnetGet(path) {
@@ -130,7 +143,7 @@
       var cmds = Array.isArray(p.commands) ? p.commands.filter(function (c) { return typeof c === 'string'; }) : [];
       if (!Number.isInteger(port)) return Promise.resolve({ ok: false, error: 'Thiếu console_port (lấy từ get_topology.nodes[].console_port — node phải đang RUNNING).' });
       if (!cmds.length) return Promise.resolve({ ok: false, error: 'Thiếu commands (mảng chuỗi lệnh CLI).' });
-      return fetch(CONSOLE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ port: port, commands: cmds }) })
+      return fetch(CONSOLE_URL, { method: 'POST', headers: aiHeaders(), body: JSON.stringify({ port: port, commands: cmds }) })
         .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'HTTP ' + r.status }; }); })
         .then(function (res) {
           // Phát hiện console KHÔNG PHẢI dạng text (vd VNC/RDP như Windows): output toàn ký tự
@@ -350,7 +363,7 @@
   function streamLLM(onDelta, attempt) {
     attempt = attempt || 1;
     var body = { model: MODEL, messages: [{ role: 'system', content: SYS }].concat(history), stream: true };
-    return fetch(LLM_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    return fetch(LLM_URL, { method: 'POST', headers: aiHeaders(), body: JSON.stringify(body) })
       .then(function (r) {
         // HTTP 524 = Cloudflare Edge timeout (9Router thỉnh thoảng chọn backend chậm) — tự thử lại.
         if (r.status === 524 && attempt < 3) {

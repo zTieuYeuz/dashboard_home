@@ -43,3 +43,19 @@ docker/
 n8n/
 n8n-workflows/
 docs/
+
+# ── Bổ sung 2026-07-27 ──
+# Rác biên dịch Python (file .pyc từng lọt lên GitHub)
+__pycache__/
+*.py[cod]
+
+# Bộ kiểm tra tự động — chạy tại máy, không cần lên GitHub
+_selftest/
+
+# Rác hệ điều hành / trình soạn thảo
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
