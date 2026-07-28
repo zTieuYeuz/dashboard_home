@@ -4037,7 +4037,7 @@ export default {
     // thiết bị trên sơ đồ, /fonts/vendor = font primereact trong bundle React.
     // ⚠ KHÔNG thêm '/auth' (dashboard dùng /auth/microsoft* cho SSO) và KHÔNG mở rộng '/fonts'
     //   thành cả nhánh — route fallback asset n8n bên dưới đang dùng '/fonts/'.
-    if (['/store', '/themes', '/legacy', '/html5', '/images/icons', '/images/vendor', '/fonts/vendor']
+    if (['/store', '/themes', '/legacy', '/html5', '/images', '/fonts/vendor']
         .some(b => p === b || p.startsWith(b + '/')))
       return handlePnetlabHomeProxy(request, env);
     // ── SSH Movi token endpoint ──

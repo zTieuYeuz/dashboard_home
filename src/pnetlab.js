@@ -382,7 +382,12 @@ const PNETLAB_HOME_BASE = '/proxy/pnetlab-home';
      /store   — toàn bộ app + asset chính
      /themes  — CSS/JS giao diện (adminLTE, jsPlumb, unetlab.css)
      /legacy  — trang topology cũ; mở 1 bài lab là `window.location.href="/legacy/topology"`
-     /images/icons, /images/vendor — icon thiết bị trên sơ đồ + asset primereact
+     /images   — icon thiết bị trên sơ đồ (`/images/icons/…`, `/images/vendor/…`) VÀ icon loại
+                node ngay tại gốc (`/images/wireshark.png`, `/images/router.png`...) — cái sau
+                do JS nối chuỗi động (`'/images/'+type+'.png'`) nên không lộ ra khi grep chuỗi
+                tĩnh trong bundle, chỉ phát hiện được qua Console thật (404 khi thiếu). Ban đầu
+                em khai hẹp `/images/icons` + `/images/vendor`, phải mở rộng thành cả nhánh
+                `/images` sau khi thấy 404 icon loại node trên production.
      /fonts/vendor  — font primereact/primeicons trong bundle React
      /html5   — console Guacamole (mở Terminal trên node); asset bên trong dùng path TƯƠNG ĐỐI
                 (`webjars/…`, `app.css`) nên tự resolve đúng khi giữ nguyên base /html5/
@@ -391,9 +396,10 @@ const PNETLAB_HOME_BASE = '/proxy/pnetlab-home';
    phải path nội bộ.
    ⚠️ `/fonts` để NGUYÊN CẢ NHÁNH thì sẽ CƯỚP của n8n: `worker.js` có route fallback asset n8n
    bắt `/assets/ /static/ /icons/ /fonts/ /rest/ /push/ /webhook/ /types/ /templates/`. Đã rà:
-   PNETLab chỉ dùng `/fonts/vendor/...` và `/images/{icons,vendor}/...` nên khai báo hẹp tới
-   nhánh con — cùng lý do, đừng mở rộng thành `/fonts` hay `/icons`. */
-const PNETLAB_PASSTHRU = ['/store', '/themes', '/legacy', '/html5', '/images/icons', '/images/vendor', '/fonts/vendor'];
+   PNETLab chỉ dùng `/fonts/vendor/...` nên khai báo hẹp tới nhánh con — cùng lý do, đừng mở
+   rộng thành `/fonts`. `/images` KHÔNG nằm trong danh sách fallback n8n nên mở cả nhánh an toàn
+   (đã kiểm tra: dashboard không dùng `/images` cho bất cứ gì). */
+const PNETLAB_PASSTHRU = ['/store', '/themes', '/legacy', '/html5', '/images', '/fonts/vendor'];
 
 /* Chuẩn hoá 1 URL/path bất kỳ trong HTML hoặc header về đường đi đúng trên dashboard:
    - bỏ origin PNETLab (kể cả bản URL-encode trong query param như `link=https%3A%2F%2F...`)
