@@ -32,18 +32,11 @@
   var LLM_URL = proxyBase() + '/api/pnet-llm';
   var CONSOLE_URL = proxyBase() + '/api/pnet-console';
 
-  /* Khoá bí mật chứng minh "lời gọi này xuất phát từ PNETLab thật".
-     KHÔNG đặt trong file này (file này public, ai cũng tải được) — dòng loader
-     cuối default.js TRÊN MÁY PNETLab gán window.__PNET_AI_KEY__ trước khi tạo
-     thẻ <script> nạp file này. Muốn lấy khoá phải qua được đăng nhập PNETLab.
-     Chưa cấu hình thì gửi rỗng, server vẫn chấp nhận như cũ (xem _pnetKeyOk
-     trong src/pnetlab.js). */
-  function aiHeaders() {
-    var h = { 'Content-Type': 'application/json' };
-    var k = window.__PNET_AI_KEY__;
-    if (k) h['X-Pnet-Key'] = k;
-    return h;
-  }
+  /* [2026-07-27] PNETLab giờ chạy CÙNG ORIGIN với dashboard (qua
+     handlePnetlabHomeProxy, src/pnetlab.js) → cookie session `dh_session`
+     tự động gửi kèm mọi fetch same-origin, không cần khoá X-Pnet-Key/
+     window.__PNET_AI_KEY__ thủ công nữa (server gác bằng session thật). */
+  function aiHeaders() { return { 'Content-Type': 'application/json' }; }
 
   /* ── Helpers gọi PNETLab same-origin ── */
   function xsrf() { try { var m = document.cookie.match(/XSRF-TOKEN=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; } catch (e) { return ''; } }

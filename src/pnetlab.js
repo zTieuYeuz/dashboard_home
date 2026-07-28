@@ -26,7 +26,7 @@
    Quyền: gác ở tầng reads.js/actions.js bằng key 'hub-pnetlab'. User không
    có quyền thì AI cũng bị chặn 403 (giống mọi nguồn khác).
    ═══════════════════════════════════════════════════════════════════ */
-import { json } from './core.js';
+import { json, getSession, hasPerm, cleanEnv } from './core.js';
 
 const PNET = 'https://pnetlab.home-server.id.vn';
 const SKEY = 'pnetlab:aisess';   // KV cache phiên ai-agent
@@ -226,77 +226,38 @@ export async function pnetExportConfig(env, params) {
 /* ═══════════════════════════════════════════════════════════════════
    PROXY 9Router cho nút 🤖 nhúng TRONG PNETLab (pnet-assistant.js)
    -------------------------------------------------------------------
-   Vì sao proxy: 9Router chặn CORS (401 preflight) + không được lộ API key
-   trong browser. Nút chat gọi endpoint này (cross-origin từ pnetlab origin),
-   Worker gắn secret NINE_ROUTER_KEY rồi forward + stream SSE trả về.
-   Bảo vệ: chỉ nhận Origin pnetlab + rate-limit theo IP + ép model allowlist +
-   chỉ forward tới đúng 9Router. Threat model homelab: lạm dụng chỉ tốn quota
-   gateway riêng của anh (Origin có thể giả bởi non-browser nhưng bị chặn số lần).
+   [2026-07-27] MIGRATE sang gác bằng SESSION DASHBOARD — trước đây PNETLab
+   nhúng bằng iframe KHÁC ORIGIN nên trình duyệt không gửi cookie `dh_session`,
+   phải chặn tạm bằng Origin-header + secret `X-Pnet-Key` (giả mạo Origin được
+   bằng curl, X-Pnet-Key phải tự tay chèn vào default.js trên VM PNETLab, mất
+   mỗi khi PNETLab update). Giờ PNETLab được phục vụ qua `handlePnetlabHomeProxy`
+   CÙNG ORIGIN với dashboard (`/proxy/pnetlab-home/...`) → cookie session tự
+   động gửi kèm → gác bằng `hasPerm('hub-pnetlab')` như mọi route khác, mạnh
+   hơn nhiều và không cần secret/sửa file gì trên VM PNETLab nữa.
    ═══════════════════════════════════════════════════════════════════ */
 const NINE_ROUTER = 'https://9router.home-server.id.vn/v1/chat/completions';
-const PNET_ORIGIN = 'https://pnetlab.home-server.id.vn';
 // [2026-07-25] 9Router chuyển từ instance root → administrator: MỖI tính năng giờ có
 // alias + secret RIÊNG (trước đây dùng chung NINE_ROUTER_KEY + allowlist 2 tên) — tránh
 // 1 key hỏng làm chết cả 3 tính năng, và anh dễ theo dõi/thu hồi riêng từng cái.
 const LLM_MODELS = new Set(['pnetlab']);
-const LLM_RL_MAX = 60;                                  // request / 5 phút / IP
-
-function _cors(origin) {
-  const ok = origin === PNET_ORIGIN;
-  return {
-    'Access-Control-Allow-Origin': ok ? PNET_ORIGIN : 'null',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Pnet-Key',
-    'Access-Control-Max-Age': '86400',
-    'Vary': 'Origin',
-  };
-}
-
-/* ── Khoá bí mật dùng chung cho 2 route AI của PNETLab (2026-07-27) ──────────
-   VÌ SAO CẦN: 2 route này KHÔNG có session dashboard (PNETLab ở origin khác nên
-   trình duyệt không gửi cookie), trước đây chỉ chặn bằng header `Origin` — mà
-   header đó GIẢ MẠO ĐƯỢC bằng curl. Ai biết URL là gọi được → xài chùa API trả
-   phí của anh Thoại. Giờ đòi thêm header `X-Pnet-Key` khớp secret PNET_AI_KEY.
-
-   Khoá đặt trong default.js TRÊN MÁY PNETLab — cụ thể là dòng loader cuối file
-   `/opt/unetlab/html/store/public/assets/js/default.js` (chính dòng chèn thẻ
-   <script src=".../pnet-assistant.js">, xem [[pnetlab_cloudflare_http2]]) —
-   không nằm trong public/ của dashboard, muốn lấy được phải qua được đăng nhập
-   PNETLab trước.
-
-   TƯƠNG THÍCH NGƯỢC CÓ CHỦ Ý: nếu secret CHƯA được cấu hình thì vẫn cho qua như
-   cũ (chỉ chặn Origin). Nhờ vậy deploy không làm chết AI PNETLab đang chạy; khi
-   nào anh set secret + sửa default.js thì việc kiểm khoá tự động có hiệu lực.
-   So khớp theo kiểu thời-gian-cố-định để không lộ khoá qua việc đo thời gian. */
-function _pnetKeyOk(request, env) {
-  const want = (env.PNET_AI_KEY || '').trim();
-  if (!want) return true;                       // chưa bật — giữ hành vi cũ
-  const got = (request.headers.get('X-Pnet-Key') || '').trim();
-  if (got.length !== want.length) return false;
-  let diff = 0;
-  for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ got.charCodeAt(i);
-  return diff === 0;
-}
+const LLM_RL_MAX = 60;                                  // request / 5 phút / user
 
 export async function handlePnetLlm(request, env) {
-  const origin = request.headers.get('Origin') || '';
-  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: _cors(origin) });
-  const cjson = (obj, status) => new Response(JSON.stringify(obj), { status, headers: Object.assign({ 'Content-Type': 'application/json' }, _cors(origin)) });
-  if (request.method !== 'POST') return cjson({ error: 'method' }, 405);
-  if (origin !== PNET_ORIGIN) return cjson({ error: 'forbidden origin' }, 403);
-  if (!_pnetKeyOk(request, env)) return cjson({ error: 'forbidden: thiếu hoặc sai X-Pnet-Key' }, 403);
+  if (request.method !== 'POST') return json({ error: 'method' }, 405);
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Chưa đăng nhập' }, 401);
+  if (!(await hasPerm(env, session, 'hub-pnetlab'))) return json({ error: 'Không có quyền PNETLab' }, 403);
 
   const key = env.PNETLAB_9ROUTER_KEY;
-  if (!key) return cjson({ error: 'Chưa cấu hình PNETLAB_9ROUTER_KEY (wrangler secret put PNETLAB_9ROUTER_KEY).' }, 503);
+  if (!key) return json({ error: 'Chưa cấu hình PNETLAB_9ROUTER_KEY (wrangler secret put PNETLAB_9ROUTER_KEY).' }, 503);
 
-  // Rate-limit theo IP (KV, cửa sổ 5 phút)
-  const ip = request.headers.get('CF-Connecting-IP') || '?';
-  const rlKey = 'pnetllm:rl:' + ip;
+  // Rate-limit theo user (KV, cửa sổ 5 phút) — trước đây theo IP vì không có session
+  const rlKey = 'pnetllm:rl:' + session.username;
   const cnt = parseInt((await env.DASHBOARD_KV.get(rlKey)) || '0', 10);
-  if (cnt >= LLM_RL_MAX) return cjson({ error: 'Quá nhiều yêu cầu, thử lại sau ít phút.' }, 429);
+  if (cnt >= LLM_RL_MAX) return json({ error: 'Quá nhiều yêu cầu, thử lại sau ít phút.' }, 429);
   await env.DASHBOARD_KV.put(rlKey, String(cnt + 1), { expirationTtl: 300 });
 
-  let body; try { body = await request.json(); } catch { return cjson({ error: 'bad json' }, 400); }
+  let body; try { body = await request.json(); } catch { return json({ error: 'bad json' }, 400); }
   const model = LLM_MODELS.has(body.model) ? body.model : 'pnetlab';
   const payload = Object.assign({}, body, { model, stream: true });
 
@@ -307,12 +268,12 @@ export async function handlePnetLlm(request, env) {
       headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-  } catch (e) { return cjson({ error: '9Router không phản hồi: ' + ((e && e.message) || e) }, 502); }
+  } catch (e) { return j({ error: '9Router không phản hồi: ' + ((e && e.message) || e) }, 502); }
 
-  // Stream thẳng SSE về browser (kèm CORS)
+  // Stream thẳng SSE về browser (same-origin, không cần CORS nữa)
   return new Response(upstream.body, {
     status: upstream.status,
-    headers: Object.assign({ 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache' }, _cors(origin)),
+    headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache' },
   });
 }
 
@@ -323,36 +284,33 @@ export async function handlePnetLlm(request, env) {
    comment phía trên) — cách duy nhất để cấu hình node là gõ lệnh console.
    console-bridge (_ops/pnetlab-console-bridge.py) chạy trên VM PNETLab,
    telnet THẲNG vào cổng console nội bộ của node (né Guacamole/WebSocket
-   hoàn toàn — thứ đã lỗi cả ngày qua tunnel). Worker giữ vai trò y hệt
-   /api/pnet-llm: gắn secret PNET_CONSOLE_SECRET (ẩn khỏi browser), chỉ
-   nhận Origin pnetlab, rate-limit, forward tới route tunnel riêng của
-   console-bridge (PNET_CONSOLE_URL, secret vì đây là named route riêng
-   không cố định như 9router). */
-const CONSOLE_RL_MAX = 30;   // request / 5 phút / IP — thao tác console nặng hơn chat
+   hoàn toàn — thứ đã lỗi cả ngày qua tunnel). Worker gắn secret
+   PNET_CONSOLE_SECRET (ẩn khỏi browser) rồi forward tới route tunnel RIÊNG
+   của console-bridge (PNET_CONSOLE_URL) — hạ tầng này KHÔNG đổi.
+   [2026-07-27] Chỉ đổi CÁCH GÁC route này — session dashboard thay vì
+   Origin+X-Pnet-Key, cùng lý do đã giải thích ở handlePnetLlm phía trên. */
+const CONSOLE_RL_MAX = 30;   // request / 5 phút / user — thao tác console nặng hơn chat
 
 export async function handlePnetConsole(request, env) {
-  const origin = request.headers.get('Origin') || '';
-  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: _cors(origin) });
-  const cjson = (obj, status) => new Response(JSON.stringify(obj), { status, headers: Object.assign({ 'Content-Type': 'application/json' }, _cors(origin)) });
-  if (request.method !== 'POST') return cjson({ error: 'method' }, 405);
-  if (origin !== PNET_ORIGIN) return cjson({ error: 'forbidden origin' }, 403);
-  if (!_pnetKeyOk(request, env)) return cjson({ error: 'forbidden: thiếu hoặc sai X-Pnet-Key' }, 403);
+  if (request.method !== 'POST') return json({ error: 'method' }, 405);
+  const session = await getSession(request, env);
+  if (!session) return json({ error: 'Chưa đăng nhập' }, 401);
+  if (!(await hasPerm(env, session, 'hub-pnetlab'))) return json({ error: 'Không có quyền PNETLab' }, 403);
 
   const bridgeUrl = env.PNET_CONSOLE_URL;      // vd https://pnetlab-console.home-server.id.vn/exec
   const secret = env.PNET_CONSOLE_SECRET;
-  if (!bridgeUrl || !secret) return cjson({ error: 'Chưa cấu hình PNET_CONSOLE_URL/PNET_CONSOLE_SECRET (wrangler secret put).' }, 503);
+  if (!bridgeUrl || !secret) return json({ error: 'Chưa cấu hình PNET_CONSOLE_URL/PNET_CONSOLE_SECRET (wrangler secret put).' }, 503);
 
-  const ip = request.headers.get('CF-Connecting-IP') || '?';
-  const rlKey = 'pnetcon:rl:' + ip;
+  const rlKey = 'pnetcon:rl:' + session.username;
   const cnt = parseInt((await env.DASHBOARD_KV.get(rlKey)) || '0', 10);
-  if (cnt >= CONSOLE_RL_MAX) return cjson({ error: 'Quá nhiều yêu cầu console, thử lại sau ít phút.' }, 429);
+  if (cnt >= CONSOLE_RL_MAX) return json({ error: 'Quá nhiều yêu cầu console, thử lại sau ít phút.' }, 429);
   await env.DASHBOARD_KV.put(rlKey, String(cnt + 1), { expirationTtl: 300 });
 
-  let body; try { body = await request.json(); } catch { return cjson({ error: 'bad json' }, 400); }
+  let body; try { body = await request.json(); } catch { return json({ error: 'bad json' }, 400); }
   const port = parseInt(body.port, 10);
   const commands = Array.isArray(body.commands) ? body.commands.filter(c => typeof c === 'string').slice(0, 40) : [];
-  if (!Number.isInteger(port)) return cjson({ error: 'Thiếu port (số nguyên, port console của node)' }, 400);
-  if (!commands.length) return cjson({ error: 'Thiếu commands (mảng chuỗi lệnh)' }, 400);
+  if (!Number.isInteger(port)) return json({ error: 'Thiếu port (số nguyên, port console của node)' }, 400);
+  if (!commands.length) return json({ error: 'Thiếu commands (mảng chuỗi lệnh)' }, 400);
 
   let upstream;
   try {
@@ -361,8 +319,339 @@ export async function handlePnetConsole(request, env) {
       headers: { 'Content-Type': 'application/json', 'X-Bridge-Secret': secret },
       body: JSON.stringify({ port, commands }),
     });
-  } catch (e) { return cjson({ error: 'console-bridge không phản hồi: ' + ((e && e.message) || e) }, 502); }
+  } catch (e) { return json({ error: 'console-bridge không phản hồi: ' + ((e && e.message) || e) }, 502); }
 
   let data; try { data = await upstream.json(); } catch { data = { ok: false, error: 'console-bridge trả dữ liệu không hợp lệ' }; }
-  return cjson(data, upstream.status);
+  return json(data, upstream.status);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   REVERSE-PROXY trang web PNETLab qua dashboard (2026-07-27)
+   -------------------------------------------------------------------
+   VÌ SAO: trước đây PNETLab nhúng bằng iframe TRỎ THẲNG sang domain thật
+   (`https://pnetlab.home-server.id.vn/...`) — domain đó KHÔNG có Cloudflare
+   Access, ai biết link là vào thẳng được, không cần qua dashboard. Anh Thoại
+   muốn bắt buộc mọi người đăng nhập qua dashboard — đúng mô hình đã áp dụng
+   cho Termix/Camera Home: đặt Cloudflare Access lên domain PNETLab, Worker
+   này cầm Service Token (PNETLAB_HOME_CF_CLIENT_ID/_SECRET) để vượt qua thay
+   mặt user ĐÃ đăng nhập dashboard; ai gõ thẳng link đó (không qua dashboard)
+   sẽ bị chính Cloudflare Access chặn ở edge.
+
+   LỢI ÍCH PHỤ: vì giờ PNETLab chạy CÙNG ORIGIN với dashboard, cookie session
+   `dh_session` tự động gửi kèm mọi request trong iframe → handlePnetLlm/
+   handlePnetConsole ở trên gác được bằng session thật (đã migrate) → KHÔNG
+   còn cần khoá PNET_AI_KEY hay phải tự tay sửa default.js trên VM PNETLab để
+   gán window.__PNET_AI_KEY__ — script trợ lý AI được TỰ ĐỘNG tiêm vào đây
+   (giống hệt cách handleN8nHomeProxy đang làm cho n8n), sống sót qua các lần
+   PNETLab tự update (không như default.js bị ghi đè mất loader).
+
+   PHẠM VI TỐI THIỂU CÓ CHỦ Ý: KHÔNG proxy WebSocket cho web UI. Guacamole/
+   WebSocket của PNETLab qua tunnel đã có tiền sử lỗi nặng (xem comment
+   console-bridge phía trên, "đã lỗi cả ngày qua tunnel") — console CLI đã né
+   hẳn bằng console-bridge riêng (telnet thô). Nếu sau test thật phát hiện
+   trang PNETLab cần WebSocket cho tính năng khác (chưa có bằng chứng), bổ
+   sung sau theo đúng pattern đã kiểm chứng ở handleTermixProxy (src/termix.js). */
+const PNETLAB_HOME_ORIGIN = 'https://pnetlab.home-server.id.vn';
+const PNETLAB_HOME_BASE = '/proxy/pnetlab-home';
+
+/* ⚠️ BÀI HỌC LỚN (2026-07-27) — VÌ SAO PHẢI GIỮ NGUYÊN PATH GỐC `/store/*`, `/themes/*`
+   -------------------------------------------------------------------
+   Lần đầu viết proxy này em phục vụ PNETLab dưới prefix `/proxy/pnetlab-home/...` (giống
+   Termix/n8n) → TRẮNG TRANG HOÀN TOÀN. Đọc thẳng bundle React của PNETLab
+   (`/store/public/react/js/app.js`) mới thấy nguyên nhân thật: PNETLab KHÔNG phải app
+   jQuery+Blade thuần như em tưởng — nó là SPA react-router v4, và route được khai báo
+   HARDCODE đúng 1 dòng:
+       path:"/store/public/:folder/:page/:func"
+   Router match `window.location.pathname` với pattern đó. Thêm bất kỳ prefix nào vào
+   pathname → không route nào khớp → React render rỗng → `<div id="app">` trắng bóc.
+   Không có `basename` để cấu hình (chỉ khai báo propTypes, không truyền giá trị), nên
+   KHÔNG thể sửa từ phía proxy bằng cách rewrite URL — rewrite bao nhiêu cũng vô ích vì
+   vấn đề nằm ở pathname của CHÍNH TRANG, không phải ở các URL bên trong trang.
+
+   → Giải pháp: phục vụ PNETLab tại ĐÚNG path gốc `/store/*` và `/themes/*` trên dashboard
+   (đã kiểm tra: dashboard không dùng 2 namespace này cho bất cứ thứ gì). Khi đó pathname
+   y hệt bản gốc → router khớp hoàn hảo, và toàn bộ asset dưới `/store/...` tự đúng đường
+   mà không cần rewrite gì cả.
+
+   Ngoại lệ DUY NHẤT: `/api/*` — PNETLab gọi `/api/labs`, `/api/auth/logout`... TRÙNG
+   namespace API của dashboard, không thể phục vụ trực tiếp. Những cái này (và chỉ những
+   cái này) được rewrite sang `/proxy/pnetlab-home/api/*` bằng JS patch + HTML rewrite.
+   React Router không quan tâm URL của API call, nên đổi chúng hoàn toàn an toàn. */
+/* Danh sách namespace gốc phục vụ NGUYÊN path (không thêm prefix).
+   Rà từ chính các bundle của PNETLab (app.js, chunk react, mainCtrl.js, default.js):
+     /store   — toàn bộ app + asset chính
+     /themes  — CSS/JS giao diện (adminLTE, jsPlumb, unetlab.css)
+     /legacy  — trang topology cũ; mở 1 bài lab là `window.location.href="/legacy/topology"`
+     /images/icons, /images/vendor — icon thiết bị trên sơ đồ + asset primereact
+     /fonts/vendor  — font primereact/primeicons trong bundle React
+     /html5   — console Guacamole (mở Terminal trên node); asset bên trong dùng path TƯƠNG ĐỐI
+                (`webjars/…`, `app.css`) nên tự resolve đúng khi giữ nguyên base /html5/
+   ⚠️ TUYỆT ĐỐI KHÔNG thêm `/auth`: dashboard đang dùng `/auth/microsoft*` cho SSO. Trong bundle
+   PNETLab, `/auth/...` chỉ xuất hiện kèm `APP_CENTER` (user.pnetlab.com) — link ra ngoài, không
+   phải path nội bộ.
+   ⚠️ `/fonts` để NGUYÊN CẢ NHÁNH thì sẽ CƯỚP của n8n: `worker.js` có route fallback asset n8n
+   bắt `/assets/ /static/ /icons/ /fonts/ /rest/ /push/ /webhook/ /types/ /templates/`. Đã rà:
+   PNETLab chỉ dùng `/fonts/vendor/...` và `/images/{icons,vendor}/...` nên khai báo hẹp tới
+   nhánh con — cùng lý do, đừng mở rộng thành `/fonts` hay `/icons`. */
+const PNETLAB_PASSTHRU = ['/store', '/themes', '/legacy', '/html5', '/images/icons', '/images/vendor', '/fonts/vendor'];
+
+/* Chuẩn hoá 1 URL/path bất kỳ trong HTML hoặc header về đường đi đúng trên dashboard:
+   - bỏ origin PNETLab (kể cả bản URL-encode trong query param như `link=https%3A%2F%2F...`)
+   - path thuộc PNETLAB_PASSTHRU  → giữ nguyên (router cần đúng pathname)
+   - path khác (chủ yếu /api/...) → thêm prefix /proxy/pnetlab-home */
+function pnetPath(path) {
+  if (!path || path.charAt(0) !== '/') return path;
+  if (path.indexOf(PNETLAB_HOME_BASE) === 0) return path;
+  if (PNETLAB_PASSTHRU.some(p => path === p || path.indexOf(p + '/') === 0)) return path;
+  return PNETLAB_HOME_BASE + path;
+}
+function rewriteUrlLike(str) {
+  if (!str) return str;
+  let out = str;
+
+  // (1) Dạng URL-encode nằm trong query param — vd `?link=https%3A%2F%2Fpnetlab...%2Fstore%2F...`
+  // PNETLab dùng param này để biết đưa trình duyệt về đâu sau khi đăng nhập xong; bỏ sót nó
+  // thì đăng nhập xong sẽ bị đẩy thẳng ra domain gốc (đã bị Cloudflare Access chặn).
+  const encOrigin = encodeURIComponent(PNETLAB_HOME_ORIGIN);
+  if (out.indexOf(encOrigin) !== -1) {
+    out = out.split(encOrigin).map((seg, i) => {
+      if (i === 0) return seg;
+      const m = seg.match(/^(?:%2F|%2f)[^&#]*/);
+      if (!m) return seg;
+      let decoded; try { decoded = decodeURIComponent(m[0]); } catch { return seg; }
+      return encodeURIComponent(pnetPath(decoded)) + seg.slice(m[0].length);
+    }).join('');
+  }
+
+  // (2) Dạng thô `https://pnetlab.home-server.id.vn/...` — cắt origin, định tuyến lại phần path.
+  out = out.split(PNETLAB_HOME_ORIGIN).map((seg, i) => {
+    if (i === 0) return seg;
+    const m = seg.match(/^\/[^?#"'\s]*/);
+    if (!m) return seg;
+    return pnetPath(m[0]) + seg.slice(m[0].length);
+  }).join('');
+
+  return out;
+}
+
+export async function handlePnetlabHomeProxy(request, env) {
+  const session = await getSession(request, env);
+  if (!session) return new Response('Unauthorized', { status: 401 });
+  if (!(await hasPerm(env, session, 'hub-pnetlab'))) return new Response('Forbidden', { status: 403 });
+
+  // Handler này nhận 2 kiểu đường vào:
+  //   /store/... , /themes/...        → path GỐC của PNETLab, gửi lên upstream y nguyên
+  //   /proxy/pnetlab-home/api/...     → path có prefix (chỉ dùng cho /api/* vì trùng dashboard)
+  const reqUrl  = new URL(request.url);
+  const subPath = reqUrl.pathname.indexOf(PNETLAB_HOME_BASE) === 0
+    ? (reqUrl.pathname.slice(PNETLAB_HOME_BASE.length) || '/')
+    : reqUrl.pathname;
+  const target  = `${PNETLAB_HOME_ORIGIN}${subPath}${reqUrl.search}`;
+
+  const clientId     = cleanEnv(env.PNETLAB_HOME_CF_CLIENT_ID);
+  const clientSecret = cleanEnv(env.PNETLAB_HOME_CF_CLIENT_SECRET);
+
+  /* ── WebSocket proxy — console Guacamole (/html5/…) của PNETLab ──
+     Ban đầu route này cố tình trả 501 ("phạm vi tối thiểu"), nhưng thực tế mở Terminal trên
+     node trong topology là bật hẳn Guacamole HTML5 → BẮT BUỘC phải có WebSocket, không có thì
+     cửa sổ Terminal trắng bóc. Dùng ĐÚNG mẫu đã chạy ổn định ở handleTermixProxy
+     (src/termix.js) — mẫu đó vốn cũng viết cho Guacamole nên khớp hoàn toàn:
+       • fetch tới `https://…` (KHÔNG dùng scheme wss://) và CHỈ set Upgrade — Connection/
+         Sec-WebSocket-Version do Workers tự quản; tự set tay là `response.webSocket` = null.
+       • ép Origin = origin PNETLab để Guacamole không từ chối vì cross-origin.
+       • chuyển tiếp Sec-WebSocket-Protocol (Guacamole yêu cầu subprotocol 'guacamole') và
+         echo lại trong response 101. */
+  if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+    const wsHeaders = new Headers();
+    wsHeaders.set('Upgrade', 'websocket');
+    wsHeaders.set('Host', new URL(PNETLAB_HOME_ORIGIN).hostname);
+    wsHeaders.set('Origin', PNETLAB_HOME_ORIGIN);
+    if (clientId && clientSecret) {
+      wsHeaders.set('CF-Access-Client-Id',     clientId);
+      wsHeaders.set('CF-Access-Client-Secret', clientSecret);
+    }
+    const wsCookie = (request.headers.get('cookie') || '').split(';').map(c => c.trim())
+      .filter(c => c && !c.startsWith('dh_session=') && !c.startsWith('dh_user='))
+      .join('; ');
+    if (wsCookie) wsHeaders.set('Cookie', wsCookie);
+    const swp = request.headers.get('Sec-WebSocket-Protocol');
+    if (swp) wsHeaders.set('Sec-WebSocket-Protocol', swp);
+
+    let upResp;
+    try { upResp = await fetch(target, { headers: wsHeaders }); }
+    catch (e) { return new Response('PNETLab WS error: ' + e.message, { status: 502 }); }
+
+    const upSock = upResp.webSocket;
+    if (!upSock) {
+      const body = await upResp.text().catch(() => '(no body)');
+      return new Response(
+        'PNETLab WS: upstream không nâng cấp được (HTTP ' + upResp.status + ') — ' + body.slice(0, 500),
+        { status: 502 }
+      );
+    }
+
+    const { 0: client, 1: server } = new WebSocketPair();
+    server.accept();
+    upSock.accept();
+    server.addEventListener('message', ({ data }) => { try { upSock.send(data); } catch { /* socket đã đóng */ } });
+    upSock.addEventListener('message', ({ data }) => { try { server.send(data); } catch { /* socket đã đóng */ } });
+    server.addEventListener('close', ({ code, reason }) => { try { upSock.close(code, reason); } catch { /* đã đóng */ } });
+    upSock.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason); } catch { /* đã đóng */ } });
+
+    const wsRespHeaders = new Headers();
+    const echoSwp = upResp.headers.get('Sec-WebSocket-Protocol') || swp;
+    if (echoSwp) wsRespHeaders.set('Sec-WebSocket-Protocol', echoSwp);
+    return new Response(null, { status: 101, webSocket: client, headers: wsRespHeaders });
+  }
+
+  const fwdHeaders = {};
+  for (const [k, v] of request.headers) {
+    const kl = k.toLowerCase();
+    // Bỏ accept-encoding: để upstream trả body KHÔNG nén, tránh trường hợp stream body nén được
+    // chuyển thẳng về browser trong khi header content-encoding đã bị gỡ bên dưới → body hỏng.
+    if (['host', 'cf-connecting-ip', 'x-forwarded-for', 'cookie', 'accept-encoding'].includes(kl)) continue;
+    fwdHeaders[k] = v;
+  }
+  fwdHeaders['Host'] = new URL(PNETLAB_HOME_ORIGIN).hostname;
+  if (clientId && clientSecret) {
+    fwdHeaders['CF-Access-Client-Id']     = clientId;
+    fwdHeaders['CF-Access-Client-Secret'] = clientSecret;
+  }
+  // Lọc cookie phiên dashboard — PNETLab không cần và không được nhận (giống n8n-proxy/termix-proxy).
+  const rawCookie = request.headers.get('cookie') || '';
+  const fwdCookie = rawCookie.split(';').map(c => c.trim())
+    .filter(c => c && !c.startsWith('dh_session=') && !c.startsWith('dh_user='))
+    .join('; ');
+  if (fwdCookie) fwdHeaders['Cookie'] = fwdCookie;
+
+  let upstream;
+  try {
+    upstream = await fetch(target, {
+      method: request.method,
+      headers: fwdHeaders,
+      redirect: 'manual',
+      ...(request.method !== 'GET' && request.method !== 'HEAD' ? { body: request.body } : {}),
+    });
+  } catch (e) {
+    return new Response('PNETLab proxy error: ' + e.message, { status: 502 });
+  }
+
+  const rh = new Headers();
+  for (const [k, v] of upstream.headers) {
+    const kl = k.toLowerCase();
+    if (kl === 'x-frame-options') continue;
+    if (kl === 'content-security-policy') continue;
+    if (kl === 'content-encoding') continue;
+    if (kl === 'content-length') continue;
+    if (kl === 'set-cookie') continue;
+    rh.set(k, v);
+  }
+  rh.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+
+  // Rewrite Set-Cookie: bỏ Domain, ép SameSite=None;Secure (bắt buộc vì chạy trong iframe).
+  // ⚠️ PHẢI dùng getSetCookie() — `Headers.getAll()` KHÔNG tồn tại trên runtime Workers hiện đại,
+  // nên `headers.getAll ? ... : []` luôn rơi vào nhánh [] → MẤT SẠCH cookie phiên PNETLab.
+  // Triệu chứng thật đã gặp: đăng nhập PNETLab thành công (server trả result:true) nhưng browser
+  // không nhận được cookie `_session` → request tiếp theo `/api/auth` trả 401 → AngularJS
+  // `unlMainController` không set `$scope.loaded = true` → `<div ng-if="loaded">` không render
+  // → trang rỗng hoàn toàn (nhìn thấy nền tối của dashboard xuyên qua iframe = "màn hình đen").
+  let rawCookies = [];
+  try { rawCookies = upstream.headers.getSetCookie(); }
+  catch { const h = upstream.headers.get('set-cookie'); if (h) rawCookies = [h]; }
+  for (const c of rawCookies) {
+    let rewritten = String(c).replace(/;\s*Domain=[^;,]*/gi, '').replace(/;\s*SameSite=\w+/gi, '; SameSite=None');
+    if (!/;\s*Secure/i.test(rewritten)) rewritten += '; Secure';
+    rh.append('Set-Cookie', rewritten);
+  }
+
+  // Redirect: nếu Cloudflare Access chặn (thiếu/sai Service Token), PNETLab/CF sẽ 3xx sang
+  // cloudflareaccess.com — bắt lỗi rõ ràng thay vì để trình duyệt redirect lạc origin (mẫu Termix).
+  const loc = upstream.headers.get('Location');
+  if (loc) {
+    if (/cloudflareaccess\.com/i.test(loc)) {
+      return new Response(
+        '<html><body style="font-family:sans-serif;padding:2rem;color:#333">'
+        + '<h2>⚠ PNETLab — Service Token không hợp lệ</h2>'
+        + '<p>Worker proxy tới <code>pnetlab.home-server.id.vn</code> nhưng bị Cloudflare Access chặn (thiếu/sai Service Token).</p>'
+        + '<p>Kiểm tra secret <code>PNETLAB_HOME_CF_CLIENT_ID</code> / <code>PNETLAB_HOME_CF_CLIENT_SECRET</code> đã set đúng chưa (wrangler secret put).</p>'
+        + '</body></html>',
+        { status: 502, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      );
+    }
+    rh.set('Location', rewriteUrlLike(loc));
+  }
+
+  const ct = upstream.headers.get('Content-Type') || '';
+  if (!ct.includes('text/html')) {
+    return new Response(upstream.body, { status: upstream.status, headers: rh });
+  }
+
+  // ── HTML response: rewrite path tuyệt đối + tự tiêm trợ lý AI ──
+  let html = await upstream.text();
+
+  // Patch các API mạng của trình duyệt ($.ajax, fetch, XHR) để URL do JS build lúc chạy cũng
+  // được định tuyến đúng. CHỈ đổi những path KHÔNG thuộc passthru (thực tế là `/api/*` — trùng
+  // namespace API dashboard); `/store/*`, `/themes/*` giữ nguyên để react-router còn khớp.
+  const patch = `<script>
+(function(){
+var B='${PNETLAB_HOME_BASE}';
+var O='pnetlab.home-server.id.vn';
+var PASS=${JSON.stringify(PNETLAB_PASSTHRU)};
+function route(p){
+  if(typeof p!=='string'||p.charAt(0)!=='/') return p;
+  if(p.indexOf(B)===0) return p;
+  for(var i=0;i<PASS.length;i++){ if(p===PASS[i]||p.indexOf(PASS[i]+'/')===0) return p; }
+  return B+p;
+}
+function rw(u){
+  if(typeof u!=='string'||!u) return u;
+  if(u.indexOf('http')===0 && u.indexOf(O)!==-1){
+    var i=u.indexOf(O)+O.length;
+    return route(u.slice(i)||'/');
+  }
+  if(u.charAt(0)==='/' && u.slice(0,2)!=='//') return route(u);
+  return u;
+}
+if(window.jQuery){
+  var _ajax=window.jQuery.ajax;
+  window.jQuery.ajax=function(opts){
+    if(typeof opts==='string'){ var extra=arguments[1]||{}; opts=Object.assign({url:opts},extra); }
+    if(opts&&opts.url) opts.url=rw(opts.url);
+    return _ajax.call(this,opts);
+  };
+}
+var _F=window.fetch;
+window.fetch=function(u,o){ return _F.call(this,rw(u),o); };
+var _X=XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open=function(m,u){ return _X.apply(this,[m,rw(u)].concat([].slice.call(arguments,2))); };
+})();
+</` + `script>`;
+  html = html.replace('<head>', '<head>' + patch);
+
+  // Rewrite src/href/action trong HTML tĩnh (link/form không qua JS ở trên).
+  // PNETLab viết hầu hết `<script src>`/`<link href>` bằng URL TUYỆT ĐỐI
+  // (`https://pnetlab.home-server.id.vn/store/public/...`) → phải cắt origin để tải qua proxy
+  // (domain gốc đã bị Cloudflare Access chặn, trình duyệt không có Service Token).
+  // Blade template ghi khoảng trắng không đều quanh dấu "=" (`href = "..."`) → regex nới \s*.
+  html = html.replace(/(\s(?:src|href|action)\s*=\s*["'])([^"']+)(["'])/gi, (m, attr, url, q) => {
+    if (url.indexOf(PNETLAB_HOME_ORIGIN) === 0) {
+      return attr + pnetPath(url.slice(PNETLAB_HOME_ORIGIN.length) || '/') + q;
+    }
+    if (url.charAt(0) === '/' && url.slice(0, 2) !== '//') {
+      return attr + pnetPath(url) + q;
+    }
+    return m;
+  });
+
+  // Tự tiêm trợ lý AI — KHÔNG còn cần sửa default.js trên VM PNETLab.
+  // BỎ QUA `/html5/*`: đó là console Guacamole chạy trong IFRAME CON bên trong cửa sổ Terminal
+  // của trang topology. Tiêm vào đó thì nút 🤖 mọc thêm lần nữa ngay giữa cửa sổ Terminal, trong
+  // khi trang topology (iframe cha) đã có sẵn nút rồi → thừa và che mất màn hình console.
+  if (!/^\/html5(\/|$)/.test(subPath)) {
+    html = html.replace('</head>',
+      '<script src="' + new URL(request.url).origin + '/pnet-assistant.js" defer></' + 'script></head>');
+  }
+
+  rh.set('Content-Type', ct);
+  return new Response(html, { status: upstream.status, headers: rh });
 }

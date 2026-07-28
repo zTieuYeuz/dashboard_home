@@ -334,9 +334,10 @@ export async function handleTermixProxy(request, env, opts) {
     // else: already absolute external URL — pass through as-is
 
     const _rhRedir = new Headers({ 'Location': _newLoc, 'Cache-Control': 'no-cache' });
-    const _setSCR  = typeof upstream.headers.getAll === 'function'
-      ? upstream.headers.getAll('set-cookie')
-      : (upstream.headers.get('set-cookie') ? [upstream.headers.get('set-cookie')] : []);
+    // ⚠️ Xem ghi chú ở khối "Build response headers" bên dưới: PHẢI dùng getSetCookie().
+    let _setSCR = [];
+    try { _setSCR = upstream.headers.getSetCookie(); }
+    catch { const h = upstream.headers.get('set-cookie'); if (h) _setSCR = [h]; }
     for (const _sc of _setSCR) _rhRedir.append('Set-Cookie', _rewriteTermixCookie(_sc, BASE));
     return new Response(null, { status: upstream.status, headers: _rhRedir });
   }
@@ -347,9 +348,10 @@ export async function handleTermixProxy(request, env, opts) {
     if (upstream.status < 500) {
       const upCt4 = upstream.headers.get('Content-Type') || 'application/octet-stream';
       const rh4   = new Headers({ 'Content-Type': upCt4, 'Cache-Control': 'no-cache' });
-      const setSC4 = typeof upstream.headers.getAll === 'function'
-        ? upstream.headers.getAll('set-cookie')
-        : (upstream.headers.get('set-cookie') ? [upstream.headers.get('set-cookie')] : []);
+      // ⚠️ Xem ghi chú ở khối "Build response headers" bên dưới: PHẢI dùng getSetCookie().
+      let setSC4 = [];
+      try { setSC4 = upstream.headers.getSetCookie(); }
+      catch { const h = upstream.headers.get('set-cookie'); if (h) setSC4 = [h]; }
       for (const sc of setSC4) rh4.append('Set-Cookie', _rewriteTermixCookie(sc, BASE));
       return new Response(upstream.body, { status: upstream.status, headers: rh4 });
     }
@@ -371,9 +373,13 @@ export async function handleTermixProxy(request, env, opts) {
   // Build response headers
   const ct  = upstream.headers.get('Content-Type') || 'application/octet-stream';
   const rh  = new Headers({ 'Content-Type': ct, 'Cache-Control': 'no-cache' });
-  const setSC = typeof upstream.headers.getAll === 'function'
-    ? upstream.headers.getAll('set-cookie')
-    : (upstream.headers.get('set-cookie') ? [upstream.headers.get('set-cookie')] : []);
+  // ⚠️ PHẢI dùng getSetCookie() — `Headers.getAll()` KHÔNG tồn tại trên runtime Workers hiện đại,
+  // nên `typeof headers.getAll === 'function' ? ... : ...` luôn rơi vào nhánh fallback: chỉ lấy được
+  // 1 header set-cookie gộp (hoặc rỗng) → mất cookie phiên. Đúng lỗi đã gặp thật ở proxy PNETLab
+  // ngày 2026-07-27 (đăng nhập xong nhưng trang trắng/đen vì cookie `_session` không tới browser).
+  let setSC = [];
+  try { setSC = upstream.headers.getSetCookie(); }
+  catch { const h = upstream.headers.get('set-cookie'); if (h) setSC = [h]; }
   for (const sc of setSC) rh.append('Set-Cookie', _rewriteTermixCookie(sc, BASE));
 
   // HTML — inject JS to rewrite WebSocket/fetch/XHR URLs to proxy path

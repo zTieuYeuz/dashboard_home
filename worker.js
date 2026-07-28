@@ -146,7 +146,7 @@ import {
   handleCpaiEmbed,
 } from './src/camera-home.js';
 import { runDailySelfReview } from './src/ai/review.js';
-import { handlePnetLlm, handlePnetConsole } from './src/pnetlab.js';
+import { handlePnetLlm, handlePnetConsole, handlePnetlabHomeProxy } from './src/pnetlab.js';
 import { handleN8nAiLlm, handleN8nAiReadWorkflow, handleN8nAiUpdateWorkflow, handleN8nAiCheckExecutions, handleN8nAiDocs } from './src/n8n-ai.js';
 import {
   handleWebauthnRegisterOptions, handleWebauthnRegisterVerify,
@@ -2890,12 +2890,15 @@ const SERVICES_EMBED_TREE = [
     { name:'n8n', icon:'⚡', url:'https://n8n-home.home-server.id.vn/', embedUrl:'/n8n-proxy/home', perm:'hub-n8n' },
   ]},
   { folder:'Lab', icon:'🧪', sites:[
-    // Nhúng iframe qua tunnel. PNETLab KHÔNG gửi X-Frame-Options và không có code framebust
-    // (comment cũ ghi "framebust" là từ hồi còn chế độ ONLINE — authen.pnetlab.com mới là thứ đá ra).
+    // [2026-07-27] Đổi từ iframe TRỎ THẲNG sang qua handlePnetlabHomeProxy (src/pnetlab.js) —
+    // bắt buộc đăng nhập dashboard, không vào thẳng link PNETLab được nữa (Cloudflare Access +
+    // Service Token, xem PNETLAB_HOME_CF_CLIENT_ID/_SECRET). PNETLab KHÔNG gửi X-Frame-Options và
+    // không có code framebust (comment cũ ghi "framebust" là từ hồi còn chế độ ONLINE).
     // ⚠ app.js của PNETLab đã phải vá lỗi statusText (chết dưới HTTP/2 của Cloudflare) — xem memory
-    //   pnetlab_cloudflare_http2. Update PNETLab sẽ ghi đè bản vá → trắng trang trở lại.
+    //   pnetlab_cloudflare_http2. Update PNETLab sẽ ghi đè bản vá → trắng trang trở lại. Bản vá này
+    //   ĐỘC LẬP với proxy mới — không bị ảnh hưởng bởi thay đổi cách nhúng.
     { name:'Pnetlab-network', icon:'🧪', url:'https://pnetlab.home-server.id.vn/',
-      embedUrl:'https://pnetlab.home-server.id.vn/store/public/admin/main/view', perm:'hub-pnetlab' },
+      embedUrl:'/store/public/admin/main/view', perm:'hub-pnetlab' },
   ]},
   { folder:'Monitor', icon:'📊', sites:[
     { name:'Frigate NVR', icon:'📷', url:'http://192.168.110.5:5000/', perm:'hub-frigate' },
@@ -3399,9 +3402,14 @@ async function handleN8nHomeProxy(request, env) {
     : 'no-store, no-cache, must-revalidate');
 
   // Rewrite Set-Cookie: strip Domain so cookie lands on dashboard origin
-  const rawCookies = upstream.headers.getAll ? upstream.headers.getAll('set-cookie') : [];
+  // ⚠️ PHẢI dùng getSetCookie() — `Headers.getAll()` KHÔNG tồn tại trên runtime Workers hiện đại,
+  // nên `headers.getAll ? ... : []` luôn rơi vào nhánh [] → mất sạch cookie phiên upstream.
+  // Đúng lỗi đã gặp thật ở proxy PNETLab ngày 2026-07-27 (login OK nhưng trang trắng/đen).
+  let rawCookies = [];
+  try { rawCookies = upstream.headers.getSetCookie(); }
+  catch { const h = upstream.headers.get('set-cookie'); if (h) rawCookies = [h]; }
   for (const c of rawCookies) {
-    const rewritten = c
+    const rewritten = String(c)
       .replace(/;\s*Domain=[^;,]*/gi, '')
       .replace(/;\s*SameSite=\w+/gi, '; SameSite=Lax');
     rh.append('Set-Cookie', rewritten);
@@ -4017,6 +4025,21 @@ export default {
     if (p.startsWith('/proxy/termix-movi'))      return handleTermixMoviProxy(request, env);
     // ── Termix Home proxy (same-origin → OIDC login works in iframe) ──
     if (p.startsWith('/proxy/termix-home'))      return handleTermixHomeProxy(request, env);
+    // ── PNETLab Home proxy (same-origin → session gates AI, CF Access blocks direct link) ──
+    // ⚠ PNETLab là SPA react-router với route HARDCODE `/store/public/:folder/:page/:func` và
+    // KHÔNG có basename → phải phục vụ tại ĐÚNG path gốc `/store/*` + `/themes/*`, thêm prefix
+    // là router không khớp và trang trắng bóc (đã gặp thật, xem chú thích trong src/pnetlab.js).
+    // Prefix `/proxy/pnetlab-home` chỉ còn dùng cho `/api/*` của PNETLab (trùng namespace API
+    // dashboard nên bắt buộc phải đổi). Cả 2 lối vào đều gác session + hasPerm trong handler.
+    if (p.startsWith('/proxy/pnetlab-home'))     return handlePnetlabHomeProxy(request, env);
+    // Danh sách này phải khớp PNETLAB_PASSTHRU trong src/pnetlab.js — sửa 1 chỗ thì sửa cả 2.
+    // /legacy = trang topology cũ (mở 1 bài lab là chuyển tới /legacy/topology), /images/* = icon
+    // thiết bị trên sơ đồ, /fonts/vendor = font primereact trong bundle React.
+    // ⚠ KHÔNG thêm '/auth' (dashboard dùng /auth/microsoft* cho SSO) và KHÔNG mở rộng '/fonts'
+    //   thành cả nhánh — route fallback asset n8n bên dưới đang dùng '/fonts/'.
+    if (['/store', '/themes', '/legacy', '/html5', '/images/icons', '/images/vendor', '/fonts/vendor']
+        .some(b => p === b || p.startsWith(b + '/')))
+      return handlePnetlabHomeProxy(request, env);
     // ── SSH Movi token endpoint ──
     if (p === '/api/ssh-movi/token')  return handleSshMoviToken(request, env);
     // Note: /api/ssh-movi/verify is handled at the top of the router (before session middleware)
