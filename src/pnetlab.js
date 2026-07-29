@@ -401,14 +401,33 @@ const PNETLAB_HOME_BASE = '/proxy/pnetlab-home';
    (đã kiểm tra: dashboard không dùng `/images` cho bất cứ gì). */
 const PNETLAB_PASSTHRU = ['/store', '/themes', '/legacy', '/html5', '/images', '/fonts/vendor'];
 
+/* ⚠️ Bug thật đã gặp: webpack (bundle React) đặt tên CHUNK DÙNG CHUNG nhiều trang kiểu
+   `vendors~./store/public/react/pages/admin-Lab_sessionsView-js~...~<hash>` — publicPath là "/"
+   nên URL request thực tế là `/vendors~./store/...js`, path này KHÔNG bắt đầu bằng "/store/" (dù
+   chứa chuỗi đó ở giữa) nên lọt khỏi mọi passthru ở trên → 404 → `ChunkLoadError`, hiện rõ nhất khi
+   bấm vào 1 lab ĐANG CHẠY (cần chunk "admin-Lab_sessionsView"). Các chunk RIÊNG từng trang thì tên
+   bắt đầu bằng "./" (vd "./store/public/react/pages/admin-LabsCreate-js") — "./" tự chuẩn hoá mất
+   khi ghép URL nên vô tình rơi đúng vào /store/, KHÔNG cần xử lý riêng; chỉ chunk DÙNG CHUNG
+   ("vendors~...") mới lọt lưới. Khớp bằng PREFIX thô (không cần dấu "/" theo sau như các mục trên,
+   vì ký tự kế tiếp luôn là "." của tên chunk, không phải path segment mới) — khác `public/vendor/`
+   (số ít, có dấu "/") của Termix nên không đụng nhau. */
+const PNETLAB_PASSTHRU_PREFIX = ['/vendors~'];
+
 /* Chuẩn hoá 1 URL/path bất kỳ trong HTML hoặc header về đường đi đúng trên dashboard:
    - bỏ origin PNETLab (kể cả bản URL-encode trong query param như `link=https%3A%2F%2F...`)
+   - path bare "/" → PNETLab tự coi đây là TRANG CHỦ CỦA CHÍNH NÓ (đã gặp thật ở nhiều nút/link
+     khác nhau — "close lab" tự redirect, nút "Main" trên thanh admin...); "/" trong ngữ cảnh
+     proxy này lại là trang chủ DASHBOARD (chưa từng bypass Cloudflare Access) → đưa thẳng về
+     ĐÚNG trang chủ THẬT của PNETLab thay vì để nó thoát ra ngoài
    - path thuộc PNETLAB_PASSTHRU  → giữ nguyên (router cần đúng pathname)
    - path khác (chủ yếu /api/...) → thêm prefix /proxy/pnetlab-home */
+const PNETLAB_HOME_ENTRY = '/store/public/admin/main/view';
 function pnetPath(path) {
   if (!path || path.charAt(0) !== '/') return path;
+  if (path === '/') return PNETLAB_HOME_ENTRY;
   if (path.indexOf(PNETLAB_HOME_BASE) === 0) return path;
   if (PNETLAB_PASSTHRU.some(p => path === p || path.indexOf(p + '/') === 0)) return path;
+  if (PNETLAB_PASSTHRU_PREFIX.some(p => path.indexOf(p) === 0)) return path;
   return PNETLAB_HOME_BASE + path;
 }
 function rewriteUrlLike(str) {
@@ -503,6 +522,14 @@ export async function handlePnetlabHomeProxy(request, env) {
     upSock.addEventListener('message', ({ data }) => { try { server.send(data); } catch { /* socket đã đóng */ } });
     server.addEventListener('close', ({ code, reason }) => { try { upSock.close(code, reason); } catch { /* đã đóng */ } });
     upSock.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason); } catch { /* đã đóng */ } });
+    // ⚠️ Bug thật đã gặp: thiếu 2 listener 'error' bên dưới → khi tunnel/mạng rớt kết nối ĐỘT NGỘT
+    // (không phải close frame sạch — vd Guacamole/Tomcat tự ngắt do idle timeout, hoặc tunnel chập
+    // chờn), phía WebSocket chỉ bắn 'error' mà KHÔNG chắc có bắn 'close' theo sau. Thiếu handler này
+    // → `upSock.close()` không bao giờ được gọi → session phía Guacamole KHÔNG BAO GIỜ được giải
+    // phóng → "ma" tích luỹ dần → hết quota "exhausted the limit for simultaneous connection" dù
+    // chỉ mở đúng 1 tab. Giờ bắt cả 'error' để đảm bảo LUÔN đóng nốt đầu kia.
+    server.addEventListener('error', () => { try { upSock.close(1011, 'peer error'); } catch { /* đã đóng */ } });
+    upSock.addEventListener('error', () => { try { server.close(1011, 'peer error'); } catch { /* đã đóng */ } });
 
     const wsRespHeaders = new Headers();
     const echoSwp = upResp.headers.get('Sec-WebSocket-Protocol') || swp;
@@ -588,6 +615,26 @@ export async function handlePnetlabHomeProxy(request, env) {
   }
 
   const ct = upstream.headers.get('Content-Type') || '';
+
+  // ⚠️ Bug thật đã gặp: PNETLab tự "postLogin()" gọi lại sau khi đóng lab (LAB==null, param==null)
+  // → `window.location.href = "/"` (functions.js), coi "/" là trang chủ CHÍNH NÓ. Trong proxy này
+  // "/" là trang chủ DASHBOARD (chưa nằm trong app bypass Cloudflare Access nào) → PNETLab tự điều
+  // hướng iframe của mình sang trang bị Cloudflare Access chặn → "This content is blocked", KHÔNG
+  // liên quan gì đến quyền hạn dashboard. Vá thẳng chuỗi này khi proxy — đưa PNETLab về ĐÚNG trang
+  // chủ của chính nó (`/store/public/admin/main/view`, luôn nằm trong passthru) thay vì để nó tự
+  // nhảy ra ngoài phạm vi đã bypass. Áp cho MỌI response text/javascript (không chỉ functions.js
+  // — PNETLab có thể lặp lại pattern này ở bundle khác, và chuỗi đủ đặc thù để không đụng nhầm gì).
+  if (ct.includes('javascript')) {
+    let js = await upstream.text();
+    // Bắt mọi biến thể (có/không "window.", khoảng trắng khác nhau, nháy đơn/kép) thay vì chỉ
+    // đúng 1 chuỗi — PNETLab lặp lại pattern "về trang chủ chính nó" ở nhiều chỗ khác nhau
+    // (postLogin() sau khi đóng lab, nút "Main" trên thanh admin...), không chỉ đúng 1 dòng.
+    js = js.replace(/(window\.)?location\.href\s*=\s*(["'])\/\2/g,
+      (m, w, q) => `${w || ''}location.href = ${q}${PNETLAB_HOME_ENTRY}${q}`);
+    rh.set('Content-Type', ct);
+    return new Response(js, { status: upstream.status, headers: rh });
+  }
+
   if (!ct.includes('text/html')) {
     return new Response(upstream.body, { status: upstream.status, headers: rh });
   }
@@ -603,10 +650,14 @@ export async function handlePnetlabHomeProxy(request, env) {
 var B='${PNETLAB_HOME_BASE}';
 var O='pnetlab.home-server.id.vn';
 var PASS=${JSON.stringify(PNETLAB_PASSTHRU)};
+var PASSPFX=${JSON.stringify(PNETLAB_PASSTHRU_PREFIX)};
+var HOME='${PNETLAB_HOME_ENTRY}';
 function route(p){
   if(typeof p!=='string'||p.charAt(0)!=='/') return p;
+  if(p==='/') return HOME;
   if(p.indexOf(B)===0) return p;
   for(var i=0;i<PASS.length;i++){ if(p===PASS[i]||p.indexOf(PASS[i]+'/')===0) return p; }
+  for(var j=0;j<PASSPFX.length;j++){ if(p.indexOf(PASSPFX[j])===0) return p; }
   return B+p;
 }
 function rw(u){

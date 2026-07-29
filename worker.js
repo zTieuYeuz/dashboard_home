@@ -2847,11 +2847,20 @@ a:hover{background:#4f46e5}</style></head>
         "media-src 'self' blob:; " +
         // [M4] Whitelist only known domains instead of broad 'https: wss:'
         // Covers: all homelab subdomains + movi-finance API/WebSocket
-        "connect-src 'self' https://*.home-server.id.vn wss://*.home-server.id.vn https://*.movi-finance.com wss://*.movi-finance.com https://speed.cloudflare.com; " +
+        // Cloudflare Access (mọi domain *.cloudflareaccess.com — team domain riêng mỗi tài khoản,
+        // vd labserverhome.cloudflareaccess.com) tự chèn iframe/XHR ẩn để LÀM MỚI NGẦM JWT phiên
+        // Access đang bảo vệ chính domain dashboard này — cơ chế có sẵn của Cloudflare, không phải
+        // code tự viết. Thiếu domain này ở connect-src/frame-src → JWT không được gia hạn ngầm →
+        // phiên Access hết hạn dần → điều hướng bất kỳ (kể cả từ trong iframe PNETLab/Termix) rơi
+        // vào trang login Access (chặn framing chính nó) → hiện "This content is blocked" dù
+        // không liên quan gì tới code PNETLab/Termix. Đã gặp lặp lại nhiều lần trong 1 tối
+        // (2026-07-28) trước khi thêm domain này — xem [[pnetlab_spa_proxy_trap]].
+        "connect-src 'self' https://*.home-server.id.vn wss://*.home-server.id.vn https://*.movi-finance.com wss://*.movi-finance.com https://speed.cloudflare.com https://*.cloudflareaccess.com; " +
         // Google Fonts files + data URIs
         "font-src 'self' data: https://fonts.gstatic.com; " +
-        // Allow camera (go2rtc), SSH terminal (termix) iframes, and Microsoft OIDC silent renewal
-        "frame-src 'self' https://*.home-server.id.vn https://cam.movi-finance.com https://termix.movi-finance.com https://login.microsoftonline.com; " +
+        // Allow camera (go2rtc), SSH terminal (termix) iframes, Microsoft OIDC silent renewal,
+        // và Cloudflare Access silent-refresh iframe (xem ghi chú connect-src ở trên).
+        "frame-src 'self' https://*.home-server.id.vn https://cam.movi-finance.com https://termix.movi-finance.com https://login.microsoftonline.com https://*.cloudflareaccess.com; " +
         "object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
     }
   });
@@ -4040,6 +4049,13 @@ export default {
     if (['/store', '/themes', '/legacy', '/html5', '/images', '/fonts/vendor']
         .some(b => p === b || p.startsWith(b + '/')))
       return handlePnetlabHomeProxy(request, env);
+    // Chunk webpack DÙNG CHUNG nhiều trang (tên "vendors~./store/public/react/pages/...~<hash>",
+    // publicPath="/") request tại GỐC domain (vd `/vendors~./store/public/react/pages/admin-
+    // Lab_sessionsView-js.js`), KHÔNG bắt đầu bằng "/store/" dù chứa chuỗi đó ở giữa → lọt khỏi
+    // mọi rule ở trên → 404 → ChunkLoadError (rõ nhất khi bấm vào 1 lab ĐANG CHẠY). Khớp bằng
+    // prefix thô (không cần "/" theo sau — ký tự kế là "." của tên chunk). Chunk RIÊNG từng trang
+    // (tên bắt đầu "./...") tự chuẩn hoá về /store/ nên không cần rule riêng.
+    if (p.startsWith('/vendors~')) return handlePnetlabHomeProxy(request, env);
     // ── SSH Movi token endpoint ──
     if (p === '/api/ssh-movi/token')  return handleSshMoviToken(request, env);
     // Note: /api/ssh-movi/verify is handled at the top of the router (before session middleware)
