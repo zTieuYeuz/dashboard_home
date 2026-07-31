@@ -518,18 +518,46 @@ export async function handlePnetlabHomeProxy(request, env) {
     const { 0: client, 1: server } = new WebSocketPair();
     server.accept();
     upSock.accept();
-    server.addEventListener('message', ({ data }) => { try { upSock.send(data); } catch { /* socket đã đóng */ } });
-    upSock.addEventListener('message', ({ data }) => { try { server.send(data); } catch { /* socket đã đóng */ } });
-    server.addEventListener('close', ({ code, reason }) => { try { upSock.close(code, reason); } catch { /* đã đóng */ } });
-    upSock.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason); } catch { /* đã đóng */ } });
+
+    // Chẩn đoán "Guacamole đóng kết nối vì không thấy phản hồi từ trình duyệt" (2026-07-30):
+    // nghi ngờ gói tin keep-alive của client bị RỚT ÂM THẦM qua relay này (catch nuốt lỗi không
+    // log) trong khi đang gõ lệnh — không phải do idle. Thêm connId + timestamp để lần sau xem
+    // qua `wrangler tail` biết chính xác: rớt ở chiều nào, sau bao lâu, do send() thật sự lỗi
+    // hay do đầu kia tự đóng trước.
+    const connId = Math.random().toString(36).slice(2, 9);
+    const t0 = Date.now();
+    console.log(`[pnet-ws ${connId}] open`);
+
+    server.addEventListener('message', ({ data }) => {
+      try { upSock.send(data); }
+      catch (e) { console.error(`[pnet-ws ${connId}] client->upstream send FAILED +${Date.now()-t0}ms:`, e && e.message); }
+    });
+    upSock.addEventListener('message', ({ data }) => {
+      try { server.send(data); }
+      catch (e) { console.error(`[pnet-ws ${connId}] upstream->client send FAILED +${Date.now()-t0}ms:`, e && e.message); }
+    });
+    server.addEventListener('close', ({ code, reason }) => {
+      console.log(`[pnet-ws ${connId}] client closed code=${code} reason="${reason}" +${Date.now()-t0}ms`);
+      try { upSock.close(code, reason); } catch { /* đã đóng */ }
+    });
+    upSock.addEventListener('close', ({ code, reason }) => {
+      console.log(`[pnet-ws ${connId}] upstream closed code=${code} reason="${reason}" +${Date.now()-t0}ms`);
+      try { server.close(code, reason); } catch { /* đã đóng */ }
+    });
     // ⚠️ Bug thật đã gặp: thiếu 2 listener 'error' bên dưới → khi tunnel/mạng rớt kết nối ĐỘT NGỘT
     // (không phải close frame sạch — vd Guacamole/Tomcat tự ngắt do idle timeout, hoặc tunnel chập
     // chờn), phía WebSocket chỉ bắn 'error' mà KHÔNG chắc có bắn 'close' theo sau. Thiếu handler này
     // → `upSock.close()` không bao giờ được gọi → session phía Guacamole KHÔNG BAO GIỜ được giải
     // phóng → "ma" tích luỹ dần → hết quota "exhausted the limit for simultaneous connection" dù
     // chỉ mở đúng 1 tab. Giờ bắt cả 'error' để đảm bảo LUÔN đóng nốt đầu kia.
-    server.addEventListener('error', () => { try { upSock.close(1011, 'peer error'); } catch { /* đã đóng */ } });
-    upSock.addEventListener('error', () => { try { server.close(1011, 'peer error'); } catch { /* đã đóng */ } });
+    server.addEventListener('error', (e) => {
+      console.error(`[pnet-ws ${connId}] client error +${Date.now()-t0}ms:`, e && e.message);
+      try { upSock.close(1011, 'peer error'); } catch { /* đã đóng */ }
+    });
+    upSock.addEventListener('error', (e) => {
+      console.error(`[pnet-ws ${connId}] upstream error +${Date.now()-t0}ms:`, e && e.message);
+      try { server.close(1011, 'peer error'); } catch { /* đã đóng */ }
+    });
 
     const wsRespHeaders = new Headers();
     const echoSwp = upResp.headers.get('Sec-WebSocket-Protocol') || swp;

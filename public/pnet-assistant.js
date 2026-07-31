@@ -54,6 +54,17 @@
 
   /* ── Tools (thao tác trên LAB user đang mở — session hiện tại) ── */
   var MUTATING = { start_node: 1, stop_node: 1, export_config: 1, run_console: 1 };
+  // Cache danh sách node từ lần get_topology gần nhất — dùng để hiện TÊN node (vd "R2") thay vì
+  // số trần trụi (id hoặc console_port) trong hộp thoại xác nhận, để user biết đang duyệt cho node nào.
+  var lastNodes = [];
+  function findNodeByPort(port) {
+    for (var i = 0; i < lastNodes.length; i++) { if (lastNodes[i].console_port === port) return lastNodes[i]; }
+    return null;
+  }
+  function findNodeById(id) {
+    for (var i = 0; i < lastNodes.length; i++) { if (String(lastNodes[i].id) === String(id)) return lastNodes[i]; }
+    return null;
+  }
   var TOOLS = {
     // /topology trả nodes+networks+lines cho lab ĐANG MỞ, KHÔNG cần factory/create
     // (đúng endpoint functions.js dùng để vẽ; /nodes cần bind nên rỗng trên trang legacy).
@@ -101,6 +112,7 @@
           }
         });
 
+        lastNodes = nodes;
         return { node_count: nodes.length, running_count: running, nodes: nodes, links: links };
       });
     },
@@ -341,11 +353,16 @@
     // Tool thay đổi trạng thái → hỏi xác nhận
     if (tool.tool === 'run_console') {
       var cmdList = (Array.isArray(tool.commands) ? tool.commands : []).join('\n  ');
-      var okC = window.confirm('AI muốn GÕ LỆNH vào console node ' + (tool.console_port || '?') + ':\n\n  ' + cmdList + '\n\nĐồng ý?');
+      var portNum = parseInt(tool.console_port, 10);
+      var nInfo = Number.isInteger(portNum) ? findNodeByPort(portNum) : null;
+      var nodeLabel = nInfo ? (nInfo.name + ' (console ' + portNum + ')') : ('console ' + (tool.console_port || '?'));
+      var okC = window.confirm('AI muốn GÕ LỆNH vào ' + nodeLabel + ':\n\n  ' + cmdList + '\n\nĐồng ý?');
       if (!okC) return Promise.resolve({ __denied: true, message: 'Người dùng từ chối gõ lệnh này.' });
     } else if (MUTATING[tool.tool]) {
       var label = { start_node: 'BẬT', stop_node: 'TẮT', export_config: 'LƯU config' }[tool.tool];
-      var ok = window.confirm('AI muốn ' + label + ' node ' + (tool.node_id != null ? tool.node_id : '(tất cả)') + '.\nĐồng ý?');
+      var nInfo2 = (tool.node_id != null) ? findNodeById(tool.node_id) : null;
+      var nodeLabel2 = nInfo2 ? (nInfo2.name + ' (id ' + tool.node_id + ')') : (tool.node_id != null ? tool.node_id : '(tất cả)');
+      var ok = window.confirm('AI muốn ' + label + ' node ' + nodeLabel2 + '.\nĐồng ý?');
       if (!ok) return Promise.resolve({ __denied: true, message: 'Người dùng từ chối thao tác này.' });
     }
     try { return Promise.resolve(TOOLS[tool.tool](tool)).catch(function (e) { return { ok: false, error: String(e && e.message || e) }; }); }
