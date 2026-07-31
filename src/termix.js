@@ -396,6 +396,14 @@ export async function handleTermixProxy(request, env, opts) {
     // → CF Access (trên domain dashboard) chặn asset → CORS fail. Strip crossorigin để asset tải
     // same-origin CÓ cookie → CF Access cho qua. (asset cùng origin nên không cần crossorigin)
     html = html.replace(/\s+crossorigin(=("[^"]*"|'[^']*'|\S+))?/gi, '');
+    // [Dọn lỗi console] Gỡ thẻ khai báo PWA manifest.
+    // Trình duyệt tải manifest theo chuẩn là request ẨN DANH (không gửi cookie), nên nó
+    // không có phiên dashboard → handleTermixProxy trả 401 → console đỏ 4-5 dòng mỗi lần
+    // mở trang. Manifest chỉ phục vụ "add to home screen"; cài Termix thành PWA từ đường
+    // proxy vốn cũng không dùng được. Gỡ thẻ đi thì trình duyệt không request nữa.
+    // CỐ Ý chọn cách này thay vì cho /manifest.json đi qua không cần đăng nhập — mở một
+    // đường công khai mới vào proxy là nới bề mặt tấn công, không đáng cho một file metadata.
+    html = html.replace(/<link[^>]+rel=(["'])[^"']*\bmanifest\b[^"']*\1[^>]*>/gi, '');
     // [H2 fix] Extract JWT from HttpOnly cookie for safe server-side injection.
     // The JWT cookie is HttpOnly so JS cannot read it via document.cookie.
     // Instead we extract it here and inject as a scoped JS variable.
@@ -502,7 +510,10 @@ export async function handleTermixProxy(request, env, opts) {
       if(_tk)r+=(r.indexOf('?')===-1?'?':'&')+'token='+_tk;
       else console.warn('[proxy-patcher] SSH WS: no JWT found');
     }
-    if(r!==u)console.log('[proxy-patcher] WS',u,'->',r);
+    // ⚠️ CHE TOKEN TRƯỚC KHI IN. URL sau rewrite có kèm ?token=<JWT phiên Termix> — ai cầm
+    // được chuỗi đó là vào thẳng phiên SSH mà không cần đăng nhập. Console rò ra rất dễ
+    // (quay màn hình, chụp ảnh gửi người khác, máy dùng chung) nên không in giá trị thật.
+    if(r!==u)console.log('[proxy-patcher] WS',u,'->',r.replace(/([?&]token=)[^&]*/i,'$1***'));
     var _sock=p!=null?new _W(r,p):new _W(r);
     if(_isSsh){ try{ _termixHookSsh(_sock); }catch(e){} }
     return _sock;
