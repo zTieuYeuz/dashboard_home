@@ -398,7 +398,15 @@ var CAN_PLAYBACK = USER.isAdmin || (USER.permissions||{})['camera_playback'] ===
 var CAN_DOWNLOAD = USER.isAdmin || (USER.permissions||{})['camera_download'] === 'read';
 var CAN_AUTOOPEN = (USER.permissions||{})['camera_autoopen'] === 'read';
 
-/* ── Camera config ── */
+/* ── Camera config ──
+   ⚠ Camera chỉ hiện ra khi có mặt ở CẢ HAI nơi: danh sách này VÀ khoá KV
+   `camera_list` (CAMS = giao của hai bên). Thêm thiếu một chỗ là camera không
+   hiện mà chẳng báo lỗi gì — đã mất công dò vì chuyện này rồi.
+   Thêm camera mới cần 3 chỗ: (1) đây, (2) DEFAULT_CAMERAS trong src/core.js,
+   (3) KV `camera_list` của CẢ staging lẫn production.
+
+   audio:true  → khi bấm 🔊 sẽ đổi sang luồng `<id>_live` (có tiếng).
+                 Camera nào không khai luồng `_live` trong Frigate thì để false. */
 var CAM_DEFAULTS = {
   'cam01': {sub:'Hikvision · H264',          audio:false},
   'cam03': {sub:'Hikvision · H264',          audio:false},
@@ -408,6 +416,8 @@ var CAM_DEFAULTS = {
   'cam07': {sub:'H265 → H264/NVENC · audio', audio:true},
   'cam08': {sub:'H265 → H264/NVENC · audio', audio:true},
   'cam09': {sub:'H265 → H264/NVENC · audio', audio:true},
+  'cam10': {sub:'H265 → H264/NVENC · audio', audio:true},
+  'cam11': {sub:'H265 → H264/NVENC · audio', audio:true},
 };
 var CAMS = [];
 var _camState = {};

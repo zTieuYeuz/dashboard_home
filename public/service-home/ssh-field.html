@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SSH Hiện trường</title>
+<link rel="stylesheet" href="/service-home/_shared/base.css"/>
+<link rel="stylesheet" href="/vendor/xterm/xterm.min.css"/>
+<style>
+/* ⚠️ CẦU NỐI TÊN BIẾN MÀU — ĐỌC TRƯỚC KHI XOÁ
+   Trang này viết bằng bộ tên --bg-2/--bg-3/--line/--err, nhưng base.css của
+   dashboard đặt tên khác: --surface/--surface-2/--border/--bad. Tức là bấy lâu
+   nay MỌI dòng var(--bg-2) đều là biến KHÔNG TỒN TẠI.
+
+   Vì sao không ai thấy: biến sai làm cả dòng khai báo bị bỏ → nền thành trong
+   suốt, viền thành không có. Mà nền trang vốn tối nên nhìn vẫn "bình thường".
+   Nó chỉ lộ ra khi có thứ khác nằm DƯỚI: menu thả xuống mở trên nền terminal
+   thì trong suốt hoàn toàn, chữ menu chồng lên chữ terminal (ảnh anh Thoại gửi).
+
+   Sửa bằng cách bắc cầu một lần ở đây thay vì đổi tên khắp file — vừa gọn vừa
+   không sợ sót chỗ nào. Đặt trên :root nên tự đổi theo chế độ Sáng/Tối. */
+:root{
+  --bg-2:var(--surface);
+  --bg-3:var(--surface-2);
+  --line:var(--border);
+  --err:var(--bad);
+}
+
+html,body{height:100%;overflow:hidden;font-family:var(--font-sans);background:var(--bg);color:var(--text);
+  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;margin:0}
+
+/* ── Bảng ghép nối (hiện khi chưa dò được cầu nối) ── */
+#setup{padding:14px 18px;background:var(--bg-2);border-bottom:1px solid var(--line);flex:none}
+#setup.hide{display:none}
+#setup h3{margin:0 0 7px;font-size:14px;display:flex;align-items:center;gap:7px}
+#setup p{margin:0 0 10px;font-size:13px;color:var(--text-2);line-height:1.75}
+#setup code{background:var(--bg-3,var(--bg));border-radius:4px;padding:1px 6px;font-family:var(--font-mono,monospace);font-size:12.5px}
+#cmdBox{background:var(--bg-3,var(--bg));border:1px solid var(--line);border-radius:7px;padding:9px 12px;
+  margin:0 0 10px;font-family:var(--font-mono,monospace);font-size:12.5px;color:var(--text);
+  overflow-x:auto;white-space:pre;line-height:1.7}
+.srow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 9px;border-radius:20px;
+  background:var(--bg-3,var(--bg));border:1px solid var(--line);color:var(--text-2)}
+.badge.ok{color:var(--ok);border-color:color-mix(in oklch,var(--ok) 40%,transparent)}
+.badge.no{color:var(--err);border-color:color-mix(in oklch,var(--err) 40%,transparent)}
+
+/* ── Thanh kết nối ── */
+.bar{display:flex;align-items:center;gap:9px;padding:9px 14px;background:var(--bg-2);
+  border-bottom:1px solid var(--line);flex-wrap:wrap;flex:none}
+.bar input{background:var(--bg-3,var(--bg));border:1px solid var(--line);color:var(--text);
+  border-radius:7px;padding:6px 9px;font-size:13px;font-family:inherit}
+.bar input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.i-host{width:150px}.i-port{width:60px}.i-user{width:115px}.i-pass{width:135px}.i-tok{width:290px}
+button{background:var(--accent);color:#fff;border:0;border-radius:7px;padding:7px 13px;font-size:13px;
+  font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+button:hover{filter:brightness(1.1)}button:disabled{opacity:.45;cursor:default;filter:none}
+button.ghost{background:var(--bg-3,var(--bg));color:var(--text-2);border:1px solid var(--line)}
+/* Nút tải là thẻ <a> (trình duyệt tự lo việc tải), nên phải tự vẽ cho giống nút */
+.btn-dl{display:inline-flex;align-items:center;gap:5px;background:var(--bg-3,var(--bg));
+  color:var(--text-2);border:1px solid var(--line);border-radius:7px;padding:7px 13px;
+  font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap}
+.btn-dl:hover{color:var(--text);border-color:var(--accent)}
+.status{font-size:12px;color:var(--text-2);white-space:nowrap}
+.spacer{flex:1}
+
+/* Trang này có bộ chọn giao diện riêng cho terminal (6 kiểu), nên nút tròn
+   Sáng/Tối mà dashboard chèn sẵn ở góc trái vừa thừa vừa dễ bấm nhầm. */
+#__themeFab{display:none!important}
+
+/* ── Thanh công cụ phiên (ngắt/nối lại · bố cục · màu · gõ cho mọi tab) ── */
+.bar2{display:flex;align-items:center;gap:8px;padding:7px 14px;background:var(--bg-2);
+  border-bottom:1px solid var(--line);flex-wrap:wrap;flex:none;font-size:12.5px}
+.bar2:empty{display:none}
+.bar2 select{background:var(--bg-3,var(--bg));border:1px solid var(--line);color:var(--text);
+  border-radius:7px;padding:5px 7px;font-size:12.5px;font-family:inherit;cursor:pointer}
+.bar2 button{padding:5px 11px;font-size:12.5px}
+.bar2 label{display:inline-flex;align-items:center;gap:5px;cursor:pointer;color:var(--text-2);user-select:none}
+.bar2 label:hover{color:var(--text)}
+.bar2 .sep{width:1px;height:20px;background:var(--line);margin:0 2px}
+
+/* ── Nút menu thả xuống (thay cho <select>) ── */
+/* Thanh công cụ phải nằm trên terminal về mặt xếp lớp: #terms đứng SAU trong
+   HTML nên mặc định vẽ đè lên. Cho .bar2 một stacking context cao hơn thì menu
+   thả xuống không bao giờ bị chìm, kể cả khi xterm dựng thêm lớp canvas. */
+.bar2{position:relative;z-index:40}
+.menu{position:relative}
+.menu .mbtn{display:inline-flex;align-items:center;gap:6px}
+.menu .cur{color:var(--text);font-weight:600}
+.menu .car{opacity:.55;font-size:10px}
+/* Nền menu KHÔNG được trong suốt — nó mở đè lên terminal. Ghi màu cứng làm lưới
+   an toàn phòng khi biến màu lại đổi tên lần nữa. */
+.menu .pop{position:absolute;top:calc(100% + 5px);left:0;z-index:60;display:none;min-width:190px;
+  background:#1b1f26;background:var(--surface,#1b1f26);
+  border:1px solid var(--border,#3a4150);border-radius:10px;padding:5px;
+  box-shadow:0 12px 34px rgba(0,0,0,.55)}
+html[data-theme=light] .menu .pop{background:#ffffff;background:var(--surface,#ffffff)}
+.menu.open .pop{display:block}
+.menu .pop button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;
+  color:var(--text-2);border:0;border-radius:7px;padding:7px 9px;font-size:12.5px;font-weight:500}
+.menu .pop button:hover{background:var(--bg-3,var(--bg));color:var(--text);filter:none}
+.menu .pop button .tick{width:12px;opacity:0;color:var(--accent)}
+.menu .pop button.on{color:var(--text);font-weight:600}
+.menu .pop button.on .tick{opacity:1}
+/* Gõ cho mọi tab là thao tác dễ gây hoạ (một lệnh sai chạy trên 6 thiết bị cùng
+   lúc) → khi bật thì cả thanh đổi màu cảnh báo, không cho quên là đang bật. */
+.bar2.multi{background:color-mix(in oklch,var(--err) 14%,var(--bg-2));
+  border-bottom-color:color-mix(in oklch,var(--err) 45%,transparent)}
+.bar2.multi .warnmx{color:var(--err);font-weight:600}
+.warnmx{display:none}
+.bar2.multi .warnmx{display:inline}
+
+/* ── Tab ── */
+.tabs{display:flex;gap:4px;padding:6px 10px 0;background:var(--bg-2);border-bottom:1px solid var(--line);
+  overflow-x:auto;flex:none}
+.tabs:empty{display:none}
+.tab{display:flex;align-items:center;gap:7px;padding:6px 11px;border-radius:8px 8px 0 0;
+  background:var(--bg-3,var(--bg));border:1px solid var(--line);border-bottom:none;font-size:12.5px;
+  cursor:pointer;white-space:nowrap;color:var(--text-2);user-select:none}
+.tab:hover{color:var(--text)}
+.tab.active{background:var(--bg);color:var(--text);font-weight:600}
+.tab .d{width:7px;height:7px;border-radius:50%;background:var(--muted,#888);flex:none}
+.tab .d.on{background:var(--ok)}.tab .d.busy{background:var(--warn)}.tab .d.err{background:var(--err)}
+.tab .c{color:var(--muted,#888);font-size:16px;line-height:1;padding:0 2px;border-radius:4px}
+.tab .c:hover{color:#fff;background:var(--err)}
+
+#terms{flex:1;min-height:0;position:relative;background:var(--bg)}
+.tw{position:absolute;inset:0;padding:6px 8px;display:none}
+.tw.active{display:block}
+
+/* ── Chia màn hình ──────────────────────────────────────────────────────────
+   Ở chế độ chia, MỌI phiên hiện cùng lúc trong lưới nên .tw phải bỏ định vị
+   tuyệt đối. min-height:0 là bắt buộc: ô lưới mặc định không co nhỏ hơn nội
+   dung, thiếu dòng này thì terminal đẩy lưới phình ra khỏi màn hình. */
+#terms.split{display:grid;gap:6px;padding:6px;overflow:auto}
+#terms.split .tw{position:relative;inset:auto;display:block;min-height:0;min-width:0;padding:4px 6px;
+  border:1px solid var(--line);border-radius:8px;background:var(--bg-2)}
+#terms.split .tw.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+/* Nhãn nằm góc TRÁI, không phải góc phải: để góc phải thì nhãn của cột 1 dính sát
+   mép cột 2, nhìn cứ như nhãn của cột bên cạnh (anh Thoại phản ánh đúng chỗ này).
+   Góc trái luôn nằm ngay đầu cột của chính nó nên không thể đọc nhầm. */
+#terms.split .tw::before{content:attr(data-label);position:absolute;top:-1px;left:10px;font-size:10.5px;
+  color:var(--text-2);background:var(--bg-2);padding:1px 7px;border-radius:0 0 6px 6px;z-index:2;
+  border:1px solid var(--line);border-top:0;white-space:nowrap;max-width:calc(100% - 20px);overflow:hidden;
+  text-overflow:ellipsis}
+#terms.split .tw.active::before{color:#fff;background:var(--accent);border-color:var(--accent);font-weight:600}
+
+/* Số thứ tự in ở CẢ tab lẫn cột — nhìn số là biết tab nào ứng với ô nào, khỏi
+   phải dò theo tên (nhiều thiết bị trùng tài khoản, tên gần giống nhau). */
+.tab .no{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;
+  border-radius:5px;background:var(--bg-2);border:1px solid var(--line);font-size:10px;font-weight:700;
+  color:var(--text-2);flex:none}
+.tab.active .no{background:var(--accent);border-color:var(--accent);color:#fff}
+.empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-2);
+  font-size:13.5px;text-align:center;line-height:1.9;padding:20px}
+
+/* ── Trợ lý AI ── */
+/* ⚠️ Dashboard đã có nút AI tổng (#oc-dial) neo ở right:22px bottom:22px. Nút AI
+   của trang này mà cũng tròn, cũng góc đó thì hai cái CHỒNG LÊN NHAU (anh Thoại
+   gửi ảnh). Nên: hình chữ nhật bo tròn, có chữ, dịch sang trái — nhìn là biết
+   ngay hai trợ lý khác nhau, không phải đoán. */
+#ai-btn{position:fixed;right:92px;bottom:22px;height:44px;padding:0 16px;border-radius:14px;
+  background:var(--ok);color:#08130c;font-size:13.5px;font-weight:700;display:inline-flex;
+  align-items:center;gap:7px;box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:50;white-space:nowrap}
+#ai-btn::before{content:'🤖';font-size:17px}
+@media(max-width:560px){#ai-btn{right:14px;bottom:76px}}
+#ai{position:fixed;right:20px;bottom:84px;width:min(430px,calc(100vw - 40px));height:min(560px,70vh);
+  background:var(--bg-2);border:1px solid var(--line);border-radius:14px;display:none;
+  flex-direction:column;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5);z-index:50}
+#ai.open{display:flex}
+#ai .hd{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);
+  font-weight:600;font-size:13.5px;background:var(--bg-3,var(--bg))}
+#ai .hd .x{margin-left:auto;cursor:pointer;color:var(--muted,#888);font-size:20px;line-height:1;
+  background:none;border:0;padding:0 4px}
+/* MỘT dải duy nhất: chế độ + phạm vi. Gọn chiều cao để chừa chỗ cho hội thoại. */
+#ai .bar-ai{display:flex;align-items:center;gap:7px;padding:7px 10px;flex:none;
+  background:var(--bg-3,var(--bg));border-bottom:1px solid var(--line)}
+#ai .sep-ai{width:1px;height:18px;background:var(--line);flex:none}
+#ai .modes{display:flex;gap:4px;flex:1;min-width:0}
+#ai .modes .md{flex:1;padding:5px 6px;font-size:11.5px;font-weight:600;border-radius:7px;
+  background:var(--bg-2);border:1px solid var(--line);color:var(--text-2);white-space:nowrap}
+#ai .modes .md.on{background:var(--accent);border-color:var(--accent);color:#fff}
+/* ByPass tô đỏ kể cả lúc đang chọn: AI tự gõ vào thiết bị thật của khách hàng —
+   không được để nó trông "bình thường" như hai chế độ kia. */
+#ai .modes .md[data-mode=bypass].on{background:var(--err);border-color:var(--err)}
+#ai .modes .md:disabled{opacity:.4;cursor:not-allowed}
+/* Chỉ hiện khi có gì thật sự cần cảnh báo (ByPass, hoặc chưa có quyền) */
+#ai .modenote{padding:6px 11px;font-size:11px;line-height:1.45;color:var(--err);
+  background:color-mix(in oklch,var(--err) 12%,var(--bg-2));border-bottom:1px solid var(--line);flex:none}
+#ai .modenote b{color:var(--text)}
+
+/* Thẻ xác nhận ngay trong khung chat (không dùng hộp thoại đè màn hình:
+   hộp thoại làm mất ngữ cảnh câu chuyện, mà cái cần đọc lại chính là ngữ cảnh) */
+.ask{background:var(--bg-3,var(--bg));border:1px solid var(--warn);border-radius:11px;padding:10px 12px;
+  align-self:stretch;display:flex;flex-direction:column;gap:8px;font-size:13px}
+.ask.danger{border-color:var(--err)}
+.ask .t{font-weight:700;color:var(--warn);display:flex;align-items:center;gap:6px}
+.ask.danger .t{color:var(--err)}
+.ask .cmd{font-family:var(--font-mono,monospace);font-size:12.5px;background:var(--bg);border:1px solid var(--line);
+  border-radius:7px;padding:8px 10px;white-space:pre-wrap;word-break:break-all;color:var(--text)}
+.ask .who{font-size:11.5px;color:var(--muted,#888)}
+.ask .btns{display:flex;gap:7px}
+.ask .btns button{padding:6px 13px;font-size:12.5px}
+.ask .no{background:var(--bg-2);border:1px solid var(--line);color:var(--text-2)}
+.ask.done{opacity:.72;border-color:var(--line)}
+.ask .verdict{font-size:12px;font-weight:600}
+
+#ai #in .stop{background:var(--err)}
+
+/* Phạm vi AI — chỉ còn 2 nút biểu tượng, tên đầy đủ nằm ở tooltip */
+#ai .scope{display:flex;gap:4px;flex:none}
+#ai .scope .sc{padding:5px 8px;font-size:12px;font-weight:600;border-radius:7px;
+  background:var(--bg-2);border:1px solid var(--line);color:var(--text-2)}
+#ai .scope .sc.on{background:var(--accent);border-color:var(--accent);color:#fff}
+#ai .scnote{font-size:10.5px;color:var(--muted,#888);white-space:nowrap;flex:none}
+#msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px}
+.m{padding:9px 12px;border-radius:11px;font-size:13.5px;white-space:pre-wrap;word-break:break-word;line-height:1.6}
+.m-u{background:var(--accent);color:#fff;align-self:flex-end;max-width:85%;border-bottom-right-radius:4px}
+.m-a{background:var(--bg-3,var(--bg));align-self:flex-start;max-width:92%;border-bottom-left-radius:4px}
+.m-t{background:transparent;color:var(--muted,#888);font-size:11.5px;align-self:center;padding:2px}
+.wc{color:var(--text-2);font-size:13px;line-height:1.75;padding:6px 2px}.wc b{color:var(--text)}
+#in{display:flex;gap:7px;padding:10px;border-top:1px solid var(--line);background:var(--bg-3,var(--bg))}
+#in textarea{flex:1;resize:none;height:40px;background:var(--bg-2);border:1px solid var(--line);
+  color:var(--text);border-radius:8px;padding:9px 11px;font:13.5px/1.4 inherit}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+      </div>
+      <div><div class="brand-name">SSH Hiện trường</div><div class="brand-sub">Nhiều thiết bị · AI hỗ trợ</div></div>
+    </div>
+    <nav class="topnav" id="sh-topnav"></nav>
+    <script src="/service-home/_shared/nav.js"></script>
+  </div>
+  <div class="topbar-right"></div>
+</header>
+
+<!-- Bảng ghép nối với chương trình chạy trên laptop -->
+<div id="setup">
+  <h3>🔌 Ghép nối với máy này <span class="badge" id="bridgeBadge">đang dò…</span></h3>
+  <p>
+    Terminal SSH không chạy được bằng trình duyệt (không mở được kết nối TCP), nên cần một
+    chương trình nhỏ chạy trên laptop làm cầu nối: <b>nhấp đúp <code>dash-ssh.exe</code></b>
+    (hoặc lối tắt <i>dash-ssh — SSH Hiện trường</i> ngoài Desktop nếu đã cài).
+    Cửa sổ hiện ra sẽ in <b>mã ghép nối</b> và tự chép sẵn vào bộ nhớ tạm — bấm
+    <b>Ctrl+V</b> vào ô dưới, chỉ cần làm <b>một lần</b>.
+  </p>
+  <p style="opacity:.75">
+    Chưa có file <code>dash-ssh.exe</code>? Dựng bằng <code>npm run build</code> trong
+    <code>_infra\dash-ssh</code> — ra cả bản portable (chép USB, máy khách không cần cài gì)
+    lẫn bộ cài. Hoặc chạy thẳng từ mã nguồn:
+  </p>
+  <pre id="cmdBox">cd C:\Users\Administrator\Documents\dashboard\_infra\dash-ssh
+node server.js</pre>
+  <p style="opacity:.75">
+    Gõ <b>2 dòng riêng</b>, đừng nối bằng <code>&amp;&amp;</code> — Windows PowerShell 5.1 không hiểu
+    ký hiệu đó, sẽ báo <i>"The token '&amp;&amp;' is not a valid statement separator"</i>.
+    <br/>Cổng 8022 bị chiếm thì chương trình tự trượt sang 8023, 8024… và in cổng thật ra —
+    nhớ sửa ô <i>cổng</i> bên dưới cho khớp.
+  </p>
+  <div class="srow">
+    <input class="i-tok" id="tok" placeholder="dán mã ghép nối vào đây" autocomplete="off"/>
+    <input class="i-port" id="bport" placeholder="8022" value="8022" autocomplete="off"/>
+    <button id="btnSave">Lưu &amp; dò lại</button>
+    <span class="status" id="setupMsg"></span>
+  </div>
+</div>
+
+<div class="bar">
+  <input class="i-host" id="host" placeholder="IP thiết bị" autocomplete="off"/>
+  <input class="i-port" id="port" placeholder="22" value="22" autocomplete="off"/>
+  <input class="i-user" id="user" placeholder="tài khoản" autocomplete="off"/>
+  <input class="i-pass" id="pass" type="password" placeholder="mật khẩu" autocomplete="off"/>
+  <button id="btnGo">+ Mở tab mới</button>
+  <!-- Ngắt/Nối lại nằm ngay đây theo yêu cầu: cùng chỗ với ô IP và nút mở tab,
+       vì cả ba đều là việc "đóng/mở kết nối". Luôn hiện (mờ đi khi chưa bấm được)
+       chứ không ẩn — nút nhảy ra nhảy vào khó bấm quen tay. -->
+  <button class="ghost" id="btnDisc" title="Đóng kết nối SSH của tab đang xem, giữ nguyên nội dung màn hình">⏹ Ngắt kết nối</button>
+  <button class="ghost" id="btnRecon" title="Mở lại kết nối cho tab đang xem (không phải gõ lại mật khẩu)">▶ Kết nối lại</button>
+  <!-- Tải bộ cài cầu nối. Đường /downloads/ được worker gác bằng phiên đăng nhập
+       + quyền 'ssh-field' (asset tĩnh mặc định là công khai — xem worker.js). -->
+  <a class="btn-dl" id="btnDownload" href="/downloads/dash-ssh-setup.exe"
+     title="Tải bộ cài dash-ssh cho máy này (khoảng 23 MB, không cần quyền quản trị)">⬇ Tải dash-ssh</a>
+  <div class="spacer"></div>
+  <div class="status" id="st">Chưa có phiên nào</div>
+  <button class="ghost" id="btnSetup" title="Hiện lại bảng ghép nối">🔌</button>
+</div>
+
+<!-- Thanh công cụ phiên: chỉ hiện khi đã có ít nhất một tab -->
+<div class="bar2" id="bar2" style="display:none">
+  <!-- Bấm thẳng vào chữ là ra danh sách chọn luôn. Bỏ thẻ <select> vì nó bắt
+       phải có nhãn đứng trước mới hiểu, thành ra vừa dài vừa rối. -->
+  <div class="menu" id="mLayout">
+    <button class="ghost mbtn" type="button">⊞ Bố cục <span class="cur"></span> <span class="car">▾</span></button>
+    <div class="pop"></div>
+  </div>
+  <div class="menu" id="mTheme">
+    <button class="ghost mbtn" type="button">🎨 Màu <span class="cur"></span> <span class="car">▾</span></button>
+    <div class="pop"></div>
+  </div>
+
+  <label title="Tô màu số, địa chỉ IP, MAC và các từ khoá trạng thái cho dễ đọc">
+    <input type="checkbox" id="chkSyntax"/> Tô màu
+  </label>
+
+  <div class="sep"></div>
+  <label title="Gõ ở một tab thì mọi tab đang kết nối gõ y hệt (cần ít nhất 2 tab)">
+    <input type="checkbox" id="chkMulti"/> Gõ cho mọi tab
+  </label>
+  <span class="warnmx">⚠ mọi phím đang đi tới TẤT CẢ các tab</span>
+</div>
+
+<div class="hint" id="hint" style="display:none"></div>
+<div class="tabs" id="tabs"></div>
+<div id="terms">
+  <div class="empty" id="empty">Chưa có phiên nào.<br/>Nhập IP thiết bị ở trên rồi bấm <b>+ Mở tab mới</b>.</div>
+</div>
+
+<!-- Nhãn chữ (không phải chỉ icon) để phân biệt với nút AI tổng của dashboard -->
+<button id="ai-btn" title="Trợ lý AI cho terminal SSH">AI SSH</button>
+<div id="ai">
+  <div class="hd">🤖 Trợ lý SSH <button class="x" id="aiX">×</button></div>
+  <!-- MỘT hàng cho cả chế độ lẫn phạm vi. Trước đây 3 dải chồng nhau (chế độ +
+       chú thích + phạm vi) ăn gần 1/4 chiều cao bảng chat, mà chỗ đó phải dành
+       cho hội thoại. Chú thích dài chuyển thành tooltip; chỉ ByPass mới hiện
+       cảnh báo thành chữ, vì đó là chế độ duy nhất tự gõ vào thiết bị thật. -->
+  <div class="bar-ai">
+    <div class="modes" id="aiModes">
+      <button type="button" class="md on" data-mode="ask"    title="Ask — chỉ đọc màn hình và trả lời. Không chèn, không chạy bất cứ thứ gì.">💬 Ask</button>
+      <button type="button" class="md" data-mode="agent"  title="AI Agent — được đặt lệnh lên dòng lệnh, nhưng mỗi lệnh anh phải bấm Đồng ý; chèn xong anh vẫn tự bấm Enter.">🤝 Agent</button>
+      <button type="button" class="md" data-mode="bypass" title="ByPass — AI TỰ CHẠY lệnh trên thiết bị thật. Bắt buộc: kiểm tra trước → trình kế hoạch → mới làm. Lệnh nguy hiểm vẫn hỏi anh.">⚡ ByPass</button>
+    </div>
+    <div class="sep-ai"></div>
+    <div class="scope" id="aiScope">
+      <button type="button" class="sc on" data-scope="single" title="Single — AI chỉ đọc tab đang hiển thị trước mặt">◧</button>
+      <button type="button" class="sc" data-scope="multi" title="Multi session — AI đọc TẤT CẢ tab đang kết nối và tự chia màn hình">⊞</button>
+    </div>
+    <span class="scnote" id="aiScopeNote" title="Phạm vi AI đọc">1 tab</span>
+  </div>
+  <div class="modenote" id="aiModeNote" style="display:none"></div>
+  <div id="msgs">
+    <div class="wc">Em đọc màn hình terminal rồi gợi ý lệnh.
+<b>Em không tự chạy lệnh nào</b> — chỉ đặt lệnh lên dòng lệnh, anh xem rồi tự bấm Enter.
+
+<b>Single</b>: chỉ đọc tab trước mặt. <b>Multi session</b>: đọc hết mọi tab đang kết nối
+(hợp lúc soi cả hệ thống — không biết đoạn nào hỏng thì bắt em xem hết một lượt).
+
+Ví dụ hỏi:
+• <b>Xem giúp tôi cấu hình VLAN hiện tại</b>
+• <b>Cổng Gi0/1 đang down, tìm nguyên nhân</b>
+• <b>So sánh cấu hình mấy con switch này xem lệch chỗ nào</b></div>
+  </div>
+  <div id="in">
+    <textarea id="q" placeholder="Hỏi gì đó… (Enter để gửi)"></textarea>
+    <button id="btnSend">Gửi</button>
+    <!-- Nút Dừng thế chỗ nút Gửi khi AI đang chạy: AI lỡ đi sai hướng hoặc gọi
+         tool vòng vòng thì phải cắt được ngay, không ngồi chờ hết lượt. -->
+    <button id="btnStop" class="stop" style="display:none" title="Dừng ngay lượt đang chạy">⏹ Dừng</button>
+  </div>
+</div>
+
+<script src="/vendor/xterm/xterm.min.js"></script>
+<script src="/vendor/xterm/addon-fit.min.js"></script>
+<!-- Kho kiến thức: nạp TRƯỚC ssh-field.js (file đó đọc mục lục lúc dựng lời nhắc).
+     Thêm lĩnh vực mới = thêm một dòng ở đây, không phải sửa gì khác. -->
+<script src="/service-home/ssh-field-kb.js"></script>
+<script src="/service-home/ssh-field-kb-linux.js"></script>
+<script src="/service-home/ssh-field.js"></script>
+<script>
+/* ── Dò cầu nối trên laptop ────────────────────────────────────────────────
+   Trang này chạy HTTPS nhưng gọi http://127.0.0.1 — loopback được chuẩn Secure
+   Contexts coi là nguồn đáng tin nên KHÔNG bị chặn như nội dung hỗn hợp thường.
+   Cầu nối trả CORS riêng cho đúng tên miền dashboard (không dùng '*'). */
+(function () {
+  var setup = document.getElementById('setup');
+  var badge = document.getElementById('bridgeBadge');
+  var msg   = document.getElementById('setupMsg');
+
+  document.getElementById('tok').value   = window.__sshfieldTok() || '';
+  document.getElementById('bport').value = window.__sshfieldPort();
+
+  /* ⚠️ PHẢI kèm ?t= — cầu nối bắt buộc token ở MỌI đường dẫn dưới /api.
+     Lỗi cũ: dò mà quên gửi mã → cổng nào cũng trả 401, dán mã đúng cũng vô ích,
+     và trình duyệt còn dịch cái 401 thiếu CORS thành "lỗi CORS" nên đi tìm nhầm hướng. */
+  function pingAt(port, tok) {
+    return fetch('http://127.0.0.1:' + port + '/api/ping?t=' + encodeURIComponent(tok),
+                 { signal: AbortSignal.timeout(2500) })
+      .then(function (r) {
+        if (r.ok) return r.json().then(function (j) { return { port: port, info: j }; });
+        var err = new Error('HTTP ' + r.status); err.status = r.status; throw err;
+      });
+  }
+
+  /* Cổng 8022 bị chiếm thì cầu nối tự trượt sang 8023, 8024… Bắt người dùng để ý
+     dòng chữ trong cửa sổ lệnh rồi sửa tay là chắc chắn có ngày quên → tự dò
+     8022…8029, thấy cổng nào nhận đúng mã thì dùng và nhớ luôn cổng đó. */
+  function findBridge(tok, firstPort) {
+    var ports = [firstPort];
+    for (var p = 8022; p <= 8029; p++) if (p !== firstPort) ports.push(p);
+
+    var sawWrongCode = false;
+    return ports.reduce(function (chain, port) {
+      return chain.catch(function () {
+        return pingAt(port, tok).catch(function (e) {
+          if (e && e.status === 401) sawWrongCode = true;   // có cầu nối, nhưng mã lệch
+          throw e;
+        });
+      });
+    }, Promise.reject()).catch(function (e) {
+      e = e || new Error('không thấy cầu nối');
+      e.sawWrongCode = sawWrongCode;
+      throw e;
+    });
+  }
+
+  function probe(quiet) {
+    var port = parseInt(document.getElementById('bport').value, 10) || 8022;
+    var tok  = window.__sshfieldTok();
+    badge.className = 'badge'; badge.textContent = 'đang dò…';
+
+    if (!tok) {
+      badge.className = 'badge no'; badge.textContent = 'chưa có mã';
+      window.__sshfieldReady(false); setup.classList.remove('hide');
+      return;
+    }
+
+    findBridge(tok, port)
+      .then(function (found) {
+        /* Dò ra cổng khác thì nhớ lại, lần sau khỏi dò vòng nữa. */
+        if (found.port !== port) {
+          window.__sshfieldSave(tok, found.port);
+          document.getElementById('bport').value = found.port;
+        }
+        badge.className = 'badge ok';
+        badge.textContent = '✓ đã kết nối cầu nối (cổng ' + found.port + ')';
+        msg.textContent = '';
+        window.__sshfieldReady(true);
+        setup.classList.add('hide');
+        document.getElementById('host').focus();
+      })
+      .catch(function (e) {
+        badge.className = 'badge no'; badge.textContent = '✕ chưa thấy cầu nối';
+        window.__sshfieldReady(false);
+        setup.classList.remove('hide');
+        if (!quiet) {
+          msg.textContent = e && e.sawWrongCode
+            /* Cầu nối SỐNG nhưng mã lệch — hay gặp nhất khi còn sót một cửa sổ
+               dash-ssh bản cũ đang giữ cổng. */
+            ? 'Có cầu nối đang chạy nhưng mã ghép nối không khớp. Sang cửa sổ dash-ssh bấm phím C ' +
+              'để chép mã rồi dán lại. Nếu lỡ mở nhiều cửa sổ dash-ssh thì đóng hết, chỉ để lại một.'
+            /* "Failed to fetch" ở đây gần như luôn là CSP chặn loopback, không phải cầu nối chết —
+               nói thẳng ra, chứ câu mặc định của trình duyệt không giúp gì cho người dùng. */
+            : /failed to fetch/i.test(String(e && e.message || e))
+              ? 'Trình duyệt chặn gọi vào 127.0.0.1 (xem Console: Content Security Policy). ' +
+                'Dashboard cần deploy lại bản có mở connect-src cho loopback ở trang này.'
+              : 'Không thấy chương trình nào chạy ở cổng 8022–8029 — đã nhấp đúp dash-ssh.exe chưa?';
+        }
+      });
+  }
+
+  document.getElementById('btnSave').onclick = function () {
+    window.__sshfieldSave(document.getElementById('tok').value, document.getElementById('bport').value);
+    probe(false);
+  };
+  document.getElementById('tok').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') document.getElementById('btnSave').click();
+  });
+  document.getElementById('btnSetup').onclick = function () { setup.classList.toggle('hide'); };
+
+  probe(true);
+})();
+</script>
+</body>
+</html>

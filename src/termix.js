@@ -3,11 +3,13 @@
    ═══════════════════════════════════════════════ */
 import {
   _escHtml,
+  _getCfg,
   cleanEnv,
   getSession,
   hasPerm,
   json,
-  logActivity
+  logActivity,
+  touchSession
 } from './core.js';
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -176,7 +178,13 @@ export async function handleSshMoviVerify(request, env) {
 export async function handleTermixProxy(request, env, opts) {
   // Auth check
   const session = await getSession(request, env);
-  if (!session) return new Response('Chưa đăng nhập — vui lòng đăng nhập lại', { status: 401 });
+  if (!session) {
+    // Header đánh dấu để trang Termix PHÂN BIỆT được "hết phiên dashboard" với 401
+    // của chính Termix. Không có nó thì SPA cứ thử lại vô hạn, giao diện nhìn như
+    // treo mà không ai đoán ra lý do (đã gặp thật 2026-07-31).
+    return new Response('Chưa đăng nhập — vui lòng đăng nhập lại',
+      { status: 401, headers: { 'X-Dash-Auth': 'expired' } });
+  }
   if (!(await hasPerm(env, session, opts.perm)))
     return new Response('Không có quyền truy cập ' + opts.label, { status: 403 });
 
@@ -189,6 +197,19 @@ export async function handleTermixProxy(request, env, opts) {
   // Build target URL (strip proxy prefix)
   const reqUrl  = new URL(request.url);
   const subPath = reqUrl.pathname.slice(BASE.length) || '/';
+
+  /* ── Giữ phiên dashboard sống trong lúc người dùng làm việc bên Termix ──────
+     Trang Termix KHÔNG đi qua injectUser nên không có bộ đếm/giữ phiên như các
+     trang dashboard khác. Đặt đường giữ phiên NGAY TRONG nhánh proxy (thay vì
+     gọi /api/auth/refresh) vì nhánh này đã được Cloudflare Access bypass — gọi
+     được cả khi cookie Access đã hết hạn. Không chuyển tiếp lên Termix. */
+  if (subPath === '/__dash-keepalive') {
+    const _cfg  = await _getCfg(env);
+    const _user = await env.DASHBOARD_KV.get(`user:${session.username}`, 'json');
+    const _hrs  = (_user && _user.sessionTtlHours) || _cfg.sessionTtlHours || 8;
+    await touchSession(env, session, _hrs);
+    return new Response('ok', { status: 200, headers: { 'Cache-Control': 'no-store' } });
+  }
   const target  = `${termixOrigin}${subPath}${reqUrl.search}`;
 
   // Upstream auth headers
@@ -545,17 +566,88 @@ export async function handleTermixProxy(request, env, opts) {
   };
   window.WebSocket.prototype=_W.prototype;
   for(var k in _W)try{window.WebSocket[k]=_W[k];}catch(e){}
+
+  /* ═══ Giữ phiên dashboard sống + báo hết phiên rõ ràng ════════════════════
+     Trang này chạy qua proxy nên KHÔNG có bộ đếm/giữ phiên như các trang
+     dashboard khác. Thiếu 2 việc dưới đây thì gặp đúng lỗi 2026-07-31: đang gõ
+     lệnh thì mọi API 401, Termix thử lại vô hạn, giao diện nhìn như treo.       */
+  var _AK='dh_act', _RK='dh_refresh', _REFRESH_EVERY=300000, _dashDead=false;
+  function _rd(k){ try{ return parseInt(localStorage.getItem(k)||'0',10)||0; }catch(e){ return 0; } }
+  function _wr(k,v){ try{ localStorage.setItem(k,String(v)); }catch(e){} }
+
+  /* (1) Thao tác trong Termix cũng phải tính là "còn người dùng" cho MỌI tab.
+         Không có bước này thì tab dashboard nằm im sẽ tưởng anh bỏ đi rồi tự gọi
+         logout — xoá phiên chung, giết luôn tab Termix đang dùng. */
+  ['mousedown','keydown','touchstart','pointerdown'].forEach(function(e){
+    document.addEventListener(e,function(){ _wr(_AK,Date.now()); },{passive:true,capture:true});
+  });
+  _wr(_AK,Date.now());
+
+  /* (2) Còn thao tác thì định kỳ đẩy hạn phiên ra xa. Gọi vào đường NẰM TRONG
+         nhánh proxy (đã được Cloudflare Access bypass) nên chạy được cả khi
+         cookie Access đã hết hạn — khác /api/auth/refresh vốn bị Access chặn. */
+  function _keepAlive(){
+    if(_dashDead) return;
+    if(Date.now()-_rd(_AK) > 900000) return;              /* 15 phút không đụng gì → thôi */
+    if(Date.now()-_rd(_RK) < _REFRESH_EVERY) return;      /* tab khác vừa gia hạn rồi */
+    _wr(_RK,Date.now());                                  /* giữ chỗ trước để khỏi gọi trùng */
+    _f(B+'/__dash-keepalive',{credentials:'same-origin',cache:'no-store'})
+      .then(function(r){ if(!r.ok) _wr(_RK,0); })
+      .catch(function(){ _wr(_RK,0); });
+  }
+  setInterval(_keepAlive,60000);
+
+  /* (3) Phân biệt "hết phiên dashboard" với 401 của chính Termix bằng header
+         riêng do worker gắn — rồi báo NGAY thay vì để SPA thử lại vô hạn. */
+  function _dashCheck(o){
+    if(_dashDead||!o) return;
+    var st,hv;
+    try{
+      st=o.status;
+      hv=o.headers?o.headers.get('X-Dash-Auth'):o.getResponseHeader('X-Dash-Auth');
+    }catch(e){ return; }
+    if(st===401&&hv==='expired') _dashSessionDead();
+  }
+  function _dashSessionDead(){
+    if(_dashDead) return; _dashDead=true;
+    console.warn('[proxy-patcher] phiên dashboard đã hết hạn — ngừng gọi máy chủ');
+    var d=document.createElement('div');
+    d.style.cssText='position:fixed;inset:0;z-index:2147483647;background:rgba(4,6,11,.88);'
+      +'display:flex;align-items:center;justify-content:center;'
+      +'font-family:system-ui,-apple-system,Segoe UI,sans-serif';
+    var box=document.createElement('div');
+    box.style.cssText='background:#0c1018;border:1px solid #2b3a5c;border-radius:14px;'
+      +'padding:28px 32px;max-width:430px;text-align:center;color:#cdd6e6;'
+      +'box-shadow:0 20px 60px rgba(0,0,0,.7)';
+    var h=document.createElement('div');
+    h.textContent='Phiên đăng nhập đã hết hạn';
+    h.style.cssText='font-size:17px;font-weight:700;color:#fff;margin-bottom:10px';
+    var p=document.createElement('div');
+    p.textContent='Phiên dashboard không còn hiệu lực nên Termix không gọi được máy chủ nữa. '
+      +'Đăng nhập lại rồi mở lại trang này.';
+    p.style.cssText='font-size:13px;line-height:1.6;margin-bottom:20px';
+    var b=document.createElement('button');
+    b.textContent='Đăng nhập lại';
+    b.style.cssText='background:#2563eb;color:#fff;border:none;padding:10px 22px;'
+      +'border-radius:8px;font-size:13px;font-weight:600;cursor:pointer';
+    b.onclick=function(){ location.href='/login.html'; };
+    box.appendChild(h); box.appendChild(p); box.appendChild(b);
+    d.appendChild(box);
+    (document.body||document.documentElement).appendChild(d);
+  }
+
   var _f=window.fetch;
   window.fetch=function(){
     var a=[].slice.call(arguments);
     if(typeof a[0]==='string'){var r=rw(a[0]);if(r!==a[0]){console.log('[proxy-patcher] fetch',a[0],'->',r);a[0]=r;}}
-    return _f.apply(this,a);
+    return _f.apply(this,a).then(function(res){ try{ _dashCheck(res); }catch(e){} return res; });
   };
   var _x=XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open=function(){
     var a=[].slice.call(arguments);
     if(typeof a[1]==='string'){var r=rw(a[1]);if(r!==a[1]){console.log('[proxy-patcher] XHR',a[1],'->',r);a[1]=r;}}
     this._proxyUrl=a[1]||'';
+    try{ this.addEventListener('load',function(){ try{ _dashCheck(this); }catch(e){} }); }catch(e){}
     return _x.apply(this,a);
   };
   // loginRedirect: reload parent iframe sau khi login thanh cong

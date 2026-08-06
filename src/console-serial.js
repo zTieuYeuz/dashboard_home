@@ -21,6 +21,33 @@ const CS_NINE_ROUTER = 'https://9router.home-server.id.vn/v1/chat/completions';
 // cho Console Serial (trước dùng chung NINE_ROUTER_KEY với pnetlab/termix).
 const CS_LLM_MODELS  = new Set(['console']);
 const CS_LLM_RL_MAX  = 60;   // request / 5 phút / user
+/* ⚠️ SSH Hiện trường phải có hạn mức RIÊNG, cao hơn hẳn — KHÔNG dùng chung 60.
+   Web Console: một câu hỏi = MỘT request. SSH Hiện trường có vòng lặp công cụ:
+   một câu hỏi có thể tốn tới 14 request (đọc → chạy → đọc lại…). Dùng chung con
+   số thì anh Thoại hỏi 4 câu là bị chặn 5 phút — đúng lỗi đã gặp 2026-08-06.
+   240 ≈ 17-20 câu hỏi trong 5 phút, vẫn đủ chặn vòng lặp hỏng. */
+const SF_LLM_RL_MAX  = 240;
+const RL_WINDOW_SEC  = 300;
+
+/* Hạn mức theo CỬA SỔ CỐ ĐỊNH, và trả về còn phải chờ bao lâu.
+   Bản cũ chỉ đếm rồi báo "thử lại sau ít phút" — người dùng không biết chờ bao
+   lâu nên cứ bấm lại liên tục (xem ảnh anh Thoại gửi), vừa bực vừa vô ích.
+   Lưu kèm mốc bắt đầu cửa sổ để tính ra số giây còn lại. */
+async function rateLimit(env, key, max) {
+  const now = Math.floor(Date.now() / 1000);
+  let st = null;
+  try { st = JSON.parse((await env.DASHBOARD_KV.get(key)) || 'null'); } catch { st = null; }
+  if (!st || typeof st.t0 !== 'number' || now - st.t0 >= RL_WINDOW_SEC) st = { n: 0, t0: now };
+
+  const conLai = RL_WINDOW_SEC - (now - st.t0);
+  if (st.n >= max) return { ok: false, retryAfter: Math.max(1, conLai) };
+
+  st.n++;
+  /* TTL bám theo cửa sổ, KHÔNG gia hạn mỗi lần gọi — nếu không thì người dùng
+     càng gọi càng bị đẩy lùi thời điểm được mở lại. */
+  await env.DASHBOARD_KV.put(key, JSON.stringify(st), { expirationTtl: Math.max(60, conLai) });
+  return { ok: true, conLai: max - st.n };
+}
 
 export async function handleConsoleSerialLlm(request, env) {
   const j = (obj, status) => new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json' } });
@@ -42,10 +69,14 @@ export async function handleConsoleSerialLlm(request, env) {
   const key = env.CONSOLE_9ROUTER_KEY;
   if (!key) return j({ error: 'Chưa cấu hình CONSOLE_9ROUTER_KEY (wrangler secret put CONSOLE_9ROUTER_KEY).' }, 503);
 
-  const rlKey = 'conserialllm:rl:' + session.username;
-  const cnt = parseInt((await env.DASHBOARD_KV.get(rlKey)) || '0', 10);
-  if (cnt >= CS_LLM_RL_MAX) return j({ error: 'Quá nhiều yêu cầu, thử lại sau ít phút.' }, 429);
-  await env.DASHBOARD_KV.put(rlKey, String(cnt + 1), { expirationTtl: 300 });
+  const rlCs = await rateLimit(env, 'conserialllm:rl:' + session.username, CS_LLM_RL_MAX);
+  if (!rlCs.ok) {
+    return new Response(JSON.stringify({
+      error: 'Đã dùng hết ' + CS_LLM_RL_MAX + ' lượt gọi AI trong 5 phút. Chờ khoảng '
+           + (rlCs.retryAfter < 60 ? rlCs.retryAfter + ' giây' : Math.ceil(rlCs.retryAfter / 60) + ' phút') + ' rồi hỏi lại.',
+      retry_after: rlCs.retryAfter,
+    }), { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': String(rlCs.retryAfter) } });
+  }
 
   let body; try { body = await request.json(); } catch { return j({ error: 'bad json' }, 400); }
   const model = CS_LLM_MODELS.has(body.model) ? body.model : 'console';
@@ -107,6 +138,102 @@ export async function handleConsoleSerialLlm(request, env) {
      lastFieldActivity) — tần suất ghi thấp hơn NHIỀU so với output/lệnh
      nên rủi ro race chấp nhận được (không còn là đường dẫn dữ liệu chính).
    ═══════════════════════════════════════════════════════════════════ */
+/* ── SSH Hiện trường (trang /service-home/ssh-field.html) ──────────────────
+   Trang đó nhúng terminal SSH ngay trên dashboard, nói chuyện với cầu nối
+   dash-ssh chạy trên laptop qua ws://127.0.0.1. Vì trang NẰM TRÊN dashboard nên
+   lời gọi AI là CÙNG NGUỒN GỐC → dùng thẳng session đăng nhập, KHÔNG cần token
+   thiết bị riêng (đây chính là cái lợi của việc nhúng thay vì để trang chạy ở
+   localhost). Cùng khuôn CSRF/rate-limit/allowlist như handleConsoleSerialLlm. */
+/* Danh sách model được phép — ép ở server để không ai sửa payload gọi sang model
+   đắt tiền khác. 'ssh-field' dành cho trường hợp anh Thoại tạo model/key RIÊNG
+   cho công cụ này bên 9Router (anh đang theo lối mỗi công cụ một key). */
+const SF_LLM_MODELS = new Set(['ssh-field', 'termix', 'console']);
+
+export async function handleSshFieldLlm(request, env) {
+  const j = (obj, status) => new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json' } });
+  if (request.method !== 'POST') return j({ error: 'method' }, 405);
+
+  const sfs = request.headers.get('Sec-Fetch-Site');
+  if (sfs && sfs !== 'same-origin') return j({ error: 'forbidden: cross-site request bị chặn' }, 403);
+  const origin = request.headers.get('Origin');
+  if (origin) {
+    try { if (new URL(origin).host !== new URL(request.url).host) return j({ error: 'forbidden: origin mismatch' }, 403); }
+    catch { return j({ error: 'bad origin' }, 403); }
+  }
+
+  const session = await getSession(request, env);
+  if (!session) return j({ error: 'Chưa đăng nhập dashboard' }, 401);
+  if (!(await hasPerm(env, session, 'ssh-field'))) return j({ error: 'Không có quyền SSH Hiện trường' }, 403);
+
+  /* ── Key theo THỨ TỰ ƯU TIÊN ────────────────────────────────────────────
+     1. SSHFIELD_9ROUTER_KEY — key riêng của công cụ này (khuyến nghị: anh Thoại
+        đang theo lối mỗi công cụ một key, để tách được mức dùng và thu hồi riêng)
+     2. TERMIX_9ROUTER_KEY   — xài ké key Termix (mặc định hiện tại)
+     3. CONSOLE_9ROUTER_KEY  — chống chết hẳn
+
+     Đặt key riêng thì model mặc định cũng đổi theo (xem sfDefaultModel bên dưới):
+     key 9Router thường gắn với đúng một model, dùng key mới mà vẫn xin model cũ
+     là upstream từ chối. */
+  const key = env.SSHFIELD_9ROUTER_KEY || env.TERMIX_9ROUTER_KEY || env.CONSOLE_9ROUTER_KEY;
+  if (!key) return j({ error: 'Chưa cấu hình SSHFIELD_9ROUTER_KEY (hoặc TERMIX_9ROUTER_KEY).' }, 503);
+
+  const rl = await rateLimit(env, 'sshfieldllm:rl:' + session.username, SF_LLM_RL_MAX);
+  if (!rl.ok) {
+    const phut = Math.ceil(rl.retryAfter / 60);
+    return new Response(JSON.stringify({
+      error: 'Đã dùng hết ' + SF_LLM_RL_MAX + ' lượt gọi AI trong 5 phút. Chờ khoảng '
+           + (rl.retryAfter < 60 ? rl.retryAfter + ' giây' : phut + ' phút') + ' rồi hỏi lại.',
+      retry_after: rl.retryAfter,
+      goi_y: 'Một câu hỏi có thể tốn nhiều lượt (AI đọc → chạy → đọc lại). Chế độ Ask tốn ít lượt nhất.',
+    }), { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': String(rl.retryAfter) } });
+  }
+
+  let body; try { body = await request.json(); } catch { return j({ error: 'bad json' }, 400); }
+
+  /* ── Gác CHẾ ĐỘ trợ lý (ask / agent / bypass) ─────────────────────────────
+     Ba chế độ = ba mức được phép động vào thiết bị thật, nên phải kiểm ở SERVER
+     chứ không chỉ giấu nút ngoài giao diện: giấu nút chỉ chặn người dùng bình
+     thường, ai mở F12 là gọi thẳng API được.
+
+     Từ đây không kiểm được "AI có thật sự chỉ đọc hay không" (công cụ chạy trong
+     trình duyệt của user), nhưng chặn được việc XIN chế độ cao hơn quyền: không
+     có quyền bypass thì không bao giờ nhận được câu trả lời sinh dưới lời nhắc
+     bypass — mà chính lời nhắc đó mới là thứ cho phép AI tự chạy lệnh. */
+  const MODE_PERM = {
+    ask:    'ssh-field-ai-ask',
+    agent:  'ssh-field-ai-agent',
+    bypass: 'ssh-field-ai-bypass',
+  };
+  const mode = MODE_PERM[body.mode] ? body.mode : 'ask';
+  if (!(await hasPerm(env, session, MODE_PERM[mode]))) {
+    return j({ error: 'Không có quyền dùng trợ lý ở chế độ "' + mode + '". Nhờ admin cấp trong Settings → Role.' }, 403);
+  }
+
+  /* Có key riêng thì mặc định gọi model 'ssh-field', không thì vẫn 'termix' như cũ.
+     Nhờ vậy chỉ cần `wrangler secret put SSHFIELD_9ROUTER_KEY` là chuyển sang key
+     riêng, KHÔNG phải sửa code lần nữa. */
+  const sfDefaultModel = env.SSHFIELD_9ROUTER_KEY ? 'ssh-field' : 'termix';
+  const model = SF_LLM_MODELS.has(body.model) ? body.model : sfDefaultModel;
+  /* `mode` là cờ nội bộ của mình, KHÔNG phải tham số của 9Router — phải bỏ ra
+     trước khi chuyển tiếp, để nguyên thì upstream có thể từ chối vì tham số lạ. */
+  const payload = Object.assign({}, body, { model, stream: true });
+  delete payload.mode;
+
+  let upstream;
+  try {
+    upstream = await fetch(CS_NINE_ROUTER, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) { return j({ error: '9Router không phản hồi: ' + ((e && e.message) || e) }, 502); }
+
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache' },
+  });
+}
+
 const CS_RELAY_TTL       = 3600;   // phiên tự dọn sau 1 giờ không dùng
 const CS_RELAY_MAXBUF    = 200000; // giới hạn buffer output (ký tự) — cắt bớt đầu nếu vượt
 const CS_FIELD_BUSY_MS   = 3000;   // field tech vừa gõ trong X ms gần nhất → khoá lệnh remote

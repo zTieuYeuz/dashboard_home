@@ -260,6 +260,27 @@ export const _sessionCache = new Map(); // token -> { session, exp }
 export const SESSION_CACHE_TTL_MS = 30_000;
 export function _invalidateSessionCache(token) { if (token) _sessionCache.delete(token); }
 
+/* ── Gia hạn phiên đang có ("chạm" vào phiên để đẩy hạn ra xa) ──────────────
+   VÌ SAO CẦN: `session.expires` là mốc TUYỆT ĐỐI đặt lúc đăng nhập. Không có gì
+   đẩy nó ra thì dùng tích cực cỡ nào, tới giờ vẫn bị đá ra giữa chừng — đúng lỗi
+   đã gặp thật: đang gõ lệnh trong Termix thì mọi API đột ngột 401.
+
+   Hàm này CHỈ dời hạn, KHÔNG cấp quyền mới và KHÔNG tạo phiên mới. Người gọi phải
+   tự bảo đảm phiên hiện đang hợp lệ (lấy từ getSession) trước khi gọi.            */
+export async function touchSession(env, session, ttlHours) {
+  if (!session || !session.token) return false;
+  const ttlSec = Math.max(1, Number(ttlHours) || 8) * 3600;
+  const { token, ...rest } = session;          // `token` là field do getSession gắn thêm
+  await env.DASHBOARD_KV.put(`session:${token}`, JSON.stringify({
+    ...rest,
+    expires: Date.now() + ttlSec * 1000,
+  }), { expirationTtl: ttlSec });
+  // Bộ nhớ đệm phiên (30s) đang giữ `expires` CŨ → phải xoá, không thì lần đọc kế
+  // tiếp vẫn thấy hạn cũ và có thể coi là hết hạn.
+  _invalidateSessionCache(token);
+  return true;
+}
+
 export async function computeEffectivePermissions(env, username) {
   const _c = _effCache.get(username);
   if (_c && _c.exp > Date.now()) return _c.eff;
@@ -399,6 +420,8 @@ export const DEFAULT_CAMERAS = [
   { id: 'cam07', name: 'Camera Phòng Khách', type: 'unknown', stream: null    },
   { id: 'cam08', name: 'Camera 08',          type: 'unknown', stream: null    },
   { id: 'cam09', name: 'Camera 09',          type: 'unknown', stream: null    },
+  { id: 'cam10', name: 'Camera 10',          type: 'unknown', stream: null    },
+  { id: 'cam11', name: 'Camera 11',          type: 'unknown', stream: null    },
 ];
 
 export const DEFAULT_CAMERAS_MOVI = [

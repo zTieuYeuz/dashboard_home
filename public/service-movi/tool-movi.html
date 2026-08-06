@@ -18,6 +18,8 @@
   --violet:oklch(0.72 0.18 310);
   --font-sans:'IBM Plex Sans',system-ui,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,monospace;
   --radius:12px;--radius-sm:8px;
+  /* legacy aliases — theo var(--text/--text-2) nên tự đổi theo theme */
+  --fg:var(--text);--fg-2:var(--text-2);
 }
 [data-theme="light"]{
   --bg:oklch(0.985 0.003 250);--surface:oklch(1 0 0);--surface-2:oklch(0.965 0.005 250);

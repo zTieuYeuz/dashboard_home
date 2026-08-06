@@ -15,7 +15,9 @@
   --accent:oklch(0.72 0.18 290);
   --green:oklch(0.74 0.16 155);--red:oklch(0.68 0.20 25);--amber:oklch(0.78 0.16 70);--purple:oklch(0.72 0.15 310);
   --font-sans:'IBM Plex Sans',system-ui,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,monospace;
-  --radius:12px;--radius-sm:8px
+  --radius:12px;--radius-sm:8px;
+  /* legacy aliases — các chỗ cũ còn dùng --fg/--fg-2/--blue */
+  --fg:var(--text);--fg-2:var(--text-2);--blue:oklch(0.72 0.16 250)
 }
 html,body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-height:100%;font-size:13px;-webkit-font-smoothing:antialiased}
 

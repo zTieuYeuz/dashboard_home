@@ -49,11 +49,11 @@
     'transition:opacity .2s ease,transform .24s cubic-bezier(.34,1.56,.64,1)}',
     '#oc-dial.oc-dopen .oc-item{opacity:1;transform:none;pointer-events:auto}',
     '#oc-dial.oc-dopen .oc-item:nth-of-type(2){transition-delay:.05s}',
-    '.oc-lbl{font:600 12px/1 inherit;color:var(--fg,#cdd6f4);background:var(--surface-2,#252535);',
+    '.oc-lbl{font:600 12px/1 inherit;color:var(--text,#cdd6f4);background:var(--surface-2,#252535);',
     'border:1px solid var(--border,rgba(255,255,255,.12));padding:7px 11px;border-radius:8px;white-space:nowrap;',
     'box-shadow:0 3px 10px rgba(0,0,0,.35)}',
     '.oc-sub{width:40px;height:40px;border-radius:50%;border:1px solid var(--border,rgba(255,255,255,.14));',
-    'background:var(--surface,#1e1e2e);color:var(--fg,#cdd6f4);cursor:pointer;display:flex;align-items:center;',
+    'background:var(--surface,#1e1e2e);color:var(--text,#cdd6f4);cursor:pointer;display:flex;align-items:center;',
     'justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.4);transition:transform .15s,border-color .15s,background .15s;flex-shrink:0}',
     '.oc-sub:hover{transform:scale(1.1);border-color:var(--accent,#7c83fc);background:var(--surface-2,#252535)}',
 
@@ -66,13 +66,13 @@
     '#oc-panel.oc-on{transform:none;opacity:1;pointer-events:all}',
     '#oc-head{display:flex;align-items:center;justify-content:space-between;padding:11px 15px;',
     'background:var(--surface-2,#252535);border-bottom:1px solid var(--border,rgba(255,255,255,.08));flex-shrink:0}',
-    '#oc-title{display:flex;align-items:center;gap:7px;color:var(--fg,#cdd6f4);font-size:13px;font-weight:600;font-family:inherit}',
+    '#oc-title{display:flex;align-items:center;gap:7px;color:var(--text,#cdd6f4);font-size:13px;font-weight:600;font-family:inherit}',
     '#oc-open-btn{background:none;border:none;color:var(--muted,#9399b2);cursor:pointer;font-size:13px;',
     'padding:3px 7px;border-radius:6px;transition:background .15s;text-decoration:none;white-space:nowrap}',
-    '#oc-open-btn:hover{background:rgba(255,255,255,.09);color:var(--fg,#cdd6f4)}',
+    '#oc-open-btn:hover{background:rgba(255,255,255,.09);color:var(--text,#cdd6f4)}',
     '#oc-x{background:none;border:none;color:var(--muted,#9399b2);cursor:pointer;font-size:17px;',
     'line-height:1;padding:3px 7px;border-radius:6px;transition:background .15s}',
-    '#oc-x:hover{background:rgba(255,255,255,.09);color:var(--fg,#cdd6f4)}',
+    '#oc-x:hover{background:rgba(255,255,255,.09);color:var(--text,#cdd6f4)}',
     '#oc-body{flex:1;position:relative;min-height:0}',
     '#oc-iframe{position:absolute;inset:0;border:none;width:100%;height:100%;background:var(--bg,#181825)}',
     /* Lớp phủ "đang kết nối" — che lúc iframe nạp lại (đổi trang / reconnect) cho đỡ giật */
@@ -463,7 +463,7 @@
     var ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px';
     var box = document.createElement('div');
-    box.style.cssText = 'background:var(--surface,#1e1e2e);color:var(--fg,#eee);border:1px solid rgba(255,255,255,.14);border-radius:14px;max-width:400px;width:100%;padding:20px;font-family:system-ui,sans-serif';
+    box.style.cssText = 'background:var(--surface,#1e1e2e);color:var(--text,#eee);border:1px solid rgba(255,255,255,.14);border-radius:14px;max-width:400px;width:100%;padding:20px;font-family:system-ui,sans-serif';
     function line(txt, css) { var e = document.createElement('div'); e.textContent = txt; e.style.cssText = css; return e; }
     box.appendChild(line('⚠️ AI muốn thực hiện', 'font-size:15px;font-weight:700;margin-bottom:8px'));
     box.appendChild(line(meta.label, 'font-size:14px;margin-bottom:4px'));

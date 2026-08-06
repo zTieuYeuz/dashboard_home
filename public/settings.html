@@ -797,13 +797,21 @@ select.inp{cursor:pointer}
         <div class="ai-pane" id="aip-train">
           <div class="panel">
             <div class="panel-header">
-              <div><div class="panel-title">🎓 Dạy AI (kho kiến thức)</div><div class="panel-desc">Tạo file/thư mục kiến thức cho AI học. Đồng bộ xuống máy OpenClaw để nạp vào bộ nhớ.</div></div>
+              <div><div class="panel-title">🎓 Dạy AI (kho kiến thức)</div><div class="panel-desc">Viết kiến thức cho AI học. Chia 2 nhóm theo thư mục — chọn nhóm bên dưới.</div></div>
               <button class="btn btn-sm" onclick="kbSyncInfo()">⤓ Lệnh đồng bộ</button>
             </div>
+            <!-- Hai nhóm phân biệt bằng TIỀN TỐ thư mục (dashboard/ và network/).
+                 Chọn nhóm nào thì cây chỉ hiện file nhóm đó, và file tạo mới tự
+                 vào đúng thư mục — người dùng không phải nhớ gõ tiền tố. -->
+            <div style="display:flex;gap:8px;align-items:center;padding:12px 14px 0;flex-wrap:wrap">
+              <button class="btn btn-sm btn-primary" id="kbg-dashboard" onclick="kbGroup('dashboard',this)">🖥 AI trang Dashboard</button>
+              <button class="btn btn-sm" id="kbg-network" onclick="kbGroup('network',this)">🌐 AI Network / Server</button>
+            </div>
+            <div id="kb-group-note" style="margin:8px 14px 0;padding:9px 12px;border-radius:var(--radius-sm);background:var(--surface-2);border:1px solid var(--border-soft);font-size:12px;line-height:1.65;color:var(--text-2)"></div>
             <div class="panel-body" style="display:flex;gap:14px;flex-wrap:wrap">
               <div style="flex:0 0 240px;min-width:220px">
                 <div style="display:flex;gap:6px;margin-bottom:8px">
-                  <input class="search-input" id="kb-newpath" placeholder="vd: network/vlan.md" style="flex:1;min-width:0">
+                  <input class="search-input" id="kb-newpath" placeholder="vd: vlan.md" style="flex:1;min-width:0">
                   <button class="btn btn-sm" onclick="kbNew()">+ Tạo</button>
                 </div>
                 <div id="kb-tree" style="font-size:13px;border:1px solid var(--border-soft);border-radius:var(--radius-sm);padding:6px;min-height:120px"><div class="empty-state">Đang tải...</div></div>

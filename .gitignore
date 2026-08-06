@@ -59,3 +59,8 @@ Thumbs.db
 *~
 .idea/
 .vscode/
+
+# Bộ cài dash-ssh (23 MB) — deploy lên Cloudflare từ máy anh Thoại, KHÔNG commit
+# vào git cho khỏi phình repo. Dựng lại bằng: cd _infra/dash-ssh && npm run build
+public/downloads/*.exe
+public/downloads/*.zip

@@ -117,6 +117,7 @@ import {
   handleConsoleRelayFieldActivity,
   handleConsoleRelayPushCommand,
   handleConsoleRelayStop,
+  handleSshFieldLlm,
 } from './src/console-serial.js';
 import {
   handleMcp,
@@ -154,6 +155,7 @@ import {
   handleWebauthnLoginOptions, handleWebauthnLoginVerify,
 } from './src/webauthn.js';
 import { PERMISSION_REGISTRY, buildPagePermMap, buildPermLabels, buildDelegateKeys } from './src/permissions-registry.js';
+import { handleKbNetwork } from './src/kb-network.js';
 
 /* Bảng gác trang, tính 1 lần lúc khởi động worker (registry là hằng số). */
 const _REGISTRY_PAGE_PERM = buildPagePermMap();
@@ -164,13 +166,43 @@ const _REGISTRY_PAGE_PERM = buildPagePermMap();
 
 /* Idle-timer script injected into every authenticated HTML page.
    T = idle timeout ms, W = warning threshold ms (must be < T) */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Bộ đếm "không hoạt động" + giữ phiên sống, tiêm vào mọi trang đã đăng nhập.
+
+   ⚠️ HAI LỖI THẬT ĐÃ GẶP (2026-07-31) mà phần này sinh ra — đọc trước khi sửa:
+
+   1. TAB NỀN GIẾT TAB ĐANG DÙNG. Bộ đếm cũ chỉ reset khi có thao tác trong CHÍNH
+      tab đó. Mở Termix ở tab mới rồi làm việc bên đó → tab dashboard nằm im →
+      tưởng người dùng bỏ đi → tự gọi /api/auth/logout → XOÁ PHIÊN CHUNG → tab
+      Termix đang gõ dở đột ngột 401 mọi thứ.
+      → Khắc phục: mốc hoạt động ghi vào localStorage (dùng chung mọi tab cùng
+        origin, kể cả trang Termix qua proxy). Idle tính theo tab HOẠT ĐỘNG GẦN
+        NHẤT, không phải riêng tab này.
+
+   2. PHIÊN KHÔNG BAO GIỜ ĐƯỢC GIA HẠN. `session.expires` là mốc tuyệt đối từ lúc
+      đăng nhập; `/api/auth/refresh` đã viết sẵn nhưng KHÔNG NƠI NÀO GỌI (mã chết).
+      Nên tới hạn là bị đá ra dù đang gõ dở.
+      → Khắc phục: còn thao tác thì định kỳ gọi refresh. Các tab điều phối với
+        nhau qua localStorage để không cùng lúc gọi nhiều lần.
+
+   Bỏ đi thật (không thao tác) thì vẫn tự đăng xuất đúng như cũ — đây KHÔNG phải
+   nới lỏng bảo mật, mà là đếm cho đúng.
+   ═══════════════════════════════════════════════════════════════════════════ */
 function makeIdleScript(T, W) {
 return `<script>(function(){
   var T=${T},W=${W},last=Date.now(),bn=null,tk=null;
+  var AK='dh_act', RK='dh_refresh', REFRESH_EVERY=300000; /* gia hạn tối đa 5 phút/lần */
+
+  function rd(k){ try{ return parseInt(localStorage.getItem(k)||'0',10)||0; }catch(e){ return 0; } }
+  function wr(k,v){ try{ localStorage.setItem(k,String(v)); }catch(e){} }
+  /* Mốc hoạt động gần nhất trên TOÀN BỘ tab, không riêng tab này. */
+  function lastAct(){ return Math.max(last, rd(AK)); }
+  wr(AK,last);
 
   /* Reset timer on any user interaction */
   window._idleReset = function() {
     last = Date.now();
+    wr(AK,last);                 /* báo cho các tab khác: vẫn còn người dùng */
     if (bn) { bn.style.display = 'none'; clearInterval(tk); tk = null; }
   };
   ['mousemove','mousedown','keydown','scroll','touchstart','click','pointerdown'].forEach(function(e) {
@@ -206,22 +238,37 @@ return `<script>(function(){
     /* Update countdown every second */
     clearInterval(tk);
     tk = setInterval(function() {
-      var r = T - (Date.now() - last);
+      var r = T - (Date.now() - lastAct());
       var el = document.getElementById('_ic');
       if (el) el.textContent = fmt(Math.max(0, r));
       if (r <= 0) clearInterval(tk);
     }, 1000);
   }
 
+  /* Đẩy hạn phiên ra xa khi người dùng CÒN thao tác. Nhiều tab điều phối qua
+     localStorage: tab nào vừa gia hạn thì ghi mốc, các tab khác thấy còn mới thì
+     thôi — tránh gọi trùng. Gọi hỏng thì xoá mốc để tab khác thử lại. */
+  function keepAlive() {
+    if (Date.now() - rd(RK) < REFRESH_EVERY) return;
+    wr(RK, Date.now());                       /* giữ chỗ TRƯỚC để 2 tab không cùng gọi */
+    fetch('/api/auth/refresh', { method: 'POST', credentials: 'same-origin' })
+      .then(function(r){ if (!r.ok) wr(RK, 0); })
+      .catch(function(){ wr(RK, 0); });
+  }
+
   /* Check idle state every 10 seconds */
   setInterval(function() {
-    var idle = Date.now() - last;
+    var idle = Date.now() - lastAct();
     if (idle >= T) {
       fetch('/api/auth/logout', { method: 'POST' }).finally(function() {
         window.location.href = '/login.html?reason=idle';
       });
     } else if (idle >= W) {
       showBanner();
+    } else {
+      /* Còn hoạt động (ở tab bất kỳ) → ẩn cảnh báo nếu đang hiện + giữ phiên sống */
+      if (bn && bn.style.display !== 'none') { bn.style.display='none'; clearInterval(tk); tk=null; }
+      keepAlive();
     }
   }, 10000);
 })();<\/script>`;
@@ -2321,6 +2368,9 @@ const WAYFIND_NAV = `<style>
  /* Camera Home mở được bằng BẤT KỲ quyền camera con nào — phải khớp đúng _PAGE_PERM phía server,
     nếu không user chỉ có quyền Playback/Download sẽ vào được trang nhưng menu lại giấu link. */
  var _CAMK=['camera','camera_playback','camera_download','app_camera','camera_autoopen'];
+ /* Terminal Home gộp 3 công cụ dòng lệnh — hiện trong menu nếu có BẤT KỲ quyền
+    nào trong ba, khớp accessKeys của service 'ssh' phía server. */
+ var _TERMK=['ssh','console-serial','ssh-field'];
  function _hp(pk){if(!pk)return true;if(Array.isArray(pk))return pk.some(function(k){return(P[k]||'none')!=='none';});return(P[pk]||'none')!=='none';}
  var _ALL=[
   {i:'\\u2316',n:'Dashboard',d:'Trang chủ · tất cả dịch vụ',h:'/',p:null},
@@ -2338,8 +2388,7 @@ const WAYFIND_NAV = `<style>
   {i:'\\uD83D\\uDCE1',n:'ASUS Router',d:'Home network router',h:'/service-home/asus.html',p:'asus'},
   {i:'\\u26A1',n:'n8n Automation',d:'Workflow & bot automation',h:'/service-home/n8n.html',p:'n8n'},
   {i:'\\uD83D\\uDCF7',n:'Camera',d:'Hệ thống camera · Frigate NVR',h:'/service-home/camera-home.html',p:_CAMK},
-  {i:'\\uD83D\\uDDA7',n:'SSH Terminal',d:'Web SSH · Termix',h:'/service-home/ssh.html',p:'ssh'},
-  {i:'\\uD83D\\uDD0C',n:'Web Console (Serial)',d:'Cấu hình switch/router qua dây console · AI hỗ trợ',h:'/service-home/console-serial.html',p:'console-serial'},
+  {i:'\\uD83D\\uDDA7',n:'Terminal Home',d:'Termix · Web Console (Serial) · SSH Hiện trường',h:'/service-home/ssh.html',p:_TERMK},
   {i:'\\uD83D\\uDDA5',n:'RustDesk',d:'Remote desktop · máy nhân viên',h:'/service-home/rustdesk.html',p:'rustdesk'},
   {i:'\\uD83D\\uDDA7',n:'Termix Movi',d:'SSH Movi · token auth',h:'/service-movi/ssh-movi.html',p:'ssh-movi'},
   {i:'\\uD83C\\uDFE0',n:'ALL Service Home',d:'Chrome Pool · FortiGate · ESXi · NAS · n8n · Frigate…',h:'/service-home/services-embed.html',p:'services-hub'},
@@ -2443,6 +2492,7 @@ const DATA_REFRESH = `<style>
   '/service-home/asus.html':['load'],'/service-home/n8n.html':['loadData'],
   '/service-home/camera-home.html':[],'/service-home/ssh.html':['loadData'],
   '/service-home/console-serial.html':[],
+  '/service-home/ssh-field.html':[],
   '/service-home/rustdesk.html':['loadDevices'],
   '/bookmarks.html':['loadData'],'/settings.html':['loadSettings']};
  var path=location.pathname.replace(/\\/index\\.html$/,'/');
@@ -2855,7 +2905,15 @@ a:hover{background:#4f46e5}</style></head>
         // vào trang login Access (chặn framing chính nó) → hiện "This content is blocked" dù
         // không liên quan gì tới code PNETLab/Termix. Đã gặp lặp lại nhiều lần trong 1 tối
         // (2026-07-28) trước khi thêm domain này — xem [[pnetlab_spa_proxy_trap]].
-        "connect-src 'self' https://*.home-server.id.vn wss://*.home-server.id.vn https://*.movi-finance.com wss://*.movi-finance.com https://speed.cloudflare.com https://*.cloudflareaccess.com; " +
+        // [SSH Hiện trường] CHỈ trang ssh-field mới được gọi vào loopback. Terminal ở đó nói
+        // chuyện với cầu nối dash-ssh chạy trên chính laptop (http://127.0.0.1:8022/api/ping để
+        // dò, ws://127.0.0.1:8022/ws để mở phiên SSH) — trình duyệt cho phép trang HTTPS gọi
+        // loopback (chuẩn Secure Contexts coi loopback là nguồn đáng tin) nhưng CSP của mình
+        // thì không, nên bị chặn "Refused to connect" dù mã ghép nối đúng.
+        // Mở theo TỪNG TRANG, không mở cho cả dashboard: trang khác không có việc gì gọi vào
+        // máy người dùng, để hở là mở thêm một mặt bị tấn công không cần thiết.
+        "connect-src 'self' https://*.home-server.id.vn wss://*.home-server.id.vn https://*.movi-finance.com wss://*.movi-finance.com https://speed.cloudflare.com https://*.cloudflareaccess.com" +
+        (url.pathname === '/service-home/ssh-field.html' ? ' http://127.0.0.1:* ws://127.0.0.1:*' : '') + "; " +
         // Google Fonts files + data URIs
         "font-src 'self' data: https://fonts.gstatic.com; " +
         // Allow camera (go2rtc), SSH terminal (termix) iframes, Microsoft OIDC silent renewal,
@@ -3836,6 +3894,8 @@ export default {
     // ── Web Console (Serial) AI proxy → 9Router: gác session + quyền 'console-serial' riêng
     //    (khác 'ssh' — đây là thao tác trên THIẾT BỊ VẬT LÝ tại hiện trường qua dây console). ──
     if (p === '/api/console-serial-llm') return handleConsoleSerialLlm(request, env);
+    // SSH Hiện trường — trang nhúng terminal, gác bằng quyền 'ssh-field'
+    if (p === '/api/ssh-field-llm') return handleSshFieldLlm(request, env);
 
     // ── Console Relay ("🙋 Nhờ hỗ trợ" — anh Thoại join phiên console của người hiện
     //    trường từ xa). Mọi endpoint tự gác session+quyền bên trong handler. ──
@@ -3860,6 +3920,10 @@ export default {
     if (p === '/api/ai/action' && m === 'POST') return handleAiAction(request, env);
     if (p === '/api/ai/guide') return handleAiGuide(request, env);
     if (p === '/api/ai/knowledge') return handleAiKnowledge(request, env);
+    /* Kho kiến thức MẠNG cho các trợ lý terminal (Console Serial · SSH Hiện trường
+       · Termix). Cùng lấy từ kho "Dạy AI" trong Settings, chỉ khác là lọc theo
+       tiền tố network/ — sửa một chỗ, cả ba trợ lý cùng hưởng. */
+    if (p === '/api/kb/network') return handleKbNetwork(request, env);
     if (p === '/api/ai/actions' && m === 'GET') return handleAiActionsList(request, env);
     if (p === '/api/ai/exec' && m === 'POST') return handleAiExec(request, env);
     if (p === '/api/ai/reads' && m === 'GET') return handleAiReadsList(request, env);
@@ -4294,6 +4358,31 @@ export default {
       const _r = await env.ASSETS.fetch(request);
       const _h = new Headers(_r.headers);
       _h.set('Cache-Control', 'private, max-age=300');
+      return new Response(_r.body, { status: _r.status, headers: _h });
+    }
+
+    /* ── Tải bộ cài dash-ssh ────────────────────────────────────────────────
+       File .exe của công cụ SSH Hiện trường nằm trong public/downloads/. Asset
+       tĩnh mặc định là CÔNG KHAI (ai biết đường dẫn cũng tải được), nên gác lại
+       giống /_settings/: phải có phiên đăng nhập + quyền 'ssh-field'.
+
+       File không chứa bí mật gì (mã ghép nối sinh ngay trên máy người dùng),
+       nhưng đây là công cụ nội bộ mở cổng SSH — không có lý do gì để nó nằm
+       công khai trên Internet cho người ta tải về nghiên cứu.
+
+       Cache 'private': để CDN cache công khai thì bản đã tải một lần sẽ phục vụ
+       cho cả người chưa đăng nhập, vô hiệu hoá luôn lớp gác này (đã gặp thật với
+       /_settings/). */
+    if (p.startsWith('/downloads/')) {
+      const _s = await getSession(request, env);
+      if (!_s) return new Response('Unauthorized', { status: 401 });
+      if (!await hasPerm(env, _s, 'ssh-field')) return new Response('Forbidden', { status: 403 });
+      const _r = await env.ASSETS.fetch(request);
+      if (!_r.ok) return _r;
+      const _h = new Headers(_r.headers);
+      _h.set('Cache-Control', 'private, max-age=600');
+      /* Ép tải về thay vì để trình duyệt tự đoán — .exe mở trong tab thì chỉ ra rác. */
+      _h.set('Content-Disposition', 'attachment; filename="' + p.split('/').pop() + '"');
       return new Response(_r.body, { status: _r.status, headers: _h });
     }
 

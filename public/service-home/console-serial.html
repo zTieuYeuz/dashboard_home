@@ -588,11 +588,16 @@ function redact(s){
   _redacted=false;
   return String(s)
     .replace(/-----BEGIN [^-\n]*PRIVATE KEY-----[\s\S]*?-----END [^-\n]*PRIVATE KEY-----/g, function(){ return _mask()+' (private key)'; })
-    .replace(/\b((?:password|secret))(\s+\d\s+)(\S+)/gi, function(m,k,mid){ return k+mid+_mask(); })
-    .replace(/([a-z0-9_.\-]*(?:pass(?:word|wd|phrase)?|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|private[_-]?key|auth[_-]?token))(\s*[:=]\s*)(["']?)([^\s"'&]{3,})(\3)/gi,
+    /* ⚠️ CHỈ [ \t], KHÔNG dùng \s — \s ăn cả ký tự xuống dòng nên "bí mật" bị che thật ra
+       là TỪ ĐẦU DÒNG SAU. Trên Cisco, dòng ngay sau "Password:" chính là DẤU NHẮC MỚI;
+       che mất nó là AI tưởng thiết bị vẫn đang chờ mật khẩu rồi báo sai trạng thái
+       (đã xảy ra thật 2026-08-06 ở trang SSH Hiện trường).
+       Bí mật LUÔN nằm cùng dòng với nhãn của nó, nên giới hạn ở space/tab là đủ. */
+    .replace(/\b((?:password|secret))([ \t]+\d[ \t]+)(\S+)/gi, function(m,k,mid){ return k+mid+_mask(); })
+    .replace(/([a-z0-9_.\-]*(?:pass(?:word|wd|phrase)?|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|private[_-]?key|auth[_-]?token))([ \t]*[:=][ \t]*)(["']?)([^\s"'&]{3,})(\3)/gi,
       function(m,k,sep,q){ return k+sep+q+_mask()+q; })
-    .replace(/\b((?:password|passwd|secret|passphrase))(\s+)(?!\d\s)(\S{3,})/gi, function(m,k,sp){ return k+sp+_mask(); })
-    .replace(/(Authorization\s*:\s*(?:Bearer|Basic)\s+)(\S+)/gi, function(m,p1){ return p1+_mask(); })
+    .replace(/\b((?:password|passwd|secret|passphrase))([ \t]+)(?![ \t]*\d[ \t])(\S{3,})/gi, function(m,k,sp){ return k+sp+_mask(); })
+    .replace(/(Authorization[ \t]*:[ \t]*(?:Bearer|Basic)[ \t]+)(\S+)/gi, function(m,p1){ return p1+_mask(); })
     .replace(/\bAKIA[0-9A-Z]{16}\b/g, function(){ return _mask()+' (AWS)'; });
 }
 

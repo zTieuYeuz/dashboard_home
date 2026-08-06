@@ -48,8 +48,36 @@ const HOME = [
   { section: 'home', id: 'esxi', name: 'VMware ESXi', icon: '🖥', page: '/service-home/vmware-home.html', access: 'rw' },
   { section: 'home', id: 'n8n', name: 'n8n Automation', icon: '⚡', page: '/service-home/n8n.html', access: 'rw' },
   { section: 'home', id: 'casaos', name: 'CasaOS', icon: '🏠', page: '/service-home/casaos.html', access: 'rw' },
-  { section: 'home', id: 'ssh', name: 'SSH Terminal', icon: '⌨', page: '/service-home/ssh.html', access: 'toggle' },
+  /* /service-home/ssh.html là TRANG GỘP "Terminal Home", chứa 3 cụm: Termix
+     (quyền 'ssh' — chính là service này) · Web Console Serial ('console-serial')
+     · SSH Hiện trường ('ssh-field'). Cụm nào thiếu quyền thì tự mờ trong trang.
+
+     Dùng pageKeys chứ KHÔNG dùng accessKeys: accessKeys nghĩa là trang cha không
+     có quyền riêng (quyền nằm hết ở mục con) — khai vậy thì quyền 'ssh' biến mất
+     khỏi Settings, không ai cấp quyền Termix được nữa. Đã dính đúng lỗi này.
+
+     ⚠️ Đổi danh sách này thì sửa cho khớp CẢ 3 chỗ: _TERMK (worker.js, menu),
+     _TERMINAL_KEYS (index.html, thẻ trang chính), CARDS (ssh.html, khoá từng cụm). */
+  { section: 'home', id: 'ssh', name: 'SSH Terminal', icon: '⌨', page: '/service-home/ssh.html', access: 'toggle',
+    pageKeys: ['ssh', 'console-serial', 'ssh-field'] },
   { section: 'home', id: 'console-serial', name: 'Web Console (Serial)', icon: '🔌', page: '/service-home/console-serial.html', access: 'toggle' },
+  /* Terminal SSH nhúng cho lúc đi công trường — SSH thật chạy trên laptop qua
+     cầu nối dash-ssh (_infra/dash-ssh), vì trình duyệt không mở được socket TCP.
+
+     BA QUYỀN CON = ba mức trợ lý AI được phép làm gì với terminal. Tách riêng vì
+     mức độ nguy hiểm khác hẳn nhau, không thể gộp thành một ô tích:
+       ask    — chỉ đọc màn hình và trả lời. KHÔNG chèn được gì.
+       agent  — chèn được lệnh, nhưng MỖI lệnh phải anh bấm Đồng ý.
+       bypass — AI tự gõ và tự bấm Enter trên thiết bị thật của khách hàng.
+     Quyền 'ssh-field' (mở trang) KHÔNG tự cho dùng AI: không cấp quyền con nào
+     thì bảng chat vẫn mở được nhưng mọi chế độ đều khoá. Cố ý — người chỉ cần
+     terminal thì không có lý do gì được kèm luôn quyền cho AI gõ lệnh. */
+  { section: 'home', id: 'ssh-field', name: 'SSH Hiện trường', icon: '🧰', page: '/service-home/ssh-field.html', access: 'toggle',
+    features: [
+      { id: 'ssh-field-ai-ask',    name: 'AI · Ask (chỉ đọc, không chèn lệnh)' },
+      { id: 'ssh-field-ai-agent',  name: 'AI · Agent (chèn lệnh, phải xác nhận từng lệnh)' },
+      { id: 'ssh-field-ai-bypass', name: 'AI · ByPass (AI TỰ CHẠY lệnh — cấp rất hạn chế)' },
+    ] },
   { section: 'home', id: 'rustdesk', name: 'RustDesk Remote', icon: '🖥', page: '/service-home/rustdesk.html', access: 'toggle-read' },
   { section: 'home', id: 'fortigate', name: 'FortiGate', icon: '🛡', page: '/service-home/fortigate.html', access: 'rw' },
   { section: 'home', id: 'asus', name: 'ASUS Router', icon: '📡', page: '/service-home/asus.html', access: 'rw' },
@@ -198,7 +226,15 @@ export function buildPagePermMap() {
   const map = {};
   PERMISSION_REGISTRY.forEach(svc => {
     if (!svc.page) return;
-    const keys = svc.accessKeys ? svc.accessKeys.slice()
+    /* pageKeys ≠ accessKeys — đừng lẫn:
+       • accessKeys = "trang cha KHÔNG có quyền riêng, quyền nằm ở các mục con"
+         (camera-home, tool-movi). Dùng nhầm cho service có quyền riêng thì
+         chính quyền đó biến mất khỏi Settings — đã dính lúc gộp trang terminal.
+       • pageKeys  = "trang cha VẪN có quyền riêng, nhưng còn mở được bằng vài
+         quyền khác nữa" (Terminal Home: quyền 'ssh' của mình + 'console-serial'
+         + 'ssh-field' của hai công cụ nằm chung trang). */
+    const keys = svc.pageKeys ? svc.pageKeys.slice()
+      : svc.accessKeys ? svc.accessKeys.slice()
       : (svc.virtualParent ? (svc.features || []).map(f => f.id) : [svc.id]);
     map[svc.page] = keys.length === 1 ? keys[0] : keys;
   });

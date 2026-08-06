@@ -605,17 +605,76 @@ function aiSub(sub, btn){
    DẠY AI — kho kiến thức (KB) dạng cây thư mục
    ═══════════════════════════════════════════════════════════ */
 var _kb=[], _kbCur=null;
+
+/* ── HAI NHÓM KIẾN THỨC ────────────────────────────────────────────────────
+   Phân biệt bằng TIỀN TỐ thư mục trong đường dẫn file:
+
+     dashboard/...  → AI tổng của trang dashboard (đồng bộ xuống OpenClaw)
+     network/...    → DÙNG CHUNG cho 3 trợ lý terminal: Web Console (Serial),
+                      SSH Hiện trường, Termix. Đọc qua /api/kb/network.
+
+   Người dùng chỉ bấm chọn nhóm, KHÔNG phải nhớ gõ tiền tố — kbNew() tự thêm.
+   File cũ chưa có tiền tố vẫn hiện ở nhóm dashboard để không biến mất. */
+var KB_NHOM = {
+  dashboard: {
+    tien_to: 'dashboard/',
+    mo_ta: '<b>AI trang Dashboard</b> — trợ lý tổng ở góc phải màn hình. Dạy nó quy trình nội bộ, '
+         + 'cách dùng các trang, quy ước đặt tên, việc hay làm. Đồng bộ xuống máy OpenClaw bằng nút “Lệnh đồng bộ”.',
+  },
+  network: {
+    tien_to: 'network/',
+    mo_ta: '<b>AI Network / Server</b> — dùng chung cho <b>Web Console (Serial)</b>, <b>SSH Hiện trường</b> và '
+         + '<b>Termix</b>. Viết một lần, cả ba cùng học: kiến thức mạng, Linux, Docker/Kubernetes, cách đọc '
+         + 'output từng hãng, quy trình chẩn đoán. Lưu xong <b>tải lại trang terminal</b> là dùng được ngay.<br>'
+         + '⚠️ Chỉ viết <b>kiến thức chung</b> — nội dung này được gửi lên AI khi nó tra cứu, đừng để IP thật, '
+         + 'mật khẩu hay tên máy chủ của công ty.',
+  },
+};
+var _kbNhom = 'dashboard';
+
+function kbGroup(nhom, btn){
+  if(!KB_NHOM[nhom]) return;
+  _kbNhom = nhom;
+  ['dashboard','network'].forEach(function(k){
+    var b=document.getElementById('kbg-'+k);
+    if(b) b.className = 'btn btn-sm' + (k===nhom ? ' btn-primary' : '');
+  });
+  var note=document.getElementById('kb-group-note');
+  if(note) note.innerHTML = KB_NHOM[nhom].mo_ta;
+  var inp=document.getElementById('kb-newpath');
+  if(inp) inp.placeholder = 'vd: ' + (nhom==='network' ? 'docker.md' : 'quy-trinh.md');
+  _kbCur=null;
+  var cur=document.getElementById('kb-cur'); if(cur) cur.textContent='Chọn hoặc tạo một file…';
+  var ct=document.getElementById('kb-content'); if(ct){ ct.value=''; ct.disabled=true; }
+  var sv=document.getElementById('kb-save'); if(sv) sv.disabled=true;
+  var dl=document.getElementById('kb-del'); if(dl) dl.disabled=true;
+  renderKbTree();
+}
+
+/* File thuộc nhóm nào. File cũ không có tiền tố → coi là dashboard, để không mất. */
+function kbThuocNhom(path){
+  return String(path||'').toLowerCase().indexOf('network/')===0 ? 'network' : 'dashboard';
+}
+
 function loadKb(){
   fetch('/api/admin/mcp/kb').then(function(r){return r.json();}).then(function(d){
-    _kb=(d&&d.files)||[]; renderKbTree();
+    _kb=(d&&d.files)||[];
+    var note=document.getElementById('kb-group-note');
+    if(note && !note.innerHTML) note.innerHTML=KB_NHOM[_kbNhom].mo_ta;
+    renderKbTree();
   }).catch(function(){});
 }
 function renderKbTree(){
   var wrap=document.getElementById('kb-tree'); if(!wrap) return;
-  if(!_kb.length){ wrap.innerHTML='<div class="empty-state">Chưa có file. Gõ đường dẫn (vd network/vlan.md) rồi bấm + Tạo.</div>'; return; }
+  var ds=_kb.filter(function(f){ return kbThuocNhom(f.path)===_kbNhom; });
+  if(!ds.length){
+    wrap.innerHTML='<div class="empty-state">Nhóm này chưa có file.<br>Gõ tên file (vd '
+      + (_kbNhom==='network'?'docker.md':'quy-trinh.md') + ') rồi bấm <b>+ Tạo</b>.</div>';
+    return;
+  }
   // group by folder
   var groups={};
-  _kb.forEach(function(f){
+  ds.forEach(function(f){
     var i=f.path.lastIndexOf('/');
     var dir=i>=0?f.path.slice(0,i):''; var name=i>=0?f.path.slice(i+1):f.path;
     (groups[dir]=groups[dir]||[]).push({name:name,path:f.path});
@@ -643,6 +702,11 @@ function kbOpen(path){
 function kbNew(){
   var inp=document.getElementById('kb-newpath'); var p=(inp.value||'').trim();
   if(!p){ inp.focus(); return; }
+  /* Tự thêm tiền tố nhóm đang chọn — người dùng chỉ cần gõ tên file.
+     Đã gõ sẵn tiền tố (dashboard/ hoặc network/) thì giữ nguyên, không thêm lần hai. */
+  var tt=KB_NHOM[_kbNhom].tien_to;
+  if(p.toLowerCase().indexOf('dashboard/')!==0 && p.toLowerCase().indexOf('network/')!==0) p=tt+p;
+  if(!/\.(md|txt)$/i.test(p)) p+='.md';
   _kbCur=p; inp.value='';
   document.getElementById('kb-cur').textContent=p+' (mới — bấm Lưu)';
   document.getElementById('kb-content').value=''; document.getElementById('kb-content').disabled=false;
