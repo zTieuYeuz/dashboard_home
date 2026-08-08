@@ -347,10 +347,30 @@ function connectWs(s) {
   s.ws = ws;
 
   ws.onopen = function () {
-    ws.send(JSON.stringify({
+    var o = {
       t:'open', host:s.host, port:s.cfg.port || 22, user:s.cfg.user, pass:s.cfg.pass,
       cols:s.term.cols, rows:s.term.rows,
-    }));
+    };
+    /* Khoá máy chủ đã đổi ở lần thử trước → hỏi DỨT KHOÁT một lần, ngay lúc anh chủ
+       động bấm kết nối lại. Hỏi ở đây chứ không ở lúc nhận cảnh báo: lúc đó anh mới
+       đang đọc, chưa quyết; ở đây là anh đã đọc xong và cố ý thử lại. */
+    if (s.pendingFp) {
+      var dong_y = window.confirm(
+        'CẢNH BÁO BẢO MẬT\n\n' + s.host + ' đang trình một khoá máy chủ KHÁC với lần trước.\n\n'
+        + 'Vân tay mới:\n' + s.pendingFp + '\n\n'
+        + 'Nếu thiết bị vừa được thay/cài lại/nâng firmware thì đây là chuyện bình thường.\n'
+        + 'Nếu KHÔNG có thay đổi nào như vậy — rất có thể đang có người chen giữa để lấy mật khẩu.\n\n'
+        + 'Chấp nhận khoá mới và kết nối?');
+      if (!dong_y) {
+        s.term.writeln('\r\n\x1b[33m[Đã huỷ — không gửi tài khoản/mật khẩu đi đâu cả]\x1b[0m\r\n');
+        setDot(s, 'err'); updateSessionBtns();
+        try { ws.close(); } catch (e) {}
+        return;
+      }
+      o.acceptFp = s.pendingFp;
+      s.pendingFp = null;
+    }
+    ws.send(JSON.stringify(o));
   };
 
   ws.onmessage = function (ev) {
@@ -367,6 +387,27 @@ function connectWs(s) {
       /* raw để nguyên, KHÔNG tô màu: đây là thứ đưa cho AI đọc, thêm mã màu vào
          chỉ làm nhiễu và tốn token. */
       s.raw += m.d; if (s.raw.length > RAW_MAX) s.raw = s.raw.slice(-RAW_MAX);
+      return;
+    }
+    /* Khoá máy chủ SSH — xem _infra/dash-ssh/server.js, lớp 4.
+       In thẳng vào terminal chứ không phải một góc nào đó: đây là thứ PHẢI đọc
+       trước khi gõ tiếp, và terminal là chỗ mắt đang nhìn. */
+    if (m.t === 'hostkey') {
+      if (m.trang_thai === 'moi') {
+        s.term.writeln('\x1b[90m[Lần đầu tới ' + m.host + ' — đã ghi nhớ khoá máy chủ]\x1b[0m');
+        s.term.writeln('\x1b[90m[' + m.fp + ']\x1b[0m');
+      } else if (m.trang_thai === 'da_chap_nhan') {
+        s.term.writeln('\x1b[33m[Đã cập nhật khoá máy chủ mới cho ' + m.host + ']\x1b[0m');
+      } else if (m.trang_thai === 'doi') {
+        s.pendingFp = m.fp;
+        s.term.writeln('\r\n\x1b[41;97m  ⚠  KHOÁ MÁY CHỦ ĐÃ ĐỔI — ĐÃ CHẶN KẾT NỐI  \x1b[0m');
+        s.term.writeln('\x1b[31mThiết bị : ' + m.host + '\x1b[0m');
+        s.term.writeln('\x1b[31mLần trước: ' + m.fp_cu + '\x1b[0m');
+        s.term.writeln('\x1b[31mLần này  : ' + m.fp + '\x1b[0m');
+        s.term.writeln('\x1b[31mTài khoản và mật khẩu CHƯA được gửi đi.\x1b[0m');
+        s.term.writeln('\x1b[33mThiết bị vừa thay/cài lại/nâng firmware? → bấm ▶ Kết nối lại rồi xác nhận.\x1b[0m');
+        s.term.writeln('\x1b[33mKhông có thay đổi nào? → DỪNG LẠI, có thể đang bị nghe lén.\x1b[0m\r\n');
+      }
       return;
     }
     if (m.t === 'err') {
@@ -498,6 +539,204 @@ $('btnGo').onclick = doOpen;
 ['host', 'port', 'user', 'pass'].forEach(function (id) {
   $(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') doOpen(); });
 });
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   YÊU THÍCH — danh sách thiết bị đã lưu, có thư mục (kiểu MobaXterm)
+   ──────────────────────────────────────────────────────────────────────────
+   Đi công trường mà mỗi lần phải gõ lại IP/tài khoản thì vừa mất thời gian vừa
+   dễ gõ nhầm sang thiết bị khác — nhầm IP ở hiện trường là chuyện có thật.
+
+   LƯU Ở ĐÂU: localStorage của chính máy này, giống MobaXterm lưu trên máy. CỐ Ý
+   không đẩy lên dashboard: đây là danh sách thiết bị của KHÁCH HÀNG, để trên máy
+   mình thì phạm vi rủi ro gói gọn trong cái laptop đó.
+
+   MẬT KHẨU: mặc định KHÔNG lưu. Muốn lưu phải tự xác nhận qua một cảnh báo rõ
+   ràng — localStorage là chữ thô, bất kỳ lỗ hổng XSS nào trên dashboard cũng đọc
+   sạch được. Không lưu thì mở phiên xong con trỏ tự nhảy vào ô mật khẩu, gõ vẫn
+   nhanh mà không phải cất mật khẩu ra đĩa. */
+var FAV_KEY = 'sshfield_fav';
+var FAV = { folders: [], items: [] };
+
+function favLoad() {
+  try {
+    var d = JSON.parse(localStorage.getItem(FAV_KEY) || 'null');
+    if (d && Array.isArray(d.folders) && Array.isArray(d.items)) FAV = d;
+  } catch (e) {}
+  if (!FAV.folders.length) FAV.folders = [{ id: 'chung', name: 'Chung' }];
+}
+function favSave() { try { localStorage.setItem(FAV_KEY, JSON.stringify(FAV)); } catch (e) {} }
+
+/* Bỏ dấu tiếng Việt khi tìm kiếm. Đặt tên thì gõ "Tầng 3" nhưng lúc tìm gấp ở
+   hiện trường thì gõ "tang 3" — không bỏ dấu là tìm không ra đúng lúc cần nhất.
+   NFD tách dấu thành ký tự riêng rồi xoá; riêng đ/Đ phải thay tay vì nó là ký tự
+   độc lập chứ không phải d cộng dấu. */
+function boDau(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+}
+function favId() { return 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+function favRender() {
+  var wrap = $('favTree');
+  if (!wrap) return;
+  var q = boDau(($('favSearch').value || '').trim());
+  wrap.innerHTML = '';
+
+  if (!FAV.items.length) {
+    var e = document.createElement('div');
+    e.className = 'fav-empty';
+    e.textContent = 'Chưa lưu thiết bị nào. Mở một phiên rồi bấm “+ Lưu phiên này”.';
+    wrap.appendChild(e);
+    return;
+  }
+
+  FAV.folders.forEach(function (f) {
+    var ds = FAV.items.filter(function (it) {
+      if (it.folderId !== f.id) return false;
+      if (!q) return true;
+      return boDau(it.label + ' ' + it.host + ' ' + (it.user || '') + ' ' + (it.note || '')).indexOf(q) >= 0;
+    });
+    /* Đang tìm thì giấu thư mục rỗng cho gọn; không tìm thì vẫn hiện để còn chỗ lưu vào */
+    if (!ds.length && q) return;
+
+    var box = document.createElement('div'); box.className = 'fav-folder';
+    var head = document.createElement('div'); head.className = 'fav-fname';
+    var i1 = document.createElement('span'); i1.textContent = '📁';
+    var i2 = document.createElement('span'); i2.textContent = f.name;
+    var i3 = document.createElement('span'); i3.className = 'cnt'; i3.textContent = ds.length;
+    head.appendChild(i1); head.appendChild(i2); head.appendChild(i3);
+    head.oncontextmenu = function (ev) { ev.preventDefault(); favMenu(ev, 'folder', f); };
+    box.appendChild(head);
+
+    ds.forEach(function (it) {
+      var row = document.createElement('div'); row.className = 'fav-item';
+      var s1 = document.createElement('span'); s1.textContent = '🖥';
+      var s2 = document.createElement('span'); s2.textContent = it.label || it.host;
+      var s3 = document.createElement('span'); s3.className = 'sub';
+      s3.textContent = (it.user ? it.user + '@' : '') + it.host + (it.pass ? ' 🔑' : '');
+      row.appendChild(s1); row.appendChild(s2); row.appendChild(s3);
+      row.title = 'Mở ' + (it.user ? it.user + '@' : '') + it.host + ':' + (it.port || 22)
+                + (it.note ? '\n' + it.note : '') + '\n(chuột phải để sửa/xoá)';
+      row.onclick = function () { favOpen(it); };
+      row.oncontextmenu = function (ev) { ev.preventDefault(); favMenu(ev, 'item', it); };
+      box.appendChild(row);
+    });
+    wrap.appendChild(box);
+  });
+}
+
+/* Mở phiên từ mục đã lưu. Không lưu mật khẩu thì điền sẵn phần còn lại rồi đưa con
+   trỏ vào ô mật khẩu — nhanh gần bằng lưu sẵn mà không phải cất mật khẩu ra đĩa. */
+function favOpen(it) {
+  if (!TOKEN) { $('setupMsg').textContent = 'Chưa ghép nối với cầu nối dash-ssh.'; return; }
+  $('host').value = it.host;
+  $('port').value = it.port || 22;
+  $('user').value = it.user || '';
+  $('pass').value = it.pass || '';
+  if (it.pass) doOpen();
+  else {
+    $('pass').focus();
+    $('st').textContent = 'Nhập mật khẩu cho ' + (it.label || it.host) + ' rồi bấm + Mở tab mới';
+  }
+}
+
+function favMenu(ev, loai, obj) {
+  var m = $('favMenu');
+  m.innerHTML = '';
+  function nut(chu, fn, xoa) {
+    var b = document.createElement('button');
+    b.textContent = chu; if (xoa) b.className = 'del';
+    b.onclick = function () { m.classList.remove('open'); fn(); };
+    m.appendChild(b);
+  }
+  if (loai === 'folder') {
+    nut('✎ Đổi tên thư mục', function () {
+      var t = prompt('Tên thư mục:', obj.name); if (!t) return;
+      obj.name = t.trim(); favSave(); favRender();
+    });
+    nut('🗑 Xoá thư mục', function () {
+      if (FAV.folders.length < 2) { alert('Phải còn ít nhất một thư mục.'); return; }
+      var n = FAV.items.filter(function (i) { return i.folderId === obj.id; }).length;
+      if (!confirm('Xoá thư mục "' + obj.name + '"' + (n ? ' và ' + n + ' thiết bị bên trong' : '') + '?')) return;
+      FAV.folders = FAV.folders.filter(function (f) { return f.id !== obj.id; });
+      FAV.items = FAV.items.filter(function (i) { return i.folderId !== obj.id; });
+      favSave(); favRender();
+    }, true);
+  } else {
+    nut('✎ Đổi tên', function () {
+      var t = prompt('Tên hiển thị:', obj.label || obj.host); if (!t) return;
+      obj.label = t.trim(); favSave(); favRender();
+    });
+    nut('📁 Chuyển thư mục', function () {
+      var ten = FAV.folders.map(function (f, i) { return (i + 1) + '. ' + f.name; }).join('\n');
+      var c = prompt('Chuyển "' + (obj.label || obj.host) + '" sang thư mục nào?\n' + ten, '1');
+      var idx = parseInt(c, 10) - 1;
+      if (FAV.folders[idx]) { obj.folderId = FAV.folders[idx].id; favSave(); favRender(); }
+    });
+    nut('📝 Ghi chú', function () {
+      var t = prompt('Ghi chú (vd: switch tầng 3, uplink Gi0/24):', obj.note || '');
+      if (t === null) return;
+      obj.note = t.trim(); favSave(); favRender();
+    });
+    nut(obj.pass ? '🔑 Xoá mật khẩu đã lưu' : '🔑 Lưu mật khẩu trên máy này', function () {
+      if (obj.pass) { delete obj.pass; favSave(); favRender(); return; }
+      if (!confirm('Lưu mật khẩu vào bộ nhớ trình duyệt của MÁY NÀY?\n\n'
+        + 'Nó nằm dưới dạng chữ thô — ai dùng được máy này, hoặc một lỗ hổng XSS trên dashboard, '
+        + 'đều đọc được. Chỉ nên làm với thiết bị phòng lab hoặc máy cá nhân.')) return;
+      var p = prompt('Mật khẩu cho ' + (obj.label || obj.host) + ':', '');
+      if (!p) return;
+      obj.pass = p; favSave(); favRender();
+    });
+    nut('🗑 Xoá khỏi danh sách', function () {
+      if (!confirm('Xoá "' + (obj.label || obj.host) + '"?')) return;
+      FAV.items = FAV.items.filter(function (i) { return i.id !== obj.id; });
+      favSave(); favRender();
+    }, true);
+  }
+  m.style.left = Math.min(ev.clientX, window.innerWidth - 175) + 'px';
+  m.style.top = Math.min(ev.clientY, window.innerHeight - 210) + 'px';
+  m.classList.add('open');
+}
+document.addEventListener('click', function () { var m = $('favMenu'); if (m) m.classList.remove('open'); });
+
+/* Lưu phiên: ưu tiên tab ĐANG XEM (thông tin thật, đã kết nối được), không có thì
+   lấy từ ô nhập — để lưu được cả thiết bị chưa kịp mở. */
+function favThemMuc() {
+  var s = active();
+  var host = s ? s.host : $('host').value.trim();
+  var port = s ? (s.cfg.port || 22) : ($('port').value.trim() || 22);
+  var user = s ? s.cfg.user : $('user').value.trim();
+  if (!host) { $('st').textContent = 'Chưa có gì để lưu — mở một phiên hoặc nhập IP trước.'; return; }
+
+  var label = prompt('Tên hiển thị cho thiết bị này:', (user ? user + '@' : '') + host);
+  if (!label) return;
+  var ten = FAV.folders.map(function (f, i) { return (i + 1) + '. ' + f.name; }).join('\n');
+  var c = prompt('Lưu vào thư mục nào?\n' + ten, '1');
+  var idx = parseInt(c, 10) - 1;
+  var folder = FAV.folders[idx] || FAV.folders[0];
+
+  FAV.items.push({ id: favId(), folderId: folder.id, label: label.trim(),
+                   host: host, port: port, user: user, note: '' });
+  favSave(); favRender();
+  $('st').textContent = 'Đã lưu "' + label.trim() + '" vào thư mục ' + folder.name;
+  setTimeout(updateTopStatus, 2500);
+}
+
+(function () {
+  favLoad();
+  favRender();
+  $('btnFav').onclick = function () { $('fav').classList.toggle('hide'); fitAll(); };
+  $('favClose').onclick = function () { $('fav').classList.add('hide'); fitAll(); };
+  $('favSearch').addEventListener('input', favRender);
+  $('favAddItem').onclick = favThemMuc;
+  $('favAddFolder').onclick = function () {
+    var t = prompt('Tên thư mục mới (vd: Khách hàng A, Chi nhánh Q7):', '');
+    if (!t) return;
+    FAV.folders.push({ id: favId(), name: t.trim() });
+    favSave(); favRender();
+  };
+})();
 
 /* ══════════ Thanh công cụ phiên ══════════ */
 $('btnDisc').onclick  = function () { disconnectSession(active()); };
@@ -732,6 +971,19 @@ function redact(s) {
        chữ ENC. Bỏ qua là lộ khoá VPN nguyên văn lên LLM. */
     .replace(/\b(set[ \t]+\S*(?:secret|password|passwd|psk)[ \t]+)(?:ENC[ \t]+)?(\S{4,})/gi,
       function (m, p1) { return p1 + _mask(); })
+    /* ══ Bí mật của THIẾT BỊ MẠNG — nhãn không hề chứa chữ "password"/"secret" ══
+       Bốn thứ dưới đây cầm được là vào được hệ thống, ngang mật khẩu, nhưng mọi
+       luật ở trên đều không bắt vì tên của chúng chẳng giống mật khẩu chút nào:
+         snmp-server community <chuỗi> RW    → đọc/ghi cấu hình cả con switch
+         message-digest-key 1 md5 <chuỗi>    → khoá xác thực OSPF
+         key-string <chuỗi>                  → khoá EIGRP/BGP
+         pre-shared-key <chuỗi>              → khoá VPN site-to-site / WiFi
+       Đúng loại lệnh AI hay chạy khi soi sự cố định tuyến hay VPN — tức là lọt
+       thường xuyên chứ không phải hiếm. */
+    .replace(/\b((?:snmp-server[ \t]+)?community[ \t]+)(\S{2,})/gi, function (m, p1) { return p1 + _mask(); })
+    .replace(/\b(message-digest-key[ \t]+\d+[ \t]+md5[ \t]+)(?:\d[ \t]+)?(\S{3,})/gi, function (m, p1) { return p1 + _mask(); })
+    .replace(/\b((?:key-string|authentication-key|pre-?shared-key|wpa-psk)[ \t]+)(?:\d[ \t]+)?(?:ENC[ \t]+)?(\S{3,})/gi,
+      function (m, p1) { return p1 + _mask(); })
     .replace(/\bAKIA[0-9A-Z]{16}\b/g, function () { return _mask() + ' (AWS)'; });
 }
 
@@ -752,7 +1004,13 @@ function doTrangThai(s) {
   for (var i = dong.length - 1; i >= 0; i--) {
     if (dong[i].trim()) { cuoi = dong[i].trim(); break; }
   }
-  var o = { dau_nhac_cuoi_cung: cuoi.slice(-120) };
+  /* ⚠️ PHẢI qua bộ che secret. Dòng cuối THƯỜNG là dấu nhắc (không phải bí mật),
+     nhưng KHÔNG PHẢI LÚC NÀO CŨNG VẬY: đọc màn hình đúng lúc thiết bị vừa in xong
+     dòng cấu hình mà dấu nhắc chưa kịp hiện thì dòng cuối chính là dòng đó —
+     "snmp-server community <chuỗi> rw", "set password ENC <chuỗi>"… Trường này đi
+     thẳng lên LLM nên bỏ che ở đây là thủng đúng chỗ mình đang bịt ở mọi chỗ khác.
+     Che một dòng đơn giờ đã an toàn: mọi luật chỉ dùng [ \t], không ăn sang dòng sau. */
+  var o = { dau_nhac_cuoi_cung: redact(cuoi.slice(-120)) };
 
   /* Nhận diện chế độ theo ký tự kết thúc — đặc trưng của từng họ thiết bị */
   if (/\(config[^)]*\)\s*#$/.test(cuoi))      o.che_do = 'Cisco/Aruba — ĐANG TRONG CHẾ ĐỘ CẤU HÌNH (config)';
@@ -1091,7 +1349,117 @@ function kbLookup(topics) {
   return o;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   CHU TRÌNH KHÉP KÍN 4 PHA — hiểu hệ thống → điều tra → kết luận → đề xuất
+   ──────────────────────────────────────────────────────────────────────────
+   Vì sao phải ÉP BẰNG CODE chứ không chỉ dặn trong lời nhắc:
+
+   AI kém về network chủ yếu vì nó NHẢY THẲNG tới câu trả lời — nhìn vài dòng
+   output đã "thấy vấn đề" rồi đề xuất sửa. Kỹ sư thật thì bắt đầu bằng "hệ thống
+   này trông ra sao đã". Dặn dò không đủ: lời nhắc là mong muốn, code mới chặn được.
+
+   Bốn pha, KHÔNG nhảy cóc:
+     1. BẢN ĐỒ   — biết hệ thống ra sao (so_do_doc; chưa có thì khảo sát rồi so_do_ghi)
+     2. ĐIỀU TRA — thu bằng chứng bằng lệnh CHỈ ĐỌC (tự do, không rào cản)
+     3. KẾT LUẬN — ghi nguyên nhân KÈM trích dẫn bằng chứng (ghi_ket_luan)
+     4. ĐỀ XUẤT  — trình phương án, anh Thoại bấm duyệt (de_xuat_sua)
+
+   Chặn cứng: lệnh THAY ĐỔI CẤU HÌNH bị từ chối tới khi có kết luận (pha 3) VÀ có
+   phương án được anh duyệt (pha 4). Lệnh chỉ đọc thì thoải mái — điều tra phải
+   nhanh, chỉ khi ĐỤNG VÀO thiết bị mới cần thủ tục. */
+
+var PHA = { ket_luan: null, de_xuat_duoc_duyet: null };
+
+/* Danh sách lệnh CHỈ ĐỌC là danh sách ĐÓNG: chỉ thứ chắc chắn an toàn mới lọt,
+   còn lại mặc định coi là thay đổi. Thà bắt xin phép thừa còn hơn để lọt một lệnh
+   sửa cấu hình mà không ai duyệt. */
+var RE_CHI_DOC = new RegExp('^(' + [
+  'show', 'display', 'get', 'diagnose', 'diag', 'ping', 'traceroute', 'tracert',
+  'ip r', 'ip a', 'ip n', 'ip -s', 'ss', 'netstat', 'ifconfig', 'arp', 'ethtool',
+  'cat', 'less', 'head', 'tail', 'grep', 'ls', 'df', 'du', 'free', 'top', 'ps',
+  'uptime', 'date', 'whoami', 'hostname', 'journalctl', 'dmesg', 'nslookup', 'dig',
+  'systemctl status', 'docker ps', 'docker logs', 'docker inspect', 'docker stats',
+  'kubectl get', 'kubectl describe', 'kubectl logs', 'kubectl top',
+  'terminal length', 'terminal pager', 'more', 'dir', 'exit', 'end', 'quit', 'enable',
+].join('|').replace(/ /g, '[ \\t]+') + ')\\b', 'i');
+
+function laLenhDoc(cmd) {
+  var c = String(cmd || '').trim().replace(/^do[ \t]+/i, '');
+  if (!c) return false;
+  /* Ghi đè file / xoá / đổi tên → coi là thay đổi dù mở đầu bằng lệnh đọc */
+  if (/>>|>[ \t]*\/|\btee\b|\brm\b|\bmv\b|\bcp\b|\bdd\b/.test(c)) return false;
+  return RE_CHI_DOC.test(c);
+}
+
+function ghiKetLuan(p) {
+  var nguyen_nhan = p && p.nguyen_nhan;
+  var bang_chung = (p && p.bang_chung) || [];
+  if (!nguyen_nhan) return { ok:false, error:'Thiếu "nguyen_nhan".' };
+  if (!Array.isArray(bang_chung) || !bang_chung.length) {
+    return { ok:false, error:'Thiếu "bang_chung": mảng, mỗi phần tử ghi THIẾT BỊ + DÒNG OUTPUT chứng minh. '
+           + 'Không trích được bằng chứng nghĩa là chưa đủ cơ sở — quay lại điều tra tiếp.' };
+  }
+  PHA.ket_luan = { nguyen_nhan:nguyen_nhan, bang_chung:bang_chung, tac_dong:(p && p.tac_dong) || '' };
+  theKetLuan(PHA.ket_luan);
+  return { ok:true, da_ghi:true,
+           note:'Đã ghi kết luận và hiện thẻ cho anh Thoại đọc. Giờ mới được sang pha ĐỀ XUẤT (de_xuat_sua).' };
+}
+
+function deXuatSua(p) {
+  if (!PHA.ket_luan) {
+    return Promise.resolve({ ok:false,
+      error:'Chưa có kết luận nguyên nhân. Gọi ghi_ket_luan (kèm bằng chứng) TRƯỚC khi đề xuất sửa.' });
+  }
+  var buoc = (p && p.buoc) || [];
+  if (!Array.isArray(buoc) || !buoc.length) {
+    return Promise.resolve({ ok:false, error:'Thiếu "buoc": mảng {thiet_bi, lenh, muc_dich}.' });
+  }
+  return new Promise(function (resolve) {
+    theDeXuat(p, buoc, function (duyet) {
+      if (!duyet) {
+        return resolve({ ok:true, duoc_duyet:false,
+          note:'Anh Thoại KHÔNG duyệt. Đừng chạy lệnh nào. Hỏi anh muốn đổi gì hoặc đề xuất cách khác.' });
+      }
+      PHA.de_xuat_duoc_duyet = { buoc:buoc, luc:Date.now() };
+      resolve({ ok:true, duoc_duyet:true,
+        note:'Anh Thoại ĐÃ DUYỆT. Chạy đúng các lệnh trong phương án, TỪNG BƯỚC MỘT, '
+           + 'xong bước nào đọc lại kết quả bước đó rồi mới sang bước kế.' });
+    });
+  });
+}
+
+/* Sơ đồ hệ thống — dữ liệu công ty, nằm ở KV riêng (src/net-topology.js) */
+function soDoDoc() {
+  return fetch('/api/net-topology', { credentials:'same-origin' })
+    .then(function (r) { return r.json(); })
+    .catch(function (e) { return { ok:false, error:'Không đọc được sơ đồ: ' + (e.message || e) }; });
+}
+
+function soDoGhi(p) {
+  var so_do = p && p.so_do;
+  if (!so_do) return Promise.resolve({ ok:false, error:'Thiếu "so_do".' });
+  return new Promise(function (resolve) {
+    theSoDo(so_do, function (duyet) {
+      if (!duyet) return resolve({ ok:true, da_luu:false, note:'Anh Thoại không duyệt sơ đồ. Hỏi lại chỗ nào chưa đúng.' });
+      fetch('/api/net-topology', {
+        method:'PUT', credentials:'same-origin',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ so_do:so_do }),
+      }).then(function (r) { return r.json(); })
+        .then(function (d) {
+          resolve(d.error ? { ok:false, error:d.error }
+                          : { ok:true, da_luu:true, note:'Đã lưu sơ đồ. Lần sau chỉ cần so_do_doc là biết hệ thống.' });
+        })
+        .catch(function (e) { resolve({ ok:false, error:String(e.message || e) }); });
+    });
+  });
+}
+
 var TOOLS = {
+  so_do_doc:      function () { return soDoDoc(); },
+  so_do_ghi:      function (p) { return soDoGhi(p); },
+  ghi_ket_luan:   function (p) { return Promise.resolve(ghiKetLuan(p)); },
+  de_xuat_sua:    function (p) { return deXuatSua(p); },
   kb_lookup:      function (p) { return Promise.resolve(kbLookup(p && (p.topic || p.topics))); },
   list_sessions:  function () { return Promise.resolve(listSessions()); },
   read_terminal:  function (p) { return Promise.resolve(readTerminal(p && p.session)); },
@@ -1112,19 +1480,19 @@ var TOOLS = {
 var MODES = {
   ask: {
     name: 'Ask', perm: 'ssh-field-ai-ask',
-    tools: ['kb_lookup', 'list_sessions', 'read_terminal'],
+    tools: ['so_do_doc', 'so_do_ghi', 'ghi_ket_luan', 'de_xuat_sua', 'kb_lookup', 'list_sessions', 'read_terminal'],
     note: '<b>Ask</b> — chỉ đọc màn hình và trả lời. Không chèn, không chạy bất cứ thứ gì.',
   },
   agent: {
     name: 'AI Agent', perm: 'ssh-field-ai-agent',
     /* send_key có ở Agent vì không gõ được phím thì AI kẹt ngay ở "--More--" —
        lệnh anh vừa duyệt cho chèn cũng không xem hết được kết quả. */
-    tools: ['kb_lookup', 'list_sessions', 'read_terminal', 'insert_command', 'send_key'],
+    tools: ['so_do_doc', 'so_do_ghi', 'ghi_ket_luan', 'de_xuat_sua', 'kb_lookup', 'list_sessions', 'read_terminal', 'insert_command', 'send_key'],
     note: '<b>AI Agent</b> — được đặt lệnh lên dòng lệnh, nhưng <b>mỗi lệnh anh phải bấm Đồng ý</b>, và vẫn tự bấm Enter.',
   },
   bypass: {
     name: 'ByPass', perm: 'ssh-field-ai-bypass', danger: true,
-    tools: ['kb_lookup', 'list_sessions', 'read_terminal', 'insert_command', 'run_command', 'send_key'],
+    tools: ['so_do_doc', 'so_do_ghi', 'ghi_ket_luan', 'de_xuat_sua', 'kb_lookup', 'list_sessions', 'read_terminal', 'insert_command', 'run_command', 'send_key'],
     note: '⚠️ <b>ByPass</b> — AI <b>tự chạy lệnh</b> trên thiết bị thật. Bắt buộc: kiểm tra trước → trình kế hoạch → mới làm. Lệnh nguy hiểm vẫn hỏi anh.',
   },
 };
@@ -1171,6 +1539,36 @@ var SYS_BASE = [
   '- insert_command {"command":"..."} → đặt 1 lệnh lên dòng lệnh tab đang xem (không kèm Enter). Mỗi lần CHỈ 1 lệnh.',
   '- send_key {"key":"space|enter|q|ctrl_c|esc|y|n"} → gõ MỘT phím. Kết quả trả về kèm màn hình sau khi gõ.',
   '- list_sessions → danh sách MỌI thiết bị đang mở: số tab, tên, LOẠI THIẾT BỊ đoán sẵn, còn kết nối hay không. KHÔNG tham số.',
+  '- so_do_doc → đọc SƠ ĐỒ HỆ THỐNG đã lưu (thiết bị, vai trò, VLAN, gateway, đường nối, dịch vụ). KHÔNG tham số.',
+  '- so_do_ghi {"so_do":{...}} → đề xuất sơ đồ mới/cập nhật; anh Thoại duyệt thì mới lưu.',
+  '- ghi_ket_luan {"nguyen_nhan":"...","bang_chung":[{"thiet_bi":"...","output":"dòng chứng minh"}],"tac_dong":"..."}',
+  '- de_xuat_sua {"buoc":[{"thiet_bi":"...","lenh":"...","muc_dich":"..."}],"rui_ro":"...","quay_lui":"...","kiem_chung":"..."}',
+  '',
+  '═══════ CHU TRÌNH BẮT BUỘC KHI SOI SỰ CỐ — 4 PHA, KHÔNG NHẢY CÓC ═══════',
+  '',
+  'PHA 1 — BẢN ĐỒ (luôn làm đầu tiên, kể cả khi thấy vấn đề có vẻ đã rõ)',
+  '  Gọi so_do_doc. CÓ sơ đồ → đọc kỹ để biết mình đang đứng ở đâu, luồng đang hỏng đi qua những thiết bị nào.',
+  '  CHƯA có → khảo sát bằng lệnh CHỈ ĐỌC: list_sessions · show cdp neighbors detail / show lldp neighbors detail ·',
+  '  show ip interface brief · show vlan brief · show ip route · (FortiGate) get system interface · get router info routing-table all.',
+  '  Khảo sát xong DỰNG sơ đồ rồi gọi so_do_ghi cho anh Thoại duyệt. Chỗ nào không chắc thì HỎI anh, TUYỆT ĐỐI đừng bịa.',
+  '  Sơ đồ nên có: thiết bị (tên, vai trò, loại) · VLAN và gateway đặt ở đâu · đường nối giữa các thiết bị ·',
+  '  dịch vụ quan trọng nằm ở máy nào · đường ra Internet/VPN. KHÔNG chép mật khẩu hay nguyên running-config vào sơ đồ.',
+  '',
+  'PHA 2 — ĐIỀU TRA (chỉ lệnh CHỈ ĐỌC, chạy bao nhiêu lệnh cũng được)',
+  '  Bám bản đồ: xác định đường đi của luồng hỏng rồi CHIA ĐÔI để khoanh vùng.',
+  '  Đối chiếu hai đầu mỗi mối nối. Kiểm cả chiều về. Không chắc ý nghĩa output thì kb_lookup.',
+  '  Manh mối quý nhất luôn là SỰ KHÁC BIỆT: chỗ này chạy chỗ kia không → đi tìm cái KHÁC NHAU giữa hai chỗ đó.',
+  '',
+  'PHA 3 — KẾT LUẬN (bắt buộc gọi ghi_ket_luan)',
+  '  Chỉ kết luận khi TRÍCH ĐƯỢC dòng output chứng minh. Mỗi bằng chứng ghi rõ THIẾT BỊ NÀO + DÒNG NÀO.',
+  '  Chưa đủ thì nói thẳng "chưa đủ dữ liệu, cần xem thêm X" rồi quay lại pha 2 — ĐỪNG đoán cho có kết luận.',
+  '',
+  'PHA 4 — ĐỀ XUẤT (bắt buộc gọi de_xuat_sua, rồi CHỜ anh Thoại quyết)',
+  '  Từng bước một lệnh, kèm mục đích. Nêu rủi ro thật, cách quay lui, cách kiểm chứng sau khi sửa.',
+  '  Anh duyệt thì mới được chạy. Không duyệt thì THÔI — hỏi anh muốn đổi gì, đừng nài.',
+  '',
+  '⛔ HỆ THỐNG CHẶN CỨNG: mọi lệnh THAY ĐỔI CẤU HÌNH bị từ chối nếu chưa có kết luận (pha 3) và',
+  '   chưa được duyệt (pha 4). Lệnh chỉ đọc KHÔNG bị chặn. Đây không phải lời khuyên — code chặn thật.',
   '',
   '⭐ CHỌN THIẾT BỊ: mọi công cụ đều nhận thêm "session" — số tab (vd "session":2) hoặc một mẩu tên/IP (vd "session":"192.168.1.2").',
   '   Không nêu thì chạy trên tab đang xem. Thao tác vào tab nào thì tab đó tự được kéo ra trước mặt anh Thoại.',
@@ -1422,6 +1820,10 @@ function doSend() {
   if (!q || busy) return;
   var wc = msgs.querySelector('.wc'); if (wc) wc.remove();
   ta.value = ''; addMsg('m-u', q); chatHistory.push({ role:'user', content:q });
+  /* CÂU HỎI MỚI = vấn đề mới → phải chứng minh lại từ đầu, không xài kết luận cũ.
+     ⚠️ CỐ Ý đặt ở đây chứ KHÔNG ở runLoop: bấm nút 'Tiếp tục' cũng gọi runLoop,
+     đặt ở đó thì phê duyệt vừa xin xong bị xoá ngay, AI không chạy tiếp được. */
+  PHA.ket_luan = null; PHA.de_xuat_duoc_duyet = null;
   runLoop();
 }
 
@@ -1443,6 +1845,10 @@ function stopRun() {
 
 function runLoop() {
   busy = true; STOPPED = false; clearReads();
+  /* ⚠️ KHÔNG reset PHA ở đây — reset nằm trong doSend (câu hỏi MỚI).
+     Nút "Tiếp tục" (moiDiTiep) cũng gọi runLoop; đặt reset ở đây thì phê duyệt anh
+     Thoại vừa bấm bị xoá ngay lượt sau, AI bị chặn lại với lý do "chưa có kết luận"
+     dù vừa mới được duyệt xong. Đã dính đúng lỗi này rồi. */
   btnSend.style.display = 'none'; $('btnStop').style.display = '';
   var loops = 0, bubble = addMsg('m-a', '…');
 
@@ -1606,6 +2012,110 @@ function askInChat(opts) {
 }
 var pendingAsks = [];
 
+/* ══════════ Ba loại thẻ của chu trình 4 pha ═══════════════════════════════
+   Đều nằm TRONG khung chat, không dùng hộp thoại đè màn hình: thứ anh Thoại cần
+   để quyết định chính là ngữ cảnh xung quanh nó. */
+
+/* Thẻ KẾT LUẬN (pha 3) — chỉ để đọc, không có nút. In rõ bằng chứng để anh tự
+   kiểm AI có suy diễn quá tay không. */
+function theKetLuan(kl) {
+  var box = document.createElement('div');
+  box.className = 'ask';
+  var t = document.createElement('div'); t.className = 't'; t.textContent = '🔎 KẾT LUẬN NGUYÊN NHÂN';
+  var n = document.createElement('div'); n.style.cssText = 'font-weight:600;line-height:1.6';
+  n.textContent = kl.nguyen_nhan;
+  box.appendChild(t); box.appendChild(n);
+
+  var bc = document.createElement('div'); bc.className = 'who';
+  bc.textContent = 'Bằng chứng (' + kl.bang_chung.length + '):';
+  box.appendChild(bc);
+  kl.bang_chung.forEach(function (b) {
+    var d = document.createElement('div'); d.className = 'cmd';
+    d.textContent = typeof b === 'string' ? b
+      : ((b.thiet_bi ? '[' + b.thiet_bi + '] ' : '') + (b.output || b.dan_chung || JSON.stringify(b)));
+    box.appendChild(d);
+  });
+  if (kl.tac_dong) {
+    var td = document.createElement('div'); td.className = 'who';
+    td.textContent = 'Tác động: ' + kl.tac_dong;
+    box.appendChild(td);
+  }
+  msgs.appendChild(box); msgs.scrollTop = msgs.scrollHeight;
+}
+
+/* Thẻ ĐỀ XUẤT SỬA (pha 4) — chốt chặn cuối cùng trước khi đụng vào thiết bị.
+   Anh Thoại quyết, không phải AI. */
+function theDeXuat(p, buoc, xong) {
+  var box = document.createElement('div');
+  box.className = 'ask danger';
+  var t = document.createElement('div'); t.className = 't'; t.textContent = '🛠 ĐỀ XUẤT SỬA — anh quyết';
+  box.appendChild(t);
+
+  buoc.forEach(function (b, i) {
+    var w = document.createElement('div'); w.className = 'who';
+    w.textContent = 'Bước ' + (i + 1) + ' · ' + (b.thiet_bi || '(tab đang xem)') + (b.muc_dich ? ' — ' + b.muc_dich : '');
+    var c = document.createElement('div'); c.className = 'cmd';
+    c.textContent = b.lenh || '';
+    box.appendChild(w); box.appendChild(c);
+  });
+
+  [['Rủi ro', p.rui_ro], ['Cách quay lui', p.quay_lui], ['Kiểm chứng sau khi sửa', p.kiem_chung]]
+    .forEach(function (x) {
+      if (!x[1]) return;
+      var d = document.createElement('div'); d.className = 'who';
+      d.textContent = x[0] + ': ' + x[1];
+      box.appendChild(d);
+    });
+
+  var btns = document.createElement('div'); btns.className = 'btns';
+  var yes = document.createElement('button'); yes.textContent = '✅ Duyệt phương án';
+  var no  = document.createElement('button'); no.className = 'no'; no.textContent = '❌ Không sửa';
+  btns.appendChild(yes); btns.appendChild(no);
+  box.appendChild(btns);
+  msgs.appendChild(box); msgs.scrollTop = msgs.scrollHeight;
+
+  function done(v) {
+    box.classList.add('done'); btns.remove();
+    var r = document.createElement('div'); r.className = 'verdict';
+    r.textContent = v ? '✅ Anh đã duyệt — AI được chạy đúng các lệnh trên' : '❌ Anh không duyệt';
+    r.style.color = v ? 'var(--ok)' : 'var(--err)';
+    box.appendChild(r); msgs.scrollTop = msgs.scrollHeight;
+    xong(v);
+  }
+  yes.onclick = function () { done(true); };
+  no.onclick  = function () { done(false); };
+  pendingAsks.push(function () { if (btns.isConnected) done(false); });
+}
+
+/* Thẻ SƠ ĐỒ (pha 1) — AI khảo sát xong thì đề xuất bản đồ, anh duyệt mới lưu.
+   Sơ đồ sai còn tệ hơn không có: mọi chẩn đoán sau đó lệch theo. */
+function theSoDo(so_do, xong) {
+  var box = document.createElement('div');
+  box.className = 'ask';
+  var t = document.createElement('div'); t.className = 't'; t.textContent = '🗺 SƠ ĐỒ HỆ THỐNG — AI đề xuất, anh duyệt';
+  var w = document.createElement('div'); w.className = 'who';
+  w.textContent = 'Lưu lại thì lần sau AI biết ngay hệ thống, không phải khảo sát lại từ đầu.';
+  var c = document.createElement('div'); c.className = 'cmd';
+  c.style.maxHeight = '260px'; c.style.overflow = 'auto';
+  c.textContent = JSON.stringify(so_do, null, 2);
+  var btns = document.createElement('div'); btns.className = 'btns';
+  var yes = document.createElement('button'); yes.textContent = '💾 Đúng, lưu lại';
+  var no  = document.createElement('button'); no.className = 'no'; no.textContent = 'Chưa đúng';
+  btns.appendChild(yes); btns.appendChild(no);
+  box.appendChild(t); box.appendChild(w); box.appendChild(c); box.appendChild(btns);
+  msgs.appendChild(box); msgs.scrollTop = msgs.scrollHeight;
+
+  function done(v) {
+    box.classList.add('done'); btns.remove();
+    var r = document.createElement('div'); r.className = 'verdict';
+    r.textContent = v ? '💾 Đã lưu sơ đồ' : '↩ Chưa lưu';
+    box.appendChild(r); xong(v);
+  }
+  yes.onclick = function () { done(true); };
+  no.onclick  = function () { done(false); };
+  pendingAsks.push(function () { if (btns.isConnected) done(false); });
+}
+
 /* ĐÃ ĐỌC THIẾT BỊ NÀO trong lượt này — điều kiện bắt buộc của ByPass.
    Ban đầu chỉ là một cờ chung "đã đọc gì đó chưa", nhưng từ khi AI tự chọn được
    thiết bị thì cờ chung là hớ: đọc con A xong đi gõ thẳng vào con B vẫn lọt.
@@ -1638,6 +2148,26 @@ function execTool(tool) {
       error:'Chưa đọc màn hình của ' + (s ? s.label : 'thiết bị này') + ' lần nào trong lượt này mà đã định gõ lệnh vào đó.',
       phai_lam:'Gọi read_terminal' + (s ? ' {"session":' + (sessions.indexOf(s) + 1) + '}' : '') + ' trước để xem thiết bị đang ở tình trạng nào, rồi trình kế hoạch.',
       vi_sao:'Mỗi thiết bị phải được kiểm tra riêng — đọc con này rồi gõ sang con khác là kiểu làm ẩu nguy hiểm nhất ở hiện trường.' });
+  }
+
+  /* ══ CHỐT CHẶN CHU TRÌNH: lệnh THAY ĐỔI CẤU HÌNH phải đi qua đủ pha 3 và 4 ══
+     Lệnh chỉ đọc thì cho tự do — điều tra phải nhanh, đặt rào ở đó chỉ làm chậm
+     mà không tăng an toàn. Chỉ khi ĐỤNG VÀO thiết bị mới bắt đủ thủ tục:
+     phải có KẾT LUẬN (kèm bằng chứng) và PHƯƠNG ÁN ĐƯỢC ANH THOẠI DUYỆT.
+     Đây chính là chỗ biến "AI đề xuất bừa" thành "AI phải chứng minh trước". */
+  if ((tool.tool === 'insert_command' || tool.tool === 'run_command') && !laLenhDoc(cmd)) {
+    if (!PHA.ket_luan) {
+      return Promise.resolve({ __denied:true, ok:false,
+        error:'Lệnh này THAY ĐỔI cấu hình mà chưa có kết luận nguyên nhân.',
+        phai_lam:'Điều tra bằng lệnh chỉ đọc trước, rồi gọi ghi_ket_luan {"nguyen_nhan":"...","bang_chung":[{"thiet_bi":"...","output":"dòng chứng minh"}]}.',
+        vi_sao:'Sửa khi chưa biết chắc nguyên nhân là cách nhanh nhất để hỏng thêm thứ khác.' });
+    }
+    if (!PHA.de_xuat_duoc_duyet) {
+      return Promise.resolve({ __denied:true, ok:false,
+        error:'Đã có kết luận nhưng anh Thoại CHƯA DUYỆT phương án sửa.',
+        phai_lam:'Gọi de_xuat_sua {"buoc":[{"thiet_bi":"...","lenh":"...","muc_dich":"..."}],"rui_ro":"...","quay_lui":"...","kiem_chung":"..."} rồi chờ anh bấm duyệt.',
+        vi_sao:'Sửa hay không là quyền của anh Thoại, không phải của bạn.' });
+    }
   }
 
   var needAsk = false, danger = false, title = '', yesText = '';

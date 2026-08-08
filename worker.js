@@ -156,6 +156,7 @@ import {
 } from './src/webauthn.js';
 import { PERMISSION_REGISTRY, buildPagePermMap, buildPermLabels, buildDelegateKeys } from './src/permissions-registry.js';
 import { handleKbNetwork } from './src/kb-network.js';
+import { handleNetTopology } from './src/net-topology.js';
 
 /* Bảng gác trang, tính 1 lần lúc khởi động worker (registry là hằng số). */
 const _REGISTRY_PAGE_PERM = buildPagePermMap();
@@ -3924,6 +3925,8 @@ export default {
        · Termix). Cùng lấy từ kho "Dạy AI" trong Settings, chỉ khác là lọc theo
        tiền tố network/ — sửa một chỗ, cả ba trợ lý cùng hưởng. */
     if (p === '/api/kb/network') return handleKbNetwork(request, env);
+    /* Sơ đồ hệ thống — DỮ LIỆU CÔNG TY, tách khỏi kho kiến thức chung. */
+    if (p === '/api/net-topology') return handleNetTopology(request, env);
     if (p === '/api/ai/actions' && m === 'GET') return handleAiActionsList(request, env);
     if (p === '/api/ai/exec' && m === 'POST') return handleAiExec(request, env);
     if (p === '/api/ai/reads' && m === 'GET') return handleAiReadsList(request, env);

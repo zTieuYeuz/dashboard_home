@@ -596,8 +596,18 @@ function redact(s){
     .replace(/\b((?:password|secret))([ \t]+\d[ \t]+)(\S+)/gi, function(m,k,mid){ return k+mid+_mask(); })
     .replace(/([a-z0-9_.\-]*(?:pass(?:word|wd|phrase)?|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|private[_-]?key|auth[_-]?token))([ \t]*[:=][ \t]*)(["']?)([^\s"'&]{3,})(\3)/gi,
       function(m,k,sep,q){ return k+sep+q+_mask()+q; })
-    .replace(/\b((?:password|passwd|secret|passphrase))([ \t]+)(?![ \t]*\d[ \t])(\S{3,})/gi, function(m,k,sp){ return k+sp+_mask(); })
+    /* "(?:ENC[ \t]+)?" bắt buộc: FortiOS ghi "set password ENC <chuỗi>" — thiếu nó thì
+       luật che đúng chữ "ENC" rồi dừng, để lộ nguyên giá trị thật phía sau. */
+    .replace(/\b((?:password|passwd|secret|passphrase))([ \t]+)(?:ENC[ \t]+)?(?![ \t]*\d[ \t])(\S{3,})/gi, function(m,k,sp){ return k+sp+_mask(); })
     .replace(/(Authorization[ \t]*:[ \t]*(?:Bearer|Basic)[ \t]+)(\S+)/gi, function(m,p1){ return p1+_mask(); })
+    /* "set psksecret ENC <chuỗi>" của FortiOS: luật chung không bắt vì không có ranh
+       giới từ trước "secret" trong "psksecret", giá trị lại nằm sau chữ ENC. */
+    .replace(/\b(set[ \t]+\S*(?:secret|password|passwd|psk)[ \t]+)(?:ENC[ \t]+)?(\S{4,})/gi, function(m,p1){ return p1+_mask(); })
+    /* Bí mật thiết bị MẠNG — nhãn không chứa chữ "password"/"secret" nên mọi luật
+       trên đều bỏ lọt, dù cầm được là vào được hệ thống. GIỮ ĐỒNG BỘ với ssh-field.js. */
+    .replace(/\b((?:snmp-server[ \t]+)?community[ \t]+)(\S{2,})/gi, function(m,p1){ return p1+_mask(); })
+    .replace(/\b(message-digest-key[ \t]+\d+[ \t]+md5[ \t]+)(?:\d[ \t]+)?(\S{3,})/gi, function(m,p1){ return p1+_mask(); })
+    .replace(/\b((?:key-string|authentication-key|pre-?shared-key|wpa-psk)[ \t]+)(?:\d[ \t]+)?(?:ENC[ \t]+)?(\S{3,})/gi, function(m,p1){ return p1+_mask(); })
     .replace(/\bAKIA[0-9A-Z]{16}\b/g, function(){ return _mask()+' (AWS)'; });
 }
 
