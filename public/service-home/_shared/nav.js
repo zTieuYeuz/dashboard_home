@@ -28,7 +28,6 @@
 
   var LINKS = [
     { href: '/',                                 label: 'Overview',  rule: 'all' },
-    { href: '/noc.html',                         label: '📡 NOC', rule: 'admin', id: 'noc-link' },
     { href: '/bookmarks.html',                   label: 'Bookmarks', rule: 'all' },
     { href: '/service-home/services-embed.html', label: 'Services',  rule: 'services-hub' }
   ];

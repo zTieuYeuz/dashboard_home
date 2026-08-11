@@ -26,7 +26,7 @@
    Quyền: gác ở tầng reads.js/actions.js bằng key 'hub-pnetlab'. User không
    có quyền thì AI cũng bị chặn 403 (giống mọi nguồn khác).
    ═══════════════════════════════════════════════════════════════════ */
-import { json, getSession, hasPerm, cleanEnv } from './core.js';
+import { json, getSession, hasPerm, cleanEnv, bridgeWebSocket } from './core.js';
 
 const PNET = 'https://pnetlab.home-server.id.vn';
 const SKEY = 'pnetlab:aisess';   // KV cache phiên ai-agent
@@ -519,45 +519,16 @@ export async function handlePnetlabHomeProxy(request, env) {
     server.accept();
     upSock.accept();
 
-    // Chẩn đoán "Guacamole đóng kết nối vì không thấy phản hồi từ trình duyệt" (2026-07-30):
-    // nghi ngờ gói tin keep-alive của client bị RỚT ÂM THẦM qua relay này (catch nuốt lỗi không
-    // log) trong khi đang gõ lệnh — không phải do idle. Thêm connId + timestamp để lần sau xem
-    // qua `wrangler tail` biết chính xác: rớt ở chiều nào, sau bao lâu, do send() thật sự lỗi
-    // hay do đầu kia tự đóng trước.
-    const connId = Math.random().toString(36).slice(2, 9);
-    const t0 = Date.now();
-    console.log(`[pnet-ws ${connId}] open`);
+    /* Nối 2 chiều bằng helper dùng chung (src/core.js), bật log chẩn đoán qua tag 'pnet-ws'
+       — vẫn xem được bằng `wrangler tail` y như trước (rớt chiều nào, sau bao lâu, do send()
+       lỗi thật hay đầu kia tự đóng).
 
-    server.addEventListener('message', ({ data }) => {
-      try { upSock.send(data); }
-      catch (e) { console.error(`[pnet-ws ${connId}] client->upstream send FAILED +${Date.now()-t0}ms:`, e && e.message); }
-    });
-    upSock.addEventListener('message', ({ data }) => {
-      try { server.send(data); }
-      catch (e) { console.error(`[pnet-ws ${connId}] upstream->client send FAILED +${Date.now()-t0}ms:`, e && e.message); }
-    });
-    server.addEventListener('close', ({ code, reason }) => {
-      console.log(`[pnet-ws ${connId}] client closed code=${code} reason="${reason}" +${Date.now()-t0}ms`);
-      try { upSock.close(code, reason); } catch { /* đã đóng */ }
-    });
-    upSock.addEventListener('close', ({ code, reason }) => {
-      console.log(`[pnet-ws ${connId}] upstream closed code=${code} reason="${reason}" +${Date.now()-t0}ms`);
-      try { server.close(code, reason); } catch { /* đã đóng */ }
-    });
-    // ⚠️ Bug thật đã gặp: thiếu 2 listener 'error' bên dưới → khi tunnel/mạng rớt kết nối ĐỘT NGỘT
-    // (không phải close frame sạch — vd Guacamole/Tomcat tự ngắt do idle timeout, hoặc tunnel chập
-    // chờn), phía WebSocket chỉ bắn 'error' mà KHÔNG chắc có bắn 'close' theo sau. Thiếu handler này
-    // → `upSock.close()` không bao giờ được gọi → session phía Guacamole KHÔNG BAO GIỜ được giải
-    // phóng → "ma" tích luỹ dần → hết quota "exhausted the limit for simultaneous connection" dù
-    // chỉ mở đúng 1 tab. Giờ bắt cả 'error' để đảm bảo LUÔN đóng nốt đầu kia.
-    server.addEventListener('error', (e) => {
-      console.error(`[pnet-ws ${connId}] client error +${Date.now()-t0}ms:`, e && e.message);
-      try { upSock.close(1011, 'peer error'); } catch { /* đã đóng */ }
-    });
-    upSock.addEventListener('error', (e) => {
-      console.error(`[pnet-ws ${connId}] upstream error +${Date.now()-t0}ms:`, e && e.message);
-      try { server.close(1011, 'peer error'); } catch { /* đã đóng */ }
-    });
+       ⚠️ SỬA 2026-08-09 — bản vá 'error' thêm hồi 2026-07-30 ở đây KHÔNG BAO GIỜ CHẠY: nó gọi
+       close(1011,…) mà 1011 là mã BỊ CẤM truyền vào close() (chỉ nhận 1000 hoặc 3000–4999) →
+       ném lỗi → `catch {}` nuốt sạch → phiên Guacamole vẫn không được giải phóng đúng như
+       triệu chứng cũ. Nhánh 'close' còn tệ hơn: rớt bất thường là code 1006, cũng bị cấm y vậy.
+       bridgeWebSocket() quy mọi mã lạ về 1000 nên lệnh đóng mới thật sự chạy. */
+    bridgeWebSocket(server, upSock, { tag: 'pnet-ws' });
 
     const wsRespHeaders = new Headers();
     const echoSwp = upResp.headers.get('Sec-WebSocket-Protocol') || swp;

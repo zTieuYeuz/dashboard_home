@@ -6,6 +6,7 @@
    ═══════════════════════════════════════════════ */
 import {
   getSession, hasPerm, isAdminUser, cleanEnv, json, logActivity, DEFAULT_CAMERAS,
+  bridgeWebSocket,
 } from './core.js';
 
 export async function handleCameraList(request, env) {
@@ -82,10 +83,9 @@ export async function handleCamTestLiveEmbed(request, env) {
     const { 0: client, 1: server } = new WebSocketPair();
     server.accept();
     upstream.accept();
-    server.addEventListener('message',   ({ data }) => { try { upstream.send(data); } catch(_) {} });
-    upstream.addEventListener('message', ({ data }) => { try { server.send(data);   } catch(_) {} });
-    server.addEventListener('close',   ({ code, reason }) => { try { upstream.close(code, reason); } catch(_) {} });
-    upstream.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason);   } catch(_) {} });
+    /* Helper dùng chung (src/core.js) — kèm bản vá BẪY MÃ ĐÓNG 1006 làm luồng camera
+       đứng hình vĩnh viễn khi kết nối rớt bất thường. Xem chú thích ở bridgeWebSocket(). */
+    bridgeWebSocket(server, upstream);
     return new Response(null, { status: 101, webSocket: client });
   }
 

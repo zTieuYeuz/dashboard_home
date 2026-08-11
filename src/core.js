@@ -485,3 +485,71 @@ export function moviN8nAuth(env) {
   return 'Basic ' + btoa(unescape(encodeURIComponent(u + ':' + p)));
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   bridgeWebSocket — nối 2 chiều một cặp WebSocket trong CF Worker
+   ───────────────────────────────────────────────────────────────────────────
+   DÙNG CHUNG cho MỌI proxy WebSocket (Termix/RemoteDesktop, camera, PNETLab,
+   OpenClaw, n8n). Trước đây mỗi file tự chép một bản gần giống nhau, và bản nào
+   cũng dính CÙNG MỘT BUG — sửa được một chỗ thì chỗ khác vẫn treo.
+
+   ⚠️ BẪY MÃ ĐÓNG 1006 — thủ phạm "lâu lâu treo cứng, phải restart phiên"
+   (anh Thoại báo với RemoteDesktop 2026-08-09; nhiều khả năng cũng là con bug
+   đứng sau vụ Guacamole PNETLab "rớt giữa lúc đang gõ" hồi 2026-07-30).
+
+   Kết nối rớt BẤT THƯỜNG (mạng chớp, guacd/tunnel restart) → code = 1006. Nhưng
+   1006 là mã DÀNH RIÊNG, chuẩn WebSocket CẤM truyền vào close() → gọi là ném lỗi,
+   rơi vào catch nuốt sạch → socket bên kia KHÔNG BAO GIỜ đóng. Trình duyệt tưởng
+   còn sống → màn hình đứng hình, và vì không có sự kiện close nên cơ chế tự nối
+   lại của app cũng KHÔNG chạy → người dùng phải tự restart.
+   Rớt sạch sẽ (code 1000) thì không dính → "lâu lâu mới bị", cực khó bắt.
+
+   close() chỉ nhận 1000 hoặc 3000–4999 → mã khác quy về 1000 để lệnh đóng CHẠY
+   ĐƯỢC, nhờ vậy đầu kia luôn nhận được tín hiệu đứt.
+
+   Kèm bắt sự kiện 'error' ở CẢ HAI chiều — thiếu nó thì socket lỗi giữa chừng bị
+   bỏ rơi, đầu kia treo vô hạn y như trên.
+
+   ⚠️ 1011 CŨNG BỊ CẤM. Bản vá PNETLab 2026-07-30 thêm handler 'error' nhưng gọi
+   close(1011,…) → cũng ném lỗi, cũng bị catch nuốt → bản vá đó KHÔNG BAO GIỜ chạy.
+   Đây chính là lý do phải gom về một hàm dùng chung: mỗi file tự chép một bản là
+   mỗi bản dính một kiểu, sửa chỗ này chỗ kia vẫn hỏng.
+
+   opts.tag: bật log chẩn đoán (xem bằng `wrangler tail`) — biết rớt ở chiều nào,
+   sau bao lâu, do send() lỗi thật hay đầu kia tự đóng trước.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export function bridgeWebSocket(server, upstream, opts = {}) {
+  const tag = opts.tag ? `[${opts.tag} ${Math.random().toString(36).slice(2, 9)}]` : null;
+  const t0  = Date.now();
+  const at  = () => `+${Date.now() - t0}ms`;
+  if (tag) console.log(`${tag} open`);
+
+  const code = (c) => (c === 1000 || (c >= 3000 && c <= 4999)) ? c : 1000;
+  const shut = (sock, c, reason) => {
+    try { sock.close(code(c), String(reason || '').slice(0, 120)); }
+    catch (_) { try { sock.close(); } catch (__) {} }   // cùng đường: đóng trần, KHÔNG im lặng
+  };
+  const pipe = (from, to, dir) => from.addEventListener('message', ({ data }) => {
+    try { to.send(data); }
+    catch (e) { if (tag) console.error(`${tag} ${dir} send FAILED ${at()}:`, e && e.message); }
+  });
+
+  pipe(server, upstream, 'client->upstream');
+  pipe(upstream, server, 'upstream->client');
+  server.addEventListener('close', ({ code: c, reason }) => {
+    if (tag) console.log(`${tag} client closed code=${c} reason="${reason}" ${at()}`);
+    shut(upstream, c, reason);
+  });
+  upstream.addEventListener('close', ({ code: c, reason }) => {
+    if (tag) console.log(`${tag} upstream closed code=${c} reason="${reason}" ${at()}`);
+    shut(server, c, reason);
+  });
+  server.addEventListener('error', (e) => {
+    if (tag) console.error(`${tag} client error ${at()}:`, e && e.message);
+    shut(upstream, 1000, 'peer error');
+  });
+  upstream.addEventListener('error', (e) => {
+    if (tag) console.error(`${tag} upstream error ${at()}:`, e && e.message);
+    shut(server, 1000, 'upstream error');
+  });
+}
+

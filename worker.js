@@ -13,6 +13,7 @@ import {
   _invalidateSessionCache,
   _sessionCache,
   _sha256Hex,
+  bridgeWebSocket,
   checkIpWhitelist,
   cleanEnv,
   computeEffectivePermissions,
@@ -2739,7 +2740,9 @@ a:hover{background:#4f46e5}</style></head>
   if (!isAdmin) {
     // ── Admin-only pages: non-admin KHÔNG bao giờ được vào (kể cả gõ thẳng URL) ──
     // Thêm trang admin mới vào đây để tự động chặn server-side (nav chỉ ẩn link là chưa đủ).
-    const _ADMIN_ONLY_PAGES = new Set(['/noc.html']);
+    // [2026-08-08] noc.html đã XOÁ (anh Thoại: trang thừa, không ai dùng) — Set rỗng
+    // vẫn giữ nguyên cơ chế cho trang admin-only KẾ TIẾP, không phải dead code.
+    const _ADMIN_ONLY_PAGES = new Set([]);
     if (_ADMIN_ONLY_PAGES.has(url.pathname)) {
       return Response.redirect(new URL('/', request.url).toString(), 302);
     }
@@ -3395,11 +3398,32 @@ async function handleN8nHomeProxy(request, env) {
   const subPath = reqUrl.pathname.replace(/^(?:\/n8n-proxy)+/, '') || '/';
   const target  = `${N8N_ORIGIN}${subPath}${reqUrl.search}`;
 
+  // Lọc cookie phiên dashboard (dh_session/dh_user) — n8n KHÔNG cần và KHÔNG được nhận token này
+  // (giống cách proxy Termix làm). Tránh rò token nếu n8n bị xâm nhập hoặc log header.
+  // Vẫn giữ các cookie riêng của n8n (n8n-auth…) để n8n hoạt động bình thường.
+  // ⚠️ Đặt TRƯỚC khối WebSocket bên dưới — cả hai nhánh (WS lẫn HTTP) đều cần biến này.
+  const _n8nRawCookie = request.headers.get('cookie') || '';
+  const _n8nCleanCookie = _n8nRawCookie.split(';').map(c => c.trim())
+    .filter(c => c && !c.startsWith('dh_session=') && !c.startsWith('dh_user='))
+    .join('; ');
+
   // ── WebSocket proxy (n8n push notifications) ──
+  // BÁO KẾT QUẢ CHẠY WORKFLOW đi qua đúng kênh này (rest/push) — thiếu Cookie phiên là n8n
+  // không biết kết nối WS thuộc về ai, không gắn được để đẩy tiến trình về, nên giao diện đứng
+  // xoay vô thời hạn dù lệnh /run đã chạy xong ở server (bug thật, phát hiện 2026-08-09: bấm
+  // Chạy xong cứ xoay mãi, /run trả 200 nhưng không nghe thấy kết quả trả về).
   if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+    /* Đúng khuôn proxy WebSocket của Termix (src/termix.js) — bản đó chạy ổn định nhiều tháng:
+       fetch tới target https:// (KHÔNG dùng wss://), chỉ set Upgrade + Cookie + Origin, để Workers
+       tự lo Connection/Sec-WebSocket-*. Tự set mấy header đó là response.webSocket về null. */
+    const wsHeaders = new Headers();
+    wsHeaders.set('Upgrade', 'websocket');
+    if (_n8nCleanCookie) wsHeaders.set('Cookie', _n8nCleanCookie);
+    wsHeaders.set('Origin', N8N_ORIGIN);   // n8n bản mới soi Origin — xem ghi chú ở nhánh HTTP bên dưới
+
     let upstreamResp;
     try {
-      upstreamResp = await fetch(target, { headers: { 'Upgrade': 'websocket' } });
+      upstreamResp = await fetch(target, { headers: wsHeaders });
     } catch(e) {
       return new Response('n8n WS upstream error: ' + e.message, { status: 502 });
     }
@@ -3407,10 +3431,17 @@ async function handleN8nHomeProxy(request, env) {
     if (!upstream) return new Response('n8n WS upstream failed (status ' + upstreamResp.status + ')', { status: 502 });
     const { 0: client, 1: server } = new WebSocketPair();
     server.accept();
-    server.addEventListener('message',   ({ data }) => { try { upstream.send(data); } catch(_) {} });
-    upstream.addEventListener('message', ({ data }) => { try { server.send(data);   } catch(_) {} });
-    server.addEventListener('close',   ({ code, reason }) => { try { upstream.close(code, reason); } catch(_) {} });
-    upstream.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason);   } catch(_) {} });
+    /* ⚠️⚠️ upstream.accept() — THIẾU DÒNG NÀY LÀ HỎNG HẾT, mà hỏng KHÔNG BÁO LỖI.
+       Cloudflare Workers bắt buộc gọi accept() trên socket phía máy chủ đích thì luồng dữ liệu mới
+       bắt đầu chảy. Không gọi: trình duyệt vẫn nhận 101 (tưởng kết nối thành công), nhưng KHÔNG
+       một tin nhắn nào từ n8n đi qua được — im lặng tuyệt đối, Network cũng không thấy gì bất thường.
+       Hậu quả thật (2026-08-09): bấm Chạy workflow → server chạy XONG, nhưng tín hiệu "đã xong" không
+       bao giờ tới giao diện → vòng xoay quay vô tận; n8n còn từ chối lệnh dừng vì execution đã hoàn
+       tất từ lâu. Mất cả buổi dò vì triệu chứng trông y như lỗi mạng/đường dẫn.
+       src/termix.js:280 có dòng này từ đầu — đó là lý do proxy Termix chạy tốt còn n8n thì không. */
+    upstream.accept();
+    /* Helper dùng chung (src/core.js) — kèm bản vá BẪY MÃ ĐÓNG 1006. */
+    bridgeWebSocket(server, upstream);
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -3423,13 +3454,24 @@ async function handleN8nHomeProxy(request, env) {
     fwdHeaders[k] = v;
   }
   fwdHeaders['Host'] = 'n8n-home.home-server.id.vn';
-  // Lọc cookie phiên dashboard (dh_session/dh_user) — n8n KHÔNG cần và KHÔNG được nhận token này
-  // (giống cách proxy Termix làm). Tránh rò token nếu n8n bị xâm nhập hoặc log header.
-  // Vẫn giữ các cookie riêng của n8n (n8n-auth…) để n8n hoạt động bình thường.
-  const _n8nRawCookie = request.headers.get('cookie') || '';
-  const _n8nCleanCookie = _n8nRawCookie.split(';').map(c => c.trim())
-    .filter(c => c && !c.startsWith('dh_session=') && !c.startsWith('dh_user='))
-    .join('; ');
+  // ── Sửa Origin/Referer trước khi chuyển tiếp — BẮT BUỘC cho POST /rest/login ──
+  // Trình duyệt tự gắn Origin = domain DASHBOARD (nơi trang đang mở), không phải domain n8n
+  // thật. Bản n8n mới (2.33.7) đã siết kiểm Origin ở endpoint đăng nhập để chống CSRF — thấy
+  // Origin lạ (không khớp domain n8n) là từ chối thẳng bằng 401, DÙ mật khẩu đúng 100%. Lỗi này
+  // chỉ lộ ra qua proxy vì vào thẳng n8n thì Origin tự nhiên đã đúng, không ai để ý.
+  // Sửa: viết đè Origin/Referer thành domain n8n thật trước khi gửi đi, để n8n thấy y hệt
+  // như đang được gọi trực tiếp.
+  if (fwdHeaders['Origin']) fwdHeaders['Origin'] = N8N_ORIGIN;
+  if (fwdHeaders['Referer']) {
+    try {
+      const refUrl = new URL(fwdHeaders['Referer']);
+      if (refUrl.origin === reqUrl.origin) {
+        const refSub = refUrl.pathname.replace(/^(?:\/n8n-proxy)+/, '') || '/';
+        fwdHeaders['Referer'] = N8N_ORIGIN + refSub + refUrl.search;
+      }
+    } catch { delete fwdHeaders['Referer']; }
+  }
+  // Cookie đã lọc sẵn ở trên (dùng chung với nhánh WebSocket) — chỉ cần gắn vào đây.
   if (_n8nCleanCookie) fwdHeaders['Cookie'] = _n8nCleanCookie;
 
   let upstream;
@@ -3489,20 +3531,35 @@ async function handleN8nHomeProxy(request, env) {
 
   const ct = upstream.headers.get('Content-Type') || '';
 
-  // ── JS response: rewrite absolute /assets/ & /static/ paths inside JS bundles ──
-  // n8n's SPA uses dynamic import('/assets/en-xxx.js') for locale files — these absolute paths
-  // bypass the HTML attribute rewriting and hit the dashboard origin → 404.
+  /* ── JS response ────────────────────────────────────────────────────────────
+     ⚠️ CHỈ viết lại `base-path.js`. TUYỆT ĐỐI KHÔNG đọc-và-regex mọi file JS.
+
+     BẢN CŨ đọc TRỌN từng file JS vào bộ nhớ rồi chạy 3 lượt regex lên đó. Với n8n
+     đời trước (bundle nhỏ) thì qua được; bản 2.33.7 chẻ ra hàng trăm chunk và có
+     chunk rất lớn → mỗi lượt regex trên chuỗi vài MB đốt sạch hạn mức CPU của một
+     request Worker → Worker chết giữa chừng → chunk đó trả 502.
+
+     Hậu quả nhìn thấy được (2026-08-09): Vue router không tải nổi component
+     ("Couldn't resolve component"), app kẹt nửa chừng — MỌI hiệu ứng đứng hình,
+     bấm Chạy workflow thì server chạy xong thật nhưng giao diện treo vĩnh viễn.
+     Triệu chứng trông y hệt lỗi mạng nên mất rất lâu mới lần ra.
+
+     Vì sao bỏ được 2 lượt regex kia: từ khi BASE_PATH = "/n8n-proxy/", n8n TỰ dựng
+     URL asset/REST dưới tiền tố đó rồi. Còn request nào lỡ gọi thiếu tiền tố thì
+     đã có lớp bắt `/assets/`, `/static/`… ở worker.js (~dòng 4425) proxy giúp.
+     Giờ mọi file JS khác được CHUYỂN THẲNG dạng luồng — không đệm, không regex,
+     gần như không tốn CPU. */
   if (ct.includes('javascript')) {
-    let js = await upstream.text();
-    js = js.replace(/(['"`])\/assets\//g, '$1/n8n-proxy/assets/');
-    js = js.replace(/(['"`])\/static\//g,  '$1/n8n-proxy/static/');
-    // ── base-path.js: set Vue Router base to /n8n-proxy/ (native n8n sub-path hosting) ──
-    // n8n's base-path.js is `window.BASE_PATH="/"`. Rewriting it to "/n8n-proxy/" makes the
-    // Vue Router (createWebHistory(BASE_PATH)) strip the proxy prefix natively → no 404,
-    // and n8n builds REST/push/asset URLs under /n8n-proxy/ on its own.
-    js = js.replace(/(window\.BASE_PATH\s*=\s*)["']\/["']/, '$1"/n8n-proxy/"');
-    rh.set('Content-Type', ct);
-    return new Response(js, { status: upstream.status, headers: rh });
+    if (/base-path\.js$/.test(subPath)) {
+      // File này chỉ vài chục byte — an toàn để đọc và sửa.
+      // n8n ghi `window.BASE_PATH="/"`; đổi thành "/n8n-proxy/" để Vue Router
+      // (createWebHistory(BASE_PATH)) tự bóc tiền tố, n8n tự dựng REST/push/asset đúng đường.
+      let js = await upstream.text();
+      js = js.replace(/(window\.BASE_PATH\s*=\s*)["']\/["']/, '$1"/n8n-proxy/"');
+      rh.set('Content-Type', ct);
+      return new Response(js, { status: upstream.status, headers: rh });
+    }
+    return new Response(upstream.body, { status: upstream.status, headers: rh });
   }
 
   if (!ct.includes('text/html')) {
@@ -3641,11 +3698,8 @@ async function handleCamEmbed(request, env) {
     server.accept();
     upstream.accept();
 
-    // Bridge bidirectionally
-    server.addEventListener('message',   ({ data }) => { try { upstream.send(data); } catch(_) {} });
-    upstream.addEventListener('message', ({ data }) => { try { server.send(data);   } catch(_) {} });
-    server.addEventListener('close',   ({ code, reason }) => { try { upstream.close(code, reason); } catch(_) {} });
-    upstream.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason);   } catch(_) {} });
+    // Bridge bidirectionally — helper dùng chung (src/core.js), kèm bản vá BẪY MÃ ĐÓNG 1006.
+    bridgeWebSocket(server, upstream);
 
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -4395,6 +4449,18 @@ export default {
     // ── n8n asset fallback: dynamic import('/assets/...') from n8n iframe bypasses JS rewriting ──
     // These requests arrive without /n8n-proxy/ prefix; catch them here and proxy to n8n.
     if (p.startsWith('/assets/') || p.startsWith('/static/') || p.startsWith('/icons/') || p.startsWith('/fonts/') || p.startsWith('/rest/') || p.startsWith('/push/') || p.startsWith('/webhook/') || p.startsWith('/types/') || p === '/healthz' || p.startsWith('/templates/')) {
+      // ⚠️ BUG THẬT (phát hiện 2026-08-09): kết nối "báo tiến trình chạy workflow" của n8n (WebSocket
+      // tới /rest/push, gọi thiếu tiền tố /n8n-proxy/ giống mọi request /assets/ khác) bị CHẾT NGAY Ở
+      // ĐÂY — env.ASSETS.fetch() chỉ hiểu file tĩnh, gặp request nâng cấp giao thức (Upgrade: websocket)
+      // nó không trả về đúng 404 như file thường, nên nhánh dưới "return assetRes" thoát sớm, KHÔNG
+      // bao giờ chạm tới handleN8nHomeProxy (nơi mới có logic xử lý WebSocket thật). Hậu quả: giao diện
+      // n8n gửi lệnh Chạy, server chạy XONG THẬT, nhưng không kênh nào báo lại "đã xong" → xoay treo mãi.
+      // Sửa: bắt request nâng cấp giao thức TRƯỚC, đưa thẳng qua proxy — bỏ qua hẳn env.ASSETS.fetch.
+      if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+        const _s = await getSession(request, env);
+        if (_s && await hasPerm(env, _s, 'n8n')) return handleN8nHomeProxy(request, env);
+        return new Response('Unauthorized', { status: 401 });
+      }
       const assetRes = await env.ASSETS.fetch(request);
       if (assetRes.status === 404) {
         const _s = await getSession(request, env);

@@ -4,6 +4,7 @@
 import {
   _escHtml,
   _getCfg,
+  bridgeWebSocket,
   cleanEnv,
   getSession,
   hasPerm,
@@ -279,10 +280,10 @@ export async function handleTermixProxy(request, env, opts) {
     server.accept();
     upstream.accept();
 
-    server.addEventListener('message',   ({ data }) => { try { upstream.send(data); } catch(_) {} });
-    upstream.addEventListener('message', ({ data }) => { try { server.send(data);   } catch(_) {} });
-    server.addEventListener('close',   ({ code, reason }) => { try { upstream.close(code, reason); } catch(_) {} });
-    upstream.addEventListener('close', ({ code, reason }) => { try { server.close(code, reason);   } catch(_) {} });
+    /* Nối 2 chiều bằng helper dùng chung (src/core.js) — trong đó có bản vá BẪY MÃ ĐÓNG 1006,
+       chính là nguyên nhân RemoteDesktop "lâu lâu treo cứng, phải restart phiên". Xem chú thích
+       đầy đủ ở bridgeWebSocket(). */
+    bridgeWebSocket(server, upstream);
 
     // Pass Sec-WebSocket-Protocol back — Guacamole requires server to echo the subprotocol
     const wsRespHeaders = new Headers();
