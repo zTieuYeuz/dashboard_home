@@ -185,7 +185,11 @@ function _readUserCookie() {
   try { var m = document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/); return m ? JSON.parse(decodeURIComponent(m[1])) : null; } catch(e) { return null; }
 }
 var __USER__ = window.__USER__ || _readUserCookie() || { role:'user', permissions:{}, isAdmin:false };
-var __PERM__  = __USER__.isAdmin ? 'write' : (__USER__.permissions['vmware-home'] || 'read');
+/* Khoá quyền của trang này là 'esxi' (src/permissions-registry.js:48), KHÔNG phải
+   'vmware-home' — đó chỉ là tên FILE. Dùng sai khoá thì permissions['vmware-home'] luôn
+   undefined → ai cũng rơi về 'read': người được cấp quyền GHI ESXi vẫn chỉ thấy giao diện
+   chỉ-xem. Admin không lộ ra vì đã có nhánh isAdmin phía trước. Sửa 2026-08-15. */
+var __PERM__  = __USER__.isAdmin ? 'write' : (__USER__.permissions['esxi'] || 'read');
 var allVMs = [], hostData = null, datastores = [];
 
 function fmtUptime(secs) {

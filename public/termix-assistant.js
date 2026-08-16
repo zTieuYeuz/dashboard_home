@@ -67,18 +67,45 @@
   function redact(s) {
     if (!s) return s;
     _redacted = false;
+    /* ⚠️⚠️ ĐỒNG BỘ 2026-08-15 — bản này TRƯỚC ĐÂY LÀ BẢN CŨ, thiếu 5 luật và còn dính
+       nguyên con bug đã vá ở 2 trang kia. Rà soát toàn hệ thống mới lộ ra: cùng một hàm
+       redact() bị chép ở 3 nơi, vá 2 nơi rồi quên nơi này → nút AI của Termix vẫn gửi
+       nguyên văn SNMP community / khoá OSPF / pre-shared-key VPN lên LLM.
+       NGUỒN CHUẨN: public/service-home/ssh-field.js — sửa bên đó thì sửa CẢ 3 nơi:
+       ssh-field.js · console-serial.html · file này.
+
+       ⚠️ KHOẢNG TRẮNG CHỈ ĐƯỢC DÙNG [ \t], TUYỆT ĐỐI KHÔNG \s — \s ăn cả ký tự xuống
+       dòng nên thứ bị che thật ra là TỪ ĐẦU TIÊN CỦA DÒNG SAU. Trên Cisco, dòng ngay
+       sau "Password:" chính là DẤU NHẮC MỚI; che mất nó là AI tưởng thiết bị vẫn đang
+       chờ mật khẩu rồi báo sai trạng thái (đã xảy ra thật 2026-08-06). */
     var out = String(s)
       // Khối private key PEM (SSH/TLS)
       .replace(/-----BEGIN [^-\n]*PRIVATE KEY-----[\s\S]*?-----END [^-\n]*PRIVATE KEY-----/g, function () { return _mask() + ' (private key)'; })
       // Cisco: "password 7 <hash>", "secret 5 <hash>"
-      .replace(/\b((?:password|secret))(\s+\d\s+)(\S+)/gi, function (m, k, mid) { return k + mid + _mask(); })
+      .replace(/\b((?:password|secret))([ \t]+\d[ \t]+)(\S+)/gi, function (m, k, mid) { return k + mid + _mask(); })
       // key = value / key: value cho các key nhạy cảm (bắt cả key có tiền tố: db_password, admin_token…)
-      .replace(/([a-z0-9_.\-]*(?:pass(?:word|wd|phrase)?|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|private[_-]?key|auth[_-]?token))(\s*[:=]\s*)(["']?)([^\s"'&]{3,})(\3)/gi,
+      .replace(/([a-z0-9_.\-]*(?:pass(?:word|wd|phrase)?|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|private[_-]?key|auth[_-]?token))([ \t]*[:=][ \t]*)(["']?)([^\s"'&]{3,})(\3)/gi,
         function (m, k, sep, q) { return k + sep + q + _mask() + q; })
-      // "password <value>" / "secret <value>" (Cisco/plain) — value không có khoảng trắng
-      .replace(/\b((?:password|passwd|secret|passphrase))(\s+)(?!\d\s)(\S{3,})/gi, function (m, k, sp) { return k + sp + _mask(); })
+      /* "(?:ENC[ \t]+)?" bắt buộc: FortiOS ghi "set password ENC <chuỗi>". Thiếu nó thì
+         luật này che đúng chữ "ENC" rồi dừng, để lộ nguyên giá trị thật phía sau. */
+      .replace(/\b((?:password|passwd|secret|passphrase))([ \t]+)(?:ENC[ \t]+)?(?![ \t]*\d[ \t])(\S{3,})/gi, function (m, k, sp) { return k + sp + _mask(); })
       // Authorization: Bearer/Basic <token>
-      .replace(/(Authorization\s*:\s*(?:Bearer|Basic)\s+)(\S+)/gi, function (m, p1) { return p1 + _mask(); })
+      .replace(/(Authorization[ \t]*:[ \t]*(?:Bearer|Basic)[ \t]+)(\S+)/gi, function (m, p1) { return p1 + _mask(); })
+      /* "set psksecret ENC <chuỗi>" của FortiOS: luật chung không bắt được vì không có
+         ranh giới từ trước "secret" trong "psksecret", giá trị lại nằm sau chữ ENC. */
+      .replace(/\b(set[ \t]+\S*(?:secret|password|passwd|psk)[ \t]+)(?:ENC[ \t]+)?(\S{4,})/gi, function (m, p1) { return p1 + _mask(); })
+      /* ══ Bí mật THIẾT BỊ MẠNG — nhãn không hề chứa chữ "password"/"secret" ══
+         Bốn thứ này cầm được là vào được hệ thống, ngang mật khẩu, nhưng mọi luật ở
+         trên đều trượt vì tên của chúng chẳng giống mật khẩu chút nào:
+           snmp-server community <x> RW   → đọc/ghi cấu hình cả con switch
+           message-digest-key 1 md5 <x>   → khoá xác thực OSPF
+           key-string <x>                 → khoá EIGRP/BGP
+           pre-shared-key <x>             → khoá VPN site-to-site / WiFi
+         Đúng loại lệnh hay chạy khi soi định tuyến/VPN → lọt THƯỜNG XUYÊN. */
+      .replace(/\b((?:snmp-server[ \t]+)?community[ \t]+)(\S{2,})/gi, function (m, p1) { return p1 + _mask(); })
+      .replace(/\b(message-digest-key[ \t]+\d+[ \t]+md5[ \t]+)(?:\d[ \t]+)?(\S{3,})/gi, function (m, p1) { return p1 + _mask(); })
+      .replace(/\b((?:key-string|authentication-key|pre-?shared-key|wpa-psk)[ \t]+)(?:\d[ \t]+)?(?:ENC[ \t]+)?(\S{3,})/gi,
+        function (m, p1) { return p1 + _mask(); })
       // AWS Access Key ID
       .replace(/\bAKIA[0-9A-Z]{16}\b/g, function () { return _mask() + ' (AWS)'; });
     return out;

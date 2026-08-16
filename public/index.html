@@ -721,6 +721,13 @@ var _TOOL_MOVI_KEYS = ['tool-movi-create-user','tool-movi-block-user','tool-movi
    lối vào ở trang chính, dù server vẫn cho họ mở trang.
    ⚠️ Phải khớp accessKeys của service 'ssh' trong src/permissions-registry.js. */
 var _TERMINAL_KEYS = ['ssh','console-serial','ssh-field'];
+/* Camera Home cũng gộp nhiều quyền con y như Terminal Home: server mở trang bằng CẢ 5
+   khoá (accessKeys của service 'camera-home-group', permissions-registry.js:126), nhưng
+   thẻ ngoài trang chủ trước đây chỉ xét mỗi 'camera'. Hậu quả: người được cấp Playback
+   hoặc Tải video mà KHÔNG cấp "Quyền xem" thì mất hẳn lối vào ở trang chính, dù server
+   vẫn cho họ mở trang bằng URL trực tiếp. Đúng cùng loại lỗi đã sửa cho Terminal Home.
+   ⚠️ Phải khớp accessKeys trong src/permissions-registry.js. */
+var _CAMERA_KEYS = ['camera','camera_playback','camera_download','app_camera','camera_autoopen'];
 var SERVICES = __USER__.isAdmin
   ? ALL_SERVICES_DEF
   : ALL_SERVICES_DEF.filter(function(s){
@@ -733,6 +740,10 @@ var SERVICES = __USER__.isAdmin
       // Terminal Home: hiện nếu có quyền của bất kỳ công cụ con nào trong 3
       if (s.id === 'ssh') {
         return _TERMINAL_KEYS.some(function(k){ return (__USER__.permissions[k] || 'none') !== 'none'; });
+      }
+      // Camera Home: hiện nếu có BẤT KỲ quyền camera nào (xem/playback/tải/mở thẳng/tự mở)
+      if (s.id === 'camera') {
+        return _CAMERA_KEYS.some(function(k){ return (__USER__.permissions[k] || 'none') !== 'none'; });
       }
       var pid = _permMap[s.id] || s.id;
       var perm = __USER__.permissions[pid] || 'none';

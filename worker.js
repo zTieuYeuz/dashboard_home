@@ -1,6 +1,5 @@
 import {
   ALL_SERVICES,
-  DEFAULT_CAMERAS,
   DEFAULT_CAMERAS_MOVI,
   MOVI_N8N_BASE,
   N8N_BASE,
@@ -1338,13 +1337,66 @@ async function handleUpdateUserGroup(request, env, groupId) {
 
   if (body.name        !== undefined) group.name        = sanitizeName(String(body.name));
   if (body.description !== undefined) group.description = sanitizeName(String(body.description), 256);
-  if (body.roleGroups  !== undefined) group.roleGroups  = Array.isArray(body.roleGroups)
-    ? body.roleGroups.filter(s => typeof s === 'string' && s.length < 128).slice(0, 50)
-    : group.roleGroups;
+
+  /* ══ [F-03, 2026-08-15] CHẶN LEO THANG QUYỀN QUA USER GROUP ══════════════════
+     BUG THẬT phát hiện khi rà soát toàn hệ thống. Nhánh gán Policy Group trực tiếp
+     (handleUpdateUserGroups, ~dòng 1428) ĐÃ có bản vá [F-02] chặn nhóm role='admin',
+     nhưng đường đi VÒNG QUA User Group thì không → vá một nửa, lách được bằng 3 bước:
+
+       1. Delegate (chỉ cần có 1 uỷ quyền bất kỳ) tạo User Group mới → mình là createdBy
+       2. PUT nhóm đó: members=[chính mình], roleGroups=[id nhóm có role='admin']
+       3. Tải lại trang → computeEffectivePermissions gộp userGroups → roleGroups →
+          policy_group, và core.js nâng eff.role lên 'admin'
+
+     Hậu quả: đọc được backup chứa hash mật khẩu + secret MFA, xoá user, đổi system_config.
+     Vá theo ĐÚNG khuôn [F-02] để hai đường đi cư xử giống nhau, khỏi lệch tiếp lần sau. */
+  if (body.roleGroups !== undefined) {
+    const xin = Array.isArray(body.roleGroups)
+      ? body.roleGroups.filter(s => typeof s === 'string' && s.length < 128).slice(0, 50)
+      : group.roleGroups;
+    if (isAdmin) {
+      group.roleGroups = xin;
+    } else {
+      /* Giữ nguyên nhóm admin ĐÃ có sẵn (không phá cấu hình admin đặt trước đó),
+         nhưng KHÔNG cho thêm nhóm admin mới. */
+      const dangCo = new Set(group.roleGroups || []);
+      const giuLai = [];
+      for (const gid of (group.roleGroups || [])) {
+        const g = await env.DASHBOARD_KV.get(`policy_group:${gid}`, 'json');
+        if (g && g.role === 'admin') giuLai.push(gid);
+      }
+      const antoan = [];
+      for (const gid of xin) {
+        if (giuLai.includes(gid)) continue;              // đã giữ ở trên
+        const g = await env.DASHBOARD_KV.get(`policy_group:${gid}`, 'json');
+        if (g && g.role === 'admin' && !dangCo.has(gid)) continue;  // KHÔNG cho thêm mới nhóm admin
+        antoan.push(gid);
+      }
+      group.roleGroups = [...giuLai, ...antoan];
+    }
+  }
+
   if (body.members !== undefined) {
-    group.members = Array.isArray(body.members)
+    let xinMembers = Array.isArray(body.members)
       ? body.members.filter(s => typeof s === 'string' && s.length < 128).slice(0, 500)
       : group.members;
+    if (!isAdmin) {
+      /* Chặn TỰ THÊM MÌNH: nhóm do chính mình tạo + tự cho mình vào = tự cấp cho mình
+         mọi quyền của các roleGroups gắn trên nhóm đó. Cũng chặn kéo tài khoản admin
+         vào nhóm mình quản (sẽ ghi đè quyền của họ). */
+      const truoc = new Set(group.members || []);
+      const loc = [];
+      for (const u of xinMembers) {
+        if (u === session.username && !truoc.has(u)) continue;   // tự thêm mình → bỏ
+        if (!truoc.has(u)) {
+          const uo = await env.DASHBOARD_KV.get(`user:${u}`, 'json');
+          if (uo && uo.role === 'admin') continue;               // thêm mới tài khoản admin → bỏ
+        }
+        loc.push(u);
+      }
+      xinMembers = loc;
+    }
+    group.members = xinMembers;
   }
 
   await env.DASHBOARD_KV.put(`user_group:${groupId}`, JSON.stringify(group));
@@ -1511,50 +1563,6 @@ async function handleMoviCameraList(request, env) {
    Frigate's jinav1 embedding model only understands English, so Vietnamese
    queries are translated first. Uses Google's keyless gtx endpoint (fixed
    host → no SSRF). Session-gated. Falls back to the original text on error. */
-async function handleTranslate(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  const u  = new URL(request.url);
-  const q  = (u.searchParams.get('q') || '').slice(0, 500);
-  const tl = (u.searchParams.get('tl') || 'en').replace(/[^a-zA-Z-]/g, '') || 'en';
-  let   sl = (u.searchParams.get('sl') || 'vi').replace(/[^a-zA-Z-]/g, '') || 'vi';
-  if (sl === 'auto') sl = 'vi';
-  if (!q.trim()) return json({ text: '', src: q });
-
-  // 0) KV cache — avoids re-hitting rate-limited free APIs for repeat queries
-  const cacheKey = `xlate:${sl}:${tl}:${q.toLowerCase().trim()}`;
-  try {
-    const cached = await env.DASHBOARD_KV.get(cacheKey);
-    if (cached) return json({ text: cached, src: q, via: 'cache' });
-  } catch (_) { /* ignore */ }
-  const _store = async (t) => { try { await env.DASHBOARD_KV.put(cacheKey, t, { expirationTtl: 2592000 }); } catch (_) {} };
-
-  // 1) MyMemory — keyless translation API, reliable from Worker egress IPs
-  try {
-    const mm = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=${encodeURIComponent(sl + '|' + tl)}`;
-    const r = await fetch(mm, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) });
-    if (r.ok) {
-      const d = await r.json();
-      const t = d && d.responseData && d.responseData.translatedText;
-      if (t && typeof t === 'string') { await _store(t); return json({ text: t, src: q, via: 'mymemory' }); }
-    }
-  } catch (_) { /* fall through */ }
-
-  // 2) Google gtx fallback
-  try {
-    const g = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(q)}`;
-    const r = await fetch(g, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) });
-    if (r.ok) {
-      const data = await r.json();
-      const text = (Array.isArray(data) && Array.isArray(data[0]))
-        ? data[0].map(seg => (seg && seg[0]) || '').join('')
-        : '';
-      if (text) { await _store(text); return json({ text, src: q, via: 'google' }); }
-    }
-  } catch (_) { /* fall through */ }
-
-  return json({ text: q, src: q, fallback: true });
-}
 
 /* ═══════════════════════════════════════════════
    TOTP / MFA — RFC 6238 (SHA-1, 30s window, 6 digits)
@@ -2958,7 +2966,10 @@ const SERVICES_EMBED_TREE = [
     { name:'Kasm',        icon:'🖥️', url:'https://kasm-service.home-server.id.vn/', embedUrl:'https://kasm-service.home-server.id.vn/?fps=24&quality=6&compression=9', cfAccess:true, perm:'hub-kasm' },
   ]},
   { folder:'Automation', icon:'⚡', sites:[
-    { name:'n8n', icon:'⚡', url:'https://n8n-home.home-server.id.vn/', embedUrl:'/n8n-proxy/home', perm:'hub-n8n' },
+    /* embedUrl phải là /home/workflows: "/home" không phải route hợp lệ của n8n → vào thẳng
+       thì giữa màn hình hiện "Oops, couldn't find that / 404". Đã xác minh bằng `wrangler tail`
+       ngày 2026-08-16: /home/workflows nạp trọn vẹn, không một lỗi 502 nào. */
+    { name:'n8n', icon:'⚡', url:'https://n8n-home.home-server.id.vn/', embedUrl:'/n8n-proxy/home/workflows', perm:'hub-n8n' },
   ]},
   { folder:'Lab', icon:'🧪', sites:[
     // [2026-07-27] Đổi từ iframe TRỎ THẲNG sang qua handlePnetlabHomeProxy (src/pnetlab.js) —
@@ -3382,7 +3393,14 @@ async function handleCameraToken(request, env) {
 async function handleN8nHomeProxy(request, env) {
   const session = await getSession(request, env);
   if (!session) return new Response('Unauthorized', { status: 401 });
-  if (!(await hasPerm(env, session, 'n8n'))) return new Response('Forbidden', { status: 403 });
+  /* Chấp nhận 'n8n' HOẶC 'hub-n8n' (anh Thoại duyệt 2026-08-16).
+     Trước đây ô n8n trong Services Hub cấp bằng 'hub-n8n' (worker.js ~3014) nhưng proxy
+     này chỉ nhận 'n8n' → admin tick ô đó xong, người dùng thấy ô nhưng bấm vào là Forbidden.
+     Tick 'hub-n8n' vốn CÓ NGHĨA là "cho người này dùng n8n nhúng", nên chấp nhận nó ở đây
+     mới đúng ý người cấp quyền. Hai khoá vẫn tách bạch: 'n8n' cho trang n8n riêng
+     (/service-home/n8n.html), 'hub-n8n' cho ô nhúng trong Hub. */
+  const _coN8n = await hasPerm(env, session, 'n8n') || await hasPerm(env, session, 'hub-n8n');
+  if (!_coN8n) return new Response('Forbidden', { status: 403 });
 
   const N8N_ORIGIN = 'https://n8n-home.home-server.id.vn';
   const reqUrl  = new URL(request.url);
@@ -3396,6 +3414,14 @@ async function handleN8nHomeProxy(request, env) {
   }
 
   const subPath = reqUrl.pathname.replace(/^(?:\/n8n-proxy)+/, '') || '/';
+
+  /* ⚠️ ĐỪNG trả swKillSwitch() cho /sw.js của n8n (Termix thì được, xem src/termix.js).
+     Thử ngày 2026-08-16 → n8n ĐEN TOÀN TRANG. Bản tự huỷ xoá sạch cache của service worker,
+     trình duyệt phải tải lại một loạt chunk cùng lúc, vài cái trả 502 → vue-router không dựng
+     nổi component → không vẽ gì cả. Xác minh sau đó: bản thân file chunk KHÔNG hỏng (mở thẳng
+     ra nội dung bình thường), và `wrangler tail` sạch 502 khi cache đã ấm lại.
+     → Nguyên nhân là CƠN DỒN request lúc cache nguội, không phải lỗi đường dẫn. */
+
   const target  = `${N8N_ORIGIN}${subPath}${reqUrl.search}`;
 
   // Lọc cookie phiên dashboard (dh_session/dh_user) — n8n KHÔNG cần và KHÔNG được nhận token này
@@ -3483,6 +3509,9 @@ async function handleN8nHomeProxy(request, env) {
       ...(request.method !== 'GET' && request.method !== 'HEAD' ? { body: request.body } : {}),
     });
   } catch(e) {
+    // Log để `wrangler tail` chỉ ra ĐÚNG file nào hỏng — thiếu dòng này thì 502 chỉ là
+    // con số trơ trong console trình duyệt, không lần được (đã mất một vòng vì thế).
+    console.error('[n8n-proxy] fetch HỎNG', subPath, '→', e && e.message);
     return new Response('n8n proxy error: ' + e.message, { status: 502 });
   }
 
@@ -3934,6 +3963,29 @@ export default {
     const isApi = p.startsWith('/api/');
     try {
 
+    /* ══ CHẶN BOT CÀO DỮ LIỆU AI (2026-08-16, anh Thoại yêu cầu) ═══════════════
+       Chặn theo ĐÚNG TÊN từng con bot, KHÔNG chặn kiểu "cái gì không phải trình duyệt".
+       Nhờ vậy công cụ của nhà KHÔNG dính: HomeLabDashboard/1.0, Uptime Kuma, n8n (axios),
+       wrangler, cầu nối dash-ssh, OpenClaw/MCP — tên hoàn toàn khác.
+
+       Vì sao vẫn cần dù đã có robots.txt: robots.txt chỉ là LỜI ĐỀ NGHỊ. OpenAI/Anthropic/
+       Google/Apple/Perplexity cam kết tuân thủ, nhưng CCBot, Bytespider, Diffbot có tiền sử
+       phớt lờ. Đây là lớp chặn thật ở tầng máy chủ.
+
+       Đặt SỚM NHẤT có thể: khỏi tốn công đọc KV/kiểm phiên cho thứ sắp bị đuổi.
+       Danh sách nên soát lại vài tháng một lần — bot mới ra liên tục và đôi khi đổi tên. */
+    const _ua = request.headers.get('User-Agent') || '';
+    /* CỐ Ý KHÔNG chặn python-requests / node-fetch / curl / Scrapy: đó là THƯ VIỆN HTTP
+       chung, không phải bot AI. Chặn chúng dễ giết nhầm automation của chính anh Thoại
+       (script n8n, cron, công cụ tự viết) mà lỗi lại im lặng — đúng thứ nguy hiểm nhất.
+       Chỉ chặn tên bot ĐÍCH DANH. */
+    if (_ua && /GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-Web|Claude-User|Claude-SearchBot|anthropic-ai|CCBot|Bytespider|PerplexityBot|Perplexity-User|Google-Extended|Applebot-Extended|Diffbot|cohere-ai|Meta-ExternalAgent|FacebookBot|Amazonbot|Omgilibot|ImagesiftBot|Timpibot|YouBot/i.test(_ua)) {
+      return new Response('Không cho phép thu thập dữ liệu tự động.\n', {
+        status: 403,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive' },
+      });
+    }
+
     // ── SSH Movi verify — fully public, must be FIRST before any session middleware ──
     if (p === '/api/ssh-movi/verify') return handleSshMoviVerify(request, env);
 
@@ -4144,7 +4196,6 @@ export default {
     if (p.startsWith('/n8n-proxy'))               return handleN8nHomeProxy(request, env);
     if (p === '/oc' || p.startsWith('/oc/'))     return handleOpenclawApp(request, env);
     if (p === '/api/openclaw-token')             return handleOpenclawToken(request, env);
-    if (p === '/api/translate')                  return handleTranslate(request, env);
     if (p === '/api/fgt-pool/allocate')          return handleFgtPoolAllocate(request, env);
     if (p === '/api/fgt-pool/open')              return handleFgtPoolOpen(request, env);
     if (p === '/api/fgt-pool/release')           return handleFgtPoolRelease(request, env);
@@ -4456,15 +4507,22 @@ export default {
       // bao giờ chạm tới handleN8nHomeProxy (nơi mới có logic xử lý WebSocket thật). Hậu quả: giao diện
       // n8n gửi lệnh Chạy, server chạy XONG THẬT, nhưng không kênh nào báo lại "đã xong" → xoay treo mãi.
       // Sửa: bắt request nâng cấp giao thức TRƯỚC, đưa thẳng qua proxy — bỏ qua hẳn env.ASSETS.fetch.
-      if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+      /* ⚠️ VÁ MỘT NỬA (sửa 2026-08-16): handleN8nHomeProxy đã chấp nhận `hub-n8n` HOẶC `n8n`
+         từ đợt trước, nhưng HAI chỗ dưới đây vẫn chỉ đòi `n8n`. Ai chỉ được cấp `hub-n8n` thì
+         mở được trang nhưng asset/WebSocket gọi thiếu tiền tố lại rơi vào đây và bị từ chối →
+         giao diện vỡ nửa vời, cực khó đoán. Đúng khuôn mẫu lỗi số 4 của dự án. */
+      const _coN8nHere = async () => {
         const _s = await getSession(request, env);
-        if (_s && await hasPerm(env, _s, 'n8n')) return handleN8nHomeProxy(request, env);
+        if (!_s) return null;
+        return (await hasPerm(env, _s, 'n8n')) || (await hasPerm(env, _s, 'hub-n8n')) ? _s : null;
+      };
+      if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+        if (await _coN8nHere()) return handleN8nHomeProxy(request, env);
         return new Response('Unauthorized', { status: 401 });
       }
       const assetRes = await env.ASSETS.fetch(request);
       if (assetRes.status === 404) {
-        const _s = await getSession(request, env);
-        if (_s && await hasPerm(env, _s, 'n8n')) return handleN8nHomeProxy(request, env);
+        if (await _coN8nHere()) return handleN8nHomeProxy(request, env);
       }
       return assetRes;
     }

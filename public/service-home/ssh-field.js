@@ -1503,6 +1503,11 @@ var MODE = 'ask';
 var DANGEROUS = [
   /\breload\b/i, /\breboot\b/i, /\bshutdown\b(?!\s+-c)/i, /\bhalt\b/i, /\bpoweroff\b/i,
   /write\s+erase/i, /erase\s+startup/i, /factory[- ]?(default|reset)/i, /\bformat\b/i,
+  /* 5 mẫu dưới bổ sung 2026-08-15 (rà soát phát hiện lệch): chúng đã có ở bản Web Console
+     nhưng THIẾU ở đây. Không phải chỉ dùng qua dây console — `config-register`, `erase flash:`,
+     `rename flash:` chạy qua SSH y hệt trên Cisco. Thiếu ở đây nghĩa là chế độ ByPass TỰ CHẠY
+     chúng mà không hỏi — mất sạch cấu hình hoặc thiết bị không boot lên nữa. */
+  /erase\s+flash/i, /\bdelete\s+flash/i, /\brename\s+flash/i, /config-register/i, /\bconfreg\b/i,
   /\brm\s+-[rf]/i, /\bmkfs\b/i, /\bdd\s+if=/i, />\s*\/dev\/[sh]d/i,
   /\bdelete\b.*\b(vlan|interface|route|policy)\b/i, /no\s+(vlan|interface|ip\s+route)/i,
   /\bshut\b/i, /passwd/i, /\buseradd\b/i, /\buserdel\b/i, /iptables\s+-F/i,

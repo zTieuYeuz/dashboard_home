@@ -370,13 +370,54 @@ function selectSiteEmbed(embedUrl, siteUrl, cfAccess){
 }
 
 /* Tìm site theo embedUrl — để highlight đúng item trong sidebar khi restore
-   và biết site có nằm sau Cloudflare Access không. */
+   và biết site có nằm sau Cloudflare Access không.
+   ⚠️ Phải khớp cả ĐƯỜNG SÂU HƠN: từ khi có _theoDoiEmbed, hash mang đúng trang người dùng
+   đang đứng (vd /n8n-proxy/workflow/abc123) chứ không còn là đường gốc (/n8n-proxy/home/...).
+   Khớp tuyệt đối không thôi thì sau F5 sidebar mất highlight và mất luôn cờ cfAccess. */
 function _siteByEmbed(embedUrl){
+  var goc=null;
   for (var i=0;i<ALL_SITE_TREE.length;i++){
     var ss=ALL_SITE_TREE[i].sites;
-    for (var j=0;j<ss.length;j++){ if(ss[j].embedUrl===embedUrl) return ss[j]; }
+    for (var j=0;j<ss.length;j++){
+      if(ss[j].embedUrl===embedUrl) return ss[j];
+      // khớp theo tiền tố: lấy bản khớp DÀI NHẤT để không nhầm giữa 2 site cùng gốc
+      var e=ss[j].embedUrl||'';
+      if(e && String(embedUrl||'').indexOf(e.replace(/\/+$/,'')+'/')===0){
+        if(!goc || e.length>(goc.embedUrl||'').length) goc=ss[j];
+      }
+    }
   }
-  return null;
+  return goc;
+}
+
+/* ── Giữ nguyên chỗ đang đứng khi F5 ────────────────────────────────────────────
+   Trước đây iframe luôn được dựng lại bằng embedUrl GỐC, nên F5 giữa lúc đang mở một
+   workflow là văng về trang tổng quan — khác hẳn khi dùng n8n trực tiếp (anh Thoại báo
+   2026-08-16). Sửa: theo dõi đường dẫn BÊN TRONG iframe rồi ghi vào hash, để lần nạp sau
+   dựng lại đúng chỗ đó (nhánh đọc hash sẵn có ở cuối file tự lo phần khôi phục).
+
+   • Chỉ chạy với embed CÙNG NGUỒN (embedUrl bắt đầu bằng '/'). Site ngoài như Kasm là khác
+     nguồn, đọc contentWindow.location là ném lỗi bảo mật — nên chặn từ đầu, không thử.
+   • Dùng history.replaceState chứ KHÔNG gán location.hash: gán hash sẽ bắn sự kiện
+     hashchange → trình xử lý ở cuối file dựng lại iframe → vòng lặp tải lại vô tận.
+   • Hỏi theo nhịp thay vì bắt sự kiện: n8n là SPA, đổi trang bằng pushState nội bộ, đứng
+     ngoài không có sự kiện nào để nghe. */
+var _embedWatch = null;
+function _dungTheoDoiEmbed(){ if(_embedWatch){ clearInterval(_embedWatch); _embedWatch=null; } }
+function _theoDoiEmbed(embedUrl){
+  _dungTheoDoiEmbed();
+  if(String(embedUrl||'').charAt(0)!=='/') return;   // khác nguồn → bỏ qua
+  _embedWatch = setInterval(function(){
+    var f=document.getElementById('embedFrame');
+    if(!f){ _dungTheoDoiEmbed(); return; }
+    var p='';
+    try{ var l=f.contentWindow.location; p=l.pathname+l.search; }catch(e){ return; }
+    // 'about:blank' cho pathname='blank' — lọc bằng dấu '/' đầu, nếu không nút 🔄 (đổi src
+    // qua about:blank rồi trả lại) sẽ ghi '#embed=blank' vào hash và F5 ra trang trắng.
+    if(!p || p.charAt(0)!=='/' || p==='/' || p===_embedUrl) return;
+    _embedUrl=p;
+    try{ history.replaceState(null,'','#embed='+encodeURIComponent(p)); }catch(e){}
+  }, 800);
 }
 function _siteUrlByEmbed(embedUrl){ var s=_siteByEmbed(embedUrl); return s ? s.url : ''; }
 
@@ -401,10 +442,21 @@ function renderEmbedFull(embedUrl){
     +'<iframe id="embedFrame" src="'+esc(embedUrl)+'" style="flex:1;width:100%;border:none;display:block;min-height:0"'
     +' sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads allow-modals"'
     +' allow="clipboard-read; clipboard-write; camera; microphone; fullscreen" referrerpolicy="no-referrer"></iframe></div>';
+  _theoDoiEmbed(embedUrl);   // ghi chỗ đang đứng vào hash để F5 không văng ra ngoài
 }
 
-/* Tải lại iframe embed (giữ nguyên URL). */
-function _embedReload(){ var f=document.getElementById('embedFrame'); if(f){ var s=f.src; f.src='about:blank'; setTimeout(function(){ f.src=s; }, 60); } }
+/* Tải lại iframe embed — giữ nguyên CHỖ ĐANG ĐỨNG.
+   Bản cũ dùng f.src, nhưng đó là địa chỉ lúc dựng iframe chứ không phải trang hiện tại
+   (n8n đổi trang bằng pushState nội bộ), nên bấm 🔄 giữa lúc mở một workflow là văng về
+   trang tổng quan — cùng một gốc bệnh với vụ F5. Ưu tiên _embedUrl vì nó được
+   _theoDoiEmbed() cập nhật liên tục. */
+function _embedReload(){
+  var f=document.getElementById('embedFrame'); if(!f) return;
+  var s=f.src;
+  try{ var l=f.contentWindow.location; if(l.pathname.charAt(0)==='/') s=l.pathname+l.search; }
+  catch(e){ if(String(_embedUrl||'').charAt(0)==='/') s=_embedUrl; }
+  f.src='about:blank'; setTimeout(function(){ f.src=s; }, 60);
+}
 
 /* Tự xác thực Cloudflare Access cho site embed (Kasm) rồi TỰ kết nối:
    - Mở tab origin để CF Access cấp cookie (gọi trong user-gesture nên không bị chặn popup).
@@ -677,6 +729,7 @@ function selectSvc(id) {
 }
 
 function renderMain() {
+  _dungTheoDoiEmbed();          // rời khỏi iframe thì ngừng theo dõi (xem _theoDoiEmbed)
   if (_selected === '__allsite__') {
     if (_embedUrl) { renderEmbedFull(_embedUrl); return; }  // site iframe (vd n8n)
     renderAllSite(); return;                                 // site Chrome Pool

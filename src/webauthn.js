@@ -219,6 +219,45 @@ export async function handleWebauthnLoginVerify(request, env, ctx) {
   const cred = (user.webauthnCredentials || []).find(c => c.id === credId);
   if (!cred) return json({ error: 'Không tìm thấy passkey này trên tài khoản.' }, 401);
 
+  /* ══ [2026-08-15] BA LỚP CHẶN mà đường passkey TRƯỚC ĐÂY BỎ QUA HẾT ══════════
+     Đường mật khẩu (worker.js ~344-372) và đường SSO đều kiểm khoá/chặn/khung giờ,
+     riêng passkey thì verify xong là cấp session luôn. Hậu quả thật: admin bấm
+     "Chặn tài khoản" hoặc tài khoản bị khoá do nhập sai nhiều lần, người đó VẪN
+     đăng nhập bình thường bằng passkey đã đăng ký từ trước — lớp chặn thành vô nghĩa.
+
+     Đặt Ở ĐÂY (sau khi biết chủ passkey, TRƯỚC khi verify chữ ký) để không tốn công
+     xác minh mật mã cho tài khoản vốn không được vào. Giữ ĐÚNG thứ tự và ĐÚNG thông
+     điệp như đường mật khẩu, để người dùng thấy lý do giống nhau dù đăng nhập kiểu nào. */
+  if (user.lockedAt || user.locked) {
+    const cfgLock = await _getCfg(env);
+    const lockoutMin = cfgLock.lockoutDurationMin || 0;
+    const permanentLock = !lockoutMin;
+    const conKhoa = permanentLock || (user.lockedAt && Date.now() < user.lockedAt + lockoutMin * 60000);
+    if (conKhoa) {
+      const remainMin = (!permanentLock && user.lockedAt)
+        ? Math.max(1, Math.ceil((user.lockedAt + lockoutMin * 60000 - Date.now()) / 60000)) : 0;
+      await logActivity(env, { action: 'webauthn-login-fail', username: owner, ip, success: false, detail: 'Account locked' });
+      return json({ error: remainMin > 0
+        ? `Tài khoản bị khóa. Tự động mở khóa sau ${remainMin} phút nữa.`
+        : 'Tài khoản bị khóa. Liên hệ admin để mở khóa.' }, 403);
+    }
+  }
+  if (user.blocked) {
+    await logActivity(env, { action: 'webauthn-login-fail', username: owner, ip, success: false, detail: 'Account blocked by admin' });
+    return json({ error: 'Tài khoản đã bị chặn bởi quản trị viên. Vui lòng liên hệ admin để được hỗ trợ.' }, 403);
+  }
+  if (user.loginTimeEnabled) {
+    const tz = user.loginTimeZone || 'Asia/Ho_Chi_Minh';
+    const nowStr = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', timeZone: tz });
+    const start = user.loginTimeStart || '00:00';
+    const end   = user.loginTimeEnd   || '23:59';
+    if (nowStr < start || nowStr > end) {
+      await logActivity(env, { action: 'webauthn-login-fail', username: owner, ip, success: false,
+        detail: `${owner} outside allowed hours ${start}–${end} (${tz})` });
+      return json({ error: `Tài khoản này chỉ được đăng nhập trong khung giờ ${start} – ${end}.` }, 403);
+    }
+  }
+
   const { rpID, origin } = rpFromRequest(request);
   let verification;
   try {

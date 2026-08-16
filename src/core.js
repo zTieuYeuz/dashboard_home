@@ -7,7 +7,9 @@
 import { buildAllServices } from './permissions-registry.js';
 
 export const SESSION_COOKIE    = 'dh_session';
-export const SESSION_TTL       = 60 * 60 * 8;      // default fallback only — runtime reads from KV system_config
+/* [2026-08-16] Đã bỏ SESSION_TTL: khai + export nhưng KHÔNG nơi nào dùng. Thời hạn phiên
+   thật lấy từ KV system_config (sessionTtlHours), hoặc theo từng user — để lại một hằng
+   số "mặc định" không ai đọc chỉ khiến người sau tưởng sửa nó là đổi được thời hạn. */
 /* ⚠️ BỘ LỌC CUỐI CÙNG khi lưu quyền (sanitizePermissions/sanitizePanels): key KHÔNG có
    ở đây bị XOÁ ÂM THẦM lúc admin bấm Lưu → cấp quyền xong user vẫn bị chặn, không lỗi gì.
    KHÔNG sửa tay danh sách này nữa — nó được SINH từ src/permissions-registry.js, khai báo
@@ -516,6 +518,20 @@ export function moviN8nAuth(env) {
 
    opts.tag: bật log chẩn đoán (xem bằng `wrangler tail`) — biết rớt ở chiều nào,
    sau bao lâu, do send() lỗi thật hay đầu kia tự đóng trước.
+
+   opts.keepAlive = { ms, data }: định kỳ gửi một gói vô hại VỀ PHÍA TRÌNH DUYỆT.
+   ───────────────────────────────────────────────────────────────────────────
+   Vì sao cần: Cloudflare đóng WebSocket **không có lưu lượng** sau khoảng 100 giây.
+   Màn hình từ xa đứng yên (người dùng đi pha cà phê) = không có gói nào chạy → CF cắt.
+   Đứt kiểu này KHÔNG sinh lỗi ở tab Network, ảnh cuối vẫn nằm nguyên trên màn hình,
+   nên nhìn y hệt "treo": bấm gì cũng không ăn, phải restart phiên. Khớp đúng triệu
+   chứng anh Thoại báo, và giải thích vì sao "lâu lâu" mới bị (chỉ khi để yên đủ lâu).
+
+   ⚠️ CHỈ gửi về phía trình duyệt, KHÔNG gửi ngược lên máy chủ: mỗi ứng dụng có giao
+   thức riêng, nhét gói lạ lên thượng nguồn là dễ làm hỏng phiên. Phía trình duyệt thì
+   an toàn vì thư viện client bỏ qua lệnh nó không hiểu.
+   Với Guacamole (RemoteDesktop) dùng data = '3.nop;' — lệnh "không làm gì cả" do chính
+   giao thức Guacamole định nghĩa ĐỂ giữ kết nối, không phải mẹo tự chế.
    ═══════════════════════════════════════════════════════════════════════════ */
 export function bridgeWebSocket(server, upstream, opts = {}) {
   const tag = opts.tag ? `[${opts.tag} ${Math.random().toString(36).slice(2, 9)}]` : null;
@@ -550,6 +566,63 @@ export function bridgeWebSocket(server, upstream, opts = {}) {
   upstream.addEventListener('error', (e) => {
     if (tag) console.error(`${tag} upstream error ${at()}:`, e && e.message);
     shut(server, 1000, 'upstream error');
+  });
+
+  /* Nhịp giữ sống — xem chú thích opts.keepAlive ở đầu hàm. */
+  if (opts.keepAlive && opts.keepAlive.data) {
+    const ms = opts.keepAlive.ms || 45000;
+    let timer = null;
+    const dungNhip = () => { if (timer) { clearInterval(timer); timer = null; } };
+    timer = setInterval(() => {
+      try { server.send(opts.keepAlive.data); }
+      catch (e) {
+        if (tag) console.error(`${tag} keepAlive FAILED ${at()}:`, e && e.message);
+        dungNhip();                       // gửi hỏng = socket chết rồi, ngừng đập
+      }
+    }, ms);
+    server.addEventListener('close', dungNhip);
+    upstream.addEventListener('close', dungNhip);
+    server.addEventListener('error', dungNhip);
+    upstream.addEventListener('error', dungNhip);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   swKillSwitch — trả về một service worker TỰ HUỶ, đặt đúng chỗ file sw.js của
+   ứng dụng bên trong proxy.
+   ───────────────────────────────────────────────────────────────────────────
+   Vì sao phải có: Termix và n8n đều tự đăng ký service worker. Đi qua proxy thì
+   SW nhận scope là đường proxy của mình → nó chặn MỌI request của iframe. Nhưng
+   bước cài của nó gọi cache.addAll() trên danh sách asset đường gốc (không có
+   tiền tố proxy) nên LUÔN hỏng → SW nằm lại ở trạng thái dở dang.
+   Hậu quả: request có thể treo vô hạn mà tab Network KHÔNG hiện lỗi nào, và SW
+   còn phục vụ asset cũ đã cache nên deploy xong vẫn chạy code cũ.
+   Console bằng chứng (2026-08-16, cả Termix lẫn n8n):
+     sw.js:1 Uncaught (in promise) TypeError: Failed to execute 'addAll' on 'Cache'
+
+   Chặn ở phía trình duyệt thôi thì KHÔNG đủ: SW đã cài nằm trong máy người dùng và
+   chạy TRƯỚC mọi đoạn JS của trang. Phải trả về bản tự huỷ này để lần kiểm cập nhật
+   kế tiếp của trình duyệt thay nó bằng bản gỡ chính mình.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export function swKillSwitch() {
+  const js = `/* Bản tự huỷ do dashboard cấp — xem swKillSwitch() trong src/core.js */
+self.addEventListener('install', function(){ self.skipWaiting(); });
+self.addEventListener('activate', function(e){
+  e.waitUntil((function(){
+    return caches.keys()
+      .then(function(ks){ return Promise.all(ks.map(function(k){ return caches.delete(k); })); })
+      .catch(function(){})
+      .then(function(){ return self.registration.unregister(); })
+      .catch(function(){});
+  })());
+});
+`;
+  return new Response(js, {
+    status: 200,
+    headers: {
+      'Content-Type':  'text/javascript; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
   });
 }
 

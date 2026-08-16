@@ -65,6 +65,35 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 #csai-in button:disabled{opacity:.5;cursor:default}
 .cs-wc{color:#c99a6a;font-size:12.5px;text-align:center;padding:14px 8px;line-height:1.6}
 
+/* ── Trợ lý nâng cấp (2026-08-12): 3 chế độ + thẻ xác nhận trong chat + nút Dừng.
+      Chép khuôn từ trang SSH Hiện trường để hai trợ lý dùng GIỐNG HỆT nhau — cùng
+      thao tác, cùng cách xác nhận, khỏi phải nhớ hai kiểu. Chỉ đổi bảng màu cho hợp
+      tông cam của trang này. ── */
+#csai-modes{display:flex;gap:5px;padding:8px 10px 0}
+#csai-modes .md{flex:1;padding:5px 6px;font-size:11.5px;font-weight:600;border-radius:7px;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);color:#c99a6a;cursor:pointer}
+#csai-modes .md.on{background:#f6a93c;border-color:#f6a93c;color:#3a1c00}
+#csai-modes .md[data-mode=bypass].on{background:#e5484d;border-color:#e5484d;color:#fff}
+#csai-modes .md:disabled{opacity:.4;cursor:not-allowed}
+#csai-modenote{font-size:11px;color:#ffbf69;padding:6px 10px 0;line-height:1.5}
+/* Thẻ xác nhận nằm TRONG luồng chat, không phải hộp thoại đè màn hình: quyết định
+   "có gõ lệnh này vào thiết bị thật không" cần đọc được ngữ cảnh xung quanh. */
+.cs-ask{background:rgba(255,255,255,.04);border:1px solid rgba(246,169,60,.55);border-radius:11px;
+  padding:10px 12px;display:flex;flex-direction:column;gap:7px;align-self:stretch}
+.cs-ask.danger{border-color:#e5484d}
+.cs-ask .t{font-weight:700;color:#ffbf69;display:flex;align-items:center;gap:6px;font-size:12.5px}
+.cs-ask.danger .t{color:#ff8b8e}
+.cs-ask .cmd{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;background:rgba(0,0,0,.35);
+  border:1px solid rgba(255,255,255,.12);border-radius:7px;padding:7px 9px;white-space:pre-wrap;word-break:break-all;color:#ffe6cc}
+.cs-ask .who{font-size:11.5px;color:#c99a6a;line-height:1.5}
+.cs-ask .btns{display:flex;gap:7px}
+.cs-ask .btns button{padding:6px 13px;font-size:12.5px;border-radius:8px;cursor:pointer;
+  background:linear-gradient(135deg,#f6a93c,#f76b1c);border:none;color:#3a1c00;font-weight:600;width:auto}
+.cs-ask .btns .no{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);color:#c99a6a}
+.cs-ask.done{opacity:.72;border-color:rgba(255,255,255,.14)}
+.cs-ask .verdict{font-size:12px;font-weight:600}
+#csai-in button.stop{background:linear-gradient(135deg,#e5484d,#b02a2f);color:#fff;width:auto;padding:0 12px;font-size:13px}
+
 /* Ẩn nút chuyển sáng/tối nổi CHUNG toàn site (#__themeFab, worker.js tiêm mọi trang,
    góc trái-dưới) — CHỈ trên trang này vì nó che khuất nội dung terminal. Không đụng
    tới widget chung ở worker.js nên các trang khác không bị ảnh hưởng. */
@@ -175,12 +204,33 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 <button type="button" id="csai-btn" title="Trợ lý cấu hình AI">🤖 <span>AI</span></button>
 <div id="csai-panel">
   <div id="csai-hd"><span>🤖 Trợ lý cấu hình thiết bị</span><span class="x" title="Đóng">✕</span></div>
+  <!-- 3 chế độ: chú thích dài để ở tooltip cho đỡ chiếm chỗ hội thoại; chỉ ByPass mới
+       hiện cảnh báo thành chữ, vì đó là chế độ duy nhất AI tự bấm Enter. -->
+  <div id="csai-modes">
+    <button type="button" class="md on" data-mode="ask"    title="Ask — chỉ đọc màn hình console và trả lời. Không chèn, không chạy bất cứ thứ gì.">💬 Ask</button>
+    <button type="button" class="md" data-mode="agent"  title="AI Agent — được đặt lệnh lên dòng lệnh, nhưng mỗi lệnh anh phải bấm Đồng ý; chèn xong anh vẫn tự bấm Enter.">🤝 Agent</button>
+    <button type="button" class="md" data-mode="bypass" title="ByPass — AI TỰ CHẠY lệnh trên thiết bị thật qua dây console. Bắt buộc: đọc trước → trình kế hoạch → mới làm. Lệnh nguy hiểm vẫn hỏi anh.">⚡ ByPass</button>
+  </div>
+  <div id="csai-modenote" style="display:none"></div>
   <div id="csai-msgs"><div class="cs-wc">Chào anh! Mình đọc được console đang kết nối và gợi ý lệnh (đa hãng: Cisco/Juniper/MikroTik/FortiGate…).<br><br>Mình <b>không tự chạy</b> — chỉ đặt lệnh lên dòng lệnh, anh xem rồi tự Enter.<br><br>Thử: <i>"đọc console xem đang ở đâu"</i> · <i>"hướng dẫn reset password Cisco"</i> · <i>"switch này là hãng gì"</i>.</div></div>
-  <div id="csai-in"><textarea placeholder="Hỏi về thiết bị đang cấu hình…" rows="1"></textarea><button title="Gửi">▶</button></div>
+  <div id="csai-in">
+    <textarea placeholder="Hỏi về thiết bị đang cấu hình…" rows="1"></textarea>
+    <button title="Gửi">▶</button>
+    <!-- Nút Dừng thế chỗ nút Gửi khi AI đang chạy: lỡ đi sai hướng hoặc gọi tool
+         vòng vòng thì cắt được ngay, không ngồi chờ hết lượt. -->
+    <button id="csai-stop" class="stop" style="display:none" title="Dừng ngay lượt đang chạy">⏹ Dừng</button>
+  </div>
 </div>
 
 <script src="/vendor/xterm/xterm.min.js"></script>
 <script src="/vendor/xterm/addon-fit.min.js"></script>
+<!-- Kho kiến thức mạng — DÙNG CHUNG với trang SSH Hiện trường (cùng 2 file, cùng nhóm
+     network/ trong Settings → Dạy AI). Nạp TRƯỚC đoạn script bên dưới vì lúc dựng lời
+     nhắc phải đọc được mục lục. Thêm lĩnh vực mới = thêm 1 dòng ở đây. -->
+<script src="/service-home/ssh-field-kb.js"></script>
+<script src="/service-home/ssh-field-kb-linux.js"></script>
+<script src="/service-home/ssh-field-kb-ccnp.js"></script>
+<script src="/service-home/ssh-field-kb-voip.js"></script>
 <script>
 /* ══════════════════════════════════════
    Quyền — chặn phía client (an ninh thật do server _PAGE_PERM gate)
@@ -567,7 +617,10 @@ relayCmdInput.onkeydown = function(e){ if(e.key==='Enter'){ e.preventDefault(); 
    AI assistant — đọc console + gợi ý lệnh (KHÔNG tự chạy)
    ══════════════════════════════════════ */
 var MODEL = 'console';   // alias 9Router RIÊNG cho Console Serial (instance administrator, 2026-07-25)
-var MAX_TOOL_LOOPS = 12;
+/* Số bước tool tối đa mỗi câu hỏi, theo TỪNG chế độ (giống trang SSH Hiện trường).
+   Ask chỉ đọc nên cần ít; ByPass tự chạy nên phải nhiều bước hơn mới làm xong việc. */
+var LOOP_LIMIT = { ask:6, agent:8, bypass:14 };
+function maxLoops(){ return LOOP_LIMIT[MODE] || 8; }
 var LLM_URL = location.origin + '/api/console-serial-llm';
 
 function stripAnsi(s){
@@ -672,12 +725,318 @@ function insertCommand(cmd){
   return insertCommandLocal(cmd);
 }
 
-var TOOLS = {
-  read_terminal:  function(){ return Promise.resolve(readTerminal()); },
-  insert_command: function(p){ return Promise.resolve(insertCommand(p && p.command)); },
+/* ══════════════════════════════════════════════════════════════════════════
+   CHU TRÌNH KHÉP KÍN 4 PHA — giống hệt trang SSH Hiện trường
+   ──────────────────────────────────────────────────────────────────────────
+   Vì sao ÉP BẰNG CODE chứ không chỉ dặn trong lời nhắc: AI hay NHẢY THẲNG tới
+   câu trả lời — nhìn vài dòng output đã "thấy vấn đề" rồi đề xuất sửa. Kỹ sư
+   thật thì bắt đầu bằng "thiết bị này đang ra sao đã". Lời nhắc là mong muốn,
+   code mới chặn được.
+
+   Bốn pha, KHÔNG nhảy cóc:
+     1. BẢN ĐỒ   — biết hệ thống ra sao (so_do_doc)
+     2. ĐIỀU TRA — thu bằng chứng bằng lệnh CHỈ ĐỌC (tự do, không rào cản)
+     3. KẾT LUẬN — ghi nguyên nhân KÈM trích dẫn bằng chứng (ghi_ket_luan)
+     4. ĐỀ XUẤT  — trình phương án, anh Thoại bấm duyệt (de_xuat_sua)
+
+   Chặn cứng: lệnh THAY ĐỔI CẤU HÌNH bị từ chối tới khi có kết luận (pha 3) VÀ
+   phương án được duyệt (pha 4). Lệnh chỉ đọc thì thoải mái — điều tra phải nhanh. */
+var PHA = { ket_luan: null, de_xuat_duoc_duyet: null };
+
+/* Danh sách lệnh CHỈ ĐỌC là danh sách ĐÓNG: chỉ thứ chắc chắn an toàn mới lọt,
+   còn lại mặc định coi là thay đổi. Thà bắt xin phép thừa còn hơn để lọt một lệnh
+   sửa cấu hình mà không ai duyệt — đây là thiết bị VẬT LÝ tại hiện trường. */
+var RE_CHI_DOC = new RegExp('^(' + [
+  'show', 'display', 'get', 'diagnose', 'diag', 'ping', 'traceroute', 'tracert',
+  'dir', 'more', 'cat', 'ls', 'pwd', 'whoami', 'uptime', 'date', 'ip r', 'ip a',
+  'ss', 'netstat', 'ifconfig', 'arp', 'terminal length', 'enable', 'end', 'exit',
+  'quit', 'flash_init', 'load_helper',
+].join('|') + ')\\b', 'i');
+
+function laLenhDoc(cmd) {
+  var c = String(cmd || '').trim().replace(/^do[ \t]+/i, '');
+  if (!c) return false;
+  /* Ghi đè file / xoá / đổi tên → coi là thay đổi dù mở đầu bằng lệnh đọc */
+  if (/>>|>[ \t]*\/|\btee\b|\brm\b|\bmv\b|\bcp\b|\bdd\b|\brename\b/.test(c)) return false;
+  return RE_CHI_DOC.test(c);
+}
+
+function ghiKetLuan(p) {
+  var nguyen_nhan = p && p.nguyen_nhan;
+  var bang_chung = (p && p.bang_chung) || [];
+  if (!nguyen_nhan) return { ok:false, error:'Thiếu "nguyen_nhan".' };
+  if (!Array.isArray(bang_chung) || !bang_chung.length) {
+    return { ok:false, error:'Thiếu "bang_chung": mảng, mỗi phần tử ghi DÒNG OUTPUT chứng minh. '
+           + 'Không trích được bằng chứng nghĩa là chưa đủ cơ sở — quay lại điều tra tiếp.' };
+  }
+  PHA.ket_luan = { nguyen_nhan:nguyen_nhan, bang_chung:bang_chung, tac_dong:(p && p.tac_dong) || '' };
+  theKetLuan(PHA.ket_luan);
+  return { ok:true, da_ghi:true,
+           note:'Đã ghi kết luận và hiện thẻ cho anh Thoại đọc. Giờ mới được sang pha ĐỀ XUẤT (de_xuat_sua).' };
+}
+
+function deXuatSua(p) {
+  if (!PHA.ket_luan) {
+    return Promise.resolve({ ok:false,
+      error:'Chưa có kết luận nguyên nhân. Gọi ghi_ket_luan (kèm bằng chứng) TRƯỚC khi đề xuất sửa.' });
+  }
+  var buoc = (p && p.buoc) || [];
+  if (!Array.isArray(buoc) || !buoc.length) {
+    return Promise.resolve({ ok:false, error:'Thiếu "buoc": mảng {lenh, muc_dich}.' });
+  }
+  return new Promise(function (resolve) {
+    theDeXuat(p, buoc, function (duyet) {
+      if (!duyet) {
+        return resolve({ ok:true, duoc_duyet:false,
+          note:'Anh Thoại KHÔNG duyệt. Đừng chạy lệnh nào. Hỏi anh muốn đổi gì hoặc đề xuất cách khác.' });
+      }
+      PHA.de_xuat_duoc_duyet = { buoc:buoc, luc:Date.now() };
+      resolve({ ok:true, duoc_duyet:true,
+        note:'Anh Thoại ĐÃ DUYỆT. Chạy đúng các lệnh trong phương án, TỪNG BƯỚC MỘT, '
+           + 'xong bước nào đọc lại kết quả bước đó rồi mới sang bước kế.' });
+    });
+  });
+}
+
+/* Sơ đồ hệ thống — DỮ LIỆU CÔNG TY, nằm ở KV riêng (src/net-topology.js), dùng
+   CHUNG với trang SSH Hiện trường: khảo sát bằng dây console rồi lưu, lần sau SSH
+   vào cũng đọc lại được đúng bản đồ đó. */
+function soDoDoc() {
+  return fetch('/api/net-topology', { credentials:'same-origin' })
+    .then(function (r) { return r.json(); })
+    .catch(function (e) { return { ok:false, error:'Không đọc được sơ đồ: ' + (e.message || e) }; });
+}
+
+function soDoGhi(p) {
+  var so_do = p && p.so_do;
+  if (!so_do) return Promise.resolve({ ok:false, error:'Thiếu "so_do".' });
+  return new Promise(function (resolve) {
+    theSoDo(so_do, function (duyet) {
+      if (!duyet) return resolve({ ok:true, da_luu:false, note:'Anh Thoại không duyệt sơ đồ. Hỏi lại chỗ nào chưa đúng.' });
+      fetch('/api/net-topology', {
+        method:'PUT', credentials:'same-origin',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ so_do:so_do }),
+      }).then(function (r) { return r.json(); })
+        .then(function (d) {
+          resolve(d.error ? { ok:false, error:d.error }
+                          : { ok:true, da_luu:true, note:'Đã lưu sơ đồ. Lần sau chỉ cần so_do_doc là biết hệ thống.' });
+        })
+        .catch(function (e) { resolve({ ok:false, error:String(e.message || e) }); });
+    });
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Tra KHO KIẾN THỨC — dùng chung file với trang SSH Hiện trường
+   ──────────────────────────────────────────────────────────────────────────
+   Lời nhắc chỉ mang MỤC LỤC (ngắn); nội dung nặng nằm ở ssh-field-kb*.js, chỉ tải
+   khi AI thật sự cần. Nhờ vậy kho lớn tuỳ ý mà không làm chậm từng lượt gọi. */
+function kbLookup(topics) {
+  if (!window.__NET_KB) return { ok:false, error:'Chưa nạp được kho kiến thức.' };
+  if (!topics) return { ok:false, error:'Thiếu tham số "topic".', muc_luc: window.__NET_KB.topics() };
+  var r = window.__NET_KB.get(topics);
+  if (!r.noi_dung) {
+    return { ok:false, error:'Không có mục ' + JSON.stringify(r.khong_co) + '.',
+             muc_luc: window.__NET_KB.topics() };
+  }
+  var o = { ok:true, noi_dung: r.noi_dung };
+  if (r.khong_co.length) o.khong_tim_thay = r.khong_co;
+  return o;
+}
+
+function kbBlock() {
+  if (!window.__NET_KB) return '';
+  return [
+    '',
+    'KHO KIẾN THỨC — tra bằng công cụ kb_lookup {"topic":"<id>"} (nhiều mục: {"topic":["a","b"]}).',
+    'Kiến thức trong kho ĐÁNG TIN HƠN trí nhớ của bạn — mâu thuẫn thì theo kho.',
+    'Tra kho TRƯỚC khi kết luận, nhất là khi sắp nói "cấu hình sai / cần sửa".',
+    '',
+    'MỤC LỤC:',
+    window.__NET_KB.indexText(),
+  ].join('\n');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Đọc/ghi console — thêm run_command + send_key (trước chỉ có đọc + chèn)
+   ──────────────────────────────────────────────────────────────────────────
+   Thiết bị mạng phân trang output: Cisco/Aruba in "--More--" rồi ĐỨNG CHỜ một
+   phím. AI không biết chuyện đó thì tưởng lệnh treo và dừng luôn. */
+var PAGER_RE = /(--\s*more\s*--|--More--|<--- More --->|\(END\)|Press any key to continue|-- MORE --)\s*$/i;
+
+function rawSince(mark) {
+  return stripAnsi(RAW_BUF.slice(mark)).replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/* DẤU NHẮC HIỆN TẠI — nói thẳng trạng thái, đừng bắt AI suy từ đống chữ.
+   Tính từ dòng cuối cùng có nội dung. PHẢI qua bộ che secret: dòng cuối THƯỜNG là
+   dấu nhắc, nhưng đọc đúng lúc thiết bị vừa in xong dòng cấu hình thì dòng cuối
+   chính là dòng đó — trường này đi thẳng lên LLM nên bỏ che ở đây là thủng. */
+function doTrangThai() {
+  var raw = stripAnsi(RAW_BUF || '');
+  var dong = raw.split('\n');
+  var cuoi = '';
+  for (var i = dong.length - 1; i >= 0; i--) {
+    if (dong[i].trim()) { cuoi = dong[i].trim(); break; }
+  }
+  var o = { dau_nhac_cuoi_cung: redact(cuoi.slice(-120)) };
+  if (/\(config[^)]*\)\s*#$/.test(cuoi))       o.che_do = 'Cisco/Aruba — ĐANG TRONG CHẾ ĐỘ CẤU HÌNH (config)';
+  else if (/^rommon\s*\d*\s*>/i.test(cuoi))    o.che_do = 'ROMMON (chế độ boot router) — dùng cho khôi phục mật khẩu';
+  else if (/^switch:\s*$/i.test(cuoi))         o.che_do = 'SWITCH: (bootloader switch Catalyst) — dùng flash_init/rename';
+  else if (/#\s*$/.test(cuoi))                 o.che_do = 'đặc quyền (enable/#) — chạy được lệnh show và cấu hình';
+  else if (/>\s*$/.test(cuoi))                 o.che_do = 'người dùng thường (>) — cần "enable" mới chạy được lệnh đặc quyền';
+  else if (/password\s*:?\s*$/i.test(cuoi))    o.che_do = 'ĐANG CHỜ NHẬP MẬT KHẨU';
+  else if (/login\s*:?\s*$/i.test(cuoi) || /username\s*:?\s*$/i.test(cuoi)) o.che_do = 'ĐANG CHỜ NHẬP TÊN ĐĂNG NHẬP';
+  else if (PAGER_RE.test(cuoi))                o.che_do = 'ĐANG DỪNG Ở PHÂN TRANG (--More--) — gửi phím space';
+  else if (/[$%]\s*$/.test(cuoi))              o.che_do = 'Linux shell';
+  else if (/\]\s*[>#]\s*$/.test(cuoi))         o.che_do = 'MikroTik/khác';
+  else o.che_do = 'chưa xác định được từ dấu nhắc — đọc kỹ output';
+  o.luu_y = 'Đây là trạng thái THẬT tại thời điểm đọc, tính từ dòng cuối của luồng dữ liệu. '
+          + 'Nếu output bên dưới có vẻ mâu thuẫn (vd còn dấu nhắc cũ ở giữa màn hình) thì TIN TRƯỜNG NÀY.';
+  return o;
+}
+
+/* Chờ thiết bị in xong rồi trả về ĐÚNG PHẦN OUTPUT MỚI. Thoát sớm khi im 300ms —
+   lệnh show ngắn xong tức thì, lệnh dài vẫn kịp in hết. */
+function waitOutput(mark, base) {
+  return new Promise(function (resolve) {
+    var t0 = Date.now(), lastLen = -1, quietSince = 0;
+    (function tick() {
+      var len = RAW_BUF.length;
+      if (len !== lastLen) { lastLen = len; quietSince = Date.now(); }
+      var yen = Date.now() - quietSince >= 300 && len > mark;
+      if (yen || Date.now() - t0 > 2500) return done();
+      setTimeout(tick, 120);
+    })();
+    function done() {
+      var out = rawSince(mark);
+      base.output_moi = redact(out.length > 3000 ? '…(đã cắt bớt phần đầu)…\n' + out.slice(-3000) : out);
+      if (PAGER_RE.test(out)) {
+        base.dang_cho_phim = true;
+        base.huong_dan = 'THIẾT BỊ ĐANG DỪNG Ở "--More--" CHỜ MỘT PHÍM — không phải treo. '
+          + 'Gọi send_key {"key":"space"} để xem tiếp (lặp tới hết), hoặc {"key":"q"} để thoát. '
+          + 'Muốn hết bị phân trang: chạy "terminal length 0" (Cisco/Aruba).';
+      } else {
+        base.huong_dan = 'output_moi là toàn bộ output của lệnh vừa gõ. Cần xem phần cũ hơn thì gọi read_terminal.';
+      }
+      resolve(base);
+    }
+  });
+}
+
+/* Ghi thẳng bytes vào cổng serial. Dùng chung cho run_command (kèm \r) và send_key. */
+function _ghiSerial(data) {
+  if (!port || !port.writable) return Promise.reject(new Error('Chưa kết nối cổng console.'));
+  var w = port.writable.getWriter();
+  return w.write(new TextEncoder().encode(data))
+    .finally(function () { try { w.releaseLock(); } catch (e) {} });
+}
+
+/* CHẠY THẲNG lệnh: chèn RỒI tự gửi Enter. CHỈ tồn tại ở chế độ ByPass.
+   Tách hẳn khỏi insertCommand để không bao giờ "lỡ tay" gửi Enter ở chế độ khác. */
+function runCommand(cmd) {
+  if (typeof cmd !== 'string' || !cmd) return Promise.resolve({ ok:false, error:'Thiếu command.' });
+  if (RELAY && RELAY.role === 'helper') {
+    return Promise.resolve({ ok:false, error:'Đang hỗ trợ từ xa — không tự chạy lệnh trên máy người khác được. '
+      + 'Dùng insert_command để gửi lệnh sang, người hiện trường tự bấm Enter.' });
+  }
+  if (!port || !port.writable) return Promise.resolve({ ok:false, error:'Chưa kết nối cổng console.' });
+  cmd = cmd.replace(/\r?\n/g, ' ').trim();
+  var mark = RAW_BUF.length;
+  return _ghiSerial(cmd + '\r')
+    .then(function () { return waitOutput(mark, { ok:true, ran:cmd }); })
+    .catch(function (e) { return { ok:false, error:'Ghi cổng serial lỗi: ' + (e && e.message || e) }; });
+}
+
+/* Gửi phím thô — để qua trang "--More--", thoát lệnh chạy dài (Ctrl+C), trả lời y/n.
+   Chỉ nhận danh sách phím ĐÃ DUYỆT: mở cho gửi chuỗi tuỳ ý thì nó thành một
+   run_command trá hình, lách hết mọi lớp xác nhận ở trên. */
+var KEYS = {
+  space:  ' ',      // qua trang tiếp ở --More--
+  enter:  '\r',     // xuống 1 dòng ở --More--, hoặc xác nhận
+  q:      'q',      // thoát phân trang
+  ctrl_c: '\x03',   // cắt lệnh đang chạy
+  esc:    '\x1b',
+  y:      'y',
+  n:      'n',
 };
 
-var SYS = [
+function sendKey(name) {
+  var k = KEYS[String(name || '').toLowerCase()];
+  if (!k) return Promise.resolve({ ok:false, error:'Phím không hợp lệ. Chỉ nhận: ' + Object.keys(KEYS).join(', ') });
+  if (RELAY && RELAY.role === 'helper') {
+    return Promise.resolve({ ok:false, error:'Đang hỗ trợ từ xa — không gửi phím thô sang máy người khác được.' });
+  }
+  if (!port || !port.writable) return Promise.resolve({ ok:false, error:'Chưa kết nối cổng console.' });
+  var mark = RAW_BUF.length;
+  return _ghiSerial(k)
+    .then(function () { return waitOutput(mark, { ok:true, sent_key:name }); })
+    .catch(function (e) { return { ok:false, error:'Ghi cổng serial lỗi: ' + (e && e.message || e) }; });
+}
+
+var TOOLS = {
+  so_do_doc:      function () { return soDoDoc(); },
+  so_do_ghi:      function (p) { return soDoGhi(p); },
+  ghi_ket_luan:   function (p) { return Promise.resolve(ghiKetLuan(p)); },
+  de_xuat_sua:    function (p) { return deXuatSua(p); },
+  kb_lookup:      function (p) { return Promise.resolve(kbLookup(p && (p.topic || p.topics))); },
+  read_terminal:  function () { var r = readTerminal(); if (r.ok) r.trang_thai_hien_tai = doTrangThai(); return Promise.resolve(r); },
+  insert_command: function (p) { return Promise.resolve(insertCommand(p && p.command)); },
+  run_command:    function (p) { return runCommand(p && p.command); },
+  send_key:       function (p) { return sendKey(p && p.key); },
+};
+
+/* ══════════ 3 CHẾ ĐỘ TRỢ LÝ — giống hệt trang SSH Hiện trường ══════════════
+   ask    — chỉ đọc, KHÔNG có công cụ ghi. An toàn tuyệt đối.
+   agent  — chèn được lệnh, mỗi lệnh anh phải bấm Đồng ý ngay trong khung chat.
+            Lệnh vẫn KHÔNG tự chạy: chèn xong anh còn phải bấm Enter thật.
+   bypass — AI tự gõ VÀ tự bấm Enter qua dây console. Đổi lại phải theo đúng quy
+            trình: đọc trước → lập kế hoạch → mới làm; lệnh nguy hiểm vẫn phải hỏi.
+
+   Mỗi chế độ có LỜI NHẮC RIÊNG chứ không chỉ khoá nút: nói cho AI biết nó đang ở
+   chế độ nào thì nó tự hành xử đúng, thay vì cứ đề xuất rồi bị chặn liên tục. */
+var MODES = {
+  ask: {
+    name: 'Ask', perm: 'console-serial-ai-ask',
+    tools: ['so_do_doc', 'so_do_ghi', 'ghi_ket_luan', 'de_xuat_sua', 'kb_lookup', 'read_terminal'],
+    note: '<b>Ask</b> — chỉ đọc màn hình console và trả lời. Không chèn, không chạy bất cứ thứ gì.',
+  },
+  agent: {
+    name: 'AI Agent', perm: 'console-serial-ai-agent',
+    /* send_key có ở Agent vì không gõ được phím thì AI kẹt ngay ở "--More--" —
+       lệnh anh vừa duyệt cho chèn cũng không xem hết được kết quả. */
+    tools: ['so_do_doc', 'so_do_ghi', 'ghi_ket_luan', 'de_xuat_sua', 'kb_lookup', 'read_terminal', 'insert_command', 'send_key'],
+    note: '<b>AI Agent</b> — được đặt lệnh lên dòng lệnh, nhưng <b>mỗi lệnh anh phải bấm Đồng ý</b>, và vẫn tự bấm Enter.',
+  },
+  bypass: {
+    name: 'ByPass', perm: 'console-serial-ai-bypass', danger: true,
+    tools: ['so_do_doc', 'so_do_ghi', 'ghi_ket_luan', 'de_xuat_sua', 'kb_lookup', 'read_terminal', 'insert_command', 'run_command', 'send_key'],
+    note: '⚠️ <b>ByPass</b> — AI <b>tự chạy lệnh</b> trên thiết bị thật qua dây console. Bắt buộc: đọc trước → trình kế hoạch → mới làm. Lệnh nguy hiểm vẫn hỏi anh.',
+  },
+};
+var MODE = 'ask';
+
+/* Lệnh có thể brick thiết bị hoặc mất sạch cấu hình. Ở ByPass vẫn PHẢI hỏi.
+   Đây là lưới an toàn cuối: lời nhắc có thể bị AI hiểu sai, danh sách này thì không.
+   Có thêm mấy lệnh riêng của console/bootloader mà bản SSH không cần. */
+var DANGEROUS = [
+  /\breload\b/i, /\breboot\b/i, /\bshutdown\b(?!\s+-c)/i, /\bhalt\b/i, /\bpoweroff\b/i,
+  /write\s+erase/i, /erase\s+startup/i, /erase\s+flash/i, /factory[- ]?(default|reset)/i, /\bformat\b/i,
+  /\bdelete\s+flash/i, /\brename\s+flash/i, /config-register/i, /\bconfreg\b/i,
+  /\brm\s+-[rf]/i, /\bmkfs\b/i, /\bdd\s+if=/i, />\s*\/dev\/[sh]d/i,
+  /\bdelete\b.*\b(vlan|interface|route|policy)\b/i, /no\s+(vlan|interface|ip\s+route)/i,
+  /\bshut\b/i, /passwd/i, /\buseradd\b/i, /\buserdel\b/i, /iptables\s+-F/i,
+  /execute\s+factoryreset/i, /system\s+reset/i,
+];
+function isDangerous(cmd) {
+  return DANGEROUS.some(function (re) { return re.test(String(cmd || '')); });
+}
+
+/* Lời nhắc NỀN — giữ nguyên toàn bộ kiến thức đã tích luỹ qua thực tế (phân biệt
+   router vs switch Catalyst, quy trình ROMMON/MODE button…). Chỉ đổi tên SYS →
+   SYS_BASE vì giờ có thêm phần lời nhắc riêng theo từng chế độ nối vào sau. */
+var SYS_BASE = [
   'Bạn là kỹ sư mạng trợ lý AI tích hợp trong "Web Console" — công cụ giúp anh Thoại cấu hình switch/router/firewall TẠI HIỆN TRƯỜNG qua dây console (USB-to-Serial), không qua mạng.',
   'Trả lời tiếng Việt, ngắn gọn, chính xác kỹ thuật.',
   '',
@@ -720,12 +1079,75 @@ var SYS = [
   '- Với quy trình nhiều bước (như reset password): làm TỪNG BƯỚC MỘT, không dồn nhiều lệnh — chờ user xác nhận đã bấm Enter/đã làm xong bước vật lý (rút nguồn, bấm Break) trước khi sang bước kế.',
 ].join('\n');
 
+/* Lời nhắc RIÊNG cho từng chế độ — nối vào sau SYS_BASE. Cùng khuôn với trang
+   SSH Hiện trường: AI biết mình đang ở mức nào thì tự hành xử đúng. */
+var SYS_MODE = {
+  ask: [
+    '',
+    '── CHẾ ĐỘ HIỆN TẠI: ASK (chỉ đọc) ──',
+    'Bạn KHÔNG có công cụ ghi. Không chèn, không chạy. Đọc màn hình rồi VIẾT lệnh ra cho anh Thoại tự gõ.',
+    'Muốn anh chạy gì thì in lệnh ra dưới dạng chữ, kèm giải thích ngắn lệnh đó làm gì.',
+  ].join('\n'),
+  agent: [
+    '',
+    '── CHẾ ĐỘ HIỆN TẠI: AI AGENT ──',
+    'Bạn ĐẶT được lệnh lên dòng lệnh console (insert_command), nhưng MỖI lệnh anh Thoại phải bấm Đồng ý.',
+    'Lệnh KHÔNG tự chạy: chèn xong anh còn phải tự bấm Enter trên bàn phím thật.',
+    'Sau khi chèn, DỪNG LẠI chờ anh bấm Enter — đừng gọi read_terminal ngay, màn hình chưa có gì mới.',
+  ].join('\n'),
+  bypass: [
+    '',
+    '── CHẾ ĐỘ HIỆN TẠI: BYPASS (bạn TỰ CHẠY lệnh) ──',
+    'Bạn có run_command: tự gõ VÀ tự bấm Enter trên thiết bị VẬT LÝ THẬT. Vì vậy bắt buộc:',
+    '1. ĐỌC trước (read_terminal) để biết đang ở dấu nhắc/chế độ nào — TUYỆT ĐỐI không gõ mù.',
+    '2. Lệnh CHỈ ĐỌC (show/dir/ping…) thì chạy tự do để điều tra.',
+    '3. Lệnh THAY ĐỔI cấu hình: phải có ghi_ket_luan (kèm bằng chứng) RỒI de_xuat_sua được anh duyệt. Hệ thống chặn cứng, không lách được.',
+    '4. Lệnh nguy hiểm (reload/erase/format/config-register…) LUÔN hỏi lại dù đã duyệt.',
+    '5. Chạy TỪNG BƯỚC MỘT, xong bước nào đọc kết quả bước đó rồi mới sang bước kế.',
+  ].join('\n'),
+};
+
+function sysPrompt() {
+  return SYS_BASE + (SYS_MODE[MODE] || SYS_MODE.ask) + '\n' + kbBlock();
+}
+
+/* ══════════ Chọn chế độ + gác theo quyền ══════════════════════════════════
+   Chế độ nào chưa được cấp thì nút khoá luôn (mờ, bấm không được) và ghi rõ lý do
+   — hiện ra mà khoá tốt hơn giấu đi: người dùng biết có thứ đó để đi xin, thay vì
+   tưởng dashboard thiếu tính năng. Server vẫn kiểm lại độc lập. */
+function _perms() {
+  try {
+    if (window.__USER__) return window.__USER__;
+    var m = document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/);
+    return m ? JSON.parse(decodeURIComponent(m[1])) : {};
+  } catch (e) { return {}; }
+}
+function canMode(k) {
+  var u = _perms();
+  if (u.isAdmin) return true;
+  return ((u.permissions || {})[MODES[k].perm] || 'none') !== 'none';
+}
+function setMode(k) {
+  if (!MODES[k] || !canMode(k)) return;
+  MODE = k;
+  Array.prototype.forEach.call(document.querySelectorAll('#csai-modes .md'), function (b) {
+    b.classList.toggle('on', b.dataset.mode === k);
+  });
+  /* Chỉ ByPass mới hiện dòng cảnh báo — cảnh báo hiện ở mọi lúc thì thành nền,
+     không ai đọc nữa; để dành cho đúng chỗ đáng cảnh báo. */
+  var n = document.getElementById('csai-modenote');
+  if (MODES[k].danger) { n.innerHTML = MODES[k].note; n.style.display = ''; }
+  else { n.style.display = 'none'; }
+  try { localStorage.setItem('csai_mode', k); } catch (e) {}
+}
+
 /* ── UI ── */
 var panel = document.getElementById('csai-panel');
 var msgs = panel.querySelector('#csai-msgs');
 var ta = panel.querySelector('textarea');
 var send = panel.querySelector('#csai-in button');
-var chatHistory = [];   // KHÔNG đặt tên 'history' — đụng độ window.history (native History API) gây lỗi im lặng
+var btnStop = document.getElementById('csai-stop');
+var chatHistory = [];   // KHÔNG đặt tên 'history' — đụng window.history (native History API), lỗi im lặng
 var busy = false;
 var btnAi = document.getElementById('csai-btn');
 
@@ -733,6 +1155,7 @@ btnAi.onclick = function(){ panel.classList.toggle('open'); if(panel.classList.c
 panel.querySelector('.x').onclick = function(){ panel.classList.remove('open'); };
 ta.onkeydown = function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); doSend(); } };
 send.onclick = doSend;
+btnStop.onclick = stopRun;
 
 function addMsg(cls, text){ var d=document.createElement('div'); d.className='csm '+cls; d.textContent=text; msgs.appendChild(d); msgs.scrollTop=msgs.scrollHeight; return d; }
 function note(text){ addMsg('csm-t', text); }
@@ -741,36 +1164,118 @@ function doSend(){
   var q=(ta.value||'').trim(); if(!q || busy) return;
   var wc = msgs.querySelector('.cs-wc'); if(wc) wc.remove();
   ta.value=''; addMsg('csm-u', q); chatHistory.push({role:'user', content:q});
+  /* CÂU HỎI MỚI = vấn đề mới → phải chứng minh lại từ đầu, không xài kết luận cũ.
+     ⚠️ CỐ Ý đặt ở đây chứ KHÔNG ở runLoop: nút "Tiếp tục" cũng gọi runLoop, đặt ở
+     đó thì phê duyệt vừa xin xong bị xoá ngay, AI không chạy tiếp được. */
+  PHA.ket_luan = null; PHA.de_xuat_duoc_duyet = null;
   runLoop();
 }
 
+/* ══════════ Nút Dừng ═══════════════════════════════════════════════════════
+   Hai thứ phải cắt được, thiếu cái nào cũng vẫn thấy như bị treo:
+     1. luồng đang tải dở từ LLM  → AbortController
+     2. vòng lặp gọi công cụ      → cờ STOPPED, kiểm ở đầu mỗi bước
+   Thẻ xác nhận đang chờ cũng phải được giải phóng (coi như từ chối), không thì
+   lời hứa treo mãi và vòng lặp không bao giờ kết thúc. */
+var STOPPED = false;
+var CURRENT_ABORT = null;
+var pendingAsks = [];
+
+function stopRun(){
+  STOPPED = true;
+  try { CURRENT_ABORT && CURRENT_ABORT.abort(); } catch(e){}
+  var q = pendingAsks; pendingAsks = [];
+  q.forEach(function(f){ try{ f(); }catch(e){} });
+}
+
 function runLoop(){
-  busy=true; send.disabled=true;
-  var loops=0;
-  var bubble = addMsg('csm-a', '…');
-  step();
+  busy = true; STOPPED = false;
+  send.style.display = 'none'; btnStop.style.display = '';
+  var loops = 0, bubble = addMsg('csm-a', '…');
 
   function step(){
+    if (STOPPED) return finish(true);
     streamLLM(function onDelta(full){ bubble.textContent = full || '…'; msgs.scrollTop = msgs.scrollHeight; })
       .then(function(full){
+        if (STOPPED) return finish(true);
         var tool = parseTool(full);
         chatHistory.push({role:'assistant', content:full});
-        if(!tool || loops>=MAX_TOOL_LOOPS){
-          if(tool && loops>=MAX_TOOL_LOOPS) note('⚠️ Đã đạt giới hạn số bước tool.');
-          finish(); return;
+        /* Bóc khối lệnh khỏi bong bóng NGAY, kể cả khi sắp dừng — trước đây lúc hết
+           lượt thì khối ```ssh``` lòi ra màn hình dạng JSON thô, nhìn như lỗi. */
+        var hienThi = full.replace(/```ssh[\s\S]*?```/g,'').trim();
+        if(!tool || loops >= maxLoops()){
+          bubble.textContent = hienThi || (tool ? '⚙️ …' : '(không có nội dung)');
+          if(tool && loops >= maxLoops()) note('⚠️ Đã đạt giới hạn ' + maxLoops() + ' bước ở chế độ ' + MODES[MODE].name + '.');
+          return finish(false);
         }
-        bubble.textContent = full.replace(/```ssh[\s\S]*?```/g,'').trim() || '⚙️ đang xử lý…';
+        bubble.textContent = hienThi || '⚙️ đang xử lý…';
         loops++;
         execTool(tool).then(function(res){
+          if (STOPPED) return finish(true);
           note((res.__denied ? '⛔ ' : '⚙️ ') + tool.tool + (res.__denied ? ' (bỏ qua)' : ' ✓'));
           chatHistory.push({role:'user', content:'[KẾT QUẢ TOOL '+tool.tool+']\n'+JSON.stringify(res)});
+          /* Agent: chèn lệnh xong là HẾT VIỆC lượt này — lệnh còn nằm chờ anh bấm
+             Enter, đọc lại màn hình lúc này chắc chắn chưa thấy gì mới. Không dừng
+             thì AI cứ chèn → đọc → chưa thấy gì → chèn lại… đốt sạch số lượt. */
+          if (shouldPauseAfter(tool, res)) {
+            moiDiTiep('Lệnh đã nằm trên dòng lệnh console. Anh xem lại rồi bấm Enter trên bàn phím thật.', '▶ Tôi bấm Enter rồi, xem tiếp');
+            return finish(false);
+          }
           bubble = addMsg('csm-a', '…');
           step();
         });
       })
-      .catch(function(e){ bubble.textContent = '⚠️ Lỗi: '+(e && e.message || e); finish(); });
+      .catch(function(e){
+        if (e && e.name === 'AbortError') return finish(true);
+        bubble.textContent = '⚠️ Lỗi: '+(e && e.message || e); finish(false);
+      });
   }
-  function finish(){ busy=false; send.disabled=false; ta.focus(); }
+  function finish(stopped){
+    busy = false;
+    send.style.display = ''; btnStop.style.display = 'none';
+    if (stopped) note('⏹ Đã dừng.');
+    ta.focus();
+  }
+  step();
+}
+
+function shouldPauseAfter(tool, res){
+  return MODE === 'agent' && tool.tool === 'insert_command' && res && res.ok;
+}
+
+/* Nút "xem tiếp" sau khi anh bấm Enter — ĐÍNH KÈM LUÔN output mới, đừng bắt AI
+   xin đọc. Trước đây phải mất HAI vòng gọi model (vòng 1 xin read_terminal, vòng 2
+   mới trả lời); mình đã có sẵn output ngay trong trình duyệt nên gửi kèm luôn. */
+var LAST_INSERT_MARK = null;
+function moiDiTiep(lyDo, nhan){
+  var box = document.createElement('div');
+  box.className = 'cs-ask';
+  var t = document.createElement('div'); t.className='t'; t.textContent='⏸ Tạm dừng';
+  var w = document.createElement('div'); w.className='who'; w.textContent=lyDo;
+  var btns = document.createElement('div'); btns.className='btns';
+  var go = document.createElement('button'); go.textContent=nhan;
+  var no = document.createElement('button'); no.className='no'; no.textContent='Thôi, để đó';
+  btns.appendChild(go); btns.appendChild(no);
+  box.appendChild(t); box.appendChild(w); box.appendChild(btns);
+  msgs.appendChild(box); msgs.scrollTop=msgs.scrollHeight;
+
+  go.onclick = function(){
+    box.remove();
+    if (busy) return;
+    var kem = '';
+    if (LAST_INSERT_MARK !== null) {
+      var out = rawSince(LAST_INSERT_MARK);
+      if (out) {
+        kem = '\n\n[MÀN HÌNH SAU KHI BẤM ENTER]\n'
+            + redact(out.length > 3000 ? '…(cắt bớt phần đầu)…\n' + out.slice(-3000) : out)
+            + '\n\nĐây là kết quả thật, KHÔNG cần gọi read_terminal nữa. Phân tích rồi làm bước tiếp.';
+        LAST_INSERT_MARK = null;
+      }
+    }
+    chatHistory.push({role:'user', content:'[TIẾP TỤC] Làm tiếp phần còn dở.' + kem});
+    runLoop();
+  };
+  no.onclick = function(){ box.remove(); };
 }
 
 function parseTool(text){
@@ -779,27 +1284,252 @@ function parseTool(text){
   try{ var o=JSON.parse(m[1].trim()); return (o && o.tool && TOOLS[o.tool]) ? o : null; }catch(e){ return null; }
 }
 
-function execTool(tool){
-  if(tool.tool==='insert_command'){
-    var cmd = (typeof tool.command==='string') ? tool.command : '';
-    var ok = window.confirm('AI muốn ĐẶT lệnh này lên dòng lệnh console (anh vẫn phải tự bấm Enter):\n\n  '+cmd+'\n\nĐồng ý đặt vào?');
-    if(!ok) return Promise.resolve({ __denied:true, message:'Người dùng từ chối chèn lệnh này.' });
+/* ══════════ Thẻ XÁC NHẬN ngay trong khung chat ═════════════════════════════
+   Trước dùng window.confirm(): hộp thoại của trình duyệt đè lên màn hình, che mất
+   chính cái terminal và đoạn hội thoại mà anh cần đọc để quyết định — mà quyết định
+   ở đây là "có gõ lệnh này vào thiết bị thật hay không". Thẻ nằm trong luồng chat
+   thì đọc được cả ngữ cảnh, và còn lưu lại để sau xem lại đã đồng ý những gì. */
+function askInChat(opts){
+  return new Promise(function(resolve){
+    var box = document.createElement('div');
+    box.className = 'cs-ask' + (opts.danger ? ' danger' : '');
+    var t = document.createElement('div'); t.className='t';
+    t.textContent = (opts.danger ? '⛔ ' : '⚠️ ') + opts.title;
+    var cmd = document.createElement('div'); cmd.className='cmd';
+    cmd.textContent = opts.command;      // textContent: lệnh do AI sinh, không nhét HTML
+    var btns = document.createElement('div'); btns.className='btns';
+    var yes = document.createElement('button'); yes.textContent = opts.yesText || 'Đồng ý';
+    var no  = document.createElement('button'); no.className='no'; no.textContent='Từ chối';
+    btns.appendChild(yes); btns.appendChild(no);
+    box.appendChild(t); box.appendChild(cmd);
+    if (opts.why) { var w=document.createElement('div'); w.className='who'; w.textContent=opts.why; box.appendChild(w); }
+    box.appendChild(btns);
+    msgs.appendChild(box); msgs.scrollTop=msgs.scrollHeight;
+
+    function done(okv){
+      box.classList.add('done'); btns.remove();
+      var v=document.createElement('div'); v.className='verdict';
+      v.textContent = okv ? '✅ Anh đã đồng ý' : '⛔ Anh đã từ chối';
+      v.style.color = okv ? '#4ade80' : '#ff8b8e';
+      box.appendChild(v); msgs.scrollTop=msgs.scrollHeight;
+      resolve(okv);
+    }
+    yes.onclick = function(){ done(true); };
+    no.onclick  = function(){ done(false); };
+    /* Bấm Dừng giữa chừng cũng phải giải phóng lời hứa này, không thì treo mãi. */
+    pendingAsks.push(function(){ if (box.isConnected && btns.isConnected) done(false); });
+  });
+}
+
+/* Thẻ KẾT LUẬN (pha 3) — chỉ để đọc, không có nút. In rõ bằng chứng để anh tự kiểm
+   AI có suy diễn quá tay không. */
+function theKetLuan(kl){
+  var box = document.createElement('div'); box.className='cs-ask';
+  var t=document.createElement('div'); t.className='t'; t.textContent='🔎 KẾT LUẬN NGUYÊN NHÂN';
+  var n=document.createElement('div'); n.style.cssText='font-weight:600;line-height:1.6;font-size:12.5px;color:#ffe6cc';
+  n.textContent = kl.nguyen_nhan;
+  box.appendChild(t); box.appendChild(n);
+  var bc=document.createElement('div'); bc.className='who';
+  bc.textContent='Bằng chứng ('+kl.bang_chung.length+'):';
+  box.appendChild(bc);
+  kl.bang_chung.forEach(function(b){
+    var d=document.createElement('div'); d.className='cmd';
+    d.textContent = typeof b === 'string' ? b : (b.output || b.dan_chung || JSON.stringify(b));
+    box.appendChild(d);
+  });
+  if (kl.tac_dong){ var td=document.createElement('div'); td.className='who'; td.textContent='Tác động: '+kl.tac_dong; box.appendChild(td); }
+  msgs.appendChild(box); msgs.scrollTop=msgs.scrollHeight;
+}
+
+/* Thẻ ĐỀ XUẤT SỬA (pha 4) — chốt chặn cuối cùng trước khi đụng vào thiết bị.
+   Anh Thoại quyết, không phải AI. */
+function theDeXuat(p, buoc, xong){
+  var box=document.createElement('div'); box.className='cs-ask danger';
+  var t=document.createElement('div'); t.className='t'; t.textContent='🛠 ĐỀ XUẤT SỬA — anh quyết';
+  box.appendChild(t);
+  buoc.forEach(function(b,i){
+    var w=document.createElement('div'); w.className='who';
+    w.textContent='Bước '+(i+1)+(b.muc_dich ? ' — '+b.muc_dich : '');
+    var c=document.createElement('div'); c.className='cmd'; c.textContent=b.lenh||'';
+    box.appendChild(w); box.appendChild(c);
+  });
+  [['Rủi ro',p.rui_ro],['Cách quay lui',p.quay_lui],['Kiểm chứng sau khi sửa',p.kiem_chung]].forEach(function(x){
+    if(!x[1]) return;
+    var d=document.createElement('div'); d.className='who'; d.textContent=x[0]+': '+x[1]; box.appendChild(d);
+  });
+  var btns=document.createElement('div'); btns.className='btns';
+  var yes=document.createElement('button'); yes.textContent='✅ Duyệt phương án';
+  var no=document.createElement('button'); no.className='no'; no.textContent='❌ Không sửa';
+  btns.appendChild(yes); btns.appendChild(no); box.appendChild(btns);
+  msgs.appendChild(box); msgs.scrollTop=msgs.scrollHeight;
+  function done(v){
+    box.classList.add('done'); btns.remove();
+    var r=document.createElement('div'); r.className='verdict';
+    r.textContent = v ? '✅ Anh đã duyệt — AI được chạy đúng các lệnh trên' : '❌ Anh không duyệt';
+    r.style.color = v ? '#4ade80' : '#ff8b8e';
+    box.appendChild(r); msgs.scrollTop=msgs.scrollHeight;
+    xong(v);
   }
+  yes.onclick=function(){ done(true); };
+  no.onclick=function(){ done(false); };
+  pendingAsks.push(function(){ if(btns.isConnected) done(false); });
+}
+
+/* Thẻ SƠ ĐỒ — AI khảo sát xong đề xuất bản đồ hệ thống, anh duyệt mới lưu.
+   Dữ liệu sai còn tệ hơn không có, nên KHÔNG bao giờ tự ghi. */
+function theSoDo(so_do, xong){
+  var box=document.createElement('div'); box.className='cs-ask';
+  var t=document.createElement('div'); t.className='t'; t.textContent='🗺 SƠ ĐỒ HỆ THỐNG — lưu lại?';
+  var d=document.createElement('div'); d.className='cmd';
+  d.textContent = JSON.stringify(so_do, null, 2).slice(0, 2500);
+  var btns=document.createElement('div'); btns.className='btns';
+  var yes=document.createElement('button'); yes.textContent='💾 Lưu sơ đồ';
+  var no=document.createElement('button'); no.className='no'; no.textContent='Chưa đúng';
+  btns.appendChild(yes); btns.appendChild(no);
+  box.appendChild(t); box.appendChild(d); box.appendChild(btns);
+  msgs.appendChild(box); msgs.scrollTop=msgs.scrollHeight;
+  function done(v){
+    box.classList.add('done'); btns.remove();
+    var r=document.createElement('div'); r.className='verdict';
+    r.textContent = v ? '💾 Đã lưu' : '⛔ Chưa lưu';
+    r.style.color = v ? '#4ade80' : '#ff8b8e';
+    box.appendChild(r); xong(v);
+  }
+  yes.onclick=function(){ done(true); };
+  no.onclick=function(){ done(false); };
+  pendingAsks.push(function(){ if(btns.isConnected) done(false); });
+}
+
+function execTool(tool){
+  var allowed = MODES[MODE].tools;
+  var cmd = typeof tool.command === 'string' ? tool.command : '';
+
+  /* Chặn theo chế độ — lời nhắc đã nói rồi nhưng vẫn phải chặn bằng code:
+     lời nhắc là mong muốn, code mới là bảo đảm. */
+  if (allowed.indexOf(tool.tool) < 0) {
+    return Promise.resolve({ __denied:true, ok:false,
+      error:'Chế độ ' + MODES[MODE].name + ' không cho dùng "' + tool.tool + '".'
+          + (MODE === 'ask' ? ' Hãy VIẾT lệnh ra cho anh Thoại tự gõ.' : '') });
+  }
+
+  /* ══ CHỐT CHẶN CHU TRÌNH: lệnh THAY ĐỔI CẤU HÌNH phải đi qua đủ pha 3 và 4 ══
+     Lệnh chỉ đọc thì cho tự do — điều tra phải nhanh, đặt rào ở đó chỉ làm chậm mà
+     không tăng an toàn. Chỉ khi ĐỤNG VÀO thiết bị mới bắt đủ thủ tục. */
+  if ((tool.tool === 'insert_command' || tool.tool === 'run_command') && !laLenhDoc(cmd)) {
+    if (!PHA.ket_luan) {
+      return Promise.resolve({ __denied:true, ok:false,
+        error:'Lệnh này THAY ĐỔI cấu hình mà chưa có kết luận nguyên nhân.',
+        phai_lam:'Điều tra bằng lệnh chỉ đọc trước, rồi gọi ghi_ket_luan {"nguyen_nhan":"...","bang_chung":[{"output":"dòng chứng minh"}]}.',
+        vi_sao:'Sửa khi chưa biết chắc nguyên nhân là cách nhanh nhất để hỏng thêm thứ khác — đây là thiết bị VẬT LÝ tại hiện trường.' });
+    }
+    if (!PHA.de_xuat_duoc_duyet) {
+      return Promise.resolve({ __denied:true, ok:false,
+        error:'Đã có kết luận nhưng anh Thoại CHƯA DUYỆT phương án sửa.',
+        phai_lam:'Gọi de_xuat_sua {"buoc":[{"lenh":"...","muc_dich":"..."}],"rui_ro":"...","quay_lui":"...","kiem_chung":"..."} rồi chờ anh bấm duyệt.',
+        vi_sao:'Sửa hay không là quyền của anh Thoại, không phải của bạn.' });
+    }
+  }
+
+  var needAsk = false, danger = false, title = '', yesText = '';
+  if (tool.tool === 'insert_command') {
+    danger = isDangerous(cmd);
+    needAsk = (MODE === 'agent') || danger;
+    title = danger ? 'AI muốn đặt một lệnh NGUY HIỂM lên dòng lệnh' : 'AI muốn đặt lệnh này lên dòng lệnh';
+    yesText = 'Đồng ý chèn';
+  } else if (tool.tool === 'run_command') {
+    danger = isDangerous(cmd);
+    needAsk = danger;                 // ByPass tự chạy, trừ lệnh nguy hiểm
+    title = 'AI muốn TỰ CHẠY một lệnh NGUY HIỂM';
+    yesText = 'Cho chạy';
+  }
+
+  if (!needAsk) return _run(tool);
+
+  return askInChat({
+    title: title, command: cmd, danger: danger, yesText: yesText,
+    why: tool.tool === 'run_command'
+      ? 'Lệnh này CHẠY NGAY khi anh đồng ý (AI tự bấm Enter qua dây console).'
+      : 'Lệnh chỉ được đặt lên dòng lệnh — anh vẫn phải tự bấm Enter.',
+  }).then(function(ok){
+    if(!ok) return { __denied:true, message:'Anh Thoại từ chối. Đừng gọi lại lệnh này; hỏi lý do hoặc đề xuất cách khác.' };
+    return _run(tool);
+  });
+}
+
+function _run(tool){
+  /* Nhớ mốc TRƯỚC khi chèn để lát nữa lấy đúng phần output sinh ra sau khi anh
+     bấm Enter (xem moiDiTiep) — khỏi tốn một vòng gọi model chỉ để xin đọc màn hình. */
+  if (tool.tool === 'insert_command') LAST_INSERT_MARK = RAW_BUF.length;
   try{ return Promise.resolve(TOOLS[tool.tool](tool)).catch(function(e){ return { ok:false, error:String(e && e.message || e) }; }); }
   catch(e){ return Promise.resolve({ ok:false, error:String(e && e.message || e) }); }
 }
 
+/* ══════════ Nén lịch sử — thứ làm AI chạy chậm nhất ════════════════════════
+   Mỗi lượt gọi phải gửi LẠI TOÀN BỘ hội thoại. Kết quả tool thì to và nằm lại
+   trong lịch sử mãi mãi → lượt sau gánh cả lượt trước, chi phí tăng theo bình
+   phương số bước. Chỉ giữ NGUYÊN VẸN 2 kết quả gần nhất — đó là thứ AI đang cần
+   để suy luận tiếp; cũ hơn thì lược (AI đã phân tích chúng ở các câu trả lời trước). */
+var KEEP_FULL_TOOL_RESULTS = 2;
+function compactHistory(){
+  var idx = [];
+  for (var i = 0; i < chatHistory.length; i++) {
+    var m = chatHistory[i];
+    if (m.role === 'user' && m.content.indexOf('[KẾT QUẢ TOOL') === 0) idx.push(i);
+  }
+  var keep = idx.slice(-KEEP_FULL_TOOL_RESULTS);
+  idx.forEach(function(i){
+    if (keep.indexOf(i) >= 0) return;
+    var c = chatHistory[i].content;
+    if (c.length <= 400) return;
+    var ten = (/^\[KẾT QUẢ TOOL ([^\]]+)\]/.exec(c) || [])[1] || 'tool';
+    chatHistory[i] = { role:'user', content:
+      '[KẾT QUẢ TOOL ' + ten + ' — ĐÃ LƯỢC cho gọn]\n' + c.slice(c.indexOf('\n') + 1, 300)
+      + '\n…(phần còn lại đã bỏ bớt. Bạn đã phân tích nó ở trên rồi; cần xem lại thì gọi công cụ đọc lại.)' };
+  });
+}
+
+/* Khoá ô nhập kèm đồng hồ đếm ngược khi hết hạn mức — cho người dùng biết CHÍNH XÁC
+   còn bao lâu, thay vì đoán rồi bấm thử liên tục (lần nào cũng ăn đúng lỗi đó). */
+var _khoaTimer = null;
+function khoaVi(giay){
+  if (_khoaTimer) clearInterval(_khoaTimer);
+  var conLai = Math.max(1, parseInt(giay, 10) || 60);
+  var chuGoc = send.textContent;
+  ta.disabled = true; send.disabled = true;
+  function ve(){
+    send.textContent = conLai + 's';
+    ta.placeholder = 'Hết lượt gọi AI — mở lại sau ' + conLai + ' giây';
+    if (--conLai < 0) {
+      clearInterval(_khoaTimer); _khoaTimer = null;
+      ta.disabled = false; send.disabled = false;
+      send.textContent = chuGoc;
+      ta.placeholder = 'Hỏi về thiết bị đang cấu hình…';
+    }
+  }
+  ve();
+  _khoaTimer = setInterval(ve, 1000);
+}
+
 function streamLLM(onDelta, attempt){
   attempt = attempt || 1;
-  var body = { model:MODEL, messages:[{role:'system', content:SYS}].concat(chatHistory), stream:true };
-  return fetch(LLM_URL, { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+  if (attempt === 1) compactHistory();
+  /* mode đi kèm mỗi lượt: server tự kiểm quyền cho chế độ đó (xem src/console-serial.js).
+     Giấu nút ngoài giao diện là chưa đủ — ai mở F12 cũng gọi thẳng API được. */
+  var body = { model:MODEL, mode:MODE, messages:[{role:'system', content:sysPrompt()}].concat(chatHistory), stream:true };
+  CURRENT_ABORT = new AbortController();
+  return fetch(LLM_URL, { method:'POST', credentials:'include', signal:CURRENT_ABORT.signal,
+                          headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
     .then(function(r){
       // HTTP 524 = Cloudflare Edge timeout (9Router thỉnh thoảng chọn backend chậm) — tự thử lại.
       if (r.status === 524 && attempt < 3) {
         onDelta('⏳ 9Router phản hồi chậm (524), đang thử lại (' + (attempt + 1) + '/3)…');
         return streamLLM(onDelta, attempt + 1);
       }
-      if(!r.ok) return r.text().then(function(t){ var e; try{ e=JSON.parse(t).error; }catch(_){ } throw new Error(e || ('HTTP '+r.status)); });
+      if(!r.ok) return r.text().then(function(t){
+        var o=null; try{ o=JSON.parse(t); }catch(_){}
+        if (r.status === 429 && o && o.retry_after) khoaVi(o.retry_after);
+        throw new Error((o && o.error) || ('HTTP '+r.status));
+      });
       var reader=r.body.getReader(), dec=new TextDecoder(), buf='', full='';
       return (function pump(){
         return reader.read().then(function(res){
@@ -820,6 +1550,30 @@ function streamLLM(onDelta, attempt){
       })();
     });
 }
+
+/* ── Dựng nút chế độ (đặt CUỐI: cần `send`/`ta` đã gán ở trên) ── */
+(function initModes(){
+  var coQuyen = false;
+  Array.prototype.forEach.call(document.querySelectorAll('#csai-modes .md'), function(b){
+    var k = b.dataset.mode;
+    if (!canMode(k)) { b.disabled = true; b.title = 'Chưa được cấp quyền — xin admin trong Settings → Role'; return; }
+    coQuyen = true;
+    b.onclick = function(){ setMode(k); };
+  });
+  if (!coQuyen) {
+    var n = document.getElementById('csai-modenote');
+    n.innerHTML = '🔒 Anh chưa được cấp quyền dùng trợ lý AI ở chế độ nào. Nhờ admin cấp trong <b>Settings → Role</b>.';
+    n.style.display = '';
+    ta.disabled = true; send.disabled = true;
+    return;
+  }
+  /* Khôi phục chế độ lần trước, nhưng chỉ khi vẫn còn quyền — quyền có thể đã bị thu hồi. */
+  var saved = null;
+  try{ saved = localStorage.getItem('csai_mode'); }catch(e){}
+  if (saved && MODES[saved] && canMode(saved)) setMode(saved);
+  else if (canMode('ask')) setMode('ask');
+  else { var dau = Object.keys(MODES).filter(canMode)[0]; if (dau) setMode(dau); }
+})();
 </script>
 </body>
 </html>

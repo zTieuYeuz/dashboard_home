@@ -60,7 +60,18 @@ const HOME = [
      _TERMINAL_KEYS (index.html, thẻ trang chính), CARDS (ssh.html, khoá từng cụm). */
   { section: 'home', id: 'ssh', name: 'SSH Terminal', icon: '⌨', page: '/service-home/ssh.html', access: 'toggle',
     pageKeys: ['ssh', 'console-serial', 'ssh-field'] },
-  { section: 'home', id: 'console-serial', name: 'Web Console (Serial)', icon: '🔌', page: '/service-home/console-serial.html', access: 'toggle' },
+  /* Web Console (Serial) — cùng BỘ BA QUYỀN CON như SSH Hiện trường (2026-08-12,
+     anh Thoại: "trợ lý console giống hệt trợ lý SSH hiện trường"). Ý nghĩa từng mức
+     giống hệt bên kia, chỉ khác đường đi tới thiết bị là DÂY CONSOLE thay vì SSH —
+     mà đi dây console còn nguy hiểm hơn: thường dùng lúc thiết bị đang hỏng/mới tinh,
+     gõ sai là brick hoặc mất sạch cấu hình, không có đường mạng nào để cứu từ xa.
+     Quyền 'console-serial' (mở trang) KHÔNG tự cho dùng AI — phải cấp thêm từng mức. */
+  { section: 'home', id: 'console-serial', name: 'Web Console (Serial)', icon: '🔌', page: '/service-home/console-serial.html', access: 'toggle',
+    features: [
+      { id: 'console-serial-ai-ask',    name: 'AI · Ask (chỉ đọc, không chèn lệnh)' },
+      { id: 'console-serial-ai-agent',  name: 'AI · Agent (chèn lệnh, phải xác nhận từng lệnh)' },
+      { id: 'console-serial-ai-bypass', name: 'AI · ByPass (AI TỰ CHẠY lệnh — cấp rất hạn chế)' },
+    ] },
   /* Terminal SSH nhúng cho lúc đi công trường — SSH thật chạy trên laptop qua
      cầu nối dash-ssh (_infra/dash-ssh), vì trình duyệt không mở được socket TCP.
 

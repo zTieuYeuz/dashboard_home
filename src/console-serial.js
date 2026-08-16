@@ -14,7 +14,7 @@
    Cùng pattern CSRF/rate-limit/model-allowlist như handleTermixLlm
    (src/termix.js) — xem file đó để biết lý do từng bước chặn.
    ═══════════════════════════════════════════════════════════════════ */
-import { getSession, hasPerm, logActivity } from './core.js';
+import { getSession, hasPerm, logActivity, _constEq } from './core.js';
 
 const CS_NINE_ROUTER = 'https://9router.home-server.id.vn/v1/chat/completions';
 // [2026-07-25] 9Router chuyển từ instance root → administrator: alias + secret RIÊNG
@@ -79,8 +79,31 @@ export async function handleConsoleSerialLlm(request, env) {
   }
 
   let body; try { body = await request.json(); } catch { return j({ error: 'bad json' }, 400); }
+
+  /* ── Gác CHẾ ĐỘ trợ lý (ask / agent / bypass) — thêm 2026-08-12 ────────────
+     Cùng khuôn với handleSshFieldLlm bên dưới. Ba chế độ = ba mức được phép động
+     vào thiết bị thật, nên phải kiểm ở SERVER chứ không chỉ giấu nút ngoài giao
+     diện: giấu nút chỉ chặn người dùng bình thường, ai mở F12 là gọi thẳng API được.
+
+     Từ đây không kiểm được "AI có thật sự chỉ đọc hay không" (công cụ chạy trong
+     trình duyệt của user), nhưng chặn được việc XIN chế độ cao hơn quyền: không có
+     quyền bypass thì không bao giờ nhận được câu trả lời sinh dưới lời nhắc bypass —
+     mà chính lời nhắc đó mới là thứ cho phép AI tự gõ và tự bấm Enter. */
+  const CS_MODE_PERM = {
+    ask:    'console-serial-ai-ask',
+    agent:  'console-serial-ai-agent',
+    bypass: 'console-serial-ai-bypass',
+  };
+  const csMode = CS_MODE_PERM[body.mode] ? body.mode : 'ask';
+  if (!(await hasPerm(env, session, CS_MODE_PERM[csMode]))) {
+    return j({ error: 'Không có quyền dùng trợ lý ở chế độ "' + csMode + '". Nhờ admin cấp trong Settings → Role.' }, 403);
+  }
+
   const model = CS_LLM_MODELS.has(body.model) ? body.model : 'console';
+  /* `mode` là cờ nội bộ của mình, KHÔNG phải tham số của 9Router — phải bỏ ra trước
+     khi chuyển tiếp, để nguyên thì upstream có thể từ chối vì tham số lạ. */
   const payload = Object.assign({}, body, { model, stream: true });
+  delete payload.mode;
 
   let upstream;
   try {
@@ -328,7 +351,7 @@ export async function handleConsoleRelayFieldSync(request, env) {
   const raw = await env.DASHBOARD_KV.get('consrelay:sess:' + sid);
   if (!raw) return _csJson({ error: 'Phiên không còn tồn tại.' }, 404);
   const sess = JSON.parse(raw);
-  if (sess.token !== token) return _csJson({ error: 'Token sai — không phải chủ phiên.' }, 403);
+  if (!_constEq(sess.token, token)) return _csJson({ error: 'Token sai — không phải chủ phiên.' }, 403);
 
   // Ghi output — CHỈ handler này (field-sync) từng ghi key này → không có ai tranh ghi cùng lúc.
   if (typeof text === 'string' && text) {
@@ -377,7 +400,7 @@ export async function handleConsoleRelayFieldActivity(request, env) {
   const raw = await env.DASHBOARD_KV.get('consrelay:sess:' + sid);
   if (!raw) return _csJson({ error: 'Phiên không còn tồn tại.' }, 404);
   const sess = JSON.parse(raw);
-  if (sess.token !== token) return _csJson({ error: 'Token sai.' }, 403);
+  if (!_constEq(sess.token, token)) return _csJson({ error: 'Token sai.' }, 403);
 
   sess.lastFieldActivity = Date.now();
   await env.DASHBOARD_KV.put('consrelay:sess:' + sid, JSON.stringify(sess), { expirationTtl: CS_RELAY_TTL });
@@ -422,7 +445,7 @@ export async function handleConsoleRelayStop(request, env) {
   const raw = await env.DASHBOARD_KV.get('consrelay:sess:' + sid);
   if (raw) {
     const sess = JSON.parse(raw);
-    if (sess.token !== token) return _csJson({ error: 'Token sai.' }, 403);
+    if (!_constEq(sess.token, token)) return _csJson({ error: 'Token sai.' }, 403);
     await env.DASHBOARD_KV.delete('consrelay:code:' + sess.code);
     await env.DASHBOARD_KV.delete('consrelay:sess:' + sid);
     await env.DASHBOARD_KV.delete('consrelay:out:' + sid);

@@ -1,0 +1,455 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ssh-field-kb-ccnp.js — KIẾN THỨC CCNP (ENCOR + ENARSI)
+   ───────────────────────────────────────────────────────────────────────────
+   Thêm 2026-08-16 theo yêu cầu anh Thoại: "công việc liên quan đến CCNP rất
+   nhiều rồi". Nạp vào cùng kho với ssh-field-kb.js qua window.__KB_ADD.
+
+   VIẾT THEO ĐÚNG NGUYÊN TẮC CỦA KHO (xem đầu ssh-field-kb.js):
+     1. Lệnh này CHỨNG MINH được gì — và KHÔNG chứng minh được gì.
+     2. Cách đọc cột/cờ cụ thể (chỗ hay đọc nhầm nhất).
+     3. Dấu hiệu KHOẺ, để biết khi nào KHÔNG cần sửa.
+     4. Triệu chứng → nguyên nhân, xếp theo thứ tự hay gặp.
+
+   ⚠️ CHỈ KIẾN THỨC CHUNG. Không IP thật, không mật khẩu, không tên thiết bị
+   của công ty — nội dung này được gửi lên LLM mỗi lần AI tra cứu.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
+if (!window.__KB_ADD) { console.warn('[KB] chưa nạp ssh-field-kb.js trước'); return; }
+
+var KB = {};
+
+/* ══════════════════════════════════════════════════════════════════════════
+   OSPF NÂNG CAO
+   ══════════════════════════════════════════════════════════════════════════ */
+KB['ospf-nang-cao'] = [
+  '# OSPF NÂNG CAO (ENCOR/ENARSI)',
+  '',
+  '## Trạng thái láng giềng — ĐỌC ĐÚNG mới biết kẹt ở đâu',
+  '`show ip ospf neighbor` — cột State là thứ quan trọng nhất:',
+  '  INIT      : nghe được Hello của nó, nhưng NÓ chưa nghe được mình → một chiều.',
+  '              → Gần như luôn là ACL/firewall chặn multicast 224.0.0.5, hoặc sai subnet mask.',
+  '  2WAY      : bình thường GIỮA 2 router DROTHER trên mạng broadcast — KHÔNG PHẢI LỖI.',
+  '              → Chỉ lo nếu đây là link point-to-point (p2p thì phải lên FULL).',
+  '  EXSTART/EXCHANGE : kẹt ở đây gần như luôn là LỆCH MTU. Đây là bẫy kinh điển.',
+  '              → `show interface | inc MTU` hai đầu. Hoặc tạm `ip ospf mtu-ignore` để XÁC NHẬN',
+  '                nguyên nhân (không phải cách sửa — sửa là cho MTU khớp nhau).',
+  '  LOADING   : đang trao đổi LSA, thoáng qua thì bình thường; kẹt lâu = LSA hỏng.',
+  '  FULL      : ✅ khoẻ. Trên broadcast, FULL với DR/BDR là đủ — không cần FULL với mọi router.',
+  '',
+  '## Điều kiện BẮT BUỘC khớp mới lên được láng giềng',
+  'Area ID · subnet (cùng mạng) · Hello/Dead timer · xác thực · stub flag · MTU.',
+  'KHÔNG cần khớp: Router ID, priority, cost, process ID (process ID chỉ có ý nghĩa cục bộ).',
+  '→ `show ip ospf interface <int>` in ra gần hết mấy giá trị này, so hai đầu là ra ngay.',
+  '',
+  '## Loại area — nhớ theo "chặn cái gì"',
+  'Stub               : chặn LSA type 5 (external). Có default route thay thế.',
+  'Totally stubby     : chặn type 5 VÀ type 3 (inter-area). Chỉ còn default. (Cisco riêng)',
+  'NSSA               : như stub nhưng CHO PHÉP external đi vào qua type 7 → ABR dịch 7→5.',
+  'Totally NSSA       : NSSA + chặn luôn type 3.',
+  '⚠️ Mọi router trong CÙNG area phải khai CÙNG loại, nếu không neighbor không lên (stub flag lệch).',
+  '',
+  '## LSA types — đọc `show ip ospf database` mà không hoảng',
+  'Type 1 Router   : mỗi router tự mô tả link của nó. Chỉ lưu hành TRONG area.',
+  'Type 2 Network  : do DR sinh, mô tả mạng multi-access. Trong area.',
+  'Type 3 Summary  : do ABR sinh, mạng của area KHÁC. → thấy nó nghĩa là có ABR.',
+  'Type 4 ASBR-Sum : đường tới ASBR.',
+  'Type 5 External : route redistribute từ giao thức khác. Lan toàn AS (trừ stub/NSSA).',
+  'Type 7 NSSA-Ext : external bên trong NSSA, ABR dịch thành type 5 khi ra ngoài.',
+  '',
+  '## Metric external: E1 vs E2 — hay bị hiểu nhầm',
+  'E2 (mặc định): cost CHỈ tính phần bên ngoài, KHÔNG cộng cost đường đi nội bộ.',
+  '  → Nhiều đường vào cùng một external có cost E2 BẰNG NHAU dù xa gần khác nhau.',
+  '  → Muốn chọn theo đường ngắn nhất thì phải dùng E1.',
+  'E1: cost ngoài + cost nội bộ → phản ánh đúng khoảng cách thật.',
+  '',
+  '## Virtual link — nhớ đúng mục đích',
+  'Chỉ để nối một area KHÔNG chạm area 0 xuyên qua một area trung gian (KHÔNG được là stub).',
+  'Là giải pháp CHỮA CHÁY, không phải thiết kế. Thấy virtual link trong mạng thật = dấu hiệu',
+  'thiết kế area có vấn đề, nên nêu ra khi khảo sát.',
+  '',
+  '## Triệu chứng → nguyên nhân (thứ tự hay gặp)',
+  'Neighbor không lên chút nào  → L1/L2 trước đã (`show ip int brief`), rồi ACL chặn 224.0.0.5,',
+  '                               rồi sai subnet/mask, rồi lệch timer, rồi lệch xác thực.',
+  'Kẹt EXSTART/EXCHANGE          → LỆCH MTU (gần như chắc chắn).',
+  'Lên FULL rồi rớt lặp lại      → mất Hello do rớt gói/CPU cao, hoặc trùng Router ID.',
+  'Có neighbor nhưng thiếu route → kiểm loại area (stub chặn external), lọc route, hoặc',
+  '                               route bị giao thức khác có AD nhỏ hơn thắng.',
+  'Route có nhưng không đi được  → OSPF chỉ chứng minh "có đường trong bảng", KHÔNG chứng minh',
+  '                               dữ liệu đi được: còn ACL, NAT, route ngược chiều, MTU.',
+].join('\n');
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EIGRP
+   ══════════════════════════════════════════════════════════════════════════ */
+KB['eigrp'] = [
+  '# EIGRP',
+  '',
+  '## Khái niệm cốt lõi — hiểu đúng thì chẩn đoán rất nhanh',
+  'FD (Feasible Distance)     : cost tốt nhất mình tính được tới đích.',
+  'RD/AD (Reported Distance)  : cost mà HÀNG XÓM báo về.',
+  'Successor                  : đường tốt nhất, nằm trong bảng định tuyến.',
+  'Feasible Successor         : đường DỰ PHÒNG dùng ngay được, điều kiện: RD < FD hiện tại.',
+  '  → Điều kiện này để CHẶN VÒNG LẶP: hàng xóm phải "gần đích hơn mình" mới tin được.',
+  '',
+  '## Vì sao "có 2 đường mà không có dự phòng"',
+  'Rất hay gặp: đường thứ hai có RD ≥ FD → KHÔNG đủ điều kiện làm feasible successor,',
+  'dù nó hoàn toàn dùng được. Khi mất đường chính, EIGRP phải hỏi lại (query) → chậm hơn.',
+  '`show ip eigrp topology all-links` mới thấy hết; `show ip eigrp topology` chỉ hiện',
+  'successor + feasible successor → nhìn lệnh ngắn dễ tưởng "không có đường nào khác".',
+  '',
+  '## Stuck-In-Active (SIA) — triệu chứng nặng',
+  'Mất đường chính, không có feasible successor → gửi query đi khắp nơi, chờ trả lời.',
+  'Ai đó không trả lời trong thời gian quy định → SIA → EIGRP reset quan hệ láng giềng.',
+  'Nguyên nhân hay gặp: mạng phẳng quá rộng (query lan quá xa), link chậm/rớt gói, CPU cao.',
+  'Cách chữa gốc: THU HẸP phạm vi query — summarization, stub router. Không phải tăng timer.',
+  '',
+  '## Stub router — hiểu đúng',
+  '`eigrp stub` nói với hàng xóm: "đừng query tôi, tôi không phải đường đi vòng".',
+  'Dùng cho router nhánh (chỉ có 1 đường lên). Giảm hẳn SIA.',
+  '⚠️ Mặc định stub chỉ quảng bá connected + summary → nhánh nào redistribute route khác sẽ',
+  'biến mất. Phải khai thêm (`eigrp stub connected summary redistributed`).',
+  '',
+  '## Điều kiện lên láng giềng',
+  'Cùng AS number · cùng subnet · K-values khớp · xác thực khớp.',
+  'KHÔNG cần khớp: Hello/Hold timer (khác EIGRP với OSPF — đây là chỗ hay nhầm).',
+  '',
+  '## Lệnh chẩn đoán và ý nghĩa THẬT',
+  '`show ip eigrp neighbors`   → có quan hệ chưa. Cột Uptime nhảy về 0 liên tục = đang rớt lặp.',
+  '`show ip eigrp topology`     → chỉ successor + FS. Thiếu đường ≠ không tồn tại đường.',
+  '`show ip eigrp interfaces`   → interface nào đang chạy EIGRP (thiếu = quên network statement',
+  '                               hoặc lỡ để passive-interface).',
+].join('\n');
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BGP
+   ══════════════════════════════════════════════════════════════════════════ */
+KB['bgp'] = [
+  '# BGP',
+  '',
+  '## eBGP vs iBGP — khác biệt QUYẾT ĐỊNH cách chẩn đoán',
+  'eBGP: khác AS, mặc định TTL=1 → hai đầu phải KỀ NHAU trực tiếp.',
+  '      → Peer qua loopback thì BẮT BUỘC `ebgp-multihop` + route tới loopback đó.',
+  'iBGP: cùng AS. Route học từ iBGP KHÔNG được quảng bá lại cho iBGP khác (chống lặp)',
+  '      → nên cần full-mesh, hoặc Route Reflector, hoặc Confederation.',
+  '',
+  '## Trạng thái neighbor — đọc để biết kẹt ở đâu',
+  'Idle        : không thử kết nối. Thường thiếu route tới peer, hoặc bị shutdown, hoặc',
+  '              Idle(PfxCt) = vượt maximum-prefix và đã tự tắt.',
+  'Active      : ĐANG THỬ mà không được — TÊN GÂY HIỂU NHẦM, đây là trạng thái XẤU.',
+  '              → TCP 179 bị chặn, sai IP peer, sai AS, route ngược chiều thiếu.',
+  'OpenSent/OpenConfirm : đang bắt tay, kẹt lâu = lệch AS/Router ID/xác thực.',
+  'Established : ✅ khoẻ.',
+  '⚠️ Nhớ: "Active" nghe như tốt nhưng là ĐANG HỎNG. Idle ↔ Active nhảy qua lại = không lên được.',
+  '',
+  '## Thứ tự chọn đường — thuộc lòng phần đầu là đủ dùng 90%',
+  '1. Weight cao hơn (chỉ CỤC BỘ trên 1 router, không truyền đi đâu)',
+  '2. Local Preference cao hơn (truyền trong AS — công cụ chính để chọn ĐƯỜNG RA)',
+  '3. Route do chính router này sinh ra',
+  '4. AS-Path NGẮN hơn',
+  '5. Origin: IGP < EGP < Incomplete',
+  '6. MED thấp hơn (gợi ý cho AS hàng xóm chọn ĐƯỜNG VÀO — họ có thể bỏ qua)',
+  '7. eBGP hơn iBGP',
+  '8. Cost IGP tới next-hop nhỏ hơn',
+  '→ Mẹo nhớ hướng: Local-Pref điều khiển đi RA, MED/AS-Path prepend điều khiển đi VÀO.',
+  '  Và điều khiển chiều VÀO luôn kém chắc chắn, vì quyền quyết định nằm ở AS bên kia.',
+  '',
+  '## Next-hop — bẫy iBGP kinh điển',
+  'Route eBGP truyền vào iBGP GIỮ NGUYÊN next-hop là router biên bên ngoài.',
+  'Router iBGP bên trong không có đường tới next-hop đó → route nằm trong bảng BGP nhưng',
+  'KHÔNG được cài vào bảng định tuyến (bị đánh dấu không hợp lệ).',
+  '→ Sửa: `neighbor <ip> next-hop-self` trên router biên.',
+  '→ Triệu chứng nhận biết: `show ip bgp` CÓ route nhưng thiếu dấu `*` (valid) hoặc `>` (best).',
+  '',
+  '## Đọc `show ip bgp`',
+  'Cột đầu: `*` = hợp lệ, `>` = đường tốt nhất đang dùng, `i` = học từ iBGP.',
+  'KHÔNG có `*` → next-hop không tới được (xem mục trên).',
+  'Có `*` mà không `>` → có đường tốt hơn thắng; xem `show ip bgp <prefix>` để biết thua ở bước nào.',
+  '',
+  '## Triệu chứng → nguyên nhân',
+  'Kẹt Active                   → TCP 179 bị chặn / sai IP / sai remote-as / thiếu route ngược.',
+  'Established nhưng 0 prefix   → chưa quảng bá (thiếu network/redistribute), hoặc bị route-map lọc sạch.',
+  'Có route nhưng không đi được → next-hop không tới được, hoặc route ngược chiều thiếu.',
+  'Nhận quá nhiều prefix rồi tắt→ maximum-prefix. `show ip bgp neighbor | inc prefix`.',
+].join('\n');
+
+/* ══════════════════════════════════════════════════════════════════════════
+   REDISTRIBUTION + ROUTE-MAP
+   ══════════════════════════════════════════════════════════════════════════ */
+KB['redistribution'] = [
+  '# REDISTRIBUTION & ROUTE-MAP',
+  '',
+  '## Administrative Distance — cái quyết định ai thắng',
+  'Connected 0 · Static 1 · eBGP 20 · EIGRP nội 90 · OSPF 110 · RIP 120 · EIGRP ngoại 170 · iBGP 200',
+  '→ AD NHỎ HƠN THẮNG, xét TRƯỚC cả metric. Đây là nguồn gốc của phần lớn sự cố redistribution.',
+  '',
+  '## Vòng lặp định tuyến do redistribute hai chiều',
+  'Redistribute A→B và B→A ở NHIỀU điểm là công thức tạo vòng lặp:',
+  'route đi vòng qua giao thức kia rồi quay lại với AD tốt hơn → router tin đường sai.',
+  'Phòng: chỉ redistribute MỘT chiều nếu được; nếu buộc hai chiều thì dùng route-map + tag',
+  'để chặn route quay ngược (đánh tag lúc đưa vào, chặn tag đó lúc đưa ra).',
+  '',
+  '## Metric bắt buộc — quên là route biến mất lặng lẽ',
+  'Vào OSPF   : nên đặt `metric` + `metric-type` (mặc định E2 cost 20).',
+  'Vào EIGRP  : BẮT BUỘC có metric (bandwidth delay reliability load MTU) hoặc `default-metric`,',
+  '             thiếu là KHÔNG redistribute gì cả mà cũng KHÔNG báo lỗi.',
+  'Vào RIP    : bắt buộc default-metric.',
+  '⚠️ Triệu chứng: "đã gõ redistribute rồi mà bên kia không thấy route nào" → 90% là thiếu metric.',
+  '',
+  '## `subnets` — bẫy cũ nhưng vẫn gặp',
+  'Redistribute vào OSPF trên IOS đời cũ mà thiếu từ khoá `subnets` thì CHỈ route classful đi vào,',
+  'mọi mạng chia nhỏ bị bỏ qua âm thầm. Bản mới mặc định có, nhưng gặp thiết bị cũ thì phải nhớ.',
+  '',
+  '## Route-map — đọc đúng thứ tự',
+  'Xét theo SỐ THỨ TỰ tăng dần, KHỚP CÁI ĐẦU TIÊN thì dừng.',
+  '⚠️ Cuối route-map luôn có "deny mọi thứ" ngầm → có ít nhất một mệnh đề permit, nếu không',
+  'thì lọc sạch không còn gì. Đây là lỗi hay gặp nhất khi dùng route-map lần đầu.',
+  '`route-map X permit 10` không có match nào = khớp TẤT CẢ.',
+].join('\n');
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HSRP / VRRP / GLBP
+   ══════════════════════════════════════════════════════════════════════════ */
+KB['first-hop-redundancy'] = [
+  '# HSRP / VRRP / GLBP (dự phòng cổng mặc định)',
+  '',
+  '## Khác nhau ở đâu',
+  'HSRP (Cisco): 1 active + 1 standby. Ưu tiên cao thắng. Mặc định KHÔNG preempt.',
+  'VRRP (chuẩn): tương tự, master/backup. Mặc định CÓ preempt. Chạy được đa hãng.',
+  'GLBP (Cisco): NHIỀU router cùng chuyển tiếp — chia tải thật, không chỉ dự phòng.',
+  '',
+  '## Bẫy số 1: quên preempt (HSRP)',
+  'Router ưu tiên cao khởi động lại → khi lên KHÔNG tự giành lại vai trò active,',
+  'vì mặc định HSRP không preempt. Kết quả: chạy sai router chính suốt mà không ai biết,',
+  'cho tới lúc mất luôn router phụ. → `standby <grp> preempt`.',
+  '',
+  '## Bẫy số 2: có active nhưng đứt đường lên',
+  'Router active vẫn active dù link WAN của nó đã chết → toàn bộ mạng đi vào ngõ cụt.',
+  '→ `standby <grp> track <interface> <giảm bao nhiêu>`, và mức giảm phải ĐỦ LỚN để tụt',
+  '  xuống dưới router kia. Đặt track mà giảm 10 trong khi chênh nhau 50 = vô nghĩa.',
+  '',
+  '## Đọc trạng thái',
+  '`show standby brief` — cột State: Active / Standby / Init / Speak / Listen.',
+  'HAI router cùng báo Active = mất liên lạc hello giữa chúng (VLAN không thông,',
+  'ACL chặn) — không phải cả hai đều tốt, mà là mạng đã chia đôi.',
+  'Init = interface down hoặc thiếu IP.',
+  '',
+  '## Điều kiện phải khớp',
+  'Cùng group number · cùng VLAN/subnet · xác thực khớp · (VRRP) cùng virtual IP.',
+  'Virtual IP nên là một địa chỉ RIÊNG, không trùng IP thật của router nào.',
+].join('\n');
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SPANNING-TREE NÂNG CAO
+   ══════════════════════════════════════════════════════════════════════════ */
+KB['stp-nang-cao'] = [
+  '# SPANNING-TREE NÂNG CAO (RSTP / MST + bảo vệ)',
+  '',
+  '## Chọn root — hiểu để biết vì sao root nằm sai chỗ',
+  'Thắng theo: Priority thấp hơn → nếu bằng thì MAC nhỏ hơn.',
+  '⚠️ Switch cũ thường có MAC nhỏ → tự nhiên thành root dù là switch access yếu nhất.',
+  'Đây là lỗi thiết kế cực phổ biến: root nằm ở tầng access, mọi lưu lượng đi vòng.',
+  '→ Luôn ĐẶT root thủ công ở switch lõi: `spanning-tree vlan <x> root primary`.',
+  '→ Kiểm nhanh: `show spanning-tree root` — cột Root ID có phải switch lõi không.',
+  '',
+  '## Các lớp bảo vệ — dùng đúng chỗ',
+  'PortFast     : cổng nối MÁY TÍNH bỏ qua giai đoạn chờ → lên ngay. CHỈ dùng cho cổng end-device.',
+  'BPDU Guard   : cổng PortFast mà NHẬN được BPDU → tắt cổng luôn (err-disable).',
+  '               → Chống người dùng cắm switch lậu. Nên bật kèm PortFast, luôn luôn.',
+  'Root Guard   : cổng này KHÔNG được phép dẫn tới root. Nhận BPDU tốt hơn → chặn cổng.',
+  '               → Đặt ở cổng hướng xuống access, giữ root luôn ở lõi.',
+  'Loop Guard   : cổng đang nhận BPDU mà BỖNG NGỪNG nhận → nghi lỗi một chiều, không mở cổng.',
+  '               → Chống vòng lặp do đứt một chiều (hay gặp với sợi quang lỗi 1 hướng).',
+  '',
+  '## Đọc trạng thái',
+  '`show spanning-tree` — Role: Root / Desg (designated) / Altn (chặn) / Back.',
+  'Cổng Altn/BLK là BÌNH THƯỜNG — đó chính là STP đang làm việc, đừng "sửa".',
+  '`show spanning-tree inconsistentports` — cổng bị guard chặn (root/loop guard).',
+  '`show interfaces status err-disabled` — cổng bị BPDU guard tắt; mở lại bằng shut/no shut',
+  'hoặc bật `errdisable recovery cause bpduguard`.',
+  '',
+  '## Dấu hiệu ĐANG CÓ VÒNG LẶP (nhận ra sớm là cứu được mạng)',
+  'CPU switch vọt 100% · đèn mọi cổng nháy đồng loạt · MAC address table nhảy loạn',
+  '(`show mac address-table | inc <mac>` thấy cùng MAC đổi cổng liên tục) · mạng chậm/đứng toàn bộ.',
+  '→ Ưu tiên: cô lập trước (rút/shut cổng nghi ngờ), tìm nguyên nhân sau.',
+  '',
+  '## MST — nhớ điều kiện',
+  'Các switch chỉ cùng vùng MST nếu KHỚP CẢ BA: tên vùng · số revision · bảng ánh xạ VLAN→instance.',
+  'Lệch một thứ (kể cả revision) → switch đó bị coi là vùng khác, cây tính riêng, dễ sinh vòng lặp bất ngờ.',
+].join('\n');
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ETHERCHANNEL
+   ══════════════════════════════════════════════════════════════════════════ */
+KB['etherchannel'] = [
+  '# ETHERCHANNEL (LACP / PAgP)',
+  '',
+  '## Chế độ và cặp hợp lệ',
+  'LACP (chuẩn) : active + active ✅ · active + passive ✅ · passive + passive ❌ (không ai mở lời)',
+  'PAgP (Cisco) : desirable + desirable ✅ · desirable + auto ✅ · auto + auto ❌',
+  'on           : ép cứng, KHÔNG thương lượng. `on` + `active` = ❌ VÀ DỄ TẠO VÒNG LẶP.',
+  '→ Nên dùng LACP active hai đầu. Tránh `on` trừ khi đầu kia không hỗ trợ gì cả.',
+  '',
+  '## Các thông số PHẢI khớp trên mọi cổng thành viên (cả hai đầu)',
+  'Tốc độ · duplex · chế độ access/trunk · VLAN cho phép trên trunk · native VLAN · MTU.',
+  '⚠️ Lệch MỘT thứ là cổng đó bị loại khỏi bó — thường im lặng, chỉ thấy khi xem kỹ.',
+  '',
+  '## Đọc `show etherchannel summary` — cột Flags mới là thứ quan trọng',
+  '(P) = đang tham gia bó ✅  |  (D) = down  |  (I) = độc lập (KHÔNG vào được bó — lỗi hay gặp)',
+  '(s) = treo  |  (H) = hot-standby (vượt số cổng tối đa)',
+  '⚠️ "Po1 up" KHÔNG chứng minh bó khoẻ — phải xem có ĐỦ cổng mang cờ (P) không.',
+  'Thấy (I) = cổng đó bị loại → so lại các thông số ở mục trên.',
+  '',
+  '## Chia tải — hiểu đúng kẻo kết luận sai',
+  'EtherChannel chia theo LUỒNG (hash theo MAC/IP/port), KHÔNG chia theo gói.',
+  '→ Một luồng đơn lẻ (vd một phiên sao lưu) CHỈ đi trên MỘT cổng, không bao giờ nhanh hơn 1 cổng.',
+  '→ "Bó 4 cổng 1G mà chỉ đạt 1G" với một luồng duy nhất là ĐÚNG, không phải lỗi.',
+  '`show etherchannel load-balance` xem đang hash theo gì; đổi sang src-dst-ip thường cân hơn.',
+].join('\n');
+
+/* ══════════════════════════════════════════════════════════════════════════
+   QoS
+   ══════════════════════════════════════════════════════════════════════════ */
+KB['qos'] = [
+  '# QoS',
+  '',
+  '## Ba bước, đúng thứ tự',
+  '1. PHÂN LOẠI (classify): nhận ra lưu lượng nào là gì — ACL, NBAR, hoặc theo DSCP có sẵn.',
+  '2. ĐÁNH DẤU (mark): ghi DSCP để các thiết bị sau khỏi phân loại lại. Đánh dấu càng GẦN NGUỒN càng tốt.',
+  '3. XỬ LÝ: queuing / shaping / policing.',
+  '',
+  '## Giá trị DSCP hay dùng',
+  'EF (46)   : thoại RTP — độ trễ thấp nhất',
+  'CS3 (24)  : báo hiệu thoại (SIP/H.323)',
+  'AF41 (34) : video hội nghị',
+  'CS0 (0)   : best effort (mặc định)',
+  '',
+  '## Shaping vs Policing — khác biệt QUYẾT ĐỊNH',
+  'Shaping : vượt ngưỡng thì XẾP HÀNG chờ → có độ trễ, KHÔNG mất gói. Dùng chiều RA.',
+  'Policing: vượt ngưỡng thì VỨT (hoặc hạ mức) → mất gói ngay. Dùng chiều VÀO.',
+  '→ Thoại/video nên shaping, đừng policing (mất gói là méo tiếng ngay).',
+  '',
+  '## LLQ — hàng đợi ưu tiên cho thoại',
+  'Priority queue phục vụ trước mọi thứ, nhưng CÓ TRẦN băng thông (policing ngầm).',
+  '⚠️ Đặt trần quá nhỏ → chính thoại bị vứt gói. Tính đủ: mỗi cuộc G.711 ~80–100 kbps',
+  'kể cả overhead → 10 cuộc đồng thời cần ~1 Mbps, cộng dư ra một chút.',
+  '',
+  '## Sự thật cần nói với khách',
+  'QoS chỉ có tác dụng khi đường TẮC. Đường rộng rãi thì bật QoS không thấy khác gì.',
+  'Và QoS chỉ điều khiển được chiều ĐI RA của mình — chiều đi vào do nhà mạng quyết định.',
+  '→ Tắc chiều tải xuống thì QoS trên router nhà gần như vô ích, phải làm việc với nhà mạng.',
+].join('\n');
+
+/* ══════════════════════════════════════════════════════════════════════════
+   VRF / TUNNEL / DMVPN
+   ══════════════════════════════════════════════════════════════════════════ */
+KB['vrf-tunnel-dmvpn'] = [
+  '# VRF-lite · GRE · IPsec · DMVPN',
+  '',
+  '## VRF-lite',
+  'Nhiều bảng định tuyến ĐỘC LẬP trên cùng một router → tách khách hàng/phòng ban hoàn toàn.',
+  '⚠️ Mọi lệnh phải kèm VRF, nếu không là đang thao tác nhầm bảng mặc định:',
+  '  `show ip route vrf <ten>` · `ping vrf <ten> <ip>` · `ip route vrf <ten> …`',
+  '→ Bẫy: "ping không được" nhưng thật ra đang ping ở bảng global, còn IP nằm trong VRF.',
+  '',
+  '## GRE',
+  'Đóng gói được mọi thứ (kể cả multicast → chạy được giao thức định tuyến trong tunnel),',
+  'nhưng KHÔNG mã hoá. Muốn bảo mật phải bọc IPsec.',
+  '⚠️ MTU: GRE thêm 24 byte. Không chỉnh là gói lớn bị phân mảnh hoặc rơi im lặng —',
+  'triệu chứng kinh điển: ping nhỏ OK, mở web/truyền file thì treo.',
+  '→ `ip mtu 1400` + `ip tcp adjust-mss 1360` trên interface tunnel.',
+  '',
+  '## IPsec site-to-site — chẩn đoán theo 2 pha',
+  'Pha 1 (IKE)  : `show crypto isakmp sa` — trạng thái phải là QM_IDLE/ACTIVE.',
+  '  Không lên → sai pre-shared key, lệch thuật toán, sai peer IP, UDP 500/4500 bị chặn.',
+  'Pha 2 (IPsec): `show crypto ipsec sa` — xem encaps/decaps.',
+  '  encaps tăng mà decaps = 0 → mình gửi được, BÊN KIA KHÔNG GỬI VỀ (hoặc về không tới).',
+  '  → Lệch proxy-ID/interesting traffic ACL hai đầu, hoặc NAT làm hỏng chiều về.',
+  '⚠️ ACL "interesting traffic" hai đầu phải ĐỐI XỨNG NHAU (gương), lệch là pha 2 không lên.',
+  '',
+  '## DMVPN',
+  'Hub-spoke tự động qua NHRP, spoke có thể dựng đường trực tiếp với nhau khi cần.',
+  'Phase 1: mọi thứ qua hub. Phase 2/3: spoke-to-spoke trực tiếp.',
+  'Chẩn đoán: `show dmvpn` (trạng thái peer), `show ip nhrp` (ánh xạ).',
+  '⚠️ Spoke sau NAT cần NAT-T (UDP 4500) mở thông.',
+].join('\n');
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MULTICAST
+   ══════════════════════════════════════════════════════════════════════════ */
+KB['multicast'] = [
+  '# MULTICAST cơ bản',
+  '',
+  '## Hai lớp, đừng lẫn',
+  'IGMP : giữa MÁY NHẬN và router — "tôi muốn nhận nhóm này".',
+  'PIM  : giữa CÁC ROUTER — dựng cây phân phối.',
+  'IGMP snooping (trên switch): để switch không phát tràn multicast ra mọi cổng.',
+  '⚠️ Tắt IGMP snooping = multicast tràn như broadcast → có thể làm nghẽn cả mạng.',
+  '',
+  '## Chế độ PIM',
+  'Dense  : phát tràn rồi cắt bớt. Chỉ hợp mạng nhỏ, hầu như không dùng trong thực tế.',
+  'Sparse : chỉ gửi tới nơi có người đăng ký. Cần RP (Rendezvous Point).',
+  '→ Gần như mọi triển khai thật đều dùng Sparse.',
+  '',
+  '## Chẩn đoán theo thứ tự',
+  '1. `show ip igmp groups`  → máy nhận có đăng ký tới router chưa? Không có = vấn đề ở phía máy/switch.',
+  '2. `show ip pim neighbor` → router có thấy nhau chưa?',
+  '3. `show ip mroute`       → cây đã dựng chưa. Đọc cờ: (S,G) đường riêng theo nguồn,',
+  '                            (*,G) đường qua RP. Incoming interface = Null → không có đường về nguồn.',
+  '4. `show ip rpf <ip nguồn>` → RPF là gốc của phần lớn sự cố multicast:',
+  '   đường về nguồn phải ĐI QUA đúng interface nhận, nếu không gói bị vứt dù mọi thứ khác đúng.',
+  '',
+  '## Bẫy hay gặp',
+  'Đường đi và đường về không đối xứng (asymmetric routing) → RPF fail → multicast chết',
+  'trong khi unicast vẫn chạy ngon. Đây là lý do "ping được mà multicast không chạy".',
+].join('\n');
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PHƯƠNG PHÁP CHẨN ĐOÁN
+   ══════════════════════════════════════════════════════════════════════════ */
+KB['chan-doan-co-phuong-phap'] = [
+  '# CHẨN ĐOÁN CÓ PHƯƠNG PHÁP (áp cho mọi ca CCNP)',
+  '',
+  '## Nguyên tắc gốc',
+  'Đi từ TẦNG DƯỚI LÊN. Tầng dưới hỏng thì mọi kết luận ở tầng trên đều vô nghĩa.',
+  'Và mỗi bước phải trả lời được: "output này CHỨNG MINH điều gì?"',
+  '',
+  '## Thang kiểm',
+  'L1 : `show interface` — up/up chưa? CRC/input errors tăng? tốc độ/duplex có khớp?',
+  '     → Lỗi CRC tăng dần = cáp/SFP, không phải cấu hình. Sửa cấu hình bao nhiêu cũng vô ích.',
+  'L2 : `show vlan brief` · `show interfaces trunk` · `show mac address-table`',
+  '     → Cùng VLAN có thấy MAC của nhau không?',
+  'L3 : `show ip route <đích>` — có đường không, đi qua đâu?',
+  '     `ping` + `traceroute` — CHÚ Ý: đi được chưa chắc về được. Phải kiểm CẢ HAI CHIỀU.',
+  'L4+: ACL, NAT, firewall policy — thứ chặn có chọn lọc (ping được, port thì không).',
+  '',
+  '## Những câu hỏi tách được nguyên nhân nhanh nhất',
+  '"Trước đây có chạy không, đổi gì thì hỏng?" → khoanh vùng ngay lập tức.',
+  '"Hỏng TẤT CẢ hay chỉ MỘT SỐ?" → tất cả = hạ tầng chung; một số = ACL/định tuyến/VLAN.',
+  '"Một chiều hay hai chiều?" → một chiều gần như luôn là ACL/NAT/route ngược thiếu.',
+  '"Gói nhỏ được, gói lớn không?" → MTU/phân mảnh (rất hay gặp với tunnel/VPN).',
+  '',
+  '## Sai lầm hay mắc — đọc kỹ phần này',
+  '• Thấy route trong bảng → kết luận "mạng thông". SAI: còn ACL, NAT, chiều về, MTU.',
+  '• Thấy interface up/up → kết luận "L1 tốt". SAI: còn phải xem CRC/lỗi đầu vào.',
+  '• Thấy neighbor FULL/Established → kết luận "định tuyến đúng". SAI: mới là có quan hệ,',
+  '  còn phải xem có ĐÚNG route cần thiết không, và có bị route khác AD nhỏ hơn đè không.',
+  '• Ping được → kết luận "dịch vụ chạy". SAI: ping là ICMP, dịch vụ là TCP/UDP cổng khác.',
+  '• Sửa nhiều thứ cùng lúc → hết hỏng nhưng KHÔNG BIẾT vì sao, lần sau tái diễn.',
+  '  → Đổi MỘT thứ, kiểm, rồi mới đổi tiếp.',
+].join('\n');
+
+window.__KB_ADD('ccnp', KB, [
+  ['ospf-nang-cao',           'OSPF: điều kiện lên láng giềng, kẹt ở EXSTART/2-WAY, loại LSA, area đặc biệt, DR/BDR'],
+  ['eigrp',                   'EIGRP: điều kiện lên hàng xóm, FD/RD và successor, SIA, đọc topology table'],
+  ['bgp',                     'BGP: eBGP/iBGP khác nhau chỗ nào, thứ tự chọn đường, đọc show ip bgp, vì sao không quảng bá'],
+  ['redistribution',          'Redistribution: metric bắt buộc, vòng lặp định tuyến, route-map/tag, thứ tự AD'],
+  ['first-hop-redundancy',    'HSRP/VRRP/GLBP: trạng thái, preempt, tracking, cả hai cùng Active nghĩa là gì'],
+  ['stp-nang-cao',            'STP nâng cao: RSTP/MST, root guard/loop guard/BPDU guard, đọc TCN, loop biểu hiện sao'],
+  ['etherchannel',            'EtherChannel/LACP: cặp mode hợp lệ, cờ trạng thái, thuật toán cân tải, suspended'],
+  ['qos',                     'QoS: DSCP/CoS, trust boundary, shaping vs policing, hàng đợi ưu tiên cho thoại'],
+  ['vrf-tunnel-dmvpn',        'VRF-lite, GRE/IPsec tunnel, DMVPN/NHRP: bẫy MTU, recursive routing'],
+  ['multicast',               'Multicast: PIM sparse/dense, RP, IGMP snooping, vì sao camera/IPTV không tới'],
+  ['chan-doan-co-phuong-phap','Phương pháp chẩn đoán CCNP: chia đôi bài toán, đổi một thứ mỗi lần, thu bằng chứng'],
+]);
+})();

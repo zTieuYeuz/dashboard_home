@@ -517,9 +517,12 @@ function renderInterfaces(ifaces,stats){
   panel.innerHTML='<div class="iface-grid">'+ifaces.map(i=>{
     const speed=i.speed>0?(i.speed>=1000?(i.speed/1000)+'G':i.speed+'M'):'';
     const badge=i.status==='up'?'<span class="badge-up">UP</span>':'<span class="badge-down">DOWN</span>';
-    const ip=i.ip&&i.ip!=='0.0.0.0'?`<div class="iface-ip">${i.ip}</div>`:'';
+    /* esc(): dữ liệu tới từ FortiGate qua webhook — IP/trạng thái interface do người
+       cấu hình thiết bị đặt, không phải hằng số. Dòng TÊN interface ngay dưới đã escape
+       đúng, riêng 2 chỗ này bị quên → vá cho nhất quán (2026-08-15). */
+    const ip=i.ip&&i.ip!=='0.0.0.0'?`<div class="iface-ip">${esc(i.ip)}</div>`:'';
     return`<div class="iface-item">
-      <div class="dot8 ${i.status}"></div>
+      <div class="dot8 ${esc(i.status)}"></div>
       <div class="iface-info">
         <div class="iface-name">${esc(i.name)} ${badge}</div>${ip}
       </div>

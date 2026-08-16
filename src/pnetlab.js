@@ -268,7 +268,10 @@ export async function handlePnetLlm(request, env) {
       headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-  } catch (e) { return j({ error: '9Router không phản hồi: ' + ((e && e.message) || e) }, 502); }
+  /* `j(...)` (chép nhầm từ bản console-serial nơi có alias tên j) → ReferenceError thật:
+     hàm này dùng json(...) ở mọi chỗ khác. Chỉ lộ khi 9Router chết, mà đúng lúc đó lẽ ra
+     phải trả 502 nói rõ lý do thì Worker lại ném lỗi → 500 vô nghĩa. Sửa 2026-08-15. */
+  } catch (e) { return json({ error: '9Router không phản hồi: ' + ((e && e.message) || e) }, 502); }
 
   // Stream thẳng SSE về browser (same-origin, không cần CORS nữa)
   return new Response(upstream.body, {
@@ -578,7 +581,16 @@ export async function handlePnetlabHomeProxy(request, env) {
     if (kl === 'set-cookie') continue;
     rh.set(k, v);
   }
-  rh.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  /* Tài nguyên tĩnh BẤT BIẾN (bundle JS/CSS/font/ảnh có content-hash trong tên) thì cho
+     trình duyệt giữ lại; còn HTML/API vẫn no-store để phần gác quyền và rewrite luôn đúng.
+     Trước đây ép no-store cho MỌI thứ → mỗi lần mở PNETLab là tải lại từ đầu vài MB bundle,
+     vừa chậm vừa tốn CPU Worker cho việc chuyển tiếp. Dùng 'private' (không phải 'public')
+     vì nội dung sau lớp đăng nhập — KHÔNG để CDN dùng chung bản đã tải cho người chưa
+     đăng nhập (đúng bài học đã gặp với /_settings/ và /downloads/). (2026-08-16) */
+  const _batBien = /\.(js|css|woff2?|ttf|otf|png|jpe?g|gif|svg|webp|ico|map)(\?|$)/i.test(subPath);
+  rh.set('Cache-Control', _batBien
+    ? 'private, max-age=86400'
+    : 'no-store, no-cache, must-revalidate');
 
   // Rewrite Set-Cookie: bỏ Domain, ép SameSite=None;Secure (bắt buộc vì chạy trong iframe).
   // ⚠️ PHẢI dùng getSetCookie() — `Headers.getAll()` KHÔNG tồn tại trên runtime Workers hiện đại,
@@ -624,6 +636,25 @@ export async function handlePnetlabHomeProxy(request, env) {
   // nhảy ra ngoài phạm vi đã bypass. Áp cho MỌI response text/javascript (không chỉ functions.js
   // — PNETLab có thể lặp lại pattern này ở bundle khác, và chuỗi đủ đặc thù để không đụng nhầm gì).
   if (ct.includes('javascript')) {
+    /* ⚠️ CHẶN LẶP LẠI SỰ CỐ 502 CỦA PROXY n8n (2026-08-09 → vá ở đây 2026-08-16)
+       ─────────────────────────────────────────────────────────────────────────
+       Đọc TRỌN file JS vào bộ nhớ rồi regex chính là khuôn mẫu đã làm proxy n8n vượt
+       hạn mức CPU của Worker → chunk trả 502 → Vue kẹt nửa chừng → cả trang đứng hình.
+       Mất rất lâu mới lần ra vì triệu chứng trông y hệt lỗi mạng.
+
+       KHÁC n8n ở chỗ: phép thay thế dưới đây là CẦN THIẾT THẬT (vá lỗi PNETLab tự nhảy
+       `location.href="/"` sang trang chủ dashboard → dính Cloudflare Access → "This
+       content is blocked"). Nên không bỏ được, chỉ tránh áp lên file to.
+
+       Bỏ qua thư viện bên thứ ba (vendors~*, *.min.js…) và mọi file > 1 MB: chuỗi cần
+       vá là mã ỨNG DỤNG của PNETLab (functions.js, thanh admin…), thư viện ngoài không
+       chứa logic điều hướng riêng của PNETLab. File to lại đúng là loại đốt CPU nhiều nhất. */
+    const _cl = parseInt(upstream.headers.get('Content-Length') || '0', 10);
+    const _laThuVien = /\/vendors[~-]|\/chunk[-.]|\.min\.js(\?|$)|\/runtime[~.-]/i.test(subPath);
+    if (_laThuVien || _cl > 1048576) {
+      /* Chuyển thẳng dạng luồng — không đệm, không regex, gần như 0 CPU. */
+      return new Response(upstream.body, { status: upstream.status, headers: rh });
+    }
     let js = await upstream.text();
     // Bắt mọi biến thể (có/không "window.", khoảng trắng khác nhau, nháy đơn/kép) thay vì chỉ
     // đúng 1 chuỗi — PNETLab lặp lại pattern "về trang chủ chính nó" ở nhiều chỗ khác nhau

@@ -563,6 +563,30 @@ function buildServiceSection(title, pages, permissions, panels, cameras, pfx, se
       body.appendChild(panelSec);
     }
 
+    /* Quyền con dạng `features` — mỗi cái một ô tích đơn giản (bật/tắt), KHÁC panels
+       (panels còn có thêm mức chỉ-xem/toàn-quyền). Dùng cho các mức trợ lý AI:
+       ssh-field-ai-ask/agent/bypass, console-serial-ai-ask/agent/bypass.
+       Trước đây phần này KHÔNG tồn tại → 6 quyền đó không cấp được qua giao diện. */
+    if (page.features) {
+      var featSec = document.createElement('div');
+      featSec.className = 'panels-section';
+      featSec.id = pfx+'-feats-'+page.id;
+      featSec.style.display = (perm !== 'none') ? '' : 'none';
+
+      page.features.forEach(function(f) {
+        var on = (permissions[f.id] || 'none') !== 'none';
+        var row = document.createElement('div');
+        row.className = 'panel-row';
+        row.innerHTML = '<span class="panel-row-name">'+esc(f.name)+'</span>'
+          + '<label class="panel-toggle">'
+          + '<input type="checkbox" class="'+pfx+'-feat-cb" data-perm="'+esc(f.id)+'"'+(on?' checked':'')+'>'
+          + '<span>Cấp quyền</span></label>';
+        featSec.appendChild(row);
+      });
+
+      body.appendChild(featSec);
+    }
+
     // Camera section (for pages with cameras)
     if (page.hasCameras) {
       var camSec = document.createElement('div');
@@ -634,6 +658,15 @@ function onPermChange(pfx, pageId) {
   // Show/hide panels section
   var panelSec = document.getElementById(pfx+'-panels-'+pageId);
   if (panelSec) panelSec.style.display = (perm !== 'none') ? '' : 'none';
+  /* Quyền con `features` (các mức trợ lý AI): ẩn khi trang bị tắt, và BỎ TÍCH luôn —
+     tắt trang mà vẫn giữ quyền AI thì lúc bật lại quyền tự sống dậy, admin không ngờ.
+     KHÔNG tự tích khi bật trang (khác tool-group): mở được trang không có nghĩa là
+     mặc nhiên được cho AI tự gõ lệnh vào thiết bị — phải admin chủ động cấp. */
+  var featSec = document.getElementById(pfx+'-feats-'+pageId);
+  if (featSec) {
+    featSec.style.display = (perm !== 'none') ? '' : 'none';
+    if (perm === 'none') featSec.querySelectorAll('input[type="checkbox"]').forEach(function(cb){ cb.checked = false; });
+  }
   // Show/hide camera section
   var camSec = document.getElementById(pfx+'-cams-'+pageId);
   if (camSec) camSec.style.display = (perm !== 'none') ? '' : 'none';
@@ -705,6 +738,21 @@ function onCamHomeViewChange(pfx) {
    Adding a new service: just add it to SERVICE_HOME_PAGES or SERVICE_MOVI_PAGES —
    this function iterates both arrays dynamically, nothing else to change here.
 ── */
+/* Thu quyền con dạng `features` (các mức trợ lý AI). Gọi cho CẢ hai khối Home và Movi
+   để sau này thêm service Movi có features cũng chạy sẵn, khỏi phải nhớ sửa lại.
+
+   ⚠️ PHẢI luôn ghi giá trị — kể cả khi trang bị tắt (ghi 'none'). Bỏ trống thì khoá đó
+   biến mất khỏi object quyền gửi lên server, đúng cái đã làm 6 quyền AI bị xoá âm thầm
+   mỗi lần admin bấm Lưu (bug phát hiện 2026-08-15). */
+function collectFeatures(page, permissions, pfx) {
+  if (!page.features) return;
+  var tat = (permissions[page.id] || 'none') === 'none';
+  page.features.forEach(function(f) {
+    var cb = document.querySelector('.' + pfx + '-feat-cb[data-perm="' + f.id + '"]');
+    permissions[f.id] = (!tat && cb && cb.checked) ? 'read' : 'none';
+  });
+}
+
 function collectPermissions(pfx) {
   var permissions = {};
   var panels = {};
@@ -759,6 +807,7 @@ function collectPermissions(pfx) {
     if (page.type === 'group-header') return;
     var radio = document.querySelector('input[name="'+pfx+'-perm-'+page.id+'"]:checked');
     permissions[page.id] = radio ? radio.value : 'none';
+    collectFeatures(page, permissions, pfx);
     if (page.hasCameras && permissions[page.id] !== 'none') {
       collectCamsFrom(pfx+'-cams-'+page.id);
     }
@@ -777,6 +826,7 @@ function collectPermissions(pfx) {
     }
     var radio = document.querySelector('input[name="'+pfx+'-perm-'+page.id+'"]:checked');
     permissions[page.id] = radio ? radio.value : 'none';
+    collectFeatures(page, permissions, pfx);
     // Sub-panels (Meraki, Topology, FortiGate Movi…)
     if (page.panels && permissions[page.id] !== 'none') {
       page.panels.forEach(function(panel){

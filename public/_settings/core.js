@@ -199,6 +199,13 @@ function _regToPage(svc) {
     return page;
   }
   if (svc.panels) page.panels = svc.panels;
+  /* ⚠️ BUG THẬT (phát hiện 2026-08-15 khi rà soát): `features` thường (KHÔNG kèm
+     customUI) trước đây bị BỎ QUA hoàn toàn ở đây. Hậu quả: 6 quyền con AI —
+     ssh-field-ai-ask/agent/bypass và console-serial-ai-ask/agent/bypass — không có
+     ô tích nào trong Settings nên KHÔNG CẤP ĐƯỢC, và vì collectPermissions dựng lại
+     object quyền từ giao diện nên chúng còn bị XOÁ ÂM THẦM mỗi lần admin bấm Lưu.
+     Chỉ nhánh customUI==='tool-group' ở trên mới đọc svc.features, nhánh thường thì không. */
+  if (svc.features && svc.features.length) page.features = svc.features;
   if (svc.hasCameras) { page.hasCameras = true; page.camClass = svc.camClass || (svc.id + '-cam-cb'); }
   return page;
 }

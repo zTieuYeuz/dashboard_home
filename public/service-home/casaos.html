@@ -301,7 +301,10 @@ function renderSystem(sys) {
   set('net-rows', `
     <div class="info-row" style="margin-bottom:8px">
       <span class="info-key">Interface</span>
-      <span class="info-val">${n.name||'—'} &nbsp;<span style="color:${stateColor};font-size:10px">● ${(n.state||'—').toUpperCase()}</span></span>
+      <!-- esc(): tên interface + trạng thái đến từ CasaOS, do cấu hình máy chủ quyết định,
+           không phải hằng số trong code → phải escape trước khi ghép vào HTML (2026-08-15).
+           stateColor là hằng nội bộ (var(--green)/var(--red)) nên an toàn, để nguyên. -->
+      <span class="info-val">${esc(n.name||'—')} &nbsp;<span style="color:${stateColor};font-size:10px">● ${esc((n.state||'—').toUpperCase())}</span></span>
     </div>
     <div class="net-grid">
       <div class="net-item"><div class="net-label">↑ Tổng gửi</div><div class="net-val net-up">${n.sentGB.toFixed(2)} GB</div></div>

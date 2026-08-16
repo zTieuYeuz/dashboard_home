@@ -10,6 +10,7 @@ import {
   hasPerm,
   json,
   logActivity,
+  swKillSwitch,
   touchSession
 } from './core.js';
 
@@ -211,6 +212,12 @@ export async function handleTermixProxy(request, env, opts) {
     await touchSession(env, session, _hrs);
     return new Response('ok', { status: 200, headers: { 'Cache-Control': 'no-store' } });
   }
+  /* ── Diệt service worker của Termix trong đường proxy ──────────────────────
+     Không chuyển tiếp sw.js lên Termix nữa mà trả bản TỰ HUỶ. Lý do đầy đủ ở
+     swKillSwitch() (src/core.js): SW cài dở dang trong scope proxy làm request
+     treo vô hạn mà Network không báo lỗi, và phục vụ asset cũ đã cache. */
+  if (/^\/(sw|service-worker)\.js$/.test(subPath)) return swKillSwitch();
+
   const target  = `${termixOrigin}${subPath}${reqUrl.search}`;
 
   // Upstream auth headers
@@ -280,10 +287,21 @@ export async function handleTermixProxy(request, env, opts) {
     server.accept();
     upstream.accept();
 
-    /* Nối 2 chiều bằng helper dùng chung (src/core.js) — trong đó có bản vá BẪY MÃ ĐÓNG 1006,
-       chính là nguyên nhân RemoteDesktop "lâu lâu treo cứng, phải restart phiên". Xem chú thích
-       đầy đủ ở bridgeWebSocket(). */
-    bridgeWebSocket(server, upstream);
+    /* Nối 2 chiều bằng helper dùng chung (src/core.js) — trong đó có bản vá BẪY MÃ ĐÓNG 1006.
+       Xem chú thích đầy đủ ở bridgeWebSocket().
+
+       keepAlive: chỉ bật cho RemoteDesktop (nhận ra qua subprotocol 'guacamole'). Cloudflare
+       cắt WebSocket im lặng quá ~100 giây; màn hình từ xa đứng yên là im lặng thật → đứt mà
+       KHÔNG có lỗi nào ở Network, ảnh cuối vẫn nằm đó → nhìn hệt như treo, phải restart phiên.
+       '3.nop;' là lệnh "không làm gì" của chính giao thức Guacamole, sinh ra để giữ kết nối.
+       KHÔNG bật cho SSH: giao thức khác, nhét gói lạ vào là hỏng phiên.
+
+       tag: BẮT BUỘC phải có, nếu không thì lúc treo `wrangler tail` chẳng thấy gì để lần. */
+    const _laRdp = /guacamole/i.test(swp || '');
+    bridgeWebSocket(server, upstream, {
+      tag: _laRdp ? 'termix-rdp' : 'termix-ws',
+      keepAlive: _laRdp ? { ms: 45000, data: '3.nop;' } : null,
+    });
 
     // Pass Sec-WebSocket-Protocol back — Guacamole requires server to echo the subprotocol
     const wsRespHeaders = new Headers();
@@ -394,7 +412,14 @@ export async function handleTermixProxy(request, env, opts) {
 
   // Build response headers
   const ct  = upstream.headers.get('Content-Type') || 'application/octet-stream';
-  const rh  = new Headers({ 'Content-Type': ct, 'Cache-Control': 'no-cache' });
+  /* Asset tĩnh BẤT BIẾN (bundle Vite có content-hash trong tên) → cho trình duyệt giữ lại.
+     Trước đây ép no-cache cho MỌI response nên mỗi lần mở Termix là tải lại toàn bộ bundle,
+     dù nội dung y hệt. 'private' chứ không 'public': nội dung nằm sau lớp đăng nhập, KHÔNG
+     để CDN phục vụ bản đã tải cho người chưa đăng nhập. HTML/API giữ no-cache như cũ để
+     phần tiêm script và gác quyền luôn chạy đúng. (2026-08-16) */
+  const _batBienTx = /\.(js|css|woff2?|ttf|otf|png|jpe?g|gif|svg|webp|ico|map)(\?|$)/i.test(subPath);
+  const rh  = new Headers({ 'Content-Type': ct,
+    'Cache-Control': _batBienTx ? 'private, max-age=86400' : 'no-cache' });
   // ⚠️ PHẢI dùng getSetCookie() — `Headers.getAll()` KHÔNG tồn tại trên runtime Workers hiện đại,
   // nên `typeof headers.getAll === 'function' ? ... : ...` luôn rơi vào nhánh fallback: chỉ lấy được
   // 1 header set-cookie gộp (hoặc rỗng) → mất cookie phiên. Đúng lỗi đã gặp thật ở proxy PNETLab
@@ -447,6 +472,27 @@ export async function handleTermixProxy(request, env, opts) {
     console.log('[proxy-patcher] window.top override OK (self===top)');
   }catch(e){ console.warn('[proxy-patcher] window.top override failed',e); }
   try{ window.IS_ELECTRON_WEBVIEW=false; }catch(e){}
+  /* [Diệt service worker] Máy chủ đã trả bản tự huỷ ở B+'/sw.js', nhưng bản CŨ đang nằm
+     trong máy người dùng vẫn chạy TRƯỚC mọi JS của trang cho tới lần kiểm cập nhật kế tiếp.
+     Nên gỡ luôn tại đây + xoá cache nó để lại (cache cũ = deploy xong vẫn chạy code cũ),
+     và chặn đăng ký mới. Lý do đầy đủ: swKillSwitch() trong src/core.js. */
+  try{
+    if(navigator.serviceWorker){
+      navigator.serviceWorker.getRegistrations().then(function(rs){
+        var daGo=false;
+        rs.forEach(function(r){
+          if(String(r.scope).indexOf(B)!==-1){ daGo=true; r.unregister(); console.warn('[proxy-patcher] đã gỡ service worker',r.scope); }
+        });
+        if(daGo&&window.caches&&caches.keys){
+          caches.keys().then(function(ks){ ks.forEach(function(k){ caches.delete(k); }); }).catch(function(){});
+        }
+      }).catch(function(){});
+      navigator.serviceWorker.register=function(){
+        console.warn('[proxy-patcher] chặn đăng ký service worker trong proxy (cố ý)');
+        return Promise.reject(new Error('service worker bị chặn trong proxy'));
+      };
+    }
+  }catch(e){ console.warn('[proxy-patcher] chặn service worker thất bại',e); }
   var WSMODE='${opts.wsMode || 'direct'}';
   console.log('[proxy-patcher] loaded B='+B);
   function _stripB(p){ return (p.indexOf(B)===0)?(p.slice(B.length)||'/'):p; }

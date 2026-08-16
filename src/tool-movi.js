@@ -9,7 +9,8 @@ import {
   isAdminUser,
   json,
   logActivity,
-  moviN8nAuth
+  moviN8nAuth,
+  _constEq,
 } from './core.js';
 
 export async function handleToolMoviCreateUser(request, env, session, ctx) {
@@ -402,7 +403,9 @@ export async function handleFgPolicyDone(request, env) {
   // Lớp 2: Verify Basic Auth từ n8n (Lớp 1 là CF Access Service Token ở edge)
   const authH = request.headers.get('Authorization') || '';
   try {
-    if (authH !== moviN8nAuth(env)) return json({ error: 'Unauthorized' }, 401);
+    /* So sánh theo thời gian HẰNG SỐ: !== thoát sớm ở ký tự đầu khác nhau, đo thời gian
+       phản hồi nhiều lần là dò được dần bí mật. Dùng _constEq có sẵn ở core.js (2026-08-15). */
+    if (!_constEq(authH, moviN8nAuth(env))) return json({ error: 'Unauthorized' }, 401);
   } catch { return json({ error: 'Auth config error' }, 500); }
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const callbackToken = (body.callbackToken || '').trim();

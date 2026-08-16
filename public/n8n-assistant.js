@@ -429,9 +429,11 @@
   /* ── UI (tông màu hồng cam — gần màu thương hiệu n8n) ── */
   var css = document.createElement('style');
   css.textContent =
-    /* Góc PHẢI dưới, chừa chỗ cho nút tròn của dashboard (#wf-fab, right:16px rộng 34px) —
-       nút AI nằm ngay BÊN TRÁI nó thay vì đè lên, theo đúng chỗ anh Thoại khoanh. */
-    '#n8nai-btn{position:fixed;bottom:20px;right:64px;height:44px;width:auto;padding:0 14px;display:inline-flex;align-items:center;gap:6px;' +
+    /* Góc PHẢI dưới, NẰM CÙNG HÀNG và ngay BÊN TRÁI nút tròn "+" — giống bố cục các trang
+       khác (anh Thoại chốt 2026-08-16: "AI nằm kế bên dấu +, không nằm trên").
+       Nút "+" của n8n rộng ~44px đặt cách mép phải ~18px → mép trái nó ở ~62px. Để 78px cho
+       hở đúng 16px. Bản cũ để 64px nên chỉ hở 4px, nhìn dính vào nhau. */
+    '#n8nai-btn{position:fixed;bottom:20px;right:78px;height:44px;width:auto;padding:0 14px;display:inline-flex;align-items:center;gap:6px;' +
     'border:none;border-radius:22px;cursor:pointer;background:linear-gradient(135deg,#ff6d5a,#ea4b6a);color:#3a0a10;font-size:14px;font-weight:700;' +
     'box-shadow:0 3px 14px rgba(0,0,0,.4);z-index:2147483000;transition:transform .12s}' +
     '#n8nai-btn:hover{transform:translateY(-1px)}' +

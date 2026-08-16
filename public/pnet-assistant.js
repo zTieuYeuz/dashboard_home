@@ -52,6 +52,47 @@
   }
   function nodeStatus(s) { return ({ 0: 'stopped', 1: 'building', 2: 'running', 3: 'running' })[s] || String(s); }
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     CHE BÍ MẬT trước khi gửi lên LLM — THÊM MỚI 2026-08-15
+     ──────────────────────────────────────────────────────────────────────────
+     Trước đó file này KHÔNG hề có lớp che nào, trong khi get_config trả về nguyên
+     startup-config (enable secret, mật khẩu user, snmp community, khoá VPN…) và
+     run_console trả về output console thô — tất cả đi thẳng lên 9Router.
+     Server cũng không che (đã kiểm: không có redact nào trong worker.js/src) nên
+     đây là lớp DUY NHẤT.
+
+     ⚠️ BẢN NÀY PHẢI GIỐNG HỆT 3 bản kia — có bộ thử ép giống nhau ở scratchpad:
+       public/service-home/ssh-field.js  (bản gốc chuẩn)
+       public/service-home/console-serial.html
+       public/termix-assistant.js
+     Sửa luật ở một nơi thì sửa cả BỐN. Đã có tiền lệ: bỏ quên Termix → rò community
+     và khoá VPN suốt nhiều tháng mà không ai biết.
+
+     ⚠️ Khoảng trắng CHỈ dùng [ \t], TUYỆT ĐỐI KHÔNG \s — \s ăn cả ký tự xuống dòng
+     nên thứ bị che thật ra là TỪ ĐẦU TIÊN CỦA DÒNG SAU (che mất dấu nhắc → AI đọc
+     sai trạng thái thiết bị; đã xảy ra thật 2026-08-06). */
+  var _redacted = false;
+  function _mask() { _redacted = true; return '[ĐÃ CHE]'; }
+  function redact(s) {
+    if (!s) return s;
+    _redacted = false;
+    return String(s)
+      .replace(/-----BEGIN [^-\n]*PRIVATE KEY-----[\s\S]*?-----END [^-\n]*PRIVATE KEY-----/g, function () { return _mask() + ' (private key)'; })
+      .replace(/\b((?:password|secret))([ \t]+\d[ \t]+)(\S+)/gi, function (m, k, mid) { return k + mid + _mask(); })
+      .replace(/([a-z0-9_.\-]*(?:pass(?:word|wd|phrase)?|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|private[_-]?key|auth[_-]?token))([ \t]*[:=][ \t]*)(["']?)([^\s"'&]{3,})(\3)/gi,
+        function (m, k, sep, q) { return k + sep + q + _mask() + q; })
+      .replace(/\b((?:password|passwd|secret|passphrase))([ \t]+)(?:ENC[ \t]+)?(?![ \t]*\d[ \t])(\S{3,})/gi, function (m, k, sp) { return k + sp + _mask(); })
+      .replace(/(Authorization[ \t]*:[ \t]*(?:Bearer|Basic)[ \t]+)(\S+)/gi, function (m, p1) { return p1 + _mask(); })
+      .replace(/\b(set[ \t]+\S*(?:secret|password|passwd|psk)[ \t]+)(?:ENC[ \t]+)?(\S{4,})/gi, function (m, p1) { return p1 + _mask(); })
+      /* Bí mật thiết bị mạng — nhãn không chứa chữ "password"/"secret" nên mọi luật
+         trên đều trượt, dù cầm được là vào được hệ thống. */
+      .replace(/\b((?:snmp-server[ \t]+)?community[ \t]+)(\S{2,})/gi, function (m, p1) { return p1 + _mask(); })
+      .replace(/\b(message-digest-key[ \t]+\d+[ \t]+md5[ \t]+)(?:\d[ \t]+)?(\S{3,})/gi, function (m, p1) { return p1 + _mask(); })
+      .replace(/\b((?:key-string|authentication-key|pre-?shared-key|wpa-psk)[ \t]+)(?:\d[ \t]+)?(?:ENC[ \t]+)?(\S{3,})/gi,
+        function (m, p1) { return p1 + _mask(); })
+      .replace(/\bAKIA[0-9A-Z]{16}\b/g, function () { return _mask() + ' (AWS)'; });
+  }
+
   /* ── Tools (thao tác trên LAB user đang mở — session hiện tại) ── */
   var MUTATING = { start_node: 1, stop_node: 1, export_config: 1, run_console: 1 };
   // Cache danh sách node từ lần get_topology gần nhất — dùng để hiện TÊN node (vd "R2") thay vì
@@ -119,7 +160,13 @@
     get_config: function (p) {
       return pnetGet('/api/labs/session/configs/' + parseInt(p.node_id, 10)).then(function (r) {
         var d = r && r.data; var cfg = (d && typeof d === 'object') ? (d.data || '') : (d || '');
-        return { node_id: p.node_id, config: cfg || '(trống — node chưa có startup config hoặc chưa bật)' };
+        /* ⚠️ PHẢI che trước khi trả về — kết quả tool này bị đẩy nguyên văn vào lịch sử
+           hội thoại rồi gửi lên 9Router. startup-config chứa `enable secret`, mật khẩu
+           user, snmp community, khoá VPN… Trước 2026-08-15 file này KHÔNG có lớp che nào. */
+        var out = redact(cfg || '(trống — node chưa có startup config hoặc chưa bật)');
+        var res = { node_id: p.node_id, config: out };
+        if (_redacted) res.note_baomat = 'Một số chuỗi nhạy cảm (mật khẩu/community/khoá) ĐÃ BỊ CHE trước khi gửi cho bạn. ĐỪNG yêu cầu user gõ lại các giá trị đó.';
+        return res;
       });
     },
     start_node: function (p) { return withId(p, function (id) { return pnetForm('/api/labs/session/nodes/start', { id: id }).then(fmtOk); }); },
@@ -333,7 +380,11 @@
           loops++;
           execTool(tool).then(function (res) {
             note((res.__denied ? '⛔ ' : '⚙️ ') + tool.tool + (res.__denied ? ' (bỏ qua)' : ' ✓'));
-            history.push({ role: 'user', content: '[KẾT QUẢ TOOL ' + tool.tool + ']\n' + JSON.stringify(res) });
+            /* Lưới an toàn CUỐI CÙNG: che một lượt nữa trên toàn bộ kết quả tool trước khi
+               nó thành lịch sử hội thoại gửi lên LLM. get_config đã tự che ở trên, nhưng
+               run_console cũng trả về output console thô (có thể chứa mật khẩu vừa gõ),
+               và tool thêm sau này dễ quên che. Che 2 lần vô hại, để lọt thì không. */
+            history.push({ role: 'user', content: '[KẾT QUẢ TOOL ' + tool.tool + ']\n' + redact(JSON.stringify(res)) });
             bubble = addMsg('pai-a', '…');
             step();
           });
