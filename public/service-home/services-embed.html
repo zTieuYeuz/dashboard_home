@@ -402,6 +402,24 @@ function _siteByEmbed(embedUrl){
      hashchange → trình xử lý ở cuối file dựng lại iframe → vòng lặp tải lại vô tận.
    • Hỏi theo nhịp thay vì bắt sự kiện: n8n là SPA, đổi trang bằng pushState nội bộ, đứng
      ngoài không có sự kiện nào để nghe. */
+/* ⚠️ GOM TIỀN TỐ LẶP — bắt buộc, đừng bỏ.
+   n8n có tật tự nối BASE_PATH vào một đường ĐÃ CÓ SẴN BASE_PATH, ra
+   `/n8n-proxy/n8n-proxy/home/workflows` (tật này ghi sẵn ở worker.js, chỗ thẻ thư mục).
+   Vue Router bóc đúng MỘT tiền tố → còn dư một cái → không khớp route nào → trang 404.
+   Trước đây tật đó chỉ thoáng qua rồi tự khỏi. Nhưng từ khi _theoDoiEmbed ghi đường dẫn
+   vào hash thì nó bị **GHIM LẠI VĨNH VIỄN**: F5 lần nào cũng dựng lại đúng cái đường hỏng
+   → 404 mãi (anh Thoại gặp ngay trên production 2026-08-16).
+   → Phải gom TRƯỚC KHI GHI và TRƯỚC KHI DÙNG. Lấy đoạn đầu của embedUrl làm mốc nên
+     dùng được cho mọi embed cùng nguồn, không đóng đinh riêng cho n8n. */
+function _gomTienTo(u){
+  var s=String(u||'');
+  if(s.charAt(0)!=='/') return s;
+  var seg=s.split('/')[1]||'';
+  if(!seg) return s;
+  var esc=seg.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return s.replace(new RegExp('^(\\/'+esc+')+'), '/'+seg);
+}
+
 var _embedWatch = null;
 function _dungTheoDoiEmbed(){ if(_embedWatch){ clearInterval(_embedWatch); _embedWatch=null; } }
 function _theoDoiEmbed(embedUrl){
@@ -414,7 +432,16 @@ function _theoDoiEmbed(embedUrl){
     try{ var l=f.contentWindow.location; p=l.pathname+l.search; }catch(e){ return; }
     // 'about:blank' cho pathname='blank' — lọc bằng dấu '/' đầu, nếu không nút 🔄 (đổi src
     // qua about:blank rồi trả lại) sẽ ghi '#embed=blank' vào hash và F5 ra trang trắng.
-    if(!p || p.charAt(0)!=='/' || p==='/' || p===_embedUrl) return;
+    if(!p || p.charAt(0)!=='/' || p==='/') return;
+    var sach=_gomTienTo(p);
+    /* Đường bị lặp tiền tố = LỖI CHẮC CHẮN, không phải trang hợp lệ. Lái iframe về đường
+       sạch luôn để người dùng thoát khỏi màn 404 ngay, khỏi phải tự bấm lui. Dùng replace()
+       để không nhét thêm mục vào lịch sử (bấm Back sẽ không rơi lại vào đường hỏng). */
+    if(sach!==p){
+      try{ f.contentWindow.location.replace(sach); }catch(e){}
+      p=sach;
+    }
+    if(p===_embedUrl) return;
     _embedUrl=p;
     try{ history.replaceState(null,'','#embed='+encodeURIComponent(p)); }catch(e){}
   }, 800);
@@ -423,6 +450,11 @@ function _siteUrlByEmbed(embedUrl){ var s=_siteByEmbed(embedUrl); return s ? s.u
 
 /* Dựng iframe full-page cho site embed (dùng chung cho click & restore khi reload). */
 function renderEmbedFull(embedUrl){
+  /* Gom tiền tố lặp NGAY TỪ ĐẦU — hash cũ của anh Thoại có thể đang giữ đường hỏng
+     (/n8n-proxy/n8n-proxy/...). Không gom ở đây thì lần nạp nào cũng dựng iframe bằng
+     đường hỏng đó. Xem chú thích đầy đủ ở _gomTienTo(). */
+  embedUrl = _gomTienTo(embedUrl);
+  _embedUrl = embedUrl;
   _enterEmbedMode(embedUrl);
   var sb=document.querySelector('.sidebar'), mn=document.querySelector('.main');
   if(sb){ sb.style.display=''; sb.classList.add('collapsed'); sb.classList.remove('expanded'); }
