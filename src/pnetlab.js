@@ -531,7 +531,21 @@ export async function handlePnetlabHomeProxy(request, env) {
        ném lỗi → `catch {}` nuốt sạch → phiên Guacamole vẫn không được giải phóng đúng như
        triệu chứng cũ. Nhánh 'close' còn tệ hơn: rớt bất thường là code 1006, cũng bị cấm y vậy.
        bridgeWebSocket() quy mọi mã lạ về 1000 nên lệnh đóng mới thật sự chạy. */
-    bridgeWebSocket(server, upSock, { tag: 'pnet-ws' });
+    /* keepAlive (thêm 2026-08-17): Cloudflare cắt WebSocket KHÔNG có lưu lượng sau khoảng
+       100 giây. Console lab rất hay im lặng lâu — gõ một lệnh rồi ngồi đọc output, hoặc để
+       đó chạy ping/debug rồi quay đi làm việc khác. Im lặng đủ lâu là CF đóng, mà kiểu đứt
+       này KHÔNG sinh lỗi nào ở tab Network và chữ trên màn hình vẫn còn nguyên → nhìn hệt
+       như "treo", phải bấm reconnect. Khớp với mô tả của anh Thoại: cỡ 20–45 phút một lần.
+
+       '3.nop;' là lệnh "không làm gì" do CHÍNH giao thức Guacamole định nghĩa để giữ kết nối
+       — không phải mẹo tự chế. Chỉ gửi VỀ PHÍA TRÌNH DUYỆT, không đẩy ngược lên guacd.
+       Gác theo subprotocol để nếu sau này PNETLab có WebSocket khác (không phải Guacamole)
+       thì tuyệt đối không bị chèn gói lạ vào. Xem chú thích đầy đủ ở bridgeWebSocket(). */
+    const _laGuac = /guacamole/i.test(swp || '');
+    bridgeWebSocket(server, upSock, {
+      tag: 'pnet-ws',
+      keepAlive: _laGuac ? { ms: 45000, data: '3.nop;' } : null,
+    });
 
     const wsRespHeaders = new Headers();
     const echoSwp = upResp.headers.get('Sec-WebSocket-Protocol') || swp;
@@ -661,6 +675,28 @@ export async function handlePnetlabHomeProxy(request, env) {
     // (postLogin() sau khi đóng lab, nút "Main" trên thanh admin...), không chỉ đúng 1 dòng.
     js = js.replace(/(window\.)?location\.href\s*=\s*(["'])\/\2/g,
       (m, w, q) => `${w || ''}location.href = ${q}${PNETLAB_HOME_ENTRY}${q}`);
+
+    /* ⚠️ NẮN LẠI ĐỊA CHỈ TRỢ LÝ AI CÒN SÓT TRONG MÃ CỦA PNETLab (2026-08-17)
+       ─────────────────────────────────────────────────────────────────────
+       Hồi mới làm, dòng loader trợ lý được chèn TAY vào cuối
+       `/opt/unetlab/html/store/public/assets/js/default.js` trên máy PNETLab, và địa chỉ
+       lúc đó trỏ về STAGING (`dashboard-homelab-staging.*.workers.dev`). Sau này proxy đã
+       tự tiêm thẻ script (xem chỗ chèn vào `</head>` bên dưới) nên dòng đó thành thừa —
+       nhưng KHÔNG AI GỠ, và nó vẫn nằm trong file.
+
+       Hậu quả trên PRODUCTION (anh Thoại báo 2026-08-17):
+       1. Trình duyệt tải script từ tên miền `*.workers.dev` → Symantec Endpoint Protection
+          chặn thẳng ("Malicious Site Blocked") vì tên miền đó hay bị lạm dụng.
+       2. NGUY HIỂM HƠN: `proxyBase()` trong pnet-assistant.js lấy origin từ THẺ SCRIPT ĐẦU
+          TIÊN nó tìm thấy → vớ phải thẻ staging → mọi lệnh gọi `/api/pnet-llm` và
+          `/api/pnet-console` của người dùng PRODUCTION bắn sang máy chủ STAGING.
+
+       Nắn mọi địa chỉ tuyệt đối trỏ tới pnet-assistant.js về đúng origin đang phục vụ.
+       Nạp 2 lần vẫn vô hại vì chính file đó có chốt `if (window.__PNET_AI__) return;`.
+       Đây là LƯỚI AN TOÀN — vẫn nên gỡ hẳn dòng loader trên máy PNETLab. */
+    js = js.replace(/https?:\/\/[^"'\s)]*\/pnet-assistant\.js/g,
+      new URL(request.url).origin + '/pnet-assistant.js');
+
     rh.set('Content-Type', ct);
     return new Response(js, { status: upstream.status, headers: rh });
   }
@@ -734,6 +770,11 @@ XMLHttpRequest.prototype.open=function(m,u){ return _X.apply(this,[m,rw(u)].conc
   // BỎ QUA `/html5/*`: đó là console Guacamole chạy trong IFRAME CON bên trong cửa sổ Terminal
   // của trang topology. Tiêm vào đó thì nút 🤖 mọc thêm lần nữa ngay giữa cửa sổ Terminal, trong
   // khi trang topology (iframe cha) đã có sẵn nút rồi → thừa và che mất màn hình console.
+  /* Nắn địa chỉ trợ lý còn sót trong HTML — cùng lý do với bản vá ở nhánh JS phía trên
+     (thẻ script trỏ về staging làm Symantec chặn VÀ làm proxyBase() bắn API sang staging). */
+  html = html.replace(/https?:\/\/[^"'\s)]*\/pnet-assistant\.js/g,
+    new URL(request.url).origin + '/pnet-assistant.js');
+
   if (!/^\/html5(\/|$)/.test(subPath)) {
     html = html.replace('</head>',
       '<script src="' + new URL(request.url).origin + '/pnet-assistant.js" defer></' + 'script></head>');
