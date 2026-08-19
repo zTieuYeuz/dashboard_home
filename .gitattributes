@@ -1,0 +1,16 @@
+# ──────────────────────────────────────────────────────────────────────────
+# Ép LF cho các file chạy BÊN TRONG Linux container.
+# Repo này được sửa/commit từ Windows → nếu để CRLF lọt vào, shell script sẽ
+# lỗi "set: -\r invalid option", "cp: No such file", Chrome nhận \r làm tham số.
+# Giữ các file dưới đây LUÔN là LF dù checkout trên Windows hay Linux.
+# ──────────────────────────────────────────────────────────────────────────
+
+# Mọi shell script
+*.sh text eol=lf
+
+# Navigator chạy trong Chrome Pool container
+docker/fortigate-pool/navigator.py text eol=lf
+
+# Dockerfile / entrypoint thường gặp
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
