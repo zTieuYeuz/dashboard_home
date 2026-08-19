@@ -64,3 +64,5 @@ Thumbs.db
 # vào git cho khỏi phình repo. Dựng lại bằng: cd _infra/dash-ssh && npm run build
 public/downloads/*.exe
 public/downloads/*.zip
+.tmp.driveupload/
+.tmp.driveupload/
