@@ -1,9 +1,0 @@
-{
-  "name": "dashboard-system",
-  "private": true,
-  "type": "module",
-  "description": "Cloudflare Worker cho dashboard homelab — ES module thuần, wrangler tự bundle. node_modules chỉ phục vụ đóng gói lúc deploy, KHÔNG có build step riêng.",
-  "dependencies": {
-    "@simplewebauthn/server": "^13.1.1"
-  }
-}
