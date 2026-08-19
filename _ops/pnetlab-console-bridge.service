@@ -1,0 +1,14 @@
+[Unit]
+Description=PNETLab Console Bridge (telnet localhost cho AI)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/pnetlab-console-bridge.py
+Restart=always
+RestartSec=3
+EnvironmentFile=/etc/pnetlab-console-bridge.env
+User=root
+
+[Install]
+WantedBy=multi-user.target

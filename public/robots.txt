@@ -1,0 +1,49 @@
+# Dashboard quản trị nội bộ — KHÔNG dành cho công cụ tìm kiếm hay bot cào dữ liệu.
+# Gần như mọi trang đều yêu cầu đăng nhập; phần công khai cũng không có gì để lập chỉ mục.
+#
+# Đây chỉ là LỜI ĐỀ NGHỊ — bot tử tế mới tuân thủ. Lớp chặn THẬT nằm ở worker.js
+# (chặn theo tên User-Agent, ngay đầu hàm fetch). Sửa danh sách thì sửa CẢ HAI nơi.
+
+# ── Bot huấn luyện mô hình AI ──
+User-agent: GPTBot
+Disallow: /
+User-agent: OAI-SearchBot
+Disallow: /
+User-agent: ChatGPT-User
+Disallow: /
+User-agent: ClaudeBot
+Disallow: /
+User-agent: Claude-Web
+Disallow: /
+User-agent: anthropic-ai
+Disallow: /
+User-agent: Google-Extended
+Disallow: /
+User-agent: Applebot-Extended
+Disallow: /
+User-agent: CCBot
+Disallow: /
+User-agent: Bytespider
+Disallow: /
+User-agent: PerplexityBot
+Disallow: /
+User-agent: Diffbot
+Disallow: /
+User-agent: cohere-ai
+Disallow: /
+User-agent: Meta-ExternalAgent
+Disallow: /
+User-agent: FacebookBot
+Disallow: /
+User-agent: Amazonbot
+Disallow: /
+User-agent: Omgilibot
+Disallow: /
+User-agent: ImagesiftBot
+Disallow: /
+User-agent: YouBot
+Disallow: /
+
+# ── Mọi thứ còn lại (kể cả Googlebot/Bingbot): đây là hệ thống nội bộ, không cần lập chỉ mục ──
+User-agent: *
+Disallow: /
