@@ -100,6 +100,12 @@
 var API_BASE = '/api/vmware01-movi';
 var PERM_KEY = 'vmware01-movi';
 </script>
-<script src="/service-movi/_shared/vmware-movi.js"></script>
+<!-- Logic VMware chuyển sang /_shared/ (gốc) ngày 2026-08-20 để trang ESXi bên
+     Service Home dùng chung được mà KHÔNG phải phụ thuộc vào thư mục service-movi/
+     — anh Thoại muốn giữ Home và Movi tách bạch, có thể xoá hẳn Movi sau này.
+     common.js lo phần khung trang (đổi giao diện sáng/tối + đồng hồ); trước đây
+     phần này nằm lẫn trong file vmware, đã tách ra để khỏi gắn trùng trình xử lý. -->
+<script src="/service-home/_shared/common.js"></script>
+<script src="/_shared/vmware.js"></script>
 </body>
 </html>

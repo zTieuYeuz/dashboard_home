@@ -1,3 +1,70 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   worker.js — CỬA VÀO DUY NHẤT của toàn dashboard (Cloudflare Worker)
+   ───────────────────────────────────────────────────────────────────────────
+   MỌI request đều đi qua đây trước (wrangler.toml đặt `run_worker_first`), kể
+   cả file tĩnh — nhờ vậy lớp gác quyền + chèn thanh điều hướng mới áp được cho
+   cả trang HTML. File này ~4.500 dòng, 146 route. Mục lục bên dưới để khỏi phải
+   cuộn mò.
+
+   ───────────────────────────────────────────────────────────────────────────
+   BẢN ĐỒ FILE — cần sửa gì thì mở file nào
+
+     worker.js           định tuyến + đăng nhập/MFA/SSO + quản trị user/nhóm
+                         + proxy n8n + các đoạn giao diện chèn vào mọi trang
+     src/core.js         NỀN TẢNG dùng chung: phiên, quyền, mã hoá mật khẩu,
+                         rate-limit, ghi log, bridgeWebSocket, swKillSwitch
+     src/permissions-registry.js   ⭐ KHAI BÁO QUYỀN — nguồn DUY NHẤT, thêm
+                         service mới sửa ở đây (đọc chú thích đầu file đó trước)
+     src/home-services.js   dịch vụ NHÀ: CasaOS, ESXi, FortiGate, ASUS, RustDesk
+     src/meraki.js · src/movi-fortigate.js · src/tool-movi.js   dịch vụ MOVI
+     src/termix.js · src/pnetlab.js · src/proxy.js   các proxy (SSH/RDP, lab, Chrome Pool)
+     src/console-serial.js · src/kb-network.js      Web Console + kho kiến thức mạng
+     src/webauthn.js     đăng nhập bằng passkey
+     src/n8n-ai.js · src/camera-home.js · src/net-topology.js
+     src/ai/*.js         hệ AI: mcp.js (tool) · reads.js (đọc) · actions.js
+                         (hành động) · movi.js · review.js (tự rà soát hằng ngày)
+
+   ───────────────────────────────────────────────────────────────────────────
+   MỤC LỤC worker.js (số dòng có thể trôi — tìm theo TÊN HÀM cho chắc)
+
+     ~346   handleLogin()              đăng nhập: mật khẩu, MFA, mã khôi phục
+     ~1389  handleUpdateUserGroup()    ⚠️ có lớp chặn LEO THANG QUYỀN, đọc kỹ
+                                       chú thích trước khi sửa
+     ~1890  handleMicrosoftCallback()  đăng nhập Microsoft SSO
+     ~2363  THEME_TOGGLE / WAYFIND_NAV / DATA_REFRESH / PANEL_REFRESH
+                                       4 mẩu HTML+CSS chèn vào MỌI trang
+     ~2706  injectUser()               chèn thanh điều hướng + gác quyền trang
+     ~3023  SERVICES_EMBED_TREE        danh sách site trong Services Hub
+     ~3460  handleN8nHomeProxy()       proxy n8n (⚠️ nhiều bẫy, xem chú thích)
+     ~4024  export default { fetch }   BỘ ĐỊNH TUYẾN — bắt đầu đọc từ đây
+
+   ───────────────────────────────────────────────────────────────────────────
+   NHÓM ROUTE (146 route, gom theo tiền tố)
+
+     /api/auth/*        17   đăng nhập, đăng xuất, MFA, đổi mật khẩu, passkey
+     /api/admin/*       17   quản trị user/nhóm/quyền/cấu hình/AI
+     /api/tool-movi/*   12   bộ công cụ Movi (tạo user, tra tài sản…)
+     /api/ai/*           8   AI đọc dữ liệu + thực thi hành động
+     /api/console-relay/* 7  chia sẻ phiên console hiện trường
+     còn lại                 mỗi dịch vụ vài route: n8n, asus, fortigate,
+                             vmware, meraki, rustdesk, pnetlab, termix…
+
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ QUY TẮC BẮT BUỘC KHI SỬA FILE NÀY
+
+     1. Thêm quyền/service mới → sửa `src/permissions-registry.js`, KHÔNG rải
+        khoá quyền lung tung. Quyền còn được dùng ở 9 nơi khác nhau, quên một
+        chỗ thì KHÔNG có lỗi nào báo cả — xem memory `perm_role_checklist`.
+     2. Gác quyền phải ở SERVER (`hasPerm`). Ẩn menu chỉ để cho gọn giao diện,
+        KHÔNG phải bảo mật.
+     3. Proxy: KHÔNG `await res.text()` rồi regex lên tài nguyên có thể lớn —
+        vượt hạn mức CPU của Worker → 502 → app kẹt nửa chừng, mà triệu chứng
+        trông y hệt lỗi mạng (đã mất cả buổi vì lỗi này ở proxy n8n).
+     4. WebSocket: dùng `bridgeWebSocket()` ở core.js, đừng tự viết lại — bản
+        tự viết nào cũng dính bẫy mã đóng 1006.
+     5. Deploy: chỉ `--config wrangler.staging.toml`. Production do anh Thoại
+        tự chạy.
+   ═══════════════════════════════════════════════════════════════════════════ */
 import {
   ALL_SERVICES,
   DEFAULT_CAMERAS_MOVI,

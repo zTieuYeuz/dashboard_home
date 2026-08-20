@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi" data-theme="dark">
 <head>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
@@ -314,6 +314,32 @@ var _authPopup = null;       // popup xác thực CF Access đang mở (đóng k
 var _groupCollapsed = {};
 var _siteTreeOpen = {};  // per-folder collapsed state; built after tree loads
 
+/* ⚠️ CHỐNG VẼ LẠI HAI LẦN — sửa 2026-08-20, đọc kỹ trước khi đụng vào hash.
+
+   Trình xử lý 'hashchange' ở cuối file CHỈ dành cho nút Lùi/Tiến của trình duyệt.
+   Nhưng trang cũng TỰ đổi hash mỗi lần chọn dịch vụ (selectSite/selectSiteEmbed/
+   selectService) → hashchange bắn theo → toàn bộ renderMain() chạy LẦN THỨ HAI.
+
+   Hậu quả thật đã đo được bằng log (anh Thoại 2026-08-20): bấm CasaOS một lần thì
+   ensurePoolSlot() chạy 2 lần → mở 2 popup xác thực → code chỉ giữ tham chiếu tới
+   1 cái → đóng đúng cái nó giữ, cái còn lại thành MỒ CÔI nằm lại trên màn hình,
+   người dùng phải tự tay đóng. Vết gọi trong log:
+       selectSite:493 → hashchange → renderMain → ensurePoolSlot → _poolAuthPopup
+       selectSite:495 →              renderMain → ensurePoolSlot → _poolAuthPopup
+
+   Ngoài popup, vẽ lại 2 lần còn đập bỏ DOM vừa dựng (khối #poolStream) rồi dựng lại
+   → tốn công vô ích và dễ sinh lỗi khó lần.
+
+   → Mọi chỗ tự đổi hash PHẢI gọi _datHash() thay vì gán thẳng window.location.hash. */
+var _boQuaHashKeTiep = false;
+function _datHash(h){
+  /* Hash không đổi thì trình duyệt KHÔNG bắn hashchange — nếu cứ bật cờ thì lần
+     hashchange THẬT kế tiếp (người dùng bấm Lùi) sẽ bị nuốt oan. Nên phải kiểm trước. */
+  if (window.location.hash.replace('#', '') === h) return;
+  _boQuaHashKeTiep = true;
+  window.location.hash = h;
+}
+
 function loadSiteTree(){
   fetch('/api/services-embed-config', { cache:'no-store' })
     .then(function(r){ return r.json(); })
@@ -333,8 +359,7 @@ function toggleSiteFolder(folder){ _siteTreeOpen[folder] = !_siteTreeOpen[folder
    Gọi ở đầu mỗi lần chọn service để auth cũ KHÔNG ghi đè lên service mới. */
 function _cancelAuth(){
   _authGen++;
-  try{ if(_authPopup && !_authPopup.closed) _authPopup.close(); }catch(e){}
-  _authPopup = null;
+  _dongPopupXacThuc();   // dùng chung cách đóng chắc chắn — xem chú thích ở hàm đó
 }
 
 function selectSite(url){
@@ -343,7 +368,7 @@ function selectSite(url){
   if (_selected !== '__allsite__' || _embedUrl){
     _embedUrl = null;
     _selected = '__allsite__';
-    window.location.hash = 'allsite';
+    _datHash('allsite');
     renderSidebar();
     renderMain();
   } else {
@@ -358,7 +383,7 @@ function selectSiteEmbed(embedUrl, siteUrl, cfAccess){
   _embedUrl = embedUrl;
   _activeSiteUrl = siteUrl;
   // Hash riêng cho site iframe → reload/quay lại vẫn mở iframe, KHÔNG rơi về Chrome Pool.
-  window.location.hash = 'embed=' + encodeURIComponent(embedUrl);
+  _datHash('embed=' + encodeURIComponent(embedUrl));
   renderSidebar();
   // CF Access: CHỈ site được đánh dấu cfAccess (Kasm) mới chạy vòng xác thực lần ĐẦU trong session
   // (tránh "content is blocked" phải bấm 🔓 thủ công). Lần sau cookie đã có → nhúng thẳng.
@@ -498,7 +523,8 @@ function _embedReload(){
 function _embedAutoAuth(origin){
   // POPUP (không phải tab) → gọn, đóng lại là tự nhúng.
   var w=null; try{ w=window.open(origin+'/','kasmAuth','width=560,height=720,menubar=no,toolbar=no,location=yes'); }catch(e){}
-  _authPopup = w;
+  _authPopup = w; _ghiNhoPopup('kasmAuth');
+  var moLucEmbed = Date.now();
   var myGen = _authGen;
   var inner=document.getElementById('mainInner');
   inner.style.maxWidth='none'; inner.style.padding='0'; inner.style.height='100%';
@@ -512,14 +538,17 @@ function _embedAutoAuth(origin){
     if(done || _authGen!==myGen) return; done=true;
     window.removeEventListener('focus', onFocus);
     if(closePoll) clearInterval(closePoll);
-    try{ if(w && !w.closed) w.close(); }catch(e){}
-    if(_authPopup===w) _authPopup=null;
+    _dongPopupXacThuc();   // dùng chung — đóng cả khi tham chiếu đã đứt
     try{ var a=JSON.parse(sessionStorage.getItem('_kasmEmbedAuth')||'{}'); a[origin]=1; sessionStorage.setItem('_kasmEmbedAuth',JSON.stringify(a)); }catch(e){}
     renderEmbedFull(_embedUrl);
   }
   function onFocus(){ if(_authGen!==myGen){ window.removeEventListener('focus', onFocus); return; } finish(); }
   // Tự nhúng khi user ĐÓNG popup (tín hiệu rõ ràng "đã xong").
-  closePoll=setInterval(function(){ if(_authGen!==myGen){ clearInterval(closePoll); return; } if(w && w.closed) finish(); }, 500);
+  closePoll=setInterval(function(){
+    if(_authGen!==myGen){ clearInterval(closePoll); return; }
+    if(Date.now()-moLucEmbed < 3000) return;            // ân hạn: xem chú thích ở _poolAuthPopup
+    if(w && w.closed) finish();
+  }, 500);
   // ...hoặc khi quay lại dashboard (delay để không fire ngay lúc mới mở popup).
   setTimeout(function(){ window.addEventListener('focus', onFocus); }, 1200);
   var btn=document.getElementById('_embedAuthBtn'); if(btn) btn.onclick=finish;
@@ -576,37 +605,138 @@ function _poolLoadIframe(slot){
   if(stream) stream.innerHTML='<iframe src="'+esc(slot.kasm)+'/?autoconnect=1&resize=remote" style="position:absolute;inset:0;width:100%;height:100%;border:none" allow="clipboard-read; clipboard-write" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>';
 }
 
-function _poolConfirmAuth(){
-  if(!_poolSlot) return;
-  try{ if(_authPopup && !_authPopup.closed) _authPopup.close(); }catch(e){}   // ĐÓNG popup xác thực
+/* ĐÓNG POPUP XÁC THỰC — KHÔNG dựa vào biến _authPopup nữa.
+
+   ⚠️ Vì sao phải làm vòng vo thế này (log thật của anh Thoại 2026-08-20):
+   `window.open()` trả về một tham chiếu OK, nhưng chỉ ~0,5 giây sau `w.closed` đã là
+   `true` TRONG KHI cửa sổ vẫn nằm sờ sờ trên màn hình. Tham chiếu bị ĐỨT (trình duyệt
+   mở popup ở một ngữ cảnh khác) → `_authPopup.close()` không đóng được gì, cửa sổ thành
+   mồ côi và người dùng phải tự tay đóng — đúng phiền toái anh Thoại báo.
+
+   Cách né: mọi popup xác thực đều được mở KÈM TÊN. Gọi `window.open('', <tên>)` với URL
+   RỖNG sẽ LẤY LẠI cửa sổ đang mang tên đó mà KHÔNG điều hướng nó — kể cả khi tham chiếu
+   cũ đã hỏng, kể cả sau khi trang được nạp lại (bắt được cả popup mồ côi từ lần trước).
+
+   ⚠️ DÙNG CHUNG cho CẢ HAI đường xác thực — đừng chép thành 2 bản:
+     'kasmPoolAuth' → đường Chrome Pool (CasaOS, FortiGate, NAS, ESXi, Router, Camera…)
+     'kasmAuth'     → đường iframe (Kasm)
+   Trước 2026-08-20 mỗi đường tự đóng popup theo kiểu riêng, và cả hai đều dính lỗi tham
+   chiếu đứt. Đã sửa đường Pool trước, đường iframe sau — đúng khuôn mẫu "vá một nửa" của
+   dự án, nên nay gom về MỘT hàm để lần sau sửa là sửa cho cả hai.
+
+   ⚠️ Chỉ thử lấy lại những tên ĐÃ THẬT SỰ MỞ (ghi trong _popupDaMo). Gọi
+   `window.open('', <tên chưa từng mở>)` sẽ TẠO một cửa sổ trắng — loé lên rồi bị đóng,
+   gây khó chịu vô cớ. */
+var _lanCuuSlot = 0;                 // mốc lần gần nhất tự xin lại slot — chống lặp vô tận, xem poolNavigate()
+var _popupDaMo = {};                 // { 'kasmPoolAuth': true, 'kasmAuth': true }
+function _ghiNhoPopup(ten){ _popupDaMo[ten] = true; }
+
+function _dongPopupXacThuc(){
+  var daDong = false;
+  try{
+    if(_authPopup && !_authPopup.closed){ _authPopup.close(); daDong = true; console.log('[pool-auth] dong bang tham chieu truc tiep'); }
+  }catch(e){ console.warn('[pool-auth] close() truc tiep loi:', e && e.message); }
   _authPopup = null;
-  try { var a=JSON.parse(sessionStorage.getItem('_kasmAuth')||'{}'); a[_poolSlot.id]=1; sessionStorage.setItem('_kasmAuth',JSON.stringify(a)); } catch(e){}
+
+  /* ⚠️ CHỈ lấy lại theo tên KHI cách trực tiếp KHÔNG đóng được.
+     Đóng trực tiếp thành công nghĩa là cửa sổ mang tên đó đã biến mất — lúc ấy mà còn gọi
+     window.open('', <tên>) thì trình duyệt TẠO MỘT CỬA SỔ TRẮNG, loé lên rồi bị đóng ngay,
+     phiền vô cớ. Bộ thử scratchpad/thu-dong-popup.mjs bắt đúng lỗi này ở bản nháp đầu. */
+  if(!daDong){
+    Object.keys(_popupDaMo).forEach(function(ten){
+      try{
+        var w2 = window.open('', ten);
+        if(w2 && !w2.closed){ w2.close(); daDong = true; console.log('[pool-auth] dong "' + ten + '" bang cach lay lai theo TEN'); }
+      }catch(e){ console.warn('[pool-auth] lay lai "' + ten + '" loi:', e && e.message); }
+    });
+  }
+  _popupDaMo = {};
+
+  if(!daDong) console.warn('[pool-auth] KHONG dong duoc popup nao (co the von khong co)');
+}
+
+/* ghiNho = có BẰNG CHỨNG CHẮC CHẮN đã xác thực xong (ảnh dò tải được) hay không.
+   Chỉ khi chắc chắn mới ghi nhớ vào sessionStorage để lần sau bỏ qua bước popup.
+   Nếu chỉ suy đoán (người dùng quay lại cửa sổ / tự đóng popup) thì KHÔNG ghi nhớ —
+   lỡ họ quay lại mà chưa đăng nhập xong thì lần sau popup vẫn hiện lại, không bị
+   kẹt vĩnh viễn ở màn hình "content is blocked" mà không có đường quay lui. */
+function _poolConfirmAuth(ghiNho){
+  console.log('[pool-auth] _poolConfirmAuth ghiNho=' + ghiNho
+    + ' | _poolSlot=' + (_poolSlot ? _poolSlot.id : 'NULL')
+    + ' | _authPopup=' + (_authPopup ? (_authPopup.closed ? 'da-dong' : 'DANG-MO') : 'NULL'));
+  if(!_poolSlot){ console.warn('[pool-auth] THOAT SOM: _poolSlot rong -> KHONG dong duoc popup'); return; }
+  _dongPopupXacThuc();
+  if(ghiNho){
+    try { var a=JSON.parse(sessionStorage.getItem('_kasmAuth')||'{}'); a[_poolSlot.id]=1; sessionStorage.setItem('_kasmAuth',JSON.stringify(a)); } catch(e){}
+  }
   _poolLoadIframe(_poolSlot);
   if(_activeSiteUrl) poolNavigate(_activeSiteUrl);
 }
 
 /* Mở POPUP xác thực CF Access cho slot pool. Slot Kasm ĐÃ tắt VNC auth (VNCOPTIONS)
-   → chỉ còn CF Access ở edge → dùng IMAGE PROBE favicon để tự phát hiện login-xong
-   → tự nhúng + tự ĐÓNG popup (không cần bấm gì). Fallback: đóng popup / nút.
+   → chỉ còn CF Access ở edge. BA tín hiệu song song để biết "đã đăng nhập xong":
+     1. dò ảnh favicon (chắc chắn nhất, nhưng cần máy Kasm có /favicon.ico)
+     2. người dùng tự đóng popup
+     3. người dùng bấm về lại cửa sổ dashboard  ← trước 2026-08-20 THIẾU cái này
+   Cái nào tới trước thì dùng cái đó → tự nhúng + tự đóng popup.
    Dùng chung _authGen/_authPopup: đổi service giữa chừng → _cancelAuth hủy. */
 function _poolAuthPopup(kasmUrl){
   var w=null; try{ w=window.open(kasmUrl,'kasmPoolAuth','width=560,height=720,menubar=no,toolbar=no,location=yes'); }catch(e){}
-  _authPopup = w;
-  var myGen = _authGen, done=false, poll=null, probeT=null;
-  function stop(){ if(poll)clearInterval(poll); if(probeT)clearTimeout(probeT); }
-  function go(){ if(done||_authGen!==myGen)return; done=true; stop(); _poolConfirmAuth(); }
-  window._poolAuthGo = go;   // cho nút "Kết nối ngay" trong _poolMsg gọi
-  // Probe: favicon kasm-aX chỉ tải được SAU khi có cookie CF Access.
+  _authPopup = w; _ghiNhoPopup('kasmPoolAuth');
+  var myGen = _authGen, done=false, poll=null, probeT=null, anhTaiDuoc=false;
+  function stop(){
+    if(poll)clearInterval(poll);
+    if(probeT)clearTimeout(probeT);
+    window.removeEventListener('focus', onFocus);
+  }
+  var moLuc = Date.now();
+  console.log('[pool-auth] MO POPUP ' + kasmUrl + ' | window.open tra ve ' + (w ? 'OK' : 'NULL (bi chan?)')
+    + ' | closed ngay luc mo = ' + (w ? w.closed : 'n/a'));
+  function go(nguon){
+    if(done||_authGen!==myGen){ console.log('[pool-auth] bo qua tin hieu "' + nguon + '" (done=' + done + ', gen lech=' + (_authGen!==myGen) + ')'); return; }
+    console.log('[pool-auth] ✔ TIN HIEU "' + nguon + '" -> ket noi + dong popup');
+    done=true; stop(); _poolConfirmAuth(anhTaiDuoc);
+  }
+  window._poolAuthGo = function(){ go('bam nut Ket noi ngay'); };   // cho nút "Kết nối ngay" trong _poolMsg gọi
+
+  /* Tín hiệu 1 — DÒ ẢNH: favicon của kasm-aX chỉ tải được SAU khi có cookie CF Access.
+     Chưa đăng nhập thì CF Access trả TRANG HTML đăng nhập chứ không phải ảnh → onerror.
+     Đây là bằng chứng CHẮC CHẮN nhất, nhưng phụ thuộc việc máy Kasm thật sự có
+     /favicon.ico — nếu không có thì nó lặp mãi mà không bao giờ báo xong. Vì vậy
+     KHÔNG được dựa mỗi tín hiệu này, phải có thêm 2 và 3 bên dưới. */
   function probe(){
     if(done||_authGen!==myGen){ stop(); return; }
     var img=new Image();
-    img.onload = go;                                          // authed → tự nhúng + đóng popup
+    img.onload = function(){ anhTaiDuoc=true; go('do anh favicon'); };         // chắc chắn xong → được phép ghi nhớ
     img.onerror = function(){ probeT=setTimeout(probe, 1200); };
     img.src = kasmUrl.replace(/\/+$/,'') + '/favicon.ico?_cfp=' + Date.now();
   }
   probeT=setTimeout(probe, 1500);
-  poll=setInterval(function(){ if(_authGen!==myGen){ stop(); return; } if(w && w.closed) go(); }, 500);
-  _poolMsg('🔓 Đăng nhập Cloudflare Access ở cửa sổ vừa mở.<br>Xong là <b>tự kết nối + tự đóng cửa sổ</b> — hoặc tự đóng / bấm nút.<br><br>'
+
+  /* Tín hiệu 2 — NGƯỜI DÙNG TỰ ĐÓNG popup. */
+  /* ⚠️ ÂN HẠN 3 GIÂY trước khi tin tín hiệu "popup đã đóng".
+     Log thật của anh Thoại (2026-08-20) cho thấy: window.open() trả về OK nhưng chỉ ~0,5s
+     sau, w.closed đã là true TRONG KHI cửa sổ vẫn hiện trên màn hình — tham chiếu bị đứt
+     ngay từ đầu (trình duyệt mở popup ở ngữ cảnh khác). Không có ân hạn thì tín hiệu này
+     bắn ngay tức thì, kết nối luôn khi người dùng chưa kịp đăng nhập, và cửa sổ kia thành
+     mồ côi không ai đóng được. */
+  poll=setInterval(function(){
+    if(_authGen!==myGen){ stop(); return; }
+    if(Date.now()-moLuc < 3000) return;                 // còn trong ân hạn -> chưa tin
+    if(w && w.closed) go('popup bi dong');
+  }, 500);
+
+  /* Tín hiệu 3 — QUAY LẠI CỬA SỔ DASHBOARD (thêm 2026-08-20).
+     ⚠️ ĐÂY LÀ CÁI TRƯỚC GIỜ BỊ THIẾU — chính là lý do anh Thoại phải TỰ TAY đóng popup
+     mỗi lần vào CasaOS/FortiGate/NAS/ESXi. Hàm _embedAutoAuth() (đường iframe, dùng cho
+     Kasm) đã có tín hiệu này từ lâu nên đường đó không bị; chỉ đường Chrome Pool thiếu.
+     Đúng khuôn mẫu "vá một nửa" của dự án: hai đường làm cùng một việc, chỉ một đường
+     được hoàn thiện.
+     Hoãn 1200ms rồi mới gắn: lúc window.open() vừa chạy, tiêu điểm nhảy qua lại giữa hai
+     cửa sổ, gắn ngay là bắn nhầm tức thì. Cùng con số với _embedAutoAuth cho đồng nhất. */
+  function onFocus(){ if(_authGen!==myGen){ window.removeEventListener('focus', onFocus); return; } go('quay lai cua so dashboard'); }
+  setTimeout(function(){ if(!done && _authGen===myGen) window.addEventListener('focus', onFocus); }, 1200);
+  _poolMsg('🔓 Đăng nhập Cloudflare Access ở cửa sổ vừa mở.<br>Xong rồi chỉ cần <b>bấm về lại cửa sổ này</b> — nó tự kết nối và tự đóng cửa sổ kia.<br><br>'
     +'<button onclick="if(window._poolAuthGo)window._poolAuthGo()" style="padding:8px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;cursor:pointer;font-family:var(--font-sans);font-weight:500">▶ Kết nối ngay</button>');
 }
 
@@ -618,6 +748,8 @@ function ensurePoolSlot(){
       _poolSlot=d.slot;
       // Kiểm tra đã xác thực CF Access cho slot này chưa (trong session hiện tại)
       var authed=false; try { authed=!!(JSON.parse(sessionStorage.getItem('_kasmAuth')||'{}')[d.slot.id]); } catch(e){}
+      console.log('[pool-auth] ensurePoolSlot slot=' + d.slot.id + ' | da-ghi-nho-auth=' + authed
+        + ' -> ' + (authed ? 'NOI THANG, KHONG mo popup' : 'MO POPUP xac thuc'));
       if(authed){
         _poolLoadIframe(d.slot);
       } else {
@@ -629,11 +761,70 @@ function ensurePoolSlot(){
   }).catch(function(e){ _poolMsg('⚠️ Lỗi: '+esc(e.message)); });
 }
 
-function poolNavigate(url){
-  fetch('/api/fgt-pool/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url})}).catch(function(){});
+/* Bảo Chrome Pool điều hướng sang một site.
+
+   ⚠️ Bản cũ là `fetch(...).catch(function(){})` — VỨT SẠCH kết quả, NUỐT LUÔN lỗi.
+   Máy chủ trả về tới 5 loại lỗi (401 hết phiên · 403 thiếu quyền · 400 URL sai ·
+   409 MẤT SLOT · 502 navigator không phản hồi) mà người dùng KHÔNG thấy gì hết:
+   bấm chuyển dịch vụ, màn hình đứng im, không một dòng thông báo.
+   Anh Thoại báo 2026-08-20: "lâu lâu bấm chuyển tab qua lại thì nó không chạy".
+
+   Nghi phạm số một cho chữ "lâu lâu": slot chỉ sống 20 phút (FGT_POOL_TTL_SEC=1200),
+   nhịp gia hạn chạy bằng setInterval 5 phút — mà trình duyệt BÓP NGHẸT hoặc ĐÓNG BĂNG
+   hẳn timer của tab chạy nền. Để tab ở nền quá 20 phút là slot hết hạn → 409 → im lặng.
+
+   Nay: 409 thì TỰ XIN SLOT MỚI rồi thử lại (chỉ một lần, tránh lặp vô tận); lỗi khác
+   thì hiện rõ lý do kèm nút thử lại. */
+function poolNavigate(url, daThuLai){
+  fetch('/api/fgt-pool/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url})})
+    .then(function(r){
+      if(r.ok) return null;
+      return r.json().catch(function(){ return {}; }).then(function(d){ return { status:r.status, d:d }; });
+    })
+    .then(function(loi){
+      if(!loi) return;                                  // thành công
+      console.warn('[pool-nav] loi ' + loi.status + ':', loi.d && loi.d.error);
+
+      /* ⚠️ CHỐNG LẶP VÔ TẬN: xin slot mới xong, ensurePoolSlot() lại gọi poolNavigate() —
+         nếu lần đó cũng 409 thì sẽ xin lại → gọi lại → quay vòng mãi, đốt CPU và spam API.
+         Chặn bằng mốc thời gian: chỉ tự cứu tối đa 1 lần mỗi 10 giây, ngoài ra thì hiện lỗi
+         cho người dùng thấy. Dùng mốc thời gian thay vì cờ boolean để không phải lo nhả cờ
+         ở mọi nhánh thoát. */
+      var giay10 = 10000;
+      if(loi.status === 409 && !daThuLai && (Date.now() - _lanCuuSlot > giay10)){
+        _lanCuuSlot = Date.now();
+        console.log('[pool-nav] mat slot -> tu xin slot moi roi thu lai');
+        _poolMsg('⏳ Phiên màn hình đã hết hạn — đang tự kết nối lại…');
+        _poolSlot = null;
+        _activeSiteUrl = url;
+        ensurePoolSlot();                               // tự cấp slot + nạp lại + poolNavigate(_activeSiteUrl)
+        return;
+      }
+
+      var lyDo = (loi.d && loi.d.error) || ('Lỗi ' + loi.status);
+      if(loi.status === 401) lyDo = 'Phiên đăng nhập đã hết — hãy tải lại trang và đăng nhập lại.';
+      _poolMsg('⚠️ Không chuyển sang dịch vụ được.<br><span style="font-size:12px;opacity:.85">' + esc(lyDo) + '</span><br><br>'
+        + '<button onclick="poolNavigate(' + JSON.stringify(url).replace(/"/g,'&quot;') + ')" style="padding:8px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;cursor:pointer;font-family:var(--font-sans);font-weight:500">↻ Thử lại</button>');
+    })
+    .catch(function(e){
+      console.warn('[pool-nav] khong goi duoc:', e && e.message);
+      _poolMsg('⚠️ Mất kết nối tới dashboard.<br><span style="font-size:12px;opacity:.85">Kiểm tra mạng rồi bấm thử lại.</span><br><br>'
+        + '<button onclick="poolNavigate(' + JSON.stringify(url).replace(/"/g,'&quot;') + ')" style="padding:8px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;cursor:pointer;font-family:var(--font-sans);font-weight:500">↻ Thử lại</button>');
+    });
 }
-// Giữ slot (heartbeat 5 phút) + trả slot khi rời trang
-setInterval(function(){ if(_poolSlot) fetch('/api/fgt-pool/allocate',{cache:'no-store'}).catch(function(){}); }, 5*60*1000);
+/* Giữ slot sống (slot chỉ tồn tại 20 phút — FGT_POOL_TTL_SEC ở src/proxy.js).
+
+   ⚠️ setInterval KHÔNG đủ: trình duyệt bóp nghẹt — có khi đóng băng hẳn — timer của tab
+   chạy nền. Để tab ở nền lâu là nhịp gia hạn ngừng chạy, slot hết hạn, quay lại bấm thì
+   im lặng không có gì xảy ra (đúng lỗi anh Thoại báo 2026-08-20).
+   → Gia hạn NGAY khi tab được xem lại, không chờ tới nhịp kế tiếp. */
+function _giaHanSlot(){
+  if(_poolSlot) fetch('/api/fgt-pool/allocate',{cache:'no-store'}).catch(function(){});
+}
+setInterval(_giaHanSlot, 5*60*1000);
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible') _giaHanSlot();
+});
 window.addEventListener('pagehide', function(){ if(_poolSlot){ try{ navigator.sendBeacon('/api/fgt-pool/release'); }catch(e){} } });
 
 /* ── XSS guard ── */
@@ -755,7 +946,7 @@ function selectSvc(id) {
   _selected = id;
   _embedOpen = false;
   _embedUrl = null;
-  window.location.hash = id;
+  _datHash(id);
   renderSidebar();
   renderMain();
 }
@@ -1105,8 +1296,11 @@ function loadAsusCards() {
   loadStatus();
   setInterval(loadStatus, 60000);
 
-  /* Listen for hash changes (back/forward) */
+  /* CHỈ dành cho nút LÙI/TIẾN của trình duyệt.
+     Hash do CHÍNH TRANG tự đổi (qua _datHash) thì trang đã vẽ lại rồi → bỏ qua ở đây,
+     nếu không sẽ vẽ lại LẦN HAI và mở 2 popup xác thực. Xem chú thích ở _datHash(). */
   window.addEventListener('hashchange', function(){
+    if (_boQuaHashKeTiep) { _boQuaHashKeTiep = false; return; }
     var h = window.location.hash.replace('#', '');
     if (h.indexOf('embed=') === 0) {
       _embedUrl = decodeURIComponent(h.slice(6));

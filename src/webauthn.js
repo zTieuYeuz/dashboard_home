@@ -51,12 +51,6 @@ async function userIdBytes(username) {
   return _hexToBytes(hex); // 32 byte, ổn định theo username, không cần lưu field mới
 }
 
-function b64urlToBytes(b64url) {
-  const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/').padEnd(b64url.length + (4 - b64url.length % 4) % 4, '=');
-  const bin = atob(b64);
-  return Uint8Array.from(bin, c => c.charCodeAt(0));
-}
-
 /* ── 1. Đăng ký passkey mới (cần đã đăng nhập) ─────────────────────────────── */
 export async function handleWebauthnRegisterOptions(request, env) {
   if (request.method !== 'POST') return json({ error: 'method' }, 405);

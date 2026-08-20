@@ -1,10 +1,35 @@
-/* ═══════════════════════════════════════════════
-   vmware-movi.js — shared logic for vmware01-movi.html + vmware02-movi.html
-   (tách từ 2 file HTML giống hệt nhau, 2026-07-10 — logic KHÔNG đổi)
-   Trang HTML phải khai báo TRƯỚC khi nạp file này:
-     var API_BASE = '/api/vmware01-movi';   // endpoint API của host
-     var PERM_KEY = 'vmware01-movi';        // key quyền trong __USER__.permissions
-   ═══════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════════
+   _shared/vmware.js — LOGIC CHUNG cho MỌI trang VMware ESXi
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ ĐỂ Ở public/_shared/ (gốc), CỐ Ý KHÔNG để trong service-home/ hay
+   service-movi/. Lý do: anh Thoại muốn hai mảng Home và Movi TÁCH BẠCH, có thể
+   xoá hẳn service-movi/ sau này mà Home vẫn chạy. Đặt file này bên trong một
+   trong hai mảng là tạo ràng buộc chéo — xoá mảng kia là mảng này gãy.
+
+   Dùng bởi: service-home/vmware-home.html · service-movi/vmware01-movi.html
+             · service-movi/vmware02-movi.html
+
+   ───────────────────────────────────────────────────────────────────────────
+   HỢP ĐỒNG — trang HTML phải khai TRƯỚC khi nạp file này:
+
+     var API_BASE = '/api/vmware-home';   // endpoint API của host
+     var PERM_KEY = 'esxi';               // KHOÁ QUYỀN trong __USER__.permissions
+
+   ⚠️ PERM_KEY là KHOÁ QUYỀN, KHÔNG phải tên file. Từng dính lỗi thật: trang Home
+   dùng nhầm 'vmware-home' (tên file) thay vì 'esxi' (khoá quyền thật, khai ở
+   src/permissions-registry.js) → permissions['vmware-home'] luôn undefined → mọi
+   người rơi về 'read', ai được cấp quyền GHI vẫn chỉ xem được. Admin không lộ ra
+   vì có nhánh isAdmin chặn trước. Sửa 2026-08-15.
+
+   ───────────────────────────────────────────────────────────────────────────
+   KHÔNG chứa phần theme/đồng hồ/thanh điều hướng — đó là "khung trang", do
+   _shared/common.js lo. Bản cũ (service-movi/_shared/vmware-movi.js) có nhét
+   sẵn một đoạn tự gắn theme+clock; nếu để nguyên thì trang Home nạp vào sẽ có
+   HAI trình xử lý cùng bấm một nút → bấm đổi giao diện hai lần → nhìn như không
+   ăn gì. Đã cắt bỏ khi gom về đây (2026-08-20).
+   Riêng dòng hiện link Settings cho admin thì GIỮ, vì nó có kiểm null nên trang
+   nào không có phần tử đó cũng vô hại.
+   ═══════════════════════════════════════════════════════════════════════════ */
 function _readUserCookie() {
   try { var m = document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/); return m ? JSON.parse(decodeURIComponent(m[1])) : null; } catch(e) { return null; }
 }
@@ -205,15 +230,9 @@ function loadData() {
 loadData();
 setInterval(loadData, 300000);
 
+/* Hiện link Settings nếu người dùng là admin.
+   Có kiểm null nên trang không có phần tử #settings-link thì bỏ qua, vô hại. */
 (function(){
-  var saved=null;try{saved=localStorage.getItem('dh_theme')}catch(e){}
-  if(saved==='light')document.documentElement.dataset.theme='light';
-  document.getElementById('themeToggle').addEventListener('click',function(){
-    var next=document.documentElement.dataset.theme==='light'?'dark':'light';
-    document.documentElement.dataset.theme=next;
-    try{localStorage.setItem('dh_theme',next)}catch(e){}
-  });
-  var sl=document.getElementById('settings-link');
-  if(sl && (__USER__.isAdmin || __USER__.role==='admin'))sl.style.display='';
-  setInterval(function(){var c=document.getElementById('clock');if(c)c.textContent=new Date().toLocaleTimeString('vi-VN',{hour12:false});},1000);
+  var sl = document.getElementById('settings-link');
+  if (sl && (__USER__.isAdmin || __USER__.role === 'admin')) sl.style.display = '';
 })();
