@@ -106,7 +106,76 @@
     for (var i = 0; i < lastNodes.length; i++) { if (String(lastNodes[i].id) === String(id)) return lastNodes[i]; }
     return null;
   }
+  /* ── Tra cứu mật khẩu MẶC ĐỊNH của image lab ────────────────────────────────
+     Dữ liệu nằm ở /pnet-lab-logins.js (222 image, nạp sẵn trong trình duyệt) nên tra cứu
+     KHÔNG tốn token LLM nào. Khớp mềm: bỏ dấu câu, không phân biệt hoa/thường, chấp nhận
+     tìm theo một phần tên — vì tên node trong lab hiếm khi trùng khít tên image
+     (vd node tên "ASAv-1" ↔ image "Cisco ASAv"). */
+  function _chuanTen(s) {
+    return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+  function traMatKhau(tuKhoa) {
+    var kho = window.__PNET_LAB_LOGINS__;
+    if (!Array.isArray(kho)) return { ok: false, error: 'Chưa nạp được bảng mật khẩu (pnet-lab-logins.js).' };
+    var q = _chuanTen(tuKhoa);
+    if (!q) return { ok: false, error: 'Thiếu tên image/thiết bị cần tra.' };
+    var tuQ = q.split(' ').filter(Boolean);
+
+    var kq = [];
+    for (var i = 0; i < kho.length; i++) {
+      var ten = _chuanTen(kho[i].t);
+      var diem = 0;
+      if (ten === q) diem = 1000;                                  // trùng khít
+      /* "Chứa nhau" chỉ áp dụng khi từ khoá đủ dài (≥4). Ngắn hơn thì rất dễ khớp bừa:
+         "ton" nằm trong "hills-TON-e" → tra ra Hillstone hoàn toàn vô lý. */
+      else if (q.length >= 4 && (ten.indexOf(q) >= 0 || q.indexOf(ten) >= 0)) diem = 500;
+      /* Điểm khớp TỪ luôn được cộng THÊM, kể cả khi đã ăn điểm "chứa nhau" — để bản
+         CỤ THỂ HƠN thắng bản chung chung. Bản cũ dùng else nên "linux debian" hoà 500
+         điểm giữa "Linux" (mục gộp 19 cặp lẫn lộn) và "Linux-debian-10", rồi thứ tự bảng
+         chữ cái quyết định → ra mục chung chung, vô dụng với người hỏi. */
+      {
+        /* Khớp theo TỪ TRỌN VẸN, KHÔNG so chuỗi con.
+           ⚠️ Bản đầu dùng indexOf nên "ton" (trong "khong-ton-tai") khớp vào "hills-TON-e"
+           → tra bừa ra Hillstone. Tra mật khẩu mà khớp sai còn tệ hơn không tìm thấy:
+           người dùng gõ nhầm nhiều lần, nhiều thiết bị KHOÁ tài khoản sau vài lần sai. */
+        var tuTen = ten.split(' ');
+        for (var j = 0; j < tuQ.length; j++) {
+          var tq = tuQ[j];
+          if (tq.length < 3) continue;
+          for (var k = 0; k < tuTen.length; k++) {
+            var tt = tuTen[k];
+            /* Trùng KHÍT ăn điểm cao hơn hẳn khớp-phần-đầu. Trước đây cùng 10 điểm nên
+               "asav-1" hoà điểm giữa "Cisco ASAv" (khít) và "Cisco ...ASA" (chỉ khớp đầu),
+               rồi thứ tự bảng chữ cái quyết định → ra nhầm ASA. */
+            if (tt === tq) { diem += 20; break; }
+            if (tq.length >= 4 && (tt.indexOf(tq) === 0 || tq.indexOf(tt) === 0)) { diem += 8; break; }
+          }
+        }
+      }
+      if (diem >= 8) kq.push({ diem: diem, e: kho[i] });
+    }
+    if (!kq.length) {
+      return { ok: false, khong_thay: true,
+        error: 'Không có image nào tên giống "' + tuKhoa + '" trong bảng ' + kho.length + ' image. '
+             + 'Thử từ khoá ngắn hơn (vd chỉ "asav", "vios", "mikrotik"), hoặc báo user là bảng chưa có image này.' };
+    }
+    kq.sort(function (a, b) { return b.diem - a.diem; });
+    return {
+      ok: true,
+      tim_theo: tuKhoa,
+      ket_qua: kq.slice(0, 6).map(function (x) {
+        return { image: x.e.t, tai_khoan: x.e.a.map(function (c) { return { user: c[0], pass: c[1] }; }),
+                 truy_cap: x.e.c || undefined };
+      }),
+      ghi_chu: 'Đây là mật khẩu MẶC ĐỊNH của image. Nếu lab đã đổi mật khẩu thì không còn đúng — '
+             + 'lúc đó phải reset theo quy trình của hãng. "(không có)" = image không cần mật khẩu.',
+    };
+  }
+
   var TOOLS = {
+    // Tra mật khẩu mặc định — CHỈ ĐỌC, không đụng gì tới lab nên không cần xác nhận.
+    get_default_login: function (t) { return Promise.resolve(traMatKhau(t && (t.image || t.name || t.query))); },
+
     // /topology trả nodes+networks+lines cho lab ĐANG MỞ, KHÔNG cần factory/create
     // (đúng endpoint functions.js dùng để vẽ; /nodes cần bind nên rỗng trên trang legacy).
     get_topology: function () {
@@ -235,6 +304,13 @@
     '- stop_node {"node_id":N} → tắt node.',
     '- export_config {"node_id":N} → lưu config từ node ĐANG CHẠY vào lab (bỏ node_id = lưu tất cả). Gọi sau khi đã gõ "write memory" trong console (qua run_console) để chốt lại vĩnh viễn.',
     '- run_console {"console_port":P,"commands":["cmd1","cmd2",...]} → GÕ LỆNH CLI THẬT vào console node đang chạy (P lấy từ get_topology.nodes[].console_port), TRẢ VỀ output thật của từng lệnh. Đây là cách DUY NHẤT để cấu hình node CÓ console dạng TEXT (xem console_hint của node).',
+    '- get_default_login {"image":"<tên image hoặc tên node>"} → tra MẬT KHẨU MẶC ĐỊNH của image lab (bảng 222 image: Cisco, Juniper, Fortinet, Palo Alto, Arista, MikroTik, F5, Check Point, Aruba…). CHỈ ĐỌC, không đụng gì tới lab.',
+    '',
+    'KHI NÀO DÙNG get_default_login:',
+    '- Console hỏi đăng nhập mà chưa biết mật khẩu → tra NGAY, đừng đoán mò và đừng hỏi user trước.',
+    '- Khớp mềm nên cứ đưa tên node cũng được (vd node "ASAv-1" → tìm ra "Cisco ASAv"). Không thấy thì thử TỪ KHOÁ NGẮN HƠN (chỉ "asav", "vios", "mikrotik") rồi mới báo user.',
+    '- Một image có thể có NHIỀU cặp tài khoản — thử lần lượt. "(không có)" nghĩa là bỏ trống ô đó, KHÔNG phải gõ chữ "(không có)".',
+    '- ⚠️ Đây là mật khẩu MẶC ĐỊNH LÚC XUẤT XƯỞNG. Lab đã đổi mật khẩu thì tra ra cũng không vào được — lúc đó nói thẳng với user là phải reset theo quy trình của hãng, ĐỪNG thử đi thử lại nhiều lần (nhiều thiết bị khoá tài khoản sau vài lần sai).',
     '',
     'ĐA HÃNG THIẾT BỊ — lab KHÔNG chỉ có Cisco IOS. Anh Thoại sẽ thêm nhiều loại: router/switch nhiều hãng (Cisco IOS/NX-OS, Juniper JunOS, MikroTik RouterOS, Fortinet FortiGate…), và cả server Windows/Linux (console dạng ĐỒ HOẠ, xem mục riêng bên dưới).',
     '- TRƯỚC KHI gõ lệnh cấu hình: xác định đang nói chuyện với hệ điều hành nào — nhìn banner/prompt trả về từ run_console đầu tiên (vd Enter suông): Cisco IOS prompt "Router>"/"Switch#"; JunOS có chữ "JUNOS" và prompt "user@host>"; MikroTik có prompt "[admin@MikroTik] >"; FortiGate prompt "hostname #" và lệnh kiểu "config system interface". ĐỪNG mặc định là Cisco IOS nếu banner không khớp.',
@@ -426,10 +502,17 @@
     var body = { model: MODEL, messages: [{ role: 'system', content: SYS }].concat(history), stream: true };
     return fetch(LLM_URL, { method: 'POST', headers: aiHeaders(), body: JSON.stringify(body) })
       .then(function (r) {
-        // HTTP 524 = Cloudflare Edge timeout (9Router thỉnh thoảng chọn backend chậm) — tự thử lại.
-        if (r.status === 524 && attempt < 3) {
-          onDelta('⏳ 9Router phản hồi chậm (524), đang thử lại (' + (attempt + 1) + '/3)…');
-          return streamLLM(onDelta, attempt + 1);
+        /* Lỗi TẠM THỜI phía 9Router → tự thử lại, đừng bắt user gõ lại câu hỏi.
+           524 = Cloudflare Edge timeout (9Router chọn phải backend chậm).
+           502/503/504 = backend của 9Router đang lỗi/quá tải — anh Thoại gặp 502 ngày
+           2026-08-20; bản cũ chỉ thử lại 524 nên 502 văng thẳng ra màn hình.
+           Có CHỜ TĂNG DẦN (1s, 2s): thử lại tức thì vào đúng backend đang lỗi thì cũng
+           lỗi tiếp, chỉ tổ spam. */
+        if ((r.status === 524 || r.status === 502 || r.status === 503 || r.status === 504) && attempt < 3) {
+          var chos = attempt * 1000;
+          onDelta('⏳ Dịch vụ AI đang lỗi (' + r.status + '), tự thử lại sau ' + (chos / 1000) + 's (' + (attempt + 1) + '/3)…');
+          return new Promise(function (res) { setTimeout(res, chos); })
+            .then(function () { return streamLLM(onDelta, attempt + 1); });
         }
         if (!r.ok) return r.text().then(function (t) { var e; try { e = JSON.parse(t).error; } catch (_) {} throw new Error(e || ('HTTP ' + r.status)); });
         var reader = r.body.getReader(), dec = new TextDecoder(), buf = '', full = '';

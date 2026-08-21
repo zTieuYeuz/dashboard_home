@@ -273,6 +273,26 @@ export async function handlePnetLlm(request, env) {
      phải trả 502 nói rõ lý do thì Worker lại ném lỗi → 500 vô nghĩa. Sửa 2026-08-15. */
   } catch (e) { return json({ error: '9Router không phản hồi: ' + ((e && e.message) || e) }, 502); }
 
+  /* ⚠️ 9Router LỖI thì đọc lý do ra, đừng truyền thẳng mã trạng thái.
+     Bản cũ stream nguyên `upstream.body` kèm `upstream.status` → khi 9Router trả 502 với
+     thân rỗng (hoặc HTML), trang chỉ hiện trơ trọi "HTTP 502", người dùng không biết lỗi
+     nằm ở dashboard hay ở dịch vụ AI (anh Thoại gặp 2026-08-20).
+     Nay: đọc thân lỗi (giới hạn nhỏ), ghi log cho `wrangler tail`, và trả về câu nói RÕ
+     đây là lỗi phía 9Router — kèm cờ `thu_lai` để trang biết đây là lỗi tạm, nên thử lại. */
+  if (!upstream.ok) {
+    const than = await upstream.text().catch(() => '');
+    console.error('[pnet-llm] 9Router loi', upstream.status, '|', than.slice(0, 300));
+    let chiTiet = '';
+    try { chiTiet = (JSON.parse(than).error && (JSON.parse(than).error.message || JSON.parse(than).error)) || ''; } catch { chiTiet = than.slice(0, 200); }
+    const tamThoi = upstream.status >= 500;
+    return json({
+      error: 'Dịch vụ AI (9Router) trả lỗi ' + upstream.status
+           + (chiTiet ? ' — ' + chiTiet : '')
+           + (tamThoi ? '. Đây là lỗi PHÍA 9Router, không phải dashboard.' : ''),
+      thu_lai: tamThoi,
+    }, 502);
+  }
+
   // Stream thẳng SSE về browser (same-origin, không cần CORS nữa)
   return new Response(upstream.body, {
     status: upstream.status,
@@ -776,7 +796,13 @@ XMLHttpRequest.prototype.open=function(m,u){ return _X.apply(this,[m,rw(u)].conc
     new URL(request.url).origin + '/pnet-assistant.js');
 
   if (!/^\/html5(\/|$)/.test(subPath)) {
+    /* pnet-lab-logins.js = bảng mật khẩu MẶC ĐỊNH của image lab (222 image). Nạp TRƯỚC
+       assistant vì tool get_default_login đọc window.__PNET_LAB_LOGINS__.
+       Để riêng file thay vì nhét vào lời nhắc: tra cứu chạy ngay trong trình duyệt nên
+       KHÔNG tốn token LLM nào — nhét 14KB vào lời nhắc là cộng thêm ~3.500 token cho MỌI
+       câu hỏi, kể cả câu chẳng liên quan gì tới mật khẩu. */
     html = html.replace('</head>',
+      '<script src="' + new URL(request.url).origin + '/pnet-lab-logins.js" defer></' + 'script>' +
       '<script src="' + new URL(request.url).origin + '/pnet-assistant.js" defer></' + 'script></head>');
   }
 
