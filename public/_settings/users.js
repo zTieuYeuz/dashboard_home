@@ -449,9 +449,24 @@ function saveUser() {
       loadUsers();
     }).catch(function(e){
       btn.disabled=false; btn.textContent='Tạo user';
-      errEl.textContent='Lỗi: '+e.message; errEl.classList.add('show');
+      errEl.textContent=_giaiThichLoiMang(e); errEl.classList.add('show');
     });
   }
+}
+
+/* "Failed to fetch" = fetch BỊ TỪ CHỐI, KHÔNG có mã lỗi HTTP nào — nghĩa là yêu cầu chưa
+   tới được máy chủ. Trên dashboard này, nguyên nhân số một là PHIÊN CLOUDFLARE ACCESS HẾT
+   HẠN: Cloudflare chặn ở tầng biên rồi chuyển hướng sang trang đăng nhập của nó ở origin
+   khác, không có header CORS → trình duyệt chặn.
+   Anh Thoại gặp đúng lỗi này lúc tạo user (2026-08-20) và không thể đoán ra từ dòng
+   "Lỗi: Failed to fetch" trơ trọi. Đổi thành câu nói rõ phải làm gì. */
+function _giaiThichLoiMang(e){
+  var m = (e && e.message) || String(e);
+  if (/failed to fetch|networkerror|load failed/i.test(m)) {
+    return 'Không gửi được yêu cầu — nhiều khả năng phiên Cloudflare Access đã hết hạn. '
+         + 'Hãy TẢI LẠI TRANG (F5), đăng nhập lại rồi thử lại. (Chi tiết kỹ thuật: ' + m + ')';
+  }
+  return 'Lỗi: ' + m;
 }
 
 function confirmDeleteUser(username) {

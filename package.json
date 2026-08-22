@@ -3,6 +3,12 @@
   "private": true,
   "type": "module",
   "description": "Cloudflare Worker cho dashboard homelab — ES module thuần, wrangler tự bundle. node_modules chỉ phục vụ đóng gói lúc deploy, KHÔNG có build step riêng.",
+  "//": "Bộ kiểm nằm ở ..\\dashboard_backup (ngoài repo, cùng phần mềm Dashboard Backup). Dấu && làm deploy DỪNG khi kiểm thấy lỗi — đúng thứ lẽ ra đã chặn sự cố Error 1101 ngày 20/08. Không có thư mục đó thì lệnh check báo lỗi; cứ dùng npx wrangler deploy trực tiếp như trước.",
+  "scripts": {
+    "check": "node ../dashboard_backup/tools/kiem-tra.mjs --repo .",
+    "deploy:staging": "npm run check && wrangler deploy --config wrangler.staging.toml",
+    "deploy": "npm run check && wrangler deploy"
+  },
   "dependencies": {
     "@simplewebauthn/server": "^13.1.1"
   }
