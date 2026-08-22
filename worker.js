@@ -316,6 +316,26 @@ return `<script>(function(){
   /* Đẩy hạn phiên ra xa khi người dùng CÒN thao tác. Nhiều tab điều phối qua
      localStorage: tab nào vừa gia hạn thì ghi mốc, các tab khác thấy còn mới thì
      thôi — tránh gọi trùng. Gọi hỏng thì xoá mốc để tab khác thử lại. */
+  /* ⚠️ ĐÃ THỬ VÀ ĐÃ GỠ (2026-08-20/21) — ĐỪNG LÀM LẠI KIỂU NÀY.
+     Từng thêm ở đây một banner đỏ "Phiên Cloudflare Access đã hết hạn", kích hoạt khi
+     fetch('/api/auth/refresh') bị TỪ CHỐI 2 lần liên tiếp. Ý tưởng: fetch bị reject (không
+     có mã lỗi) trên đường same-origin thường là do Access chuyển hướng rồi CORS chặn.
+
+     HAI LẦN HỎNG THẬT:
+     1. Chú thích có dấu BACKTICK → đoạn này nằm trong chuỗi template của worker.js →
+        cắt đứt chuỗi → Worker ném lỗi → PRODUCTION CHẾT (Error 1101). Lệnh kiểm cú pháp
+        thường KHÔNG bắt được vì file vẫn hợp lệ, chỉ nội dung chuỗi mới hỏng, và lỗi chỉ
+        nổ lúc chạy.
+     2. Sau khi vá backtick, banner vẫn BÁO NHẦM: anh Thoại dùng 2-3 phút là hiện, F5 vẫn
+        hiện lại. Giả thuyết "fetch reject = hết phiên Access" SAI — còn nguyên nhân khác
+        làm fetch reject (trang PNETLab chạy trong iframe qua proxy, patcher viết lại URL,
+        tab nền bị bóp…) mà chưa xác định được.
+
+     → Chưa hiểu rõ thì KHÔNG đoán. Một banner che ngang màn hình báo sai còn tệ hơn nhiều
+     so với thông báo lỗi khó hiểu. Muốn làm lại thì phải có BẰNG CHỨNG thật (wrangler tail
+     + console lúc nó bắn) chứ không suy luận suông.
+     Thông báo dễ hiểu ở _settings/users.js (_giaiThichLoiMang) thì GIỮ — cái đó chỉ đổi
+     chữ khi lỗi đã thật sự xảy ra, không tự bắn ra bao giờ. */
   function keepAlive() {
     if (Date.now() - rd(RK) < REFRESH_EVERY) return;
     wr(RK, Date.now());                       /* giữ chỗ TRƯỚC để 2 tab không cùng gọi */

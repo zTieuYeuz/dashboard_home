@@ -66,3 +66,11 @@ public/downloads/*.exe
 public/downloads/*.zip
 .tmp.driveupload/
 .tmp.driveupload/
+
+# ── Bo sung 2026-08-21 ──
+# Phong ho: file sao luu KV chua hash mat khau + khoa MFA. Chung nam o
+# ..\dashboard_backup\ (NGOAI repo) nen binh thuong git khong thay. Dong nay
+# chan truong hop ai do chep nham vao trong repo.
+dashboard_backup/
+backups/
+*.json.enc
