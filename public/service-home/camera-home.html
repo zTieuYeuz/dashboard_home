@@ -5,7 +5,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.light.min.js" defer></script>
+<script src="/vendor/hls/hls.light.min.js" defer></script>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Camera Home · Linux PC Frigate</title>
@@ -1129,7 +1129,7 @@ function playEvent(id,hasClip,camId,startTime,endTime){
     var st=Math.max(0,startTime-1),et=(endTime||startTime+60)+1;
     var hlsUrl='/cam-test-api/vod/'+encodeURIComponent(camId)+'/start/'+st+'/end/'+et+'/master.m3u8';
     if(video.canPlayType('application/vnd.apple.mpegurl')){video.src=hlsUrl;video.load();video.play().catch(function(){});return;}
-    if(typeof Hls!=='undefined'&&Hls.isSupported()){_aiHlsModal=new Hls({maxBufferLength:30});_aiHlsModal.loadSource(hlsUrl);_aiHlsModal.attachMedia(video);_aiHlsModal.on(Hls.Events.MANIFEST_PARSED,function(){video.play().catch(function(){});});return;}
+    if(typeof Hls!=='undefined'&&Hls.isSupported()){_aiHlsModal=new Hls({enableWorker:false,maxBufferLength:30});_aiHlsModal.loadSource(hlsUrl);_aiHlsModal.attachMedia(video);_aiHlsModal.on(Hls.Events.MANIFEST_PARSED,function(){video.play().catch(function(){});});return;}
   }
   video.src='/cam-test-api/api/events/'+encodeURIComponent(id)+'/clip.mp4';
   video.play().catch(function(){});
