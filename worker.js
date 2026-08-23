@@ -4052,7 +4052,7 @@ export default {
 
     /* ══ CHẶN BOT CÀO DỮ LIỆU AI (2026-08-16, anh Thoại yêu cầu) ═══════════════
        Chặn theo ĐÚNG TÊN từng con bot, KHÔNG chặn kiểu "cái gì không phải trình duyệt".
-       Nhờ vậy công cụ của nhà KHÔNG dính: HomeLabDashboard/1.0, Uptime Kuma, n8n (axios),
+       Nhờ vậy công cụ của nhà KHÔNG dính: HomeLabDashboard/1.0, n8n (axios),
        wrangler, cầu nối dash-ssh, OpenClaw/MCP — tên hoàn toàn khác.
 
        Vì sao vẫn cần dù đã có robots.txt: robots.txt chỉ là LỜI ĐỀ NGHỊ. OpenAI/Anthropic/
