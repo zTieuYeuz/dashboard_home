@@ -51,6 +51,15 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .cam-overlay .resume-btn{font-size:10px;padding:4px 14px;border-radius:20px;border:1px solid color-mix(in oklch,var(--ok) 30%,transparent);background:color-mix(in oklch,var(--ok) 10%,transparent);color:var(--ok);cursor:pointer;font-weight:600}
 .cam-overlay .resume-btn:hover{background:color-mix(in oklch,var(--ok) 18%,transparent)}
 .cam-actions{position:absolute;top:5px;right:5px;display:flex;gap:3px;opacity:0;transition:opacity .18s;pointer-events:none;z-index:10}
+/* [2026-08-25] Bàn phím quay PTZ — chỉ hiện khi bấm nút 🕹, chỉ admin mới có nút. */
+.ptz-pad{position:absolute;left:8px;bottom:8px;width:96px;height:96px;display:none;z-index:11}
+.ptz-pad.on{display:block}
+.ptz-b{position:absolute;width:30px;height:30px;border-radius:7px;border:1px solid var(--border);
+  background:rgba(15,18,26,.78);color:#e5e7eb;font-size:12px;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px);padding:0}
+.ptz-b:hover{background:rgba(37,99,235,.75);border-color:#3b82f6}
+.ptz-b:active{background:#2563eb}
+.ptz-u{top:0;left:33px}.ptz-d{bottom:0;left:33px}.ptz-l{left:0;top:33px}.ptz-r{right:0;top:33px}
 .cam-frame:hover .cam-actions,.cam-frame.fs .cam-actions{opacity:1;pointer-events:auto}
 .cam-act-btn{width:28px;height:28px;border-radius:6px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.18);color:#fff;display:grid;place-items:center;cursor:pointer;font-size:13px;transition:background .15s;backdrop-filter:blur(6px);padding:0}
 .cam-act-btn:hover{background:rgba(0,0,0,.9)}
@@ -158,6 +167,9 @@ body.fs-lock{overflow:hidden}
 .ai-label.person{background:rgba(239,68,68,.18);color:#f87171}
 .ai-label.car,.ai-label.truck{background:rgba(59,130,246,.18);color:#60a5fa}
 .ai-label.motorcycle,.ai-label.bicycle{background:rgba(168,85,247,.18);color:#c084fc}
+/* [2026-08-25] `cat` mới được thêm vào objects.track của Frigate — không có class thì
+   nhãn rơi về màu xám mặc định, nhìn không phân biệt được với nhãn lạ. */
+.ai-label.cat{background:rgba(245,158,11,.18);color:#fbbf24}
 .ai-score{font-size:10.5px;color:var(--muted);font-family:var(--font-mono)}
 .ai-cam-tag{display:inline-block;font-size:10px;font-family:var(--font-mono);color:var(--muted);background:var(--surface-2);border-radius:4px;padding:1px 5px;margin-bottom:2px}
 .ai-time{font-size:10.5px;color:var(--muted);font-family:var(--font-mono)}
@@ -324,8 +336,8 @@ body.fs-lock{overflow:hidden}
 <!-- ── AI Events Panel ── -->
 <div class="page hidden" id="panel-ai">
   <div class="ai-search-bar">
-    <input id="ai-q" type="text" placeholder="🔍 Tìm bằng câu chữ — vd: người mặc áo đỏ, xe máy, con chó..." onkeydown="if(event.key==='Enter')semanticSearch()">
-    <button class="ai-search-btn" onclick="semanticSearch()">Tìm</button>
+    <!-- [2026-08-25] BO o tim bang cau chu: can semantic_search cua Frigate, ma no dang
+         TAT (semantic_search.enabled = false). De lai thi go vao khong bao gio ra ket qua. -->
     <button class="ai-back hidden" id="ai-back" onclick="showExplore()">← Khám phá</button>
   </div>
   <details class="ai-adv">
@@ -353,7 +365,6 @@ body.fs-lock{overflow:hidden}
           <button class="ai-chip" data-what="person" onclick="aiPick('ai-what',this)">👤 Người</button>
           <button class="ai-chip" data-what="car" onclick="aiPick('ai-what',this)">🚗 Xe ô tô</button>
           <button class="ai-chip" data-what="motorcycle" onclick="aiPick('ai-what',this)">🏍 Xe máy</button>
-          <button class="ai-chip" data-what="dog" onclick="aiPick('ai-what',this)">🐕 Chó</button>
           <button class="ai-chip" data-what="cat" onclick="aiPick('ai-what',this)">🐈 Mèo</button>
         </div>
       </div>
@@ -402,23 +413,48 @@ var CAN_AUTOOPEN = (USER.permissions||{})['camera_autoopen'] === 'read';
    ⚠ Camera chỉ hiện ra khi có mặt ở CẢ HAI nơi: danh sách này VÀ khoá KV
    `camera_list` (CAMS = giao của hai bên). Thêm thiếu một chỗ là camera không
    hiện mà chẳng báo lỗi gì — đã mất công dò vì chuyện này rồi.
-   Thêm camera mới cần 3 chỗ: (1) đây, (2) DEFAULT_CAMERAS trong src/core.js,
-   (3) KV `camera_list` của CẢ staging lẫn production.
+   Thêm camera mới cần 4 chỗ: (1) đây, (2) DEFAULT_CAMERAS trong src/core.js,
+   (3) KV `camera_list` của CẢ staging lẫn production,
+   (4) KV `policy_group:*` nào có khoá `cameras` — người dùng thường chỉ thấy camera
+       nằm trong danh sách đó. Chỗ (4) trước đây KHÔNG được ghi ở ghi chú này nên bị
+       bỏ sót: nhóm `camera-view-home` vẫn cấp cam04→cam08 sau khi 5 camera đó đã chết.
 
-   audio:true  → khi bấm 🔊 sẽ đổi sang luồng `<id>_live` (có tiếng).
-                 Camera nào không khai luồng `_live` trong Frigate thì để false. */
+   audio:true  → camera có tiếng; bấm 🔊 sẽ bỏ tắt loa trên chính luồng đang xem.
+
+   ⚠ [2026-08-25] ĐỒNG BỘ VỚI FRIGATE MỚI (192.168.110.21, Frigate 0.17.2).
+   Server cũ .5 đã tắt hẳn. Danh sách này lấy từ `/api/config` của server mới:
+     - BỎ  cam04 cam05 cam06 cam07 cam08 — không còn tồn tại trên Frigate mới
+     - THÊM cam12 → cam16
+   `view` = tên luồng go2rtc dùng để xem trực tiếp. PHẢI khớp `cameras.<id>.live.streams`
+   trong Frigate, không phải cứ lấy id. Lấy sai thì iframe quay hoài không lên hình.
+     cam01 · cam03 · cam09 · cam10 · cam11  → luồng gốc (không có micro)
+     cam12 · cam13 · cam14                 → <id>_live (luồng chính 1080p, CÓ TIẾNG)
+     cam15 · cam16                        → <id>_live (1080p, KHÔNG tiếng — xem dưới)
+
+   ✅ [2026-08-25] ÂM THANH ĐÃ CHẠY — và tôi đã từng kết luận SAI là không cứu được.
+   AAC của đầu ghi KHÔNG hề hỏng. Mọi lần thử trước đó đều làm trên luồng PHỤ (camNN)
+   — vốn đã hỏng SPS/PPS — nên ffmpeg chết vì HÌNH, còn tôi quy nhầm cho TIẾNG.
+   Lấy từ luồng CHÍNH (camNN_hd) thì chạy ngay: đo được 193.195 byte âm thanh giải mã,
+   trong khi cam13_live (đối chứng, chưa sửa) đo được 0 byte.
+   cam01 có track PCMU nhưng IM LẶNG — không có micro, nên để audio:false.
+   RANH GIỚI: chỉ luồng lấy THẲNG TỪ CAMERA mới chở được tiếng.
+     cam12(.7) cam13(.4) cam14(.8) = camera trực tiếp → CÓ TIẾNG
+     cam15 cam16 = kênh 1501/1601 của ĐẦU GHI → thêm #audio=aac là TIMEOUT,
+     mất CẢ HÌNH. Đã lùi về chỉ-video cho hai cái này. */
 var CAM_DEFAULTS = {
-  'cam01': {sub:'Hikvision · H264',          audio:false},
-  'cam03': {sub:'Hikvision · H264',          audio:false},
-  'cam04': {sub:'Hikvision · H264',          audio:false},
-  'cam05': {sub:'Hikvision · H264',          audio:false},
-  'cam06': {sub:'Hikvision · H264',          audio:false},
-  'cam07': {sub:'H265 → H264/NVENC · audio', audio:true},
-  'cam08': {sub:'H265 → H264/NVENC · audio', audio:true},
-  'cam09': {sub:'H265 → H264/NVENC · audio', audio:true},
-  'cam10': {sub:'H265 → H264/NVENC · audio', audio:true},
-  'cam11': {sub:'H265 → H264/NVENC · audio', audio:true},
+  'cam01': {sub:'Hikvision · H264',              audio:false},
+  'cam03': {sub:'Hikvision · H264',              audio:false},
+  'cam09': {sub:'Hikvision · H264',              audio:false},
+  'cam10': {sub:'Hikvision · H264 · che lòng đường', audio:false},
+  'cam11': {sub:'Hikvision · H264',              audio:false},
+  'cam12': {sub:'1920×1080 · nhận diện mặt · quay PTZ', audio:true , view:'cam12_live', ptz:true},
+  'cam13': {sub:'1920×1080 · nhận diện mặt · quay PTZ', audio:true , view:'cam13_live', ptz:true},
+  'cam14': {sub:'1920×1080 · nhận diện mặt · quay PTZ', audio:true , view:'cam14_live', ptz:true},
+  'cam15': {sub:'Luồng chính 1920×1080 · tắt AI', audio:false, view:'cam15_live'},
+  'cam16': {sub:'Luồng chính 1920×1080 · quay PTZ · tắt AI', audio:false, view:'cam16_live', ptz:true},
 };
+/* Luồng go2rtc dùng để xem — mặc định trùng id nếu camera không khai `view`. */
+function _viewStream(id){ var c=CAM_DEFAULTS[id]||{}; return c.view || id; }
 var CAMS = [];
 var _camState = {};
 var _camNames = {};
@@ -428,7 +464,11 @@ function _saveNames(n){localStorage.setItem('cam_home_names_v1',JSON.stringify(n
 function _displayName(c){return _camNames[c.id]||c.name;}
 
 var _isMobile=/Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&/Mac/i.test(navigator.userAgent));
-var _MODE=_isMobile?'mse,hls,mjpeg':'webrtc,mse,hls,mjpeg';
+/* [2026-08-25] BO 'webrtc': dashboard luon qua proxy Cloudflare, WebRTC can UDP toi IP
+   noi bo nen KHONG BAO GIO bat tay duoc -> trinh phat treo cho het gio moi lui ve MSE
+   (anh Thoai: 'bam 1 phut khong thay phan hoi'). Do tren LAN: webrtc 510ms vs mse 794ms.
+   Bo di gan nhu khong mat gi ma tranh duoc cu treo. */
+var _MODE='mse,hls,mjpeg';
 var currentTab='live';
 
 /* ── Clock ── */
@@ -502,13 +542,23 @@ function buildCamGrid(){
           +'<button class="resume-btn" onclick="toggleCam(\''+c.id+'\')">▶ Bật</button>'
         +'</div>'
         +'<div class="cam-actions">'
+          +((CAM_DEFAULTS[c.id]||{}).ptz&&USER.isAdmin
+              ? '<button class="cam-act-btn" id="ptzbtn-'+c.id+'" onclick="ptzToggle(\''+c.id+'\')" title="Điều khiển quay">🕹</button>' : '')
           +'<button class="cam-act-btn" onclick="camFullscreen(\''+c.id+'\')" title="Toàn màn hình">⛶</button>'
           +'<button class="cam-act-btn" onclick="camSnapshot(\''+c.id+'\')" title="Chụp ảnh">📷</button>'
         +'</div>'
+        +((CAM_DEFAULTS[c.id]||{}).ptz&&USER.isAdmin
+            ? '<div class="ptz-pad" id="ptzpad-'+c.id+'">'
+              +'<button class="ptz-b ptz-u" title="Lên">▲</button>'
+              +'<button class="ptz-b ptz-l" title="Trái">◀</button>'
+              +'<button class="ptz-b ptz-r" title="Phải">▶</button>'
+              +'<button class="ptz-b ptz-d" title="Xuống">▼</button>'
+              +'</div>' : '')
       +'</div>'
     +'</div>';
   }).join('');
   if(_editingId){var inp=document.getElementById('edit-input-'+_editingId);if(inp){inp.focus();inp.select();}}
+  _ptzWarm();
 }
 
 /* ── Rename functions ── */
@@ -581,7 +631,7 @@ function renderCam(id){
     badge.style.display='';overlay.style.display='none';snap.classList.add('hidden');
     var ifr=document.createElement('iframe');
     ifr.allow='autoplay';ifr.allowFullscreen=true;
-    ifr.src='/cam-test-live/stream.html?src='+encodeURIComponent(id)+'&mode='+_MODE;
+    ifr.src='/cam-test-live/stream.html?src='+encodeURIComponent(_viewStream(id))+'&mode='+_MODE;
     frame.insertBefore(ifr,frame.querySelector('.cam-actions'));
   } else {
     badge.style.display='none';
@@ -591,13 +641,11 @@ function renderCam(id){
 }
 
 /* ── Audio ──
-   cam07/cam08 (EZVIZ): stream chính `camXX` giờ CHỈ VIDEO (để không khóa kênh
-   audio 1-đường của EZVIZ → app gọi 2 chiều được khi không ai bật loa).
-   Bật 🔊 → chuyển sang stream `camXX_live` (go2rtc ghép video sẵn có + audio
-   kéo on-demand từ camera — chỉ chiếm kênh audio TRONG LÚC đang nghe). */
+   [2026-08-25] Frigate mới không còn luồng `camXX_live` như server .5 cũ. Luồng xem
+   của mỗi camera đã có sẵn tiếng hay không — xem `view` trong CAM_DEFAULTS. Bật 🔊
+   chỉ cần nạp lại chính luồng đó kèm cam_audio=1, không đổi sang luồng khác nữa. */
 function _audioStream(id){
-  var c=CAM_DEFAULTS[id]||{};
-  return c.audio ? (id+'_live') : id;   // camera có audio → dùng bản _live khi bật loa
+  return _viewStream(id);
 }
 function camToggleAudio(id){
   var st=_camState[id];st.audioOn=!st.audioOn;
@@ -614,10 +662,66 @@ function camToggleAudio(id){
     ifr.src='about:blank';
     setTimeout(function(){ifr.src=src;},80);
   }else{
-    var src2='/cam-test-live/stream.html?src='+encodeURIComponent(id)+'&mode='+_MODE;
+    var src2='/cam-test-live/stream.html?src='+encodeURIComponent(_viewStream(id))+'&mode='+_MODE;
     ifr.src='about:blank';
     setTimeout(function(){ifr.src=src2;},80);
   }
+}
+
+/* ── Điều khiển quay PTZ ──
+   [2026-08-25] Frigate 0.17.2 KHÔNG có API HTTP để ra lệnh quay — chỉ có
+   `GET /{camera}/ptz/info` để đọc thông tin. Giao diện Frigate gửi lệnh qua
+   WebSocket `/ws`, dạng { topic:"<cam>/ptz", payload:"MOVE_LEFT", retain:false }.
+   Đã kiểm tận nơi: nối ws tới Frigate, gửi tới `cam15/ptz` — nhận, không văng lỗi.
+   MQTT đang TẮT nên kênh này KHÔNG phụ thuộc MQTT.
+
+   Giữ MỘT kết nối dùng chung cho mọi camera; server chỉ cho admin (src/camera-home.js).
+   Nhấn giữ = quay, thả = STOP. Không tự STOP thì camera quay mãi. */
+var _ptzWs=null,_ptzWait=[];
+function _ptzConn(){
+  if(_ptzWs&&(_ptzWs.readyState===0||_ptzWs.readyState===1))return _ptzWs;
+  var proto=location.protocol==='https:'?'wss://':'ws://';
+  _ptzWs=new WebSocket(proto+location.host+'/cam-test-api/ws');
+  _ptzWs.onopen=function(){var q=_ptzWait;_ptzWait=[];q.forEach(function(m){try{_ptzWs.send(m);}catch(e){}});};
+  _ptzWs.onclose=function(){_ptzWs=null;};
+  _ptzWs.onerror=function(){};
+  return _ptzWs;
+}
+function _ptzSend(id,cmd){
+  var ws=_ptzConn();
+  var msg=JSON.stringify({topic:id+'/ptz',payload:cmd,retain:false});
+  if(ws.readyState===1){try{ws.send(msg);}catch(e){}}
+  else if(_ptzWait.length<8){_ptzWait.push(msg);}
+}
+/* Mo san ket noi ngay khi vao trang: bat tay qua Cloudflare ton 323-829ms (do 25/08).
+   De den luc bam moi noi thi lan bam DAU TIEN luon tre. Chi mo neu co camera PTZ. */
+function _ptzWarm(){try{for(var k in CAM_DEFAULTS){if(CAM_DEFAULTS[k].ptz&&USER.isAdmin){_ptzConn();return;}}}catch(e){}}
+function ptzToggle(id){
+  var pad=document.getElementById('ptzpad-'+id);if(!pad)return;
+  var on=pad.classList.toggle('on');
+  if(on){_ptzConn();_ptzBind(id,pad);}
+}
+function _ptzBind(id,pad){
+  if(pad.dataset.bound)return;pad.dataset.bound='1';
+  var map={'ptz-u':'MOVE_UP','ptz-d':'MOVE_DOWN','ptz-l':'MOVE_LEFT','ptz-r':'MOVE_RIGHT'};
+  /* Log Frigate 25/08: moi lan bam chi quay 130-290ms -> camera gan nhu khong nhuc
+     nhich, anh Thoai tuong khong phan hoi roi bam tiep. Giu lenh it nhat 600ms. */
+  var TOI_THIEU=600;
+  Object.keys(map).forEach(function(cls){
+    var b=pad.querySelector('.'+cls);if(!b)return;
+    var t0=0,hen=null;
+    var di=function(e){e.preventDefault();e.stopPropagation();
+      if(hen){clearTimeout(hen);hen=null;}
+      t0=Date.now();_ptzSend(id,map[cls]);};
+    var dung=function(e){e.preventDefault();e.stopPropagation();
+      if(!t0)return;
+      var con=TOI_THIEU-(Date.now()-t0);t0=0;
+      if(con>0){if(hen)clearTimeout(hen);hen=setTimeout(function(){hen=null;_ptzSend(id,'STOP');},con);}
+      else{_ptzSend(id,'STOP');}};
+    b.addEventListener('mousedown',di);b.addEventListener('touchstart',di,{passive:false});
+    ['mouseup','mouseleave','touchend','touchcancel'].forEach(function(ev){b.addEventListener(ev,dung);});
+    b.addEventListener('click',function(e){e.stopPropagation();});
+  });
 }
 
 /* ── Fullscreen ── */
@@ -1064,30 +1168,13 @@ function loadExploreRow(label){
     }).catch(function(){var sc=document.getElementById('scroll-'+label);if(sc)sc.innerHTML='<div class="ai-row-empty">Lỗi tải</div>';});
 }
 function showExplore(){
-  document.getElementById('ai-q').value='';
   document.getElementById('ai-back').classList.add('hidden');
   document.getElementById('ai-grid').innerHTML='';
   document.getElementById('ai-count').textContent='';
   var box=document.getElementById('ai-explore');box.classList.remove('hidden');
   if(!box.innerHTML.trim()||box.querySelector('.ai-empty'))loadExplore();
 }
-function semanticSearch(){
-  /* jinav2 hiểu tiếng Việt native → gửi thẳng câu tiếng Việt, KHÔNG cần dịch */
-  var q=(document.getElementById('ai-q').value||'').trim();
-  if(!q){showExplore();return;}
-  document.getElementById('ai-explore').classList.add('hidden');
-  document.getElementById('ai-back').classList.remove('hidden');
-  document.getElementById('ai-count').textContent='Đang tìm “'+q+'”…';
-  document.getElementById('ai-grid').innerHTML='';
-  var url='/cam-test-api/api/events/search?query='+encodeURIComponent(q)+'&limit=100';
-  fetch(url).then(function(r){return r.ok?r.json():Promise.reject(r.status);})
-    .then(function(data){
-      var evs=Array.isArray(data)?data:(data.events||[]);
-      renderEvents(evs);
-      document.getElementById('ai-count').textContent='Kết quả cho “'+q+'” — '+evs.length+' sự kiện';
-    })
-    .catch(function(e){document.getElementById('ai-grid').innerHTML='<div class="ai-empty">Lỗi tìm kiếm ('+escHtml(String(e))+')</div>';document.getElementById('ai-count').textContent='';});
-}
+/* [2026-08-25] Da bo semanticSearch() cung voi o tim kiem - xem ghi chu o tren. */
 function drillLabel(label){
   _setChip('ai-what','what',label);
   _setChip('ai-when','when','all');

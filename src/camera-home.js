@@ -198,6 +198,47 @@ export async function handleCamTestApiEmbed(request, env) {
   const reqUrl = new URL(request.url);
   const target = `${baseUrl}${subPath}${reqUrl.search}`;
 
+  /* ── WebSocket `/ws` của Frigate — đường DUY NHẤT để điều khiển PTZ ──
+     [2026-08-25] Frigate 0.17.2 KHÔNG có endpoint HTTP nào ra lệnh quay camera.
+     Rà cả `/api/openapi.json`: chỉ có `GET /{camera}/ptz/info` để ĐỌC thông tin.
+     Giao diện Frigate gửi lệnh qua WebSocket `/ws` theo dạng
+         { topic: "<camera>/ptz", payload: "MOVE_LEFT", retain: false }
+     Đã xác minh bằng cách nối thẳng tới ws://192.168.110.21:5000/ws: mở được,
+     nhận đủ các kênh, và nhận lệnh gửi tới `cam15/ptz` mà không văng lỗi.
+     MQTT đang TẮT (`mqtt.enabled=false`) — kênh này không phụ thuộc MQTT.
+
+     ⚠ CHỈ ADMIN. Quay camera là hành vi ĐIỀU KHIỂN, không phải xem. Kênh `/ws`
+     còn mang cả `restart`, `<camera>/detect/set`, `ptz_autotracker/set`… nên mở
+     cho quyền `camera` (chỉ-đọc) là leo thang đặc quyền. Muốn giao PTZ cho người
+     dùng thường thì phải khai quyền riêng `camera_ptz` — nhớ sửa ĐỦ 9 chỗ, xem
+     memory `perm_role_checklist`. */
+  if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+    if (!(await isAdminUser(env, session))) return new Response('Forbidden', { status: 403 });
+
+    let upstreamResp;
+    try {
+      upstreamResp = await fetch(target, {
+        headers: {
+          'Upgrade':               'websocket',
+          'Connection':            'Upgrade',
+          'Sec-WebSocket-Version': '13',
+          'Sec-WebSocket-Key':     'dGhlIHNhbXBsZSBub25jZQ==',
+          ...(cfId ? { 'CF-Access-Client-Id': cfId, 'CF-Access-Client-Secret': cfSecret } : {}),
+        },
+      });
+    } catch (e) {
+      return new Response('WebSocket upstream error: ' + e.message, { status: 502 });
+    }
+    const upstream = upstreamResp.webSocket;
+    if (!upstream) return new Response('WebSocket upstream failed (' + upstreamResp.status + ')', { status: 502 });
+
+    const { 0: client, 1: server } = new WebSocketPair();
+    server.accept();
+    upstream.accept();
+    bridgeWebSocket(server, upstream);
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
   try {
     const fetchOpts = {
       method:  request.method,

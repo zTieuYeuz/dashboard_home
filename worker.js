@@ -3070,7 +3070,9 @@ const SERVICES_EMBED_TREE = [
       embedUrl:'/store/public/admin/main/view', perm:'hub-pnetlab' },
   ]},
   { folder:'Monitor', icon:'📊', sites:[
-    { name:'Frigate NVR', icon:'📷', url:'http://192.168.110.5:5000/', perm:'hub-frigate' },
+    // [2026-08-25] Đổi .5 → .21: máy Frigate cũ (.5) đã tắt hẳn sau khi chuyển sang
+    // server mới 192.168.110.21 (CasaOS, Frigate 0.17.2, 10 camera qua đầu ghi Hikvision).
+    { name:'Frigate NVR', icon:'📷', url:'http://192.168.110.21:5000/', perm:'hub-frigate' },
     { name:'Camera NVR',  icon:'📹', url:'http://192.168.130.3:8088/',  perm:'hub-camera-nvr' },
   ]},
 ];

@@ -413,17 +413,23 @@ export function _truncateJson(v, maxBytes) {
   } catch (_) { return null; }
 }
 
+/* [2026-08-25] Đồng bộ với Frigate mới 192.168.110.21 (0.17.2) — server cũ .5 đã tắt.
+   Nguồn sự thật là `/api/config` của Frigate. Bỏ cam04→cam08 (không còn), thêm cam12→cam16.
+   `stream` = tên luồng go2rtc dùng để XEM, phải khớp `cameras.<id>.live.streams` bên Frigate.
+   ⚠ Sửa ở đây thôi chưa đủ — còn CAM_DEFAULTS trong public/service-home/camera-home.html
+     và khoá KV `camera_list` của CẢ staging lẫn production. Thiếu chỗ nào thì camera
+     không hiện mà KHÔNG báo lỗi gì. */
 export const DEFAULT_CAMERAS = [
-  { id: 'cam01', name: 'Camera 01',          type: 'analog',  stream: 'cam01' },
-  { id: 'cam03', name: 'Camera 03',          type: 'analog',  stream: 'cam03' },
-  { id: 'cam04', name: 'Camera 04',          type: 'ip',      stream: 'cam04' },
-  { id: 'cam05', name: 'Camera 05',          type: 'ip',      stream: 'cam05' },
-  { id: 'cam06', name: 'Camera 06',          type: 'ip',      stream: 'cam06' },
-  { id: 'cam07', name: 'Camera Phòng Khách', type: 'unknown', stream: null    },
-  { id: 'cam08', name: 'Camera 08',          type: 'unknown', stream: null    },
-  { id: 'cam09', name: 'Camera 09',          type: 'unknown', stream: null    },
-  { id: 'cam10', name: 'Camera 10',          type: 'unknown', stream: null    },
-  { id: 'cam11', name: 'Camera 11',          type: 'unknown', stream: null    },
+  { id: 'cam01', name: 'Camera 01', type: 'ip', stream: 'cam01_xem' },
+  { id: 'cam03', name: 'Camera 03', type: 'ip', stream: 'cam03'     },
+  { id: 'cam09', name: 'Camera 09', type: 'ip', stream: 'cam09'     },
+  { id: 'cam10', name: 'Camera 10', type: 'ip', stream: 'cam10'     },
+  { id: 'cam11', name: 'Camera 11', type: 'ip', stream: 'cam11'     },
+  { id: 'cam12', name: 'Camera 12', type: 'ip', stream: 'cam12_rec' },
+  { id: 'cam13', name: 'Camera 13', type: 'ip', stream: 'cam13_rec' },
+  { id: 'cam14', name: 'Camera 14', type: 'ip', stream: 'cam14_rec' },
+  { id: 'cam15', name: 'Camera 15', type: 'ip', stream: 'cam15_rec' },
+  { id: 'cam16', name: 'Camera 16', type: 'ip', stream: 'cam16_rec' },
 ];
 
 export const DEFAULT_CAMERAS_MOVI = [
