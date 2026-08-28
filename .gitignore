@@ -64,8 +64,28 @@ Thumbs.db
 # vào git cho khỏi phình repo. Dựng lại bằng: cd _infra/dash-ssh && npm run build
 public/downloads/*.exe
 public/downloads/*.zip
+
+# ── Rac cua Google Drive (bo sung 2026-08-28) ──────────────────────────────
+# Thu muc Documents cua may DANG duoc Google Drive sao luu, ma repo nam trong
+# do. Drive rai file rieng cua no vao moi thu muc no cham toi.
+#
+# desktop.ini: Windows/Drive tao de dat icon cho thu muc. KHONG phai file cua
+# du an — nhung no DA TUNG LOT len GitHub that (commit 7530cfb, 27/08/2026),
+# vi luc do gitignore chua co dong nay.
+#
+# .tmp.driveupload: file dang tai len do dang. Truoc day dong nay bi ghi LAP
+# hai lan — da gop lai con mot.
+desktop.ini
+Desktop.ini
 .tmp.driveupload/
-.tmp.driveupload/
+.tmp.drivedownload/
+*.gdoc
+*.gsheet
+*.gslides
+*.gdraw
+*.gform
+*.gmap
+*.gsite
 
 # ── Bo sung 2026-08-21 ──
 # Phong ho: file sao luu KV chua hash mat khau + khoa MFA. Chung nam o
