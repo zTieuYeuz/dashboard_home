@@ -368,7 +368,7 @@ a.brand{display:flex;align-items:baseline;gap:8px;margin-right:20px;text-decorat
       <div style="display:flex;gap:4px;padding:8px 12px 0;border-bottom:.5px solid var(--border)">
         <button class="sdwan-tab active" id="sdwan-tab-members" onclick="setSdwanTab('members')">
           <span style="width:5px;height:5px;border-radius:50%;background:var(--purple);display:inline-block;margin-right:4px"></span>
-          Members <span id="sdwan-badge" style="font-size:9px;font-weight:600;color:var(--muted);margin-left:2px"></span>
+          Members <span id="sdwan-members-badge" style="font-size:9px;font-weight:600;color:var(--muted);margin-left:2px"></span>
         </button>
         <button class="sdwan-tab" id="sdwan-tab-rules" onclick="setSdwanTab('rules')">
           <span style="width:5px;height:5px;border-radius:50%;background:var(--amber);display:inline-block;margin-right:4px"></span>
@@ -872,6 +872,11 @@ async function loadSdwan(){
     if(d.error)return;
     _sdwanMembers=d.members||[];
     document.getElementById('sdwan-badge').textContent=`${_sdwanMembers.length} members · ${d.zone||''}`;
+    /* [2026-08-28] Nhãn trên tab Members. Trước đây thẻ này mang id="sdwan-badge"
+       TRÙNG với nhãn ở tiêu đề panel, mà getElementById chỉ trả về thẻ đầu tiên
+       -> nhãn tab luôn RỖNG, không ai để ý vì chẳng có lỗi nào báo ra.
+       Đổi thành id riêng cho đối xứng với sdwan-rules-badge ngay bên cạnh. */
+    document.getElementById('sdwan-members-badge').textContent=`${_sdwanMembers.length}`;
     renderSdwan(_sdwanMembers);
     if(_sdwanRulesAll.length)renderSdwanRules(_sdwanRulesAll);
   }catch(e){}
