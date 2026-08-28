@@ -180,6 +180,14 @@ var _popupRef  = null;
    loginRedirect: Patcher gửi sau khi login thành công VÀ không phát hiện 2FA screen.
    Nếu có 2FA: patcher im lặng, user nhập mã, Termix navigate qua location patcher. ── */
 window.addEventListener('message', function(e) {
+  /* [2026-08-28] Kiểm origin TRƯỚC mọi thứ khác. Trước đây chỉ dựa vào dấu hiệu
+     _termixProxy trong e.data — mà dấu hiệu đó ai xem mã nguồn cũng thấy và
+     bắt chước được, nên bất kỳ trang lạ nào mở dashboard trong iframe cũng gửi
+     giả được lệnh này.
+     An toàn để kiểm chặt như vậy vì iframe termix LUÔN là '/proxy/termix-movi/'
+     — đường dẫn tương đối, tức luôn cùng origin với dashboard. Cùng cách làm
+     đã dùng ở login.html. */
+  if (e.origin !== window.location.origin) return;
   if (!e.data || e.data._termixProxy !== true) return;
   if (e.data.type !== 'loginRedirect') return;
   if (!_termixUrl) return;
