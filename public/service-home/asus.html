@@ -714,13 +714,19 @@ const __PERM__=__USER__.isAdmin?'write':(__USER__.permissions['asus']||'read');
 
 /* ── Polling ── */
 let _pollTimer=null,_bwTimer=null,_clientsTimer=null;
+/* [2026-08-28] Bọc một lớp mỏng: ẩn tab thì bỏ nhịp, không gọi router.
+   KHÔNG đụng vào load/loadBW/loadClients — chúng đang chạy tốt, chỉ chặn ở khâu
+   gọi định kỳ. Trước đây ba timer này vẫn hỏi router đều đặn dù không ai nhìn.
+   Cùng cách với dinhKy() trong fortigate-movi.html. */
+function _dinhKy(fn, ms){ return setInterval(function(){ if (!document.hidden) fn(); }, ms); }
+
 function startPolling(){
   if(_pollTimer)clearInterval(_pollTimer);
-  _pollTimer=setInterval(load,600000);      // 10 phút — full refresh
+  _pollTimer=_dinhKy(load,600000);      // 10 phút — full refresh
   if(_bwTimer)clearInterval(_bwTimer);
-  _bwTimer=setInterval(loadBW,30000);       // 30s — bandwidth only
+  _bwTimer=_dinhKy(loadBW,30000);       // 30s — bandwidth only
   if(_clientsTimer)clearInterval(_clientsTimer);
-  _clientsTimer=setInterval(loadClients,120000); // 2 phút — devices only
+  _clientsTimer=_dinhKy(loadClients,120000); // 2 phút — devices only
 }
 function stopPolling(){
   if(_pollTimer){clearInterval(_pollTimer);_pollTimer=null;}

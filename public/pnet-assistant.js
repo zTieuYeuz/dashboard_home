@@ -395,24 +395,45 @@
   }
   var _mo = null, _inToolbar = false;
   function mountBtn() {
-    if (_inToolbar && btn.parentNode) return;   // đã gắn cạnh Physical → thôi quét
+    /* [2026-08-28] SỬA LỖI NÚT 🤖 BIẾN MẤT KHI MỞ LAB / THƯ MỤC KHÁC.
+
+       PNETLab là ứng dụng một-trang: chuyển lab không tải lại trang mà thay
+       nguyên phần thân. Toolbar cũ bị gỡ, kéo theo nút 🤖 gắn trong đó.
+
+       Bản cũ hỏng ở hai chỗ, cùng một gốc — tưởng "gắn xong là xong việc":
+         1. Điều kiện thoát sớm chỉ hỏi `btn.parentNode` — nút bị gỡ cùng cả
+            mảng cha thì thuộc tính này VẪN còn trỏ tới cha cũ (cái cha đó cũng
+            đã rời khỏi trang). Nên hàm tưởng nút còn nguyên và không làm gì.
+         2. Gắn được một lần là NGẮT HẲN bộ theo dõi DOM. Mất nút lần sau thì
+            không còn ai phát hiện.
+       Kết quả: nút mất hẳn cho tới khi bấm F5.
+
+       Nay dùng `btn.isConnected` — hỏi thẳng "nút có còn nằm trong trang không",
+       không quan tâm cha nó là ai. Và KHÔNG bao giờ ngắt bộ theo dõi nữa. */
+    if (btn.isConnected && _inToolbar) return;   // vẫn đang ở đúng chỗ → thôi
+    if (!btn.isConnected) _inToolbar = false;    // đã bị gỡ khỏi trang → gắn lại
+
     var phys = findPhysical();
     if (phys) {
       var anchor = phys.closest ? (phys.closest('button,a,li,div') || phys) : phys;
       btn.classList.remove('pai-float');
       anchor.parentNode.insertBefore(btn, anchor);  // chèn TRƯỚC "Physical" (bên trái)
       _inToolbar = true;
-      if (_mo) { _mo.disconnect(); _mo = null; }   // xong việc, ngừng theo dõi
-    } else if (!btn.parentNode) {
+    } else if (!btn.isConnected) {
+      /* Không thấy toolbar (trang danh sách lab, trang thư mục…) → cho nút nổi
+         ở góc màn hình. Vẫn dùng được, chỉ khác chỗ đứng. */
       btn.classList.add('pai-float');
       document.body.appendChild(btn);
     }
   }
   mountBtn();
-  // Topology nạp động (/legacy/topology) → theo dõi DOM tới khi toolbar "Physical" xuất hiện
-  if (!_inToolbar) {
-    try { _mo = new MutationObserver(function () { mountBtn(); }); _mo.observe(document.body, { childList: true, subtree: true }); } catch (e) {}
-  }
+  /* Theo dõi SUỐT vòng đời trang, không ngắt. Chi phí gần như bằng không: mỗi
+     lần DOM đổi chỉ chạy một phép kiểm `isConnected` rồi thoát ngay — chỉ khi
+     nút thật sự biến mất mới quét tìm toolbar. */
+  try {
+    _mo = new MutationObserver(function () { mountBtn(); });
+    _mo.observe(document.body, { childList: true, subtree: true });
+  } catch (e) {}
 
   var msgs = panel.querySelector('#pnetai-msgs');
   var ta = panel.querySelector('textarea');

@@ -2874,7 +2874,133 @@ a:hover{background:#4f46e5}</style></head>
         delegateMovi: buildDelegateKeys('movi'),
       })};</` + `script>`
     : '';
-  const userScript = permRegistryScript + `<script>window.__USER__=${JSON.stringify({
+  /* ── Hạn chờ mạng cho MỌI trang (thêm 2026-08-28) ────────────────────────
+     VẤN ĐỀ ĐO ĐƯỢC: 192 trong 197 lệnh gọi mạng của dashboard không có hạn chờ.
+     Mạng yếu mà máy chủ không đáp thì trang đứng im VÔ HẠN — không báo lỗi,
+     không quay vòng, người dùng chỉ thấy màn hình trống và tưởng hỏng.
+
+     Sửa ở ĐÂY thay vì sửa 192 chỗ: đoạn này được chèn vào mọi trang HTML.
+
+     🔴 ĐIỂM MẤU CHỐT — chỉ tính giờ tới lúc máy chủ ĐÁP LỜI, rồi buông ngay.
+     Dashboard có 6 chỗ đọc phản hồi theo luồng (trợ lý AI trả lời dần từng chữ,
+     console-serial dùng event-stream). Nếu đặt hạn cho CẢ quá trình thì câu trả
+     lời AI dài quá 20 giây sẽ bị cắt ngang giữa chừng. Nên hạn chờ được gỡ bỏ
+     ngay khi nhận được phản hồi đầu tiên — phần đọc dữ liệu sau đó thoải mái.
+
+     Ba lớp giữ an toàn:
+       • Lời gọi nào ĐÃ tự đặt hạn riêng thì để nguyên, không đụng
+       • Trình duyệt không có AbortController thì bỏ qua, không làm gì
+       • Bao toàn bộ trong try/catch — hỏng thì trả về fetch gốc, không chặn trang
+     Cố ý KHÔNG dùng dấu huyền ngược trong đoạn này: nó nằm trong chuỗi mẫu của
+     worker.js, một dấu lạc là sập cả trang (đúng lỗi Error 1101 ngày 20/08). */
+  const fetchHanCho = `<script>(function(){
+  try{
+    if(!window.fetch||!window.AbortController)return;
+    var gocFetch=window.fetch.bind(window);
+    var HAN_CHO_DAP=20000;
+    var SO_LAN_THU_LAI=2;
+    var CHO_GIUA_CAC_LAN=[400,1200];
+
+    /* Chỉ thử lại khi CHẮC CHẮN an toàn. Lệnh đọc dữ liệu (GET) gọi lại mấy lần
+       cũng cho cùng kết quả; còn lệnh GHI (POST/PUT/DELETE) gọi lại có thể tạo
+       hai bản ghi, gửi hai lệnh khởi động lại thiết bị — nên tuyệt đối không đụng. */
+    function coTheThuLai(init){
+      var pt=(init&&init.method?String(init.method):'GET').toUpperCase();
+      return pt==='GET'||pt==='HEAD';
+    }
+    /* Chỉ thử lại khi MẠNG hỏng (trình duyệt ném TypeError "failed to fetch").
+       Máy chủ trả 500 thì gọi lại cũng 500 — thử lại chỉ tổ chậm thêm.
+       Và KHÔNG thử lại khi chính mình vừa cắt vì hết hạn chờ: máy chủ đang treo,
+       thử lại 2 lần nữa là bắt người dùng đợi tới một phút. */
+    function laLoiMang(e){
+      return e&&e.name!=='AbortError'&&!(e instanceof RangeError);
+    }
+
+    window.fetch=function(dau,init){
+      try{
+        init=init||{};
+        if(init.signal)return gocFetch(dau,init);
+
+        var choPhepThuLai=coTheThuLai(init);
+
+        function chay(lanThu){
+          var ctrl=new AbortController();
+          var hen=setTimeout(function(){try{ctrl.abort();}catch(e){}},HAN_CHO_DAP);
+          var init2={};for(var k in init){init2[k]=init[k];}
+          init2.signal=ctrl.signal;
+          return gocFetch(dau,init2).then(function(r){
+            clearTimeout(hen);
+            return r;
+          },function(e){
+            clearTimeout(hen);
+            if(choPhepThuLai&&lanThu<SO_LAN_THU_LAI&&laLoiMang(e)){
+              return new Promise(function(ok){
+                setTimeout(ok,CHO_GIUA_CAC_LAN[lanThu]||1200);
+              }).then(function(){return chay(lanThu+1);});
+            }
+            throw e;
+          });
+        }
+        return chay(0);
+      }catch(e){return gocFetch(dau,init);}
+    };
+  }catch(e){}
+
+  /* ── Tự đo tốc độ tải trang ─────────────────────────────────────────────
+     Mọi việc tối ưu đều là PHỎNG ĐOÁN cho tới khi đo được. Không có số thì
+     không biết thay đổi nào đáng công, thay đổi nào chỉ tốn thời gian.
+
+     Giữ 40 lần đo gần nhất trong máy người dùng, không gửi đi đâu cả.
+     Xem bằng cách mở Console của trình duyệt (F12) rồi gõ:  xemTocDo() */
+  try{
+    window.addEventListener('load',function(){
+      setTimeout(function(){
+        try{
+          var t=(performance.getEntriesByType&&performance.getEntriesByType('navigation')[0]);
+          if(!t)return;
+          var so={
+            trang:location.pathname,
+            luc:Date.now(),
+            tong:Math.round(t.duration),
+            choMayChu:Math.round(t.responseStart-t.requestStart),
+            taiVe:Math.round(t.responseEnd-t.responseStart),
+            dungTrang:Math.round(t.domContentLoadedEventEnd-t.responseEnd)
+          };
+          var ds=[];
+          try{ds=JSON.parse(localStorage.getItem('_docTocDo')||'[]');}catch(e){}
+          ds.push(so);
+          if(ds.length>40)ds=ds.slice(-40);
+          try{localStorage.setItem('_docTocDo',JSON.stringify(ds));}catch(e){}
+        }catch(e){}
+      },0);
+    });
+
+    window.xemTocDo=function(){
+      var ds=[];
+      try{ds=JSON.parse(localStorage.getItem('_docTocDo')||'[]');}catch(e){}
+      if(!ds.length){console.log('Chua co so lieu — mo vai trang roi goi lai.');return;}
+      var theoTrang={};
+      ds.forEach(function(x){
+        (theoTrang[x.trang]=theoTrang[x.trang]||[]).push(x.tong);
+      });
+      var bang=Object.keys(theoTrang).map(function(k){
+        var v=theoTrang[k].slice().sort(function(a,b){return a-b;});
+        return {
+          Trang:k,
+          'So lan':v.length,
+          'Nhanh nhat':v[0]+' ms',
+          'Giua':v[Math.floor(v.length/2)]+' ms',
+          'Cham nhat':v[v.length-1]+' ms'
+        };
+      });
+      if(console.table)console.table(bang);else console.log(bang);
+      console.log('Xoa so lieu cu:  localStorage.removeItem("_docTocDo")');
+      return bang;
+    };
+  }catch(e){}
+})();</` + `script>`;
+
+  const userScript = fetchHanCho + permRegistryScript + `<script>window.__USER__=${JSON.stringify({
     username: session.username,
     role: session.role,
     permissions: isAdmin ? {} : effPerms.permissions,

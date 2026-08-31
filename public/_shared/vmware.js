@@ -228,7 +228,10 @@ function loadData() {
 }
 
 loadData();
-setInterval(loadData, 300000);
+/* [2026-08-28] Ẩn tab thì bỏ nhịp này, không gọi máy chủ. Bọc một lớp mỏng thay
+   vì sửa loadData() — hàm đó đang chạy tốt, không đụng vào. Lần tải đầu ở trên
+   vẫn chạy như cũ. Cùng cách với dinhKy() trong fortigate-movi.html. */
+setInterval(function(){ if (!document.hidden) loadData(); }, 300000);
 
 /* Hiện link Settings nếu người dùng là admin.
    Có kiểm null nên trang không có phần tử #settings-link thì bỏ qua, vô hại. */

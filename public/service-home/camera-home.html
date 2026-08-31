@@ -450,9 +450,12 @@ var CAM_DEFAULTS = {
   'cam09': {sub:'Hikvision · H264',              audio:false},
   'cam10': {sub:'Hikvision · H264 · che lòng đường', audio:false},
   'cam11': {sub:'Hikvision · H264',              audio:false},
-  'cam12': {sub:'1920×1080 · nhận diện mặt · quay PTZ', audio:true , view:'cam12_live', ptz:true},
-  'cam13': {sub:'1920×1080 · nhận diện mặt · quay PTZ', audio:true , view:'cam13_live', ptz:true},
-  'cam14': {sub:'1920×1080 · nhận diện mặt · quay PTZ', audio:true , view:'cam14_live', ptz:true},
+  /* view  = luồng xem thường — KHÔNG tiếng, ưu tiên hình lên nhanh
+     tieng = luồng dùng khi bấm 🔊 — có tiếng, đổi lại trễ hơn
+     Xem giải thích đầy đủ ở _viewStream() bên dưới. */
+  'cam12': {sub:'1920×1080 · quay PTZ', audio:true , view:'cam12_nhanh', tieng:'cam12_live', ptz:true},
+  'cam13': {sub:'1920×1080 · quay PTZ', audio:true , view:'cam13_nhanh', tieng:'cam13_live', ptz:true},
+  'cam14': {sub:'1920×1080 · quay PTZ', audio:true , view:'cam14_nhanh', tieng:'cam14_live', ptz:true},
   'cam15': {sub:'Luồng chính 1920×1080 · tắt AI', audio:false, view:'cam15_live'},
   'cam16': {sub:'Luồng chính 1920×1080 · quay PTZ · tắt AI', audio:false, view:'cam16_live', ptz:true},
 };
@@ -647,8 +650,22 @@ function renderCam(id){
    [2026-08-25] Frigate mới không còn luồng `camXX_live` như server .5 cũ. Luồng xem
    của mỗi camera đã có sẵn tiếng hay không — xem `view` trong CAM_DEFAULTS. Bật 🔊
    chỉ cần nạp lại chính luồng đó kèm cam_audio=1, không đổi sang luồng khác nữa. */
+/* [2026-08-29] Luồng dùng KHI BẤM NÚT LOA — có tiếng.
+
+   Trước đây hàm này trả về đúng luồng đang xem, nghĩa là luồng xem LÚC NÀO CŨNG
+   kèm tiếng, kể cả khi đang tắt loa. Mà có tiếng thì trình phát buộc phải giữ sẵn
+   vài giây dữ liệu để khớp hình với tiếng — nên hình luôn chậm 5–6 giây.
+
+   Anh Thoại tìm ra bằng phép so rất chắc: bấm PTZ rồi nhìn màn hình HDMI cắm thẳng
+   thì camera quay NGAY, còn trên dashboard phải đợi 5–6 giây. Tức lệnh không chậm,
+   chỉ hình chậm. Thêm một manh mối nữa: cam16 phản hồi tức thì — và nó là camera
+   PTZ DUY NHẤT không có tiếng.
+
+   Nay tách đôi: xem thường dùng luồng không tiếng (nhanh), bấm loa mới đổi sang
+   luồng có tiếng. Camera nào không khai `tieng` thì dùng luôn luồng đang xem. */
 function _audioStream(id){
-  return _viewStream(id);
+  var c = CAM_DEFAULTS[id] || {};
+  return c.tieng || _viewStream(id);
 }
 function camToggleAudio(id){
   var st=_camState[id];st.audioOn=!st.audioOn;

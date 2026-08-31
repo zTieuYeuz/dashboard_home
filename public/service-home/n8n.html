@@ -669,6 +669,9 @@ function scheduleRefresh(seconds) {
   _refreshCountdown = seconds;
   var lbl = document.getElementById('autoRefreshLabel');
   _refreshTimer = setInterval(function() {
+    /* [2026-08-28] Ẩn tab thì dừng đếm và dừng gọi mạng — xem ghi chú cùng loại
+       ở casaos.html. Quay lại tab thì đếm tiếp từ chỗ đang dở. */
+    if (document.hidden) return;
     _refreshCountdown--;
     if (_refreshCountdown <= 0) {
       clearInterval(_refreshTimer);

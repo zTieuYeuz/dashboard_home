@@ -404,6 +404,11 @@ function manualRefresh() {
 
 // Countdown ticker — updates every second
 setInterval(() => {
+  /* [2026-08-28] Tab đang ẩn thì đứng yên — không đếm, không gọi mạng.
+     Trước đây trang này vẫn hỏi máy chủ đều đặn dù không ai nhìn; mở vài tab
+     dashboard là mỗi tab đều rút băng thông, rõ nhất khi dùng 4G/5G.
+     Cùng cách đã chạy tốt ở rustdesk.html và fortigate-movi.html. */
+  if (document.hidden) return;
   _nextIn--;
   if (_nextIn <= 0) {
     _nextIn = REFRESH_SEC;

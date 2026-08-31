@@ -530,7 +530,8 @@ function _embedAutoAuth(origin){
   inner.style.maxWidth='none'; inner.style.padding='0'; inner.style.height='100%';
   inner.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;padding:30px;gap:14px;color:var(--text-2);font-size:14px;line-height:1.6">'
     +'<div style="font-size:30px">🔓</div>'
-    +'<div>Đang xác thực Cloudflare Access cho Kasm…<br>Đăng nhập xong ở cửa sổ vừa mở → <b>đóng cửa sổ đó</b> (hoặc quay lại đây) → Kasm tự nhúng vào.</div>'
+    +'<div>Đang xác thực Cloudflare Access cho Kasm…<br>Đăng nhập xong ở cửa sổ vừa mở → quay lại đây là Kasm tự nhúng vào.'
+    +'<br><span style="opacity:.75;font-size:12px">Cửa sổ kia đôi khi tự đóng, đôi khi không (Cloudflare chặn) — không sao, anh tự đóng cũng được.</span></div>'
     +'<button id="_embedAuthBtn" style="padding:7px 18px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);font-size:12px;cursor:pointer;font-family:var(--font-sans)">▶ Kết nối ngay</button>'
     +'</div>';
   var done=false, closePoll=null;
@@ -655,20 +656,33 @@ function _dongPopupXacThuc(){
   if(!daDong) console.warn('[pool-auth] KHONG dong duoc popup nao (co the von khong co)');
 }
 
-/* ghiNho = có BẰNG CHỨNG CHẮC CHẮN đã xác thực xong (ảnh dò tải được) hay không.
-   Chỉ khi chắc chắn mới ghi nhớ vào sessionStorage để lần sau bỏ qua bước popup.
-   Nếu chỉ suy đoán (người dùng quay lại cửa sổ / tự đóng popup) thì KHÔNG ghi nhớ —
-   lỡ họ quay lại mà chưa đăng nhập xong thì lần sau popup vẫn hiện lại, không bị
-   kẹt vĩnh viễn ở màn hình "content is blocked" mà không có đường quay lui. */
+/* [2026-08-31] LUÔN GHI NHỚ, không đòi bằng chứng nữa — anh Thoại yêu cầu sau khi
+   phát hiện phải xác thực lại mỗi lần vào.
+
+   Ý ĐỊNH BAN ĐẦU (giữ lại để hiểu vì sao đổi): chỉ ghi nhớ khi có bằng chứng chắc
+   chắn — dò tải được một tấm ảnh trên máy Kasm. Nghe rất hợp lý, nhưng nó dựa vào
+   một giả định KHÔNG AI KIỂM: rằng máy Kasm có `/favicon.ico`.
+
+   THỰC TẾ (log của anh Thoại 31/08): `favicon.ico → 404 Not Found`. Máy Kasm KHÔNG
+   có file đó. Nên phép dò VĨNH VIỄN thất bại → `ghiNho` luôn false → không bao giờ
+   ghi nhớ → LẦN NÀO VÀO CŨNG PHẢI XÁC THỰC LẠI. Một lớp bảo vệ được viết cẩn thận
+   nhưng lại tự vô hiệu hoá chính mục đích của nó.
+
+   ⚠️ ĐÁNH ĐỔI ĐÃ CÂN NHẮC: nếu anh quay lại dashboard khi CHƯA đăng nhập xong, ta
+   sẽ ghi nhớ nhầm và iframe hiện trang bị chặn. KHÔNG bị kẹt vĩnh viễn — nút 🔓
+   (reauthPool) xoá cờ nhớ và mở lại popup. Đổi một lần bấm nút trong trường hợp
+   hiếm, lấy về việc không phải xác thực lại mỗi lần trong trường hợp thường.
+
+   Tham số `ghiNho` GIỮ NGUYÊN trong chữ ký hàm, chỉ còn dùng để ghi nhật ký: nó cho
+   biết lần này có bằng chứng chắc chắn hay chỉ là suy đoán — hữu ích khi chẩn đoán,
+   và để sau này nếu tìm được đường dẫn ảnh thật thì thấy ngay nó đã hoạt động lại. */
 function _poolConfirmAuth(ghiNho){
-  console.log('[pool-auth] _poolConfirmAuth ghiNho=' + ghiNho
+  console.log('[pool-auth] _poolConfirmAuth co-bang-chung=' + ghiNho + ' -> VAN GHI NHO'
     + ' | _poolSlot=' + (_poolSlot ? _poolSlot.id : 'NULL')
     + ' | _authPopup=' + (_authPopup ? (_authPopup.closed ? 'da-dong' : 'DANG-MO') : 'NULL'));
   if(!_poolSlot){ console.warn('[pool-auth] THOAT SOM: _poolSlot rong -> KHONG dong duoc popup'); return; }
   _dongPopupXacThuc();
-  if(ghiNho){
-    try { var a=JSON.parse(sessionStorage.getItem('_kasmAuth')||'{}'); a[_poolSlot.id]=1; sessionStorage.setItem('_kasmAuth',JSON.stringify(a)); } catch(e){}
-  }
+  try { var a=JSON.parse(sessionStorage.getItem('_kasmAuth')||'{}'); a[_poolSlot.id]=1; sessionStorage.setItem('_kasmAuth',JSON.stringify(a)); } catch(e){}
   _poolLoadIframe(_poolSlot);
   if(_activeSiteUrl) poolNavigate(_activeSiteUrl);
 }
@@ -736,7 +750,16 @@ function _poolAuthPopup(kasmUrl){
      cửa sổ, gắn ngay là bắn nhầm tức thì. Cùng con số với _embedAutoAuth cho đồng nhất. */
   function onFocus(){ if(_authGen!==myGen){ window.removeEventListener('focus', onFocus); return; } go('quay lai cua so dashboard'); }
   setTimeout(function(){ if(!done && _authGen===myGen) window.addEventListener('focus', onFocus); }, 1200);
-  _poolMsg('🔓 Đăng nhập Cloudflare Access ở cửa sổ vừa mở.<br>Xong rồi chỉ cần <b>bấm về lại cửa sổ này</b> — nó tự kết nối và tự đóng cửa sổ kia.<br><br>'
+  /* [2026-08-31] Bỏ lời hứa "tự đóng cửa sổ kia" — SAI trong nhiều trường hợp thật.
+     Anh Thoại chụp bằng chứng: log báo "đã đóng bằng cách lấy lại theo tên" mà cửa sổ
+     vẫn còn nguyên trên màn hình. Đào ra nguyên nhân: trang đăng nhập Cloudflare Access
+     có Cross-Origin-Opener-Policy — trình duyệt CỐ Ý cắt đứt liên kết script tới cửa sổ
+     đó VĨNH VIỄN ngay khi nó chạm trang đó, và BÁO GIẢ `.closed = true` để chặn dò xét.
+     Không có cách nào từ phía mình phát hiện hay sửa — đây là hạ tầng của Cloudflare,
+     không phải máy chủ mình. `_dongPopupXacThuc()` vẫn giữ, THỬ đóng vẫn có ích cho các
+     trường hợp không dính COOP — chỉ là không còn HỨA chắc trong giao diện nữa. */
+  _poolMsg('🔓 Đăng nhập Cloudflare Access ở cửa sổ vừa mở.<br>Xong rồi chỉ cần <b>bấm về lại cửa sổ này</b> — nó tự kết nối ngay.'
+    +'<br><span style="opacity:.75;font-size:12px">Cửa sổ đăng nhập kia đôi khi không tự đóng được (Cloudflare chặn) — anh có thể tự đóng nó, không ảnh hưởng gì.</span><br><br>'
     +'<button onclick="if(window._poolAuthGo)window._poolAuthGo()" style="padding:8px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;cursor:pointer;font-family:var(--font-sans);font-weight:500">▶ Kết nối ngay</button>');
 }
 
@@ -1294,7 +1317,11 @@ function loadAsusCards() {
 
   /* Load status, refresh every 60s */
   loadStatus();
-  setInterval(loadStatus, 60000);
+  /* [2026-08-28] Ẩn tab thì bỏ nhịp, không gọi máy chủ. Bọc lớp mỏng, KHÔNG đụng
+     loadStatus(). Lần tải đầu ngay trên vẫn chạy như cũ.
+     ⚠️ CỐ Ý không đụng tới nhịp gia hạn slot Chrome Pool phía dưới — cái đó PHẢI
+     chạy cả khi tab ẩn, nếu không slot bị thu hồi giữa chừng. */
+  setInterval(function(){ if (!document.hidden) loadStatus(); }, 60000);
 
   /* CHỈ dành cho nút LÙI/TIẾN của trình duyệt.
      Hash do CHÍNH TRANG tự đổi (qua _datHash) thì trang đã vẽ lại rồi → bỏ qua ở đây,

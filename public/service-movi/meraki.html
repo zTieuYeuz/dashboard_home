@@ -1686,6 +1686,10 @@ function hidePortTip() {
 /* Auto-refresh */
 var cd = 300;
 setInterval(function() {
+  /* [2026-08-28] Ẩn tab thì đứng yên — không đếm, không gọi Meraki.
+     Quay lại tab thì đếm tiếp từ chỗ đang dở. Cùng cách đã chạy tốt ở
+     rustdesk.html và fortigate-movi.html. */
+  if (document.hidden) return;
   cd--;
   var m = Math.floor(cd / 60), s = cd % 60;
   document.getElementById('autoLabel').textContent = 'Auto · ' + (m > 0 ? m + 'm ' : '') + s + 's';

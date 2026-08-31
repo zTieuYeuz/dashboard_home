@@ -628,8 +628,12 @@ window.addEventListener('load',()=>{
   initCanvas();
   window.addEventListener('resize',initCanvas);
   loadAll();                          /* full load ngay khi mở */
-  setInterval(loadBW,30000);          /* bandwidth: cập nhật mỗi 30s */
-  setInterval(loadAll,600000);        /* tất cả panels: cập nhật mỗi 10 phút */
+  /* [2026-08-28] Ẩn tab thì bỏ nhịp, không gọi FortiGate. Bọc một lớp mỏng,
+     KHÔNG đụng loadBW/loadAll — chúng đang chạy tốt. Lần tải đầu ngay trên vẫn
+     chạy như cũ. Cùng cách với dinhKy() trong fortigate-movi.html. */
+  var _dinhKy = function(fn, ms){ setInterval(function(){ if (!document.hidden) fn(); }, ms); };
+  _dinhKy(loadBW,30000);              /* bandwidth: cập nhật mỗi 30s */
+  _dinhKy(loadAll,600000);            /* tất cả panels: cập nhật mỗi 10 phút */
 });
 
 </script>
