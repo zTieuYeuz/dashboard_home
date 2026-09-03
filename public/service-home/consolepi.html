@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="preconnect" href="https://consolepi.home-server.id.vn"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ConsolePi</title>
+<link rel="stylesheet" href="/service-home/_shared/base.css"/>
+<style>
+html,body{height:100%;overflow:hidden;font-family:var(--font-sans);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+.topnav-item:hover{color:var(--text);background:var(--surface-2)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);transition:all .12s;cursor:pointer;white-space:nowrap}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn:hover{color:var(--text);border-color:var(--muted)}
+
+/* Khung nhúng chiếm hết phần còn lại dưới thanh điều hướng. */
+.embed-wrap{position:relative;flex:1;min-height:0}
+.embed-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none;background:var(--bg)}
+
+/* Lớp phủ gợi ý — chỉ hiện lúc đầu rồi tự ẩn, KHÔNG chặn thao tác (pointer-events:none).
+   Có vì trang ConsolePi có đăng nhập riêng: lần đầu vào sẽ thấy form lạ, không nói
+   trước thì tưởng dashboard hỏng. */
+.hint{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;pointer-events:none;
+  display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;
+  background:color-mix(in oklch,var(--surface-2) 92%,transparent);border:1px solid var(--border);
+  color:var(--text-2);font-size:12px;white-space:nowrap;
+  box-shadow:0 4px 16px rgba(0,0,0,.28);opacity:0;animation:hintShow 7s ease forwards}
+@keyframes hintShow{0%{opacity:0}8%{opacity:1}80%{opacity:1}100%{opacity:0;visibility:hidden}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M12 16v4"/><path d="M7 9l2 2-2 2M13 13h4"/></svg>
+      </div>
+      <div><div class="brand-name">ConsolePi</div><div class="brand-sub">Console server · nhúng trực tiếp</div></div>
+    </div>
+    <nav class="topnav" id="sh-topnav"></nav>
+    <script src="/service-home/_shared/nav.js"></script>
+  </div>
+  <div class="topbar-right">
+    <button class="btn ghost" id="btnReload" title="Tải lại khung">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 8a6 6 0 1 1-1.76-4.24"/><path d="M14 2v4h-4"/></svg>
+    </button>
+    <a class="btn ghost" href="https://consolepi.home-server.id.vn/" target="_blank" rel="noopener" title="Mở trong tab riêng">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3H3v10h10V9.5"/><path d="M9.5 2.5H14V7"/><path d="M14 2.5L7.5 9"/></svg>
+    </a>
+    <button class="btn ghost theme-toggle" id="themeToggle" title="Toggle theme">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M14.5 8h-1.5M3 8h-1.5M12.6 3.4l-1.05 1.05M4.45 11.55l-1.05 1.05M12.6 12.6l-1.05-1.05M4.45 4.45l-1.05-1.05"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="embed-wrap" id="embedWrap">
+  <div class="hint">🔑 ConsolePi có đăng nhập riêng — lần đầu vào sẽ hỏi tài khoản của nó.</div>
+  <iframe id="cpFrame"
+    src="/consolepi-proxy/"
+    title="ConsolePi"
+    allow="clipboard-read; clipboard-write"
+    referrerpolicy="no-referrer"></iframe>
+</div>
+
+<script>
+/* ── Gác quyền ─────────────────────────────────────────────────────────────
+   Khoá 'consolepi'. Máy chủ đã chặn sẵn theo registry (_REGISTRY_PAGE_PERM),
+   phần này chỉ để người vào nhầm thấy lời giải thích tử tế thay vì khung trắng.
+   Viết y hệt khuôn ở ssh.html — cùng cách đọc cookie, cùng nhánh isAdmin. */
+(function(){
+  function _readUserCookie(){try{var m=document.cookie.match(/(?:^|;\s*)dh_user=([^;]+)/);return m?JSON.parse(decodeURIComponent(m[1])):null;}catch(e){return null;}}
+  var U=window.__USER__||_readUserCookie()||{role:'user',permissions:{},isAdmin:false};
+  var P=U.permissions||{};
+  if(U.isAdmin||((P['consolepi']||'none')!=='none'))return;
+  document.addEventListener('DOMContentLoaded',function(){
+    var w=document.getElementById('embedWrap');
+    if(w)w.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:#71717a"><div style="font-size:48px">🔒</div><div style="font-size:17px;font-weight:600;color:#f4f4f5">Không có quyền truy cập</div><div style="font-size:13px">Trang ConsolePi yêu cầu quyền riêng.<br>Liên hệ admin để được cấp quyền.</div><a href="/service-home/ssh.html" style="margin-top:8px;font-size:13px;color:#3b82f6;text-decoration:none">← Về Terminal Home</a></div>';
+  });
+})();
+
+/* Tải lại khung: đổi src kèm mốc thời gian thay vì contentWindow.location.reload()
+   — khung khác nguồn nên trình duyệt chặn đọc/ghi vào bên trong nó. */
+document.getElementById('btnReload').addEventListener('click',function(){
+  var f=document.getElementById('cpFrame');
+  if(f)f.src='/consolepi-proxy/?_t='+Date.now();
+});
+
+(function initTheme(){
+  var saved=null;try{saved=localStorage.getItem('dh_theme')}catch(e){}
+  if(saved==='light')document.documentElement.dataset.theme='light';
+  document.getElementById('themeToggle').addEventListener('click',function(){
+    var next=document.documentElement.dataset.theme==='light'?'dark':'light';
+    document.documentElement.dataset.theme=next;
+    try{localStorage.setItem('dh_theme',next)}catch(e){}
+  });
+})();
+</script>
+</body>
+</html>

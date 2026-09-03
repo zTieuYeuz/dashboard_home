@@ -59,7 +59,18 @@ const HOME = [
      ⚠️ Đổi danh sách này thì sửa cho khớp CẢ 3 chỗ: _TERMK (worker.js, menu),
      _TERMINAL_KEYS (index.html, thẻ trang chính), CARDS (ssh.html, khoá từng cụm). */
   { section: 'home', id: 'ssh', name: 'SSH Terminal', icon: '⌨', page: '/service-home/ssh.html', access: 'toggle',
-    pageKeys: ['ssh', 'console-serial', 'ssh-field'] },
+    pageKeys: ['ssh', 'console-serial', 'ssh-field', 'consolepi'] },
+  /* ConsolePi — console server chạy sẵn, NHÚNG THẲNG bằng iframe (2026-08-31).
+     Khác ba cụm trên ở chỗ: ba cụm kia là công cụ mình tự viết, cụm này là một
+     trang web sẵn có của thiết bị, chỉ mượn khung để xem cho tiện.
+
+     Nhúng được vì đã kiểm header thật: KHÔNG có X-Frame-Options, KHÔNG có
+     frame-ancestors. Nếu sau này ConsolePi nâng cấp mà thêm hai header đó thì
+     khung sẽ trắng — lúc ấy dùng nút "mở tab riêng" đã đặt sẵn trên thanh.
+
+     Nó có ĐĂNG NHẬP RIÊNG (chuyển hướng /login), không qua Cloudflare Access,
+     nên dashboard không thay nó đăng nhập được — người dùng tự nhập trong khung. */
+  { section: 'home', id: 'consolepi', name: 'ConsolePi', icon: '🔌', page: '/service-home/consolepi.html', access: 'toggle' },
   /* Web Console (Serial) — cùng BỘ BA QUYỀN CON như SSH Hiện trường (2026-08-12,
      anh Thoại: "trợ lý console giống hệt trợ lý SSH hiện trường"). Ý nghĩa từng mức
      giống hệt bên kia, chỉ khác đường đi tới thiết bị là DÂY CONSOLE thay vì SSH —

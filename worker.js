@@ -215,6 +215,7 @@ import {
 } from './src/camera-home.js';
 import { runDailySelfReview } from './src/ai/review.js';
 import { handlePnetLlm, handlePnetConsole, handlePnetlabHomeProxy } from './src/pnetlab.js';
+import { handleConsolePiProxy } from './src/consolepi.js';
 import { handleN8nAiLlm, handleN8nAiReadWorkflow, handleN8nAiUpdateWorkflow, handleN8nAiCheckExecutions, handleN8nAiDocs } from './src/n8n-ai.js';
 import {
   handleWebauthnRegisterOptions, handleWebauthnRegisterVerify,
@@ -2467,7 +2468,7 @@ const WAYFIND_NAV = `<style>
  var _CAMK=['camera','camera_playback','camera_download','app_camera','camera_autoopen'];
  /* Terminal Home gộp 3 công cụ dòng lệnh — hiện trong menu nếu có BẤT KỲ quyền
     nào trong ba, khớp accessKeys của service 'ssh' phía server. */
- var _TERMK=['ssh','console-serial','ssh-field'];
+ var _TERMK=['ssh','console-serial','ssh-field','consolepi'];
  function _hp(pk){if(!pk)return true;if(Array.isArray(pk))return pk.some(function(k){return(P[k]||'none')!=='none';});return(P[pk]||'none')!=='none';}
  var _ALL=[
   {i:'\\u2316',n:'Dashboard',d:'Trang chủ · tất cả dịch vụ',h:'/',p:null},
@@ -2485,7 +2486,7 @@ const WAYFIND_NAV = `<style>
   {i:'\\uD83D\\uDCE1',n:'ASUS Router',d:'Home network router',h:'/service-home/asus.html',p:'asus'},
   {i:'\\u26A1',n:'n8n Automation',d:'Workflow & bot automation',h:'/service-home/n8n.html',p:'n8n'},
   {i:'\\uD83D\\uDCF7',n:'Camera',d:'Hệ thống camera · Frigate NVR',h:'/service-home/camera-home.html',p:_CAMK},
-  {i:'\\uD83D\\uDDA7',n:'Terminal Home',d:'Termix · Web Console (Serial) · SSH Hiện trường',h:'/service-home/ssh.html',p:_TERMK},
+  {i:'\\uD83D\\uDDA7',n:'Terminal Home',d:'Termix · Web Console (Serial) · SSH Hiện trường · ConsolePi',h:'/service-home/ssh.html',p:_TERMK},
   {i:'\\uD83D\\uDDA5',n:'RustDesk',d:'Remote desktop · máy nhân viên',h:'/service-home/rustdesk.html',p:'rustdesk'},
   {i:'\\uD83D\\uDDA7',n:'Termix Movi',d:'SSH Movi · token auth',h:'/service-movi/ssh-movi.html',p:'ssh-movi'},
   {i:'\\uD83C\\uDFE0',n:'ALL Service Home',d:'Chrome Pool · FortiGate · ESXi · NAS · n8n · Frigate…',h:'/service-home/services-embed.html',p:'services-hub'},
@@ -4409,6 +4410,7 @@ export default {
     if (p === '/api/admin/camera-aliases-movi' && m === 'PUT')  return handleSaveCameraAlias(request, env);
     if (p.startsWith('/cpai/'))                  return handleCpaiEmbed(request, env);
     if (p.startsWith('/n8n-proxy'))               return handleN8nHomeProxy(request, env);
+    if (p.startsWith('/consolepi-proxy'))        return handleConsolePiProxy(request, env);
     if (p === '/oc' || p.startsWith('/oc/'))     return handleOpenclawApp(request, env);
     if (p === '/api/openclaw-token')             return handleOpenclawToken(request, env);
     if (p === '/api/fgt-pool/allocate')          return handleFgtPoolAllocate(request, env);

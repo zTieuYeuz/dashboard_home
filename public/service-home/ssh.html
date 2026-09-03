@@ -78,7 +78,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
  <div class="hub">
   <div class="hub-head">
     <h1>Terminal Home</h1>
-    <p>Ba đường vào dòng lệnh của thiết bị. Chọn theo <b>chỗ anh đang đứng</b>, không phải theo thiết bị.</p>
+    <p>Bốn đường vào dòng lệnh của thiết bị. Chọn theo <b>chỗ anh đang đứng</b>, không phải theo thiết bị.</p>
   </div>
 
   <div class="hub-grid">
@@ -117,6 +117,17 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
       <a class="launch-btn" href="/service-home/ssh-field.html">🧰 Mở SSH Hiện trường →</a>
     </div>
 
+    <!-- ── Cụm 4: ConsolePi (nhúng iframe, không mở tab như 3 cụm trên) ── -->
+    <div class="launch-card" id="card-consolepi">
+      <div class="launch-icon">
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M12 16v4"/><path d="M7 9l2 2-2 2M13 13h4"/></svg>
+      </div>
+      <div class="launch-title">ConsolePi</div>
+      <div class="launch-desc grow">Console server cắm sẵn tại chỗ — vào thẳng cổng console của thiết bị qua mạng, không cần cầm dây tới tận nơi.</div>
+      <div class="launch-when">Dùng khi: <b>thiết bị đã đấu sẵn vào ConsolePi</b> — ngồi xa vẫn chạm được cổng console.</div>
+      <a class="launch-btn" href="/service-home/consolepi.html">🔌 Mở ConsolePi →</a>
+    </div>
+
   </div>
  </div>
 </div>
@@ -135,7 +146,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
   var U=window.__USER__||_readUserCookie()||{role:'user',permissions:{},isAdmin:false};
   var P=U.permissions||{};
   function can(k){return U.isAdmin||((P[k]||'none')!=='none');}
-  var CARDS=[['card-ssh','ssh'],['card-console-serial','console-serial'],['card-ssh-field','ssh-field']];
+  var CARDS=[['card-ssh','ssh'],['card-console-serial','console-serial'],['card-ssh-field','ssh-field'],['card-consolepi','consolepi']];
 
   document.addEventListener('DOMContentLoaded',function(){
     var any=false;
