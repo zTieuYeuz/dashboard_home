@@ -17,10 +17,31 @@
    ConsolePi rất nhỏ — trang đăng nhập chỉ 1.900 byte), còn JS/CSS/ảnh chuyển
    thẳng dạng luồng, không đệm, không regex. */
 
-import { getSession, hasPerm, bridgeWebSocket } from './core.js';
+import { getSession, hasPerm, bridgeWebSocket, cleanEnv } from './core.js';
 
 const CP_ORIGIN = 'https://consolepi.home-server.id.vn';
 const CP_PREFIX = '/consolepi-proxy';
+
+/* ── Vé vào cửa cho Worker (Cloudflare Access Service Token) ─────────────────
+   Dùng khi anh Thoại khoá consolepi.home-server.id.vn bằng Cloudflare Access
+   với chính sách Service Auth, để CHỈ vào được qua dashboard:
+     • Worker gọi kèm cặp mã này  → Cloudflare cho qua
+     • Người ngoài mở thẳng địa chỉ → không có mã → Cloudflare chặn ngay ở biên,
+       chưa từng chạm tới thiết bị
+
+   Cùng khuôn với 6 dịch vụ khác trong dự án (TERMIX_HOME_CF_*, HOME_CAM_CF_*,
+   PNETLAB_HOME_CF_*, FGT_POOL_CF_*…) — mỗi dịch vụ một cặp riêng, để lộ cặp nào
+   thì thu hồi cặp đó, không kéo sập mọi thứ.
+
+   CHƯA khai mã thì bỏ qua, proxy chạy y như cũ — nên đặt sẵn phần này TRƯỚC lúc
+   bật khoá là an toàn: bật xong dashboard vào được ngay, không có khoảng đứt.
+   `cleanEnv` cắt dấu BOM và khoảng trắng thừa — secret dán từ Cloudflare hay
+   dính, mà dính thì Access từ chối với thông báo rất khó hiểu. */
+function veVaoCua(env) {
+  const id  = cleanEnv(env.CONSOLEPI_CF_CLIENT_ID);
+  const sec = cleanEnv(env.CONSOLEPI_CF_CLIENT_SECRET);
+  return (id && sec) ? { id, sec } : null;
+}
 
 /* Đường dẫn tuyệt đối trong HTML (vd src="/vkeyboard.js") sẽ trỏ về GỐC dashboard
    chứ không phải vào proxy — đúng cái bẫy đã làm trắng trang PNETLab. Nên phải
@@ -63,6 +84,11 @@ export async function handleConsolePiProxy(request, env) {
     if (ckWs) wsHeaders.set('Cookie', ckWs);
     const swp = request.headers.get('Sec-WebSocket-Protocol');
     if (swp) wsHeaders.set('Sec-WebSocket-Protocol', swp);
+    const veWs = veVaoCua(env);
+    if (veWs) {
+      wsHeaders.set('CF-Access-Client-Id',     veWs.id);
+      wsHeaders.set('CF-Access-Client-Secret', veWs.sec);
+    }
 
     let upResp;
     try { upResp = await fetch(target, { headers: wsHeaders }); }
@@ -100,6 +126,11 @@ export async function handleConsolePiProxy(request, env) {
     .filter(c => c && !c.startsWith('dh_session=') && !c.startsWith('dh_user='))
     .join('; ');
   if (sach) fwd.set('Cookie', sach); else fwd.delete('Cookie');
+  const ve = veVaoCua(env);
+  if (ve) {
+    fwd.set('CF-Access-Client-Id',     ve.id);
+    fwd.set('CF-Access-Client-Secret', ve.sec);
+  }
 
   let upstream;
   try {
