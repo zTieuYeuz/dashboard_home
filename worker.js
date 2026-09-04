@@ -363,6 +363,55 @@ return `<script>(function(){
       + 'font-size:12px;cursor:pointer">Để sau</button></div>';
     document.body.appendChild(d);
   }
+  /* [2026-09-04] KHUNG ẨN TỰ ĐIỀU HƯỚNG — làm mới THẺ NGẮN HẠN của Cloudflare Access.
+
+     Vì sao _hienThongBaoCfHetHan (ở trên) CHƯA ĐỦ: nó chỉ bắt được đúng MỘT lời gọi —
+     fetch('/api/auth/refresh') của chính dashboard. Anh Thoại gửi thêm bằng chứng
+     2026-09-04: script của CHÍNH ConsolePi (ttyd, mã không phải của mình, không sửa
+     được) tự gọi fetch tới '/consolepi-proxy/term-console/ttyUSB0/token' rồi mở
+     WebSocket — CẢ HAI đều dính đúng lỗi y hệt, độc lập với dashboard.
+
+     Cloudflare Access có HAI mốc thời hạn khác nhau — dễ nhầm là chỉ có một:
+       • Session Duration (xem trong Cloudflare) — anh Thoại xác nhận đã để DÀI
+         (1 tuần–1 tháng) — đây là hạn KHAI LẠI DANH TÍNH, không phải thứ đang gây lỗi.
+       • Một thẻ NGẮN HẠN hơn nhiều (JWT truy cập) mà Cloudflare tự cấp và tự âm thầm
+         làm mới — nhưng CHỈ làm mới được qua một cú ĐIỀU HƯỚNG TRANG THẬT, KHÔNG BAO
+         GIỜ làm mới được qua fetch() nền. Đã kiểm chứng: mở thẳng một địa chỉ bị chặn
+         ở TAB MỚI (điều hướng thật) thì LUÔN qua được; cùng địa chỉ đó gọi bằng fetch()
+         thì THỈNH THOẢNG bị chặn — đúng lúc thẻ ngắn hạn vừa hết.
+
+     Cách chữa: định kỳ tự điều hướng một khung ẩn (không ai nhìn thấy) sang một địa chỉ
+     nhẹ cùng gốc. Đây LÀ điều hướng thật nên Cloudflare tự làm mới thẻ ngắn hạn được —
+     nếu phiên đăng nhập gốc (Session Duration) vẫn còn hạn thì việc này diễn ra HOÀN
+     TOÀN ÂM THẦM, không ai thấy gì, không cần gõ lại mật khẩu. Nhờ vậy lúc ttyd (hay
+     bất kỳ mã nào khác) gọi fetch(), thẻ luôn còn mới.
+
+     ⚠️ Vùng này đã làm sập production 2 lần (backtick lạc, banner báo sai) — ĐỌC chú
+     thích ở _hienThongBaoCfHetHan phía trên trước khi sửa tiếp. Khối này giữ đúng quy
+     tắc đã rút ra hôm nay: KHÔNG dùng backtick ở bất cứ đâu (kể cả trong chú thích),
+     KHÔNG lồng dấu nháy nhiều lớp — mọi nối chuỗi dùng dấu +. */
+  var CF_LAM_MOI_MOI = 240000; /* 4 phút/lần — ngắn hơn REFRESH_EVERY một chút, chủ động
+                                   làm mới trước khi fetch() kịp đụng lúc thẻ vừa hết */
+  var CF_LMM_RK = 'dh_cf_iframe';
+  function _lamMoiTheNganHan() {
+    if (Date.now() - rd(CF_LMM_RK) < CF_LAM_MOI_MOI) return;
+    wr(CF_LMM_RK, Date.now());
+    var f = document.getElementById('_cfSilentRefresh');
+    if (!f) {
+      f = document.createElement('iframe');
+      f.id = '_cfSilentRefresh';
+      f.setAttribute('aria-hidden', 'true');
+      f.tabIndex = -1;
+      f.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;'
+        + 'border:0;left:-9999px;top:-9999px';
+      document.body.appendChild(f);
+    }
+    /* /favicon.svg: file tĩnh nhẹ, luôn có sẵn, không tốn gì để tải lặp lại. Thêm mốc
+       thời gian để trình duyệt không dùng lại bản nhớ đệm cũ (không cần bản mới nhất
+       của FILE — chỉ cần chính HÀNH ĐỘNG điều hướng chạy lại mỗi lần). */
+    f.src = '/favicon.svg?_cfw=' + Date.now();
+  }
+
   function keepAlive() {
     if (Date.now() - rd(RK) < REFRESH_EVERY) return;
     wr(RK, Date.now());                       /* giữ chỗ TRƯỚC để 2 tab không cùng gọi */
@@ -387,6 +436,7 @@ return `<script>(function(){
       /* Còn hoạt động (ở tab bất kỳ) → ẩn cảnh báo nếu đang hiện + giữ phiên sống */
       if (bn && bn.style.display !== 'none') { bn.style.display='none'; clearInterval(tk); tk=null; }
       keepAlive();
+      _lamMoiTheNganHan();
     }
   }, 10000);
 })();<\/script>`;
