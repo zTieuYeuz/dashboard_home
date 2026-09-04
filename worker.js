@@ -317,31 +317,60 @@ return `<script>(function(){
   /* Đẩy hạn phiên ra xa khi người dùng CÒN thao tác. Nhiều tab điều phối qua
      localStorage: tab nào vừa gia hạn thì ghi mốc, các tab khác thấy còn mới thì
      thôi — tránh gọi trùng. Gọi hỏng thì xoá mốc để tab khác thử lại. */
-  /* ⚠️ ĐÃ THỬ VÀ ĐÃ GỠ (2026-08-20/21) — ĐỪNG LÀM LẠI KIỂU NÀY.
-     Từng thêm ở đây một banner đỏ "Phiên Cloudflare Access đã hết hạn", kích hoạt khi
-     fetch('/api/auth/refresh') bị TỪ CHỐI 2 lần liên tiếp. Ý tưởng: fetch bị reject (không
-     có mã lỗi) trên đường same-origin thường là do Access chuyển hướng rồi CORS chặn.
+  /* [2026-09-04] LÀM LẠI, LẦN NÀY CÓ BẰNG CHỨNG THẬT — đọc phần GỠ Ở TRÊN trước khi
+     đụng lại chỗ này, hai lần hỏng cũ VẪN CÒN ĐÚNG, chỉ là lần này khác ở CÁCH PHÁT HIỆN.
 
-     HAI LẦN HỎNG THẬT:
-     1. Chú thích có dấu BACKTICK → đoạn này nằm trong chuỗi template của worker.js →
-        cắt đứt chuỗi → Worker ném lỗi → PRODUCTION CHẾT (Error 1101). Lệnh kiểm cú pháp
-        thường KHÔNG bắt được vì file vẫn hợp lệ, chỉ nội dung chuỗi mới hỏng, và lỗi chỉ
-        nổ lúc chạy.
-     2. Sau khi vá backtick, banner vẫn BÁO NHẦM: anh Thoại dùng 2-3 phút là hiện, F5 vẫn
-        hiện lại. Giả thuyết "fetch reject = hết phiên Access" SAI — còn nguyên nhân khác
-        làm fetch reject (trang PNETLab chạy trong iframe qua proxy, patcher viết lại URL,
-        tab nền bị bóp…) mà chưa xác định được.
+     BẰNG CHỨNG (ảnh Console anh Thoại chụp 2026-09-04, lúc dùng trang ConsolePi):
+       "Access to fetch at 'labserverhome.cloudflareaccess.com/...' (redirected from
+        'dashboard.home-server.id.vn/api/auth/refresh') ... blocked by CORS policy"
+     Cùng lúc đó '/consolepi-proxy/term-local/token' (Terminal trong ConsolePi) dính
+     ĐÚNG lỗi y hệt — cùng một gốc, không phải 2 lỗi rời rạc: phiên Cloudflare Access
+     (khác 'dh_session' của dashboard) hết hạn giữa lúc dùng. Xác nhận thêm bằng cách đọc
+     handleSessionRefresh() (worker.js ~578) — hàm KHÔNG hề tự chuyển hướng, nên cú chặn
+     xảy ra ở BIÊN Cloudflare, trước khi chạm tới Worker.
 
-     → Chưa hiểu rõ thì KHÔNG đoán. Một banner che ngang màn hình báo sai còn tệ hơn nhiều
-     so với thông báo lỗi khó hiểu. Muốn làm lại thì phải có BẰNG CHỨNG thật (wrangler tail
-     + console lúc nó bắn) chứ không suy luận suông.
-     Thông báo dễ hiểu ở _settings/users.js (_giaiThichLoiMang) thì GIỮ — cái đó chỉ đổi
-     chữ khi lỗi đã thật sự xảy ra, không tự bắn ra bao giờ. */
+     ⚠️ SỰ THẬT KHÔNG SỬA ĐƯỢC BẰNG JS: fetch() KHÔNG BAO GIỜ tự làm mới được phiên
+     Access đã hết hạn — phản hồi chuyển hướng của Access không cấp CORS cho fetch đọc,
+     đây là thiết kế cố ý của Cloudflare (chặn kịch bản dò xét), không phải lỗi cấu hình.
+     Chỉ TẢI LẠI TRANG (điều hướng thật) mới đi trọn được vòng chuyển hướng đó.
+
+     CÁCH TRÁNH LẶP LỖI 1 (2026-08-20, backtick cắt đứt chuỗi template): đoạn này nằm
+     trong chuỗi template bao ngoài (return '<script>...') — TUYỆT ĐỐI KHÔNG dùng dấu
+     backtick ở bất cứ đâu trong khối này, kể cả trong chú thích. Toàn bộ nối chuỗi dưới
+     đây dùng dấu '+', giống các đoạn khác trong file này.
+
+     CÁCH TRÁNH LẶP LỖI 2 (banner báo sai vì suy đoán "fetch reject = hết phiên"): LẦN NÀY
+     dùng redirect:'manual' — cờ này khiến fetch KHÔNG throw khi bị chuyển hướng, mà trả
+     về response với type === 'opaqueredirect'. Đây là TÍN HIỆU CHẮC CHẮN, phân biệt được
+     với những lý do khác khiến fetch thất bại (mất mạng, tab nền bị bóp…) — những lý do đó
+     vẫn rơi vào catch() như cũ, KHÔNG hiện thông báo. Chỉ hiện khi biết chắc, không đoán. */
+  var _cfNoticeDaHien = false;
+  function _hienThongBaoCfHetHan() {
+    if (_cfNoticeDaHien) return;
+    _cfNoticeDaHien = true;
+    var d = document.createElement('div');
+    d.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:99999;'
+      + 'max-width:320px;background:#1e293b;color:#e2e8f0;border:1px solid #475569;'
+      + 'border-radius:10px;padding:12px 14px;font-family:system-ui,sans-serif;'
+      + 'font-size:12.5px;line-height:1.5;box-shadow:0 6px 24px rgba(0,0,0,.4)';
+    d.innerHTML = '<div style="margin-bottom:8px">🔐 Phiên đăng nhập Cloudflare cần làm mới '
+      + '— vài chức năng (Terminal, tải tệp…) có thể không chạy cho tới khi tải lại.</div>'
+      + '<div style="display:flex;gap:8px">'
+      + '<button onclick="location.reload()" style="flex:1;background:#2563eb;color:#fff;'
+      + 'border:none;padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer">Tải lại trang</button>'
+      + '<button onclick="this.parentElement.parentElement.remove()" style="background:transparent;'
+      + 'color:#94a3b8;border:1px solid #475569;padding:6px 10px;border-radius:6px;'
+      + 'font-size:12px;cursor:pointer">Để sau</button></div>';
+    document.body.appendChild(d);
+  }
   function keepAlive() {
     if (Date.now() - rd(RK) < REFRESH_EVERY) return;
     wr(RK, Date.now());                       /* giữ chỗ TRƯỚC để 2 tab không cùng gọi */
-    fetch('/api/auth/refresh', { method: 'POST', credentials: 'same-origin' })
-      .then(function(r){ if (!r.ok) wr(RK, 0); })
+    fetch('/api/auth/refresh', { method: 'POST', credentials: 'same-origin', redirect: 'manual' })
+      .then(function(r){
+        if (r.type === 'opaqueredirect') { wr(RK, 0); _hienThongBaoCfHetHan(); return; }
+        if (!r.ok) wr(RK, 0);
+      })
       .catch(function(){ wr(RK, 0); });
   }
 
