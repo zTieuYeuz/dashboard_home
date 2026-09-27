@@ -17,7 +17,7 @@
    ConsolePi rất nhỏ — trang đăng nhập chỉ 1.900 byte), còn JS/CSS/ảnh chuyển
    thẳng dạng luồng, không đệm, không regex. */
 
-import { getSession, hasPerm, bridgeWebSocket, cleanEnv } from './core.js';
+import { getSession, hasPerm, bridgeWebSocket, cleanEnv, getRawSetCookies, filterCookies } from './core.js';
 
 const CP_ORIGIN = 'https://consolepi.home-server.id.vn';
 const CP_PREFIX = '/consolepi-proxy';
@@ -78,9 +78,7 @@ export async function handleConsolePiProxy(request, env) {
     wsHeaders.set('Upgrade', 'websocket');
     wsHeaders.set('Host', new URL(CP_ORIGIN).hostname);
     wsHeaders.set('Origin', CP_ORIGIN);
-    const ckWs = (request.headers.get('cookie') || '').split(';').map(c => c.trim())
-      .filter(c => c && !c.startsWith('dh_session=') && !c.startsWith('dh_user='))
-      .join('; ');
+    const ckWs = filterCookies(request.headers.get('cookie'), ['dh_session=', 'dh_user=']);
     if (ckWs) wsHeaders.set('Cookie', ckWs);
     const swp = request.headers.get('Sec-WebSocket-Protocol');
     if (swp) wsHeaders.set('Sec-WebSocket-Protocol', swp);
@@ -122,9 +120,7 @@ export async function handleConsolePiProxy(request, env) {
   const ref = request.headers.get('Referer');
   if (ref) fwd.set('Referer', ref.split(reqUrl.origin + CP_PREFIX).join(CP_ORIGIN).split(reqUrl.origin).join(CP_ORIGIN));
   /* Bỏ cookie phiên của dashboard — ConsolePi không cần, gửi sang là rò thông tin. */
-  const sach = (request.headers.get('cookie') || '').split(';').map(c => c.trim())
-    .filter(c => c && !c.startsWith('dh_session=') && !c.startsWith('dh_user='))
-    .join('; ');
+  const sach = filterCookies(request.headers.get('cookie'), ['dh_session=', 'dh_user=']);
   if (sach) fwd.set('Cookie', sach); else fwd.delete('Cookie');
   const ve = veVaoCua(env);
   if (ve) {
@@ -152,14 +148,9 @@ export async function handleConsolePiProxy(request, env) {
   rh.delete('Content-Security-Policy');
   rh.delete('Content-Length');       // sửa HTML xong là độ dài đổi
 
-  /* ⚠️ PHẢI dùng getSetCookie(): Headers gộp nhiều Set-Cookie thành MỘT chuỗi,
-     lấy bằng .get() là mất hết cookie phiên trừ cái đầu. Đúng lỗi đã làm proxy
-     PNETLab "đăng nhập OK nhưng trang trắng" ngày 2026-07-27. */
+  /* getRawSetCookies (core.js) — xem chú thích ở đó vì sao KHÔNG được dùng .get(). */
   rh.delete('Set-Cookie');
-  let rawCookies = [];
-  try { rawCookies = upstream.headers.getSetCookie(); }
-  catch (e) { const h = upstream.headers.get('set-cookie'); if (h) rawCookies = [h]; }
-  for (const c of rawCookies) {
+  for (const c of getRawSetCookies(upstream.headers)) {
     rh.append('Set-Cookie', String(c)
       .replace(/;\s*Domain=[^;,]*/gi, '')          // bỏ Domain của ConsolePi → cookie thuộc dashboard
       .replace(/;\s*SameSite=\w+/gi, '')

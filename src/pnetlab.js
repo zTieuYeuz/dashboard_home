@@ -26,7 +26,7 @@
    Quyền: gác ở tầng reads.js/actions.js bằng key 'hub-pnetlab'. User không
    có quyền thì AI cũng bị chặn 403 (giống mọi nguồn khác).
    ═══════════════════════════════════════════════════════════════════ */
-import { json, getSession, hasPerm, cleanEnv, bridgeWebSocket } from './core.js';
+import { json, getSession, hasPerm, cleanEnv, bridgeWebSocket, getRawSetCookies, filterCookies } from './core.js';
 
 const PNET = 'https://pnetlab.home-server.id.vn';
 const SKEY = 'pnetlab:aisess';   // KV cache phiên ai-agent
@@ -35,9 +35,7 @@ const STTL = 1800;               // 30 phút
 /* ── Cookie helpers (Workers không có cookie jar, tự quản) ── */
 function jarFrom(resp, prev) {
   const jar = Object.assign({}, prev || {});
-  let list = [];
-  try { list = resp.headers.getSetCookie(); } catch { const h = resp.headers.get('set-cookie'); if (h) list = [h]; }
-  for (const sc of list) {
+  for (const sc of getRawSetCookies(resp.headers)) {
     const first = String(sc).split(';')[0];
     const i = first.indexOf('=');
     if (i > 0) jar[first.slice(0, i).trim()] = first.slice(i + 1).trim();
@@ -518,9 +516,7 @@ export async function handlePnetlabHomeProxy(request, env) {
       wsHeaders.set('CF-Access-Client-Id',     clientId);
       wsHeaders.set('CF-Access-Client-Secret', clientSecret);
     }
-    const wsCookie = (request.headers.get('cookie') || '').split(';').map(c => c.trim())
-      .filter(c => c && !c.startsWith('dh_session=') && !c.startsWith('dh_user='))
-      .join('; ');
+    const wsCookie = filterCookies(request.headers.get('cookie'), ['dh_session=', 'dh_user=']);
     if (wsCookie) wsHeaders.set('Cookie', wsCookie);
     const swp = request.headers.get('Sec-WebSocket-Protocol');
     if (swp) wsHeaders.set('Sec-WebSocket-Protocol', swp);
@@ -587,10 +583,7 @@ export async function handlePnetlabHomeProxy(request, env) {
     fwdHeaders['CF-Access-Client-Secret'] = clientSecret;
   }
   // Lọc cookie phiên dashboard — PNETLab không cần và không được nhận (giống n8n-proxy/termix-proxy).
-  const rawCookie = request.headers.get('cookie') || '';
-  const fwdCookie = rawCookie.split(';').map(c => c.trim())
-    .filter(c => c && !c.startsWith('dh_session=') && !c.startsWith('dh_user='))
-    .join('; ');
+  const fwdCookie = filterCookies(request.headers.get('cookie'), ['dh_session=', 'dh_user=']);
   if (fwdCookie) fwdHeaders['Cookie'] = fwdCookie;
 
   let upstream;
@@ -633,10 +626,7 @@ export async function handlePnetlabHomeProxy(request, env) {
   // không nhận được cookie `_session` → request tiếp theo `/api/auth` trả 401 → AngularJS
   // `unlMainController` không set `$scope.loaded = true` → `<div ng-if="loaded">` không render
   // → trang rỗng hoàn toàn (nhìn thấy nền tối của dashboard xuyên qua iframe = "màn hình đen").
-  let rawCookies = [];
-  try { rawCookies = upstream.headers.getSetCookie(); }
-  catch { const h = upstream.headers.get('set-cookie'); if (h) rawCookies = [h]; }
-  for (const c of rawCookies) {
+  for (const c of getRawSetCookies(upstream.headers)) {
     let rewritten = String(c).replace(/;\s*Domain=[^;,]*/gi, '').replace(/;\s*SameSite=\w+/gi, '; SameSite=None');
     if (!/;\s*Secure/i.test(rewritten)) rewritten += '; Secure';
     rh.append('Set-Cookie', rewritten);

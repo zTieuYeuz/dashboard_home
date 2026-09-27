@@ -19,6 +19,40 @@ export const ALL_SERVICES      = buildAllServices();
 /* ── Strip BOM + trim any env/config string value ── */
 export function cleanEnv(v) { return (v || '').replace(/^﻿/, '').trim(); }
 
+/* ── Lấy nguyên vẹn mọi Set-Cookie từ response upstream trong proxy ──────────
+   DÙNG CHUNG cho MỌI proxy (ConsolePi/PNETLab/Termix). Trước đây mỗi file tự
+   chép một bản gần giống nhau — 5 chỗ tổng cộng (consolepi.js×1, pnetlab.js×1,
+   termix.js×3) — cùng một dòng chú thích cảnh báo y hệt.
+
+   ⚠️ PHẢI dùng getSetCookie(): `Headers.getAll()` KHÔNG tồn tại trên runtime
+   Workers hiện đại. `.get('set-cookie')` GỘP nhiều Set-Cookie thành MỘT chuỗi
+   → lấy bằng .get() là MẤT SẠCH cookie phiên trừ cái đầu.
+   Đúng lỗi đã gặp thật ở proxy PNETLab ngày 2026-07-27: đăng nhập thành công
+   (server trả result:true) nhưng browser không nhận cookie `_session` → request
+   tiếp theo 401 → trang trắng/đen. Cùng lỗi lặp lại lần nữa ở Termix.
+
+   CHỈ gộp phần LẤY cookie — KHÔNG gộp phần SỬA từng cookie (Domain/SameSite/
+   Path), vì mỗi dịch vụ cần khác nhau thật sự: ConsolePi ép SameSite=Lax,
+   PNETLab ép SameSite=None+Secure, Termix còn phải viết lại Path theo subpath
+   (`_rewriteTermixCookie`). Gộp luôn phần đó sẽ xoá mất khác biệt cần thiết. */
+export function getRawSetCookies(headers) {
+  try { return headers.getSetCookie(); }
+  catch (e) { const h = headers.get('set-cookie'); return h ? [h] : []; }
+}
+
+/* ── Lọc cookie phiên của DASHBOARD trước khi chuyển tiếp sang dịch vụ khác ──
+   DÙNG CHUNG cho MỌI proxy — gửi cookie phiên dashboard sang dịch vụ ngoài là
+   rò rỉ thông tin, dịch vụ đó cũng không cần tới.
+   `stripPrefixes` khác nhau theo từng dịch vụ (ConsolePi/PNETLab lọc
+   'dh_session='+'dh_user=', Termix lọc 'dh_session='+'ts_movi=') nên vẫn nhận
+   tham số — KHÔNG hardcode danh sách chung, dễ sai một dịch vụ có cookie riêng
+   tên khác. */
+export function filterCookies(rawCookie, stripPrefixes) {
+  return (rawCookie || '').split(';').map(c => c.trim())
+    .filter(c => c && !stripPrefixes.some(p => c.startsWith(p)))
+    .join('; ');
+}
+
 /* ── Short-TTL cache for system_config (read on nearly every request) ──
    Returns the config object, or {} on absence/error (matches the old
    `... || {}` semantics). Writers call _invalidateCfgCache() for instant

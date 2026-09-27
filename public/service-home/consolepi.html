@@ -14,9 +14,6 @@
 html,body{height:100%;overflow:hidden;font-family:var(--font-sans);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .topnav-item:hover{color:var(--text);background:var(--surface-2)}
-.btn{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);border-radius:var(--radius-sm);transition:all .12s;cursor:pointer;white-space:nowrap}
-.btn.ghost{background:transparent;border-color:transparent}
-.btn:hover{color:var(--text);border-color:var(--muted)}
 
 /* Khung nhúng chiếm hết phần còn lại dưới thanh điều hướng. */
 .embed-wrap{position:relative;flex:1;min-height:0}
@@ -31,6 +28,19 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
   color:var(--text-2);font-size:12px;white-space:nowrap;
   box-shadow:0 4px 16px rgba(0,0,0,.28);opacity:0;animation:hintShow 7s ease forwards}
 @keyframes hintShow{0%{opacity:0}8%{opacity:1}80%{opacity:1}100%{opacity:0;visibility:hidden}}
+
+/* [2026-09-06] Khung chờ trong lúc iframe còn tải — trước đây trắng trơn vài giây
+   trên mạng yếu (4G công trường), không phân biệt được "đang tải" hay "đứng hình".
+   Nằm TRÊN iframe (z-index cao hơn), tự ẩn khi iframe bắn sự kiện 'load'. */
+.loading-overlay{position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:12px;background:var(--bg);
+  transition:opacity .25s ease;pointer-events:none}
+.loading-overlay.hide{opacity:0}
+.spinner{width:28px;height:28px;border-radius:50%;border:2.5px solid var(--border);
+  border-top-color:var(--accent);animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-overlay .txt{font-size:12.5px;color:var(--text-2)}
+@media (prefers-reduced-motion:reduce){.spinner{animation-duration:1.6s}}
 </style>
 </head>
 <body>
@@ -64,6 +74,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 
 <div class="embed-wrap" id="embedWrap">
   <div class="hint">🔑 ConsolePi có đăng nhập riêng — lần đầu vào sẽ hỏi tài khoản của nó.</div>
+  <div class="loading-overlay" id="cpLoading"><div class="spinner"></div><div class="txt">Đang tải ConsolePi…</div></div>
   <iframe id="cpFrame"
     src="/consolepi-proxy/"
     title="ConsolePi"
@@ -87,10 +98,23 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
   });
 })();
 
+/* Khung chờ: ẩn khi iframe bắn 'load' (kể cả trang lỗi cũng bắn 'load', không
+   riêng gì tải thành công — không có cách nào từ ngoài phân biệt được nội dung
+   BÊN TRONG một iframe khác nguồn, nên chỉ dùng 'load' làm tín hiệu "đã có gì
+   đó hiện ra", không khẳng định "đã đăng nhập xong"). Hiện lại mỗi khi đổi src. */
+(function(){
+  var f = document.getElementById('cpFrame');
+  var ov = document.getElementById('cpLoading');
+  if (!f || !ov) return;
+  f.addEventListener('load', function(){ ov.classList.add('hide'); });
+})();
+
 /* Tải lại khung: đổi src kèm mốc thời gian thay vì contentWindow.location.reload()
    — khung khác nguồn nên trình duyệt chặn đọc/ghi vào bên trong nó. */
 document.getElementById('btnReload').addEventListener('click',function(){
   var f=document.getElementById('cpFrame');
+  var ov=document.getElementById('cpLoading');
+  if(ov)ov.classList.remove('hide');
   if(f)f.src='/consolepi-proxy/?_t='+Date.now();
 });
 

@@ -6,6 +6,8 @@ import {
   _getCfg,
   bridgeWebSocket,
   cleanEnv,
+  filterCookies,
+  getRawSetCookies,
   getSession,
   hasPerm,
   json,
@@ -240,11 +242,7 @@ export async function handleTermixProxy(request, env, opts) {
   upHeaders.set('X-Forwarded-Proto', 'https');
 
   // Forward Termix session cookies, strip dashboard cookies
-  const rawCookie = request.headers.get('cookie') || '';
-  const fwdCookie = rawCookie.split(';')
-    .map(c => c.trim())
-    .filter(c => c && !c.startsWith('dh_session=') && !c.startsWith('ts_movi='))
-    .join('; ');
+  const fwdCookie = filterCookies(request.headers.get('cookie'), ['dh_session=', 'ts_movi=']);
   if (fwdCookie) upHeaders.set('Cookie', fwdCookie);
   // Forward Authorization header — Termix API uses Bearer token auth for protected endpoints
   const authHeader = request.headers.get('Authorization');
@@ -375,10 +373,7 @@ export async function handleTermixProxy(request, env, opts) {
 
     const _rhRedir = new Headers({ 'Location': _newLoc, 'Cache-Control': 'no-cache' });
     // ⚠️ Xem ghi chú ở khối "Build response headers" bên dưới: PHẢI dùng getSetCookie().
-    let _setSCR = [];
-    try { _setSCR = upstream.headers.getSetCookie(); }
-    catch { const h = upstream.headers.get('set-cookie'); if (h) _setSCR = [h]; }
-    for (const _sc of _setSCR) _rhRedir.append('Set-Cookie', _rewriteTermixCookie(_sc, BASE));
+    for (const _sc of getRawSetCookies(upstream.headers)) _rhRedir.append('Set-Cookie', _rewriteTermixCookie(_sc, BASE));
     return new Response(null, { status: upstream.status, headers: _rhRedir });
   }
 
@@ -389,10 +384,7 @@ export async function handleTermixProxy(request, env, opts) {
       const upCt4 = upstream.headers.get('Content-Type') || 'application/octet-stream';
       const rh4   = new Headers({ 'Content-Type': upCt4, 'Cache-Control': 'no-cache' });
       // ⚠️ Xem ghi chú ở khối "Build response headers" bên dưới: PHẢI dùng getSetCookie().
-      let setSC4 = [];
-      try { setSC4 = upstream.headers.getSetCookie(); }
-      catch { const h = upstream.headers.get('set-cookie'); if (h) setSC4 = [h]; }
-      for (const sc of setSC4) rh4.append('Set-Cookie', _rewriteTermixCookie(sc, BASE));
+      for (const sc of getRawSetCookies(upstream.headers)) rh4.append('Set-Cookie', _rewriteTermixCookie(sc, BASE));
       return new Response(upstream.body, { status: upstream.status, headers: rh4 });
     }
     // 5xx: show visible error page for diagnosability
@@ -424,10 +416,7 @@ export async function handleTermixProxy(request, env, opts) {
   // nên `typeof headers.getAll === 'function' ? ... : ...` luôn rơi vào nhánh fallback: chỉ lấy được
   // 1 header set-cookie gộp (hoặc rỗng) → mất cookie phiên. Đúng lỗi đã gặp thật ở proxy PNETLab
   // ngày 2026-07-27 (đăng nhập xong nhưng trang trắng/đen vì cookie `_session` không tới browser).
-  let setSC = [];
-  try { setSC = upstream.headers.getSetCookie(); }
-  catch { const h = upstream.headers.get('set-cookie'); if (h) setSC = [h]; }
-  for (const sc of setSC) rh.append('Set-Cookie', _rewriteTermixCookie(sc, BASE));
+  for (const sc of getRawSetCookies(upstream.headers)) rh.append('Set-Cookie', _rewriteTermixCookie(sc, BASE));
 
   // HTML — inject JS to rewrite WebSocket/fetch/XHR URLs to proxy path
   if (ct.includes('text/html')) {

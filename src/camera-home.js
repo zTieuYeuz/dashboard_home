@@ -9,6 +9,36 @@ import {
   bridgeWebSocket,
 } from './core.js';
 
+/* ── Mở WebSocket ngược lên go2rtc, dùng chung cho cả 2 điểm cuối camera ─────
+   handleCamTestLiveEmbed và handleCamTestApiEmbed lặp lại y hệt khối này —
+   khác các proxy khác trong dự án (ConsolePi/PNETLab/Termix để Workers tự quản
+   Sec-WebSocket-Key/Version), go2rtc cần khai CỨNG cả hai vì không tự thương
+   lượng được qua Cloudflare Workers `fetch()`. Nonce mẫu 'dGhlIHNhbXBsZSBub25jZQ=='
+   là giá trị chuẩn RFC 6455 dùng cho handshake một chiều kiểu này — không phải
+   bí mật, không cần ngẫu nhiên vì phía go2rtc không thật sự kiểm tra lại.
+
+   CHỈ dùng nội bộ file này — cấu trúc header khác hẳn 3 proxy kia nên KHÔNG gộp
+   chung vào core.js, tránh ép các proxy khác nhau vào một khuôn không đúng. */
+async function _openGo2rtcWs(target, cfId, cfSecret) {
+  let upstreamResp;
+  try {
+    upstreamResp = await fetch(target, {
+      headers: {
+        'Upgrade':               'websocket',
+        'Connection':            'Upgrade',
+        'Sec-WebSocket-Version': '13',
+        'Sec-WebSocket-Key':     'dGhlIHNhbXBsZSBub25jZQ==',
+        ...(cfId ? { 'CF-Access-Client-Id': cfId, 'CF-Access-Client-Secret': cfSecret } : {}),
+      },
+    });
+  } catch (e) {
+    return { err: new Response('WebSocket upstream error: ' + e.message, { status: 502 }) };
+  }
+  const upstream = upstreamResp.webSocket;
+  if (!upstream) return { err: new Response('WebSocket upstream failed (' + upstreamResp.status + ')', { status: 502 }) };
+  return { upstream };
+}
+
 export async function handleCameraList(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
@@ -63,22 +93,8 @@ export async function handleCamTestLiveEmbed(request, env) {
   const target  = `${baseUrl}${subPath}${reqUrl.search}`;
 
   if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
-    let upstreamResp;
-    try {
-      upstreamResp = await fetch(target, {
-        headers: {
-          'Upgrade':               'websocket',
-          'Connection':            'Upgrade',
-          'Sec-WebSocket-Version': '13',
-          'Sec-WebSocket-Key':     'dGhlIHNhbXBsZSBub25jZQ==',
-          ...(cfId ? { 'CF-Access-Client-Id': cfId, 'CF-Access-Client-Secret': cfSecret } : {}),
-        },
-      });
-    } catch(e) {
-      return new Response('WebSocket upstream error: ' + e.message, { status: 502 });
-    }
-    const upstream = upstreamResp.webSocket;
-    if (!upstream) return new Response('WebSocket upstream failed (' + upstreamResp.status + ')', { status: 502 });
+    const { upstream, err } = await _openGo2rtcWs(target, cfId, cfSecret);
+    if (err) return err;
 
     const { 0: client, 1: server } = new WebSocketPair();
     server.accept();
@@ -215,22 +231,8 @@ export async function handleCamTestApiEmbed(request, env) {
   if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
     if (!(await isAdminUser(env, session))) return new Response('Forbidden', { status: 403 });
 
-    let upstreamResp;
-    try {
-      upstreamResp = await fetch(target, {
-        headers: {
-          'Upgrade':               'websocket',
-          'Connection':            'Upgrade',
-          'Sec-WebSocket-Version': '13',
-          'Sec-WebSocket-Key':     'dGhlIHNhbXBsZSBub25jZQ==',
-          ...(cfId ? { 'CF-Access-Client-Id': cfId, 'CF-Access-Client-Secret': cfSecret } : {}),
-        },
-      });
-    } catch (e) {
-      return new Response('WebSocket upstream error: ' + e.message, { status: 502 });
-    }
-    const upstream = upstreamResp.webSocket;
-    if (!upstream) return new Response('WebSocket upstream failed (' + upstreamResp.status + ')', { status: 502 });
+    const { upstream, err } = await _openGo2rtcWs(target, cfId, cfSecret);
+    if (err) return err;
 
     const { 0: client, 1: server } = new WebSocketPair();
     server.accept();
