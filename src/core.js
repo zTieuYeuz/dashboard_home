@@ -19,6 +19,20 @@ export const ALL_SERVICES      = buildAllServices();
 /* ── Strip BOM + trim any env/config string value ── */
 export function cleanEnv(v) { return (v || '').replace(/^﻿/, '').trim(); }
 
+/* ── Đọc secret webhook đã GỘP thành 1 JSON (2026-09-27) ──────────────────
+   Cloudflare Workers Free giới hạn 64 biến (secret+var) mỗi Worker — dashboard
+   đã chạm 105 vì mỗi webhook n8n từng là 1 secret riêng. Gộp nhiều webhook liên
+   quan (vd toàn bộ FortiGate Movi) thành 1 secret duy nhất chứa JSON, đọc bằng
+   hàm này thay vì env.TÊN_CŨ trực tiếp.
+   legacyEnvKey: TÊN secret CŨ (đơn lẻ) — phương án lùi trong lúc chuyển tiếp. */
+export function whFrom(env, group, key, legacyEnvKey) {
+  try {
+    const g = env[group] ? JSON.parse(env[group]) : null;
+    if (g && typeof g[key] === 'string' && g[key]) return cleanEnv(g[key]);
+  } catch (_) {}
+  return legacyEnvKey ? cleanEnv(env[legacyEnvKey]) : '';
+}
+
 /* ── Lấy nguyên vẹn mọi Set-Cookie từ response upstream trong proxy ──────────
    DÙNG CHUNG cho MỌI proxy (ConsolePi/PNETLab/Termix). Trước đây mỗi file tự
    chép một bản gần giống nhau — 5 chỗ tổng cộng (consolepi.js×1, pnetlab.js×1,

@@ -7,14 +7,15 @@ import {
   hasPerm,
   hasWritePerm,
   json,
-  moviN8nAuth
+  moviN8nAuth,
+  whFrom
 } from './core.js';
 
 export async function handleMoviInterfaces(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_INTERFACES);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_FG_JSON', 'interfaces', 'MOVI_WH_FG_INTERFACES');
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -39,7 +40,7 @@ export async function handleMoviPolicy(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_POLICY);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_FG_JSON', 'policy', 'MOVI_WH_FG_POLICY');
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
@@ -55,7 +56,7 @@ export async function handleMoviDhcp(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_ROUTING);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_FG_JSON', 'routing', 'MOVI_WH_FG_ROUTING');
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
@@ -71,7 +72,7 @@ export async function handleMoviSslVpn(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_SSL_VPN);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_FG_JSON', 'sslVpn', 'MOVI_WH_FG_SSL_VPN');
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -96,7 +97,7 @@ export async function handleMoviVpn(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_VPN);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_FG_JSON', 'vpn', 'MOVI_WH_FG_VPN');
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -123,7 +124,7 @@ export async function handleMoviLicense(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_LICENSE);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_FG_JSON', 'license', 'MOVI_WH_FG_LICENSE');
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -148,7 +149,7 @@ export async function handleMoviSystem(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_SYSTEM);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_FG_JSON', 'system', 'MOVI_WH_FG_SYSTEM');
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -193,7 +194,7 @@ export async function handleMoviFirewallUsers(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_FIREWALL_USERS);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_FG_JSON', 'firewallUsers', 'MOVI_WH_FG_FIREWALL_USERS');
   const N8N_AUTH = moviN8nAuth(env);
   if (!N8N_URL) return json({ error: 'MOVI_WH_FG_FIREWALL_USERS chưa được cấu hình' }, 503);
   try {
@@ -207,7 +208,7 @@ export async function handleMoviFortiviewSource(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_FORTIVIEW_SOURCE);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_FG_JSON', 'fortiviewSource', 'MOVI_WH_FG_FORTIVIEW_SOURCE');
   const N8N_AUTH = moviN8nAuth(env);
   if (!N8N_URL) return json({ error: 'MOVI_WH_FG_FORTIVIEW_SOURCE chưa được cấu hình' }, 503);
   try {
@@ -221,7 +222,7 @@ export async function handleMoviFirewallDeauth(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasWritePerm(env, session, 'fortigate-movi'))) return json({ error: 'Cần quyền Write trên FortiGate Movi để deauth user' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_FIREWALL_DEAUTH);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_FG_JSON', 'firewallDeauth', 'MOVI_WH_FG_FIREWALL_DEAUTH');
   const N8N_AUTH = moviN8nAuth(env);
   if (!N8N_URL) return json({ error: 'MOVI_WH_FG_FIREWALL_DEAUTH chưa được cấu hình' }, 503);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }

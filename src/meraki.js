@@ -8,7 +8,8 @@ import {
   hasWritePerm,
   json,
   logActivity,
-  moviN8nAuth
+  moviN8nAuth,
+  whFrom
 } from './core.js';
 
 export async function handleMerakiDevices(request, env) {
@@ -16,7 +17,7 @@ export async function handleMerakiDevices(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_DEVICES);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_MERAKI_JSON', 'devices', 'MOVI_WH_MERAKI_DEVICES');
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -61,7 +62,7 @@ export async function handleMerakiClients(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_CLIENTS);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_MERAKI_JSON', 'clients', 'MOVI_WH_MERAKI_CLIENTS');
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -112,7 +113,7 @@ export async function handleMerakiClientPolicy(request, env) {
     return json({ error: "policy phải là 'Blocked' hoặc 'Normal'" }, 400);
   }
 
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_CLIENT_POLICY);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_MERAKI_JSON', 'clientPolicy', 'MOVI_WH_MERAKI_CLIENT_POLICY');
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -169,7 +170,7 @@ export async function handleMerakiDeviceStatus(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_DEV_STATUS);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_MERAKI_JSON', 'devStatus', 'MOVI_WH_MERAKI_DEV_STATUS');
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -206,7 +207,7 @@ export async function handleMerakiSwitchPorts(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_SW_PORTS);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_MERAKI_JSON', 'swPorts', 'MOVI_WH_MERAKI_SW_PORTS');
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(60000) });
@@ -228,7 +229,7 @@ export async function handleMerakiSwitchPortConfigs(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_PORT_CFG);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_MERAKI_JSON', 'portCfg', 'MOVI_WH_MERAKI_PORT_CFG');
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(50000) });
@@ -246,7 +247,7 @@ export async function handleMerakiLinkAggregations(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_LINK_AGG);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_MERAKI_JSON', 'linkAgg', 'MOVI_WH_MERAKI_LINK_AGG');
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -274,7 +275,7 @@ export async function handleMerakiUplinks(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_UPLINKS);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_MERAKI_JSON', 'uplinks', 'MOVI_WH_MERAKI_UPLINKS');
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -300,7 +301,7 @@ export async function handleMerakiL3Routing(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_L3);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_MERAKI_JSON', 'l3', 'MOVI_WH_MERAKI_L3');
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, {
@@ -328,7 +329,7 @@ export async function handleMerakiEvents(request, env) {
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'meraki'))) return json({ error: 'Không có quyền truy cập Meraki' }, 403);
 
-  const N8N_URL  = cleanEnv(env.MOVI_WH_MERAKI_EVENTS);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_MERAKI_JSON', 'events', 'MOVI_WH_MERAKI_EVENTS');
   const N8N_AUTH = moviN8nAuth(env);
 
   try {
@@ -348,7 +349,7 @@ export async function handleMoviSdwanRules(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_SDWAN_RULES);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_FG_JSON', 'sdwanRules', 'MOVI_WH_FG_SDWAN_RULES');
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });
@@ -371,7 +372,7 @@ export async function handleMoviSdwan(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
   if (!(await hasPerm(env, session, 'fortigate-movi'))) return json({ error: 'Không có quyền truy cập FortiGate Movi' }, 403);
-  const N8N_URL  = cleanEnv(env.MOVI_WH_FG_SDWAN_MEMBERS);
+  const N8N_URL  = whFrom(env, 'MOVI_WH_FG_JSON', 'sdwanMembers', 'MOVI_WH_FG_SDWAN_MEMBERS');
   const N8N_AUTH = moviN8nAuth(env);
   try {
     const resp = await fetch(N8N_URL, { headers: { 'Authorization': N8N_AUTH }, signal: AbortSignal.timeout(15000) });

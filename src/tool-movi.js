@@ -15,7 +15,7 @@ import {
 
 export async function handleToolMoviCreateUser(request, env, session, ctx) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = cleanEnv(env.MOVI_TOOL_CREATE_USER_WEBHOOK);
+  const webhookUrl = whFrom(env, 'MOVI_WH_USERMGMT_JSON', 'createUser', 'MOVI_TOOL_CREATE_USER_WEBHOOK');
   if (!webhookUrl) return json({ error: 'MOVI_TOOL_CREATE_USER_WEBHOOK not configured. Run: npx wrangler secret put MOVI_TOOL_CREATE_USER_WEBHOOK' }, 500);
 
   let body;
@@ -72,7 +72,7 @@ export async function handleToolMoviCreateUser(request, env, session, ctx) {
 /* ── Tool Movi: Block User ── */
 export async function handleToolMoviBlockUser(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = cleanEnv(env.MOVI_WH_BLOCK_USER);
+  const webhookUrl = whFrom(env, 'MOVI_WH_USERMGMT_JSON', 'blockUser', 'MOVI_WH_BLOCK_USER');
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const email     = (body.email || '').trim();
   const startDate = (body.startDate || '').trim();
@@ -118,7 +118,7 @@ export async function handleToolMoviBlockUser(request, env, session) {
 /* ── Tool Movi: Asset Search ── */
 export async function handleToolMoviAssetSearch(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = cleanEnv(env.MOVI_WH_ASSET_SEARCH);
+  const webhookUrl = whFrom(env, 'MOVI_WH_USERMGMT_JSON', 'assetSearch', 'MOVI_WH_ASSET_SEARCH');
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const params = {
     email:     (body.email     || '').trim(),
@@ -153,7 +153,7 @@ export async function handleToolMoviAssetSearch(request, env, session) {
 /* ── Tool Movi: Check Email Azure AD ── */
 export async function handleToolMoviCheckEmail(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = cleanEnv(env.MOVI_WH_AZURE_CHECK_EMAIL);
+  const webhookUrl = whFrom(env, 'MOVI_WH_USERMGMT_JSON', 'azureCheckEmail', 'MOVI_WH_AZURE_CHECK_EMAIL');
   if (!webhookUrl) return json({ error: 'MOVI_WH_AZURE_CHECK_EMAIL chưa được cấu hình' }, 503);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   // Accept email OR partial name/keyword — no strict email format check
@@ -201,7 +201,7 @@ export async function handleToolMoviCheckEmail(request, env, session) {
 /* ── Tool Movi: Check Azure Group ── */
 export async function handleToolMoviCheckAzureGroup(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = cleanEnv(env.MOVI_WH_AZURE_CHECK_GROUP);
+  const webhookUrl = whFrom(env, 'MOVI_WH_USERMGMT_JSON', 'azureCheckGroup', 'MOVI_WH_AZURE_CHECK_GROUP');
   if (!webhookUrl) return json({ error: 'MOVI_WH_AZURE_CHECK_GROUP chưa được cấu hình' }, 503);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const query = (body.query || '').trim();
@@ -232,7 +232,7 @@ export async function handleToolMoviCheckAzureGroup(request, env, session) {
 
 /* ── Tool Movi: Delete User List ── */
 export async function handleToolMoviDeleteUserList(request, env, session) {
-  const webhookUrl = cleanEnv(env.MOVI_WH_DELETE_USER_LIST);
+  const webhookUrl = whFrom(env, 'MOVI_WH_USERMGMT_JSON', 'deleteUserList', 'MOVI_WH_DELETE_USER_LIST');
   try {
     const resp = await fetch(webhookUrl, {
       method: 'GET',
@@ -254,7 +254,7 @@ export async function handleToolMoviDeleteUserList(request, env, session) {
 /* ── Tool Movi: Delete User Action ── */
 export async function handleToolMoviDeleteUserAction(request, env, session) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const webhookUrl = cleanEnv(env.MOVI_WH_DELETE_USER);
+  const webhookUrl = whFrom(env, 'MOVI_WH_USERMGMT_JSON', 'deleteUser', 'MOVI_WH_DELETE_USER');
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const email = (body.email || '').trim();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Email không hợp lệ' }, 400);
@@ -282,8 +282,9 @@ export async function handleToolMoviDeleteUserAction(request, env, session) {
 
 export async function handleToolMoviFgPolicy(request, env, session, policyType, ctx) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
-  const envKey = policyType === 'lan' ? env.MOVI_WH_FG_POLICY_LAN : env.MOVI_WH_FG_POLICY_WIFI;
-  const webhookUrl = cleanEnv(envKey);
+  const webhookUrl = policyType === 'lan'
+    ? whFrom(env, 'MOVI_WH_FG_JSON', 'policyLan', 'MOVI_WH_FG_POLICY_LAN')
+    : whFrom(env, 'MOVI_WH_FG_JSON', 'policyWifi', 'MOVI_WH_FG_POLICY_WIFI');
   if (!webhookUrl) return json({ error: "MOVI_WH_FG_POLICY_" + policyType.toUpperCase() + " chưa được cấu hình" }, 503);
   let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const email = (body.email || '').trim();

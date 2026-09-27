@@ -559,19 +559,31 @@ export async function handleTermixProxy(request, env, opts) {
   window.WebSocket=function(u,p){
     var r=rw(u,true);
     r=r.replace(/[?&]undefined$/,''); // strip ?undefined appended by Termix new version bug
-    // For SSH websocket: append JWT as ?token= so verifyClient can auth
+    // For SSH websocket: send JWT so verifyClient can auth.
     // [H2 fix] JWT is injected server-side (__JWT), NOT read from document.cookie (HttpOnly)
+    // [2026-09-27] Termix 2.8.0 XOÁ hẳn việc đọc ?token= trên URL WS (chỉ còn nhận qua
+    // cookie / header Authorization / subprotocol 'termix.jwt.<token>' — xem
+    // Termix-SSH/Termix#1456 & Termix-SSH/Support#1334). Kết nối SSH của Termix Home đi
+    // THẲNG từ trình duyệt sang termix.home-server.id.vn (wsMode:'direct', không qua Worker)
+    // nên cookie không tự gửi được (khác domain dashboard) và Authorization header không
+    // set được trên WebSocket từ trình duyệt → chỉ còn đường subprotocol dùng được.
+    // Vẫn giữ ?token= (giờ bị 2.8.0 bỏ qua, vô hại) để không phá tương thích nếu có ngày
+    // Termix hạ cấp/khác nhánh còn đọc query.
     var _isSsh=r.indexOf('/ssh/websocket')!==-1;
+    var _proto=p;
     if(_isSsh){
       var _tk=__JWT||(localStorage.getItem('token')||localStorage.getItem('jwt')||localStorage.getItem('authToken')||'');
-      if(_tk)r+=(r.indexOf('?')===-1?'?':'&')+'token='+_tk;
-      else console.warn('[proxy-patcher] SSH WS: no JWT found');
+      if(_tk){
+        r+=(r.indexOf('?')===-1?'?':'&')+'token='+_tk;
+        var _swp='termix.jwt.'+_tk;
+        _proto=Array.isArray(p)?p.concat(_swp):(p!=null?[p,_swp]:[_swp]);
+      } else console.warn('[proxy-patcher] SSH WS: no JWT found');
     }
     // ⚠️ CHE TOKEN TRƯỚC KHI IN. URL sau rewrite có kèm ?token=<JWT phiên Termix> — ai cầm
     // được chuỗi đó là vào thẳng phiên SSH mà không cần đăng nhập. Console rò ra rất dễ
     // (quay màn hình, chụp ảnh gửi người khác, máy dùng chung) nên không in giá trị thật.
     if(r!==u)console.log('[proxy-patcher] WS',u,'->',r.replace(/([?&]token=)[^&]*/i,'$1***'));
-    var _sock=p!=null?new _W(r,p):new _W(r);
+    var _sock=_proto!=null?new _W(r,_proto):new _W(r);
     if(_isSsh){ try{ _termixHookSsh(_sock); }catch(e){} }
     return _sock;
   };

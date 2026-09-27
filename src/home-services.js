@@ -4,7 +4,8 @@
 import {
   RUSTDESK_BASE,
   cleanEnv,
-  json
+  json,
+  whFrom
 } from './core.js';
 
 export const CASAOS_BASE = 'https://casaos.home-server.id.vn';
@@ -361,7 +362,7 @@ export async function handleRustdesk(env) {
 export async function handleVmwareHome(env) {
   const n8nUser = cleanEnv(env.HOME_N8N_USER);
   const n8nPass = cleanEnv(env.HOME_N8N_PASS);
-  const wh      = cleanEnv(env.HOME_WH_VMWARE_DATA);
+  const wh      = whFrom(env, 'HOME_WH_VMWARE_JSON', 'data', 'HOME_WH_VMWARE_DATA');
   if (!wh) return json({ error: 'HOME_WH_VMWARE_DATA not configured' }, 500);
   const hdrs = { 'Content-Type': 'application/json' };
   if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
@@ -378,7 +379,7 @@ export async function handleVmwareHomePower(request, env) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   const n8nUser = cleanEnv(env.HOME_N8N_USER);
   const n8nPass = cleanEnv(env.HOME_N8N_PASS);
-  const wh      = cleanEnv(env.HOME_WH_VMWARE_POWER);
+  const wh      = whFrom(env, 'HOME_WH_VMWARE_JSON', 'power', 'HOME_WH_VMWARE_POWER');
   if (!wh) return json({ error: 'HOME_WH_VMWARE_POWER not configured' }, 500);
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
@@ -401,7 +402,7 @@ export async function handleVmwareHomePower(request, env) {
 export async function handleMoviVmwareData(env, hostNum) {
   const moviUser = cleanEnv(env.MOVI_N8N_USER);
   const moviPass = cleanEnv(env.MOVI_N8N_PASS);
-  const wh = cleanEnv(env[`MOVI_WH_VMWARE0${hostNum}_DATA`]);
+  const wh = whFrom(env, 'MOVI_WH_VMWARE_JSON', `vmware0${hostNum}Data`, `MOVI_WH_VMWARE0${hostNum}_DATA`);
   if (!wh) return json({ error: `MOVI_WH_VMWARE0${hostNum}_DATA not configured` }, 500);
   const hdrs = { 'Content-Type': 'application/json' };
   if (moviUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${moviUser}:${moviPass}`)));
@@ -417,7 +418,7 @@ export async function handleMoviVmwarePower(request, env, hostNum) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   const moviUser = cleanEnv(env.MOVI_N8N_USER);
   const moviPass = cleanEnv(env.MOVI_N8N_PASS);
-  const wh = cleanEnv(env[`MOVI_WH_VMWARE0${hostNum}_POWER`]);
+  const wh = whFrom(env, 'MOVI_WH_VMWARE_JSON', `vmware0${hostNum}Power`, `MOVI_WH_VMWARE0${hostNum}_POWER`);
   if (!wh) return json({ error: `MOVI_WH_VMWARE0${hostNum}_POWER not configured` }, 500);
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
@@ -450,13 +451,13 @@ export async function handleFortigateWebhook(env) {
       .catch(() => null);
   };
 
-  const whSys    = cleanEnv(env.HOME_WH_FG_SYSTEM);
-  const whRes    = cleanEnv(env.HOME_WH_FG_RESOURCES);
-  const whIface  = cleanEnv(env.HOME_WH_FG_INTERFACES);
-  const whVpn    = cleanEnv(env.HOME_WH_FG_VPN);
-  const whSsl    = cleanEnv(env.HOME_WH_FG_SSL);
-  const whPolicy = cleanEnv(env.HOME_WH_FG_POLICIES);
-  const whDdns   = cleanEnv(env.HOME_WH_FG_DDNS);
+  const whSys    = whFrom(env, 'HOME_WH_FG_JSON', 'system', 'HOME_WH_FG_SYSTEM');
+  const whRes    = whFrom(env, 'HOME_WH_FG_JSON', 'resources', 'HOME_WH_FG_RESOURCES');
+  const whIface  = whFrom(env, 'HOME_WH_FG_JSON', 'interfaces', 'HOME_WH_FG_INTERFACES');
+  const whVpn    = whFrom(env, 'HOME_WH_FG_JSON', 'vpn', 'HOME_WH_FG_VPN');
+  const whSsl    = whFrom(env, 'HOME_WH_FG_JSON', 'ssl', 'HOME_WH_FG_SSL');
+  const whPolicy = whFrom(env, 'HOME_WH_FG_JSON', 'policies', 'HOME_WH_FG_POLICIES');
+  const whDdns   = whFrom(env, 'HOME_WH_FG_JSON', 'ddns', 'HOME_WH_FG_DDNS');
 
   if (!whSys) return json({ error: 'HOME_WH_FG_SYSTEM not configured' }, 500);
 
@@ -498,7 +499,7 @@ export async function handleFortigateBW(env) {
   const n8nPass = cleanEnv(env.HOME_N8N_PASS);
   const hdrs = { 'Content-Type': 'application/json' };
   if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
-  const whIface = cleanEnv(env.HOME_WH_FG_INTERFACES);
+  const whIface = whFrom(env, 'HOME_WH_FG_JSON', 'interfaces', 'HOME_WH_FG_INTERFACES');
   if (!whIface) return json({ error: 'HOME_WH_FG_INTERFACES not configured' }, 500);
   try {
     const r = await fetch(whIface, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(8000) });
@@ -514,7 +515,7 @@ export async function handleFortigateBW(env) {
 }
 
 export async function handleFortigateReboot(env) {
-  const wh = cleanEnv(env.HOME_WH_FG_REBOOT);
+  const wh = whFrom(env, 'HOME_WH_FG_JSON', 'reboot', 'HOME_WH_FG_REBOOT');
   if (!wh) return json({ error: 'HOME_WH_FG_REBOOT not configured' }, 500);
   const n8nUser = cleanEnv(env.HOME_N8N_USER);
   const n8nPass = cleanEnv(env.HOME_N8N_PASS);
@@ -553,8 +554,8 @@ export async function handleAsusWebhook(env) {
     return fetch(u, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(ms) })
       .then(r => r.ok ? r.json() : null).catch(() => null);
   };
-  const whMain    = cleanEnv(env.HOME_WH_ASUS_MAIN);
-  const whClients = cleanEnv(env.HOME_WH_ASUS_CLIENTS);
+  const whMain    = whFrom(env, 'HOME_WH_ASUS_JSON', 'main', 'HOME_WH_ASUS_MAIN');
+  const whClients = whFrom(env, 'HOME_WH_ASUS_JSON', 'clients', 'HOME_WH_ASUS_CLIENTS');
   if (!whMain) return json({ error: 'HOME_WH_ASUS_MAIN not configured' }, 500);
   const [main, clients] = await Promise.all([call(whMain), call(whClients)]);
   return new Response(JSON.stringify({
@@ -578,7 +579,7 @@ export async function handleAsusClients(env) {
   const n8nPass = cleanEnv(env.HOME_N8N_PASS);
   const hdrs = { 'Content-Type': 'application/json' };
   if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
-  const whClients = cleanEnv(env.HOME_WH_ASUS_CLIENTS);
+  const whClients = whFrom(env, 'HOME_WH_ASUS_JSON', 'clients', 'HOME_WH_ASUS_CLIENTS');
   if (!whClients) return json({ error: 'HOME_WH_ASUS_CLIENTS not configured' }, 500);
   try {
     const r = await fetch(whClients, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(15000) });
@@ -594,7 +595,7 @@ export async function handleAsusBw(env) {
   const n8nPass = cleanEnv(env.HOME_N8N_PASS);
   const hdrs = { 'Content-Type': 'application/json' };
   if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
-  const whMain = cleanEnv(env.HOME_WH_ASUS_MAIN);
+  const whMain = whFrom(env, 'HOME_WH_ASUS_JSON', 'main', 'HOME_WH_ASUS_MAIN');
   if (!whMain) return json({ error: 'HOME_WH_ASUS_MAIN not configured' }, 500);
   try {
     const r = await fetch(whMain, { method: 'POST', headers: hdrs, body: '{}', signal: AbortSignal.timeout(15000) });
@@ -609,7 +610,7 @@ export async function handleAsusReboot(request, env) {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   const n8nUser = cleanEnv(env.HOME_N8N_USER);
   const n8nPass = cleanEnv(env.HOME_N8N_PASS);
-  const whReboot = cleanEnv(env.HOME_WH_ASUS_REBOOT);
+  const whReboot = whFrom(env, 'HOME_WH_ASUS_JSON', 'reboot', 'HOME_WH_ASUS_REBOOT');
   if (!whReboot) return json({ error: 'HOME_WH_ASUS_REBOOT not configured' }, 500);
   const hdrs = { 'Content-Type': 'application/json' };
   if (n8nUser) hdrs['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(`${n8nUser}:${n8nPass}`)));
