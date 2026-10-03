@@ -410,13 +410,6 @@ input { font: inherit; }
 .blk-table td { padding: 9px 16px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
 .blk-table tr:last-child td { border-bottom: none; }
 .blk-table tr:hover td { background: var(--surface-2); }
-.cli-act { font-size: 11px; padding: 3px 9px; border-radius: 5px; cursor: pointer; font-weight: 600; border: 1px solid; transition: all .15s; white-space: nowrap; font-family: var(--font-sans); }
-.cli-act.blk { background: color-mix(in oklch, var(--bad) 10%, transparent); color: var(--bad); border-color: color-mix(in oklch, var(--bad) 35%, transparent); }
-.cli-act.blk:hover { background: color-mix(in oklch, var(--bad) 18%, transparent); }
-.cli-act.unblk { background: color-mix(in oklch, var(--ok) 10%, transparent); color: var(--ok); border-color: color-mix(in oklch, var(--ok) 35%, transparent); }
-.cli-act.unblk:hover { background: color-mix(in oklch, var(--ok) 18%, transparent); }
-.cli-act-prog { font-size: 11px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
-.cli-spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
 
 .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 0; padding: 4px 0; }
 .kv > div { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; border-top: 1px solid var(--border-soft); font-size: 13px; }
@@ -689,15 +682,6 @@ var ALL_SERVICES_DEF = [
   { id:'asus',        name:'ASUS Router',     icon:'📡', desc:'ASUS · home network',                          url:'http://192.168.10.1:8443',                   local:true,  detailPage:'/service-home/asus.html' },
   { id:'camera',        name:'Camera',          icon:'📷', desc:'Camera system · go2rtc WebRTC',                url:'https://camera.home-server.id.vn',           local:false, detailPage:'/service-home/camera-home.html'},
   { id:'rustdesk',    name:'RustDesk',        icon:'🖥', desc:'Remote desktop · máy nhân viên',               url:'https://rustdesk.home-server.id.vn/_admin/', local:false, detailPage:'/service-home/rustdesk.html' },
-  { id:'meraki',        name:'Meraki-Network',  icon:'🌐', desc:'Cisco Meraki · client monitor',                url:'https://dashboard.meraki.com',               local:false, detailPage:'/service-movi/meraki.html',        noCheck:true },
-  { id:'movi',          name:'Movi Map Network',icon:'🗺', desc:'Network topology · wiring · L3',               url:'/service-movi/topology.html',                local:false, detailPage:'/service-movi/topology.html',       noCheck:true },
-  { id:'fortigate-movi',name:'FortiGate Movi',  icon:'🔥', desc:'Firewall Movi-HO-200F · SD-WAN Bandwidth',    url:'https://192.168.140.254:4434',               local:true,  detailPage:'/service-movi/fortigate-movi.html', noCheck:true },
-  { id:'camera-movi',   name:'Camera Movi',     icon:'📷', desc:'Camera giám sát · go2rtc · 16 kênh',          url:'https://cam.movi-finance.com',               local:true,  detailPage:'/service-movi/camera-movi.html',    noCheck:true },
-  { id:'n8n-movi',      name:'n8n Movi',        icon:'⚡', desc:'Workflow automation · Movi Finance',           url:'https://n8n.movi-finance.com',               local:false, detailPage:'/service-movi/n8n-movi.html',        noCheck:true },
-  { id:'vmware01-movi', name:'VMware01 Movi',   icon:'🖥', desc:'ESXi host 01 · Movi Finance datacenter',        url:'https://vmw01.movi-finance.com',             local:false, detailPage:'/service-movi/vmware01-movi.html',   noCheck:true },
-  { id:'vmware02-movi', name:'VMware02 Movi',   icon:'🖥', desc:'ESXi host 02 · Movi Finance datacenter',        url:'https://vmw02.movi-finance.com',             local:false, detailPage:'/service-movi/vmware02-movi.html',   noCheck:true },
-  { id:'tool-movi',     name:'Tool Movi',       icon:'🛠', desc:'Workflow triggers · tạo user · tự động hoá',    url:'/service-movi/tool-movi.html',               local:false, detailPage:'/service-movi/tool-movi.html',        noCheck:true },
-  { id:'ssh-movi',      name:'Termix Movi',     icon:'⌨', desc:'Termix · SSH Movi server · token auth',         url:'/service-movi/ssh-movi.html',                local:false, detailPage:'/service-movi/ssh-movi.html',          noCheck:true },
 ];
 
 /* Categories (matches original SERVICE_CATEGORIES) */
@@ -706,16 +690,10 @@ var SERVICE_CATEGORIES = [
     /* 'console-serial' đã bỏ khỏi đây: nó nằm trong thẻ Terminal Home ('ssh') rồi.
        Để lại id không còn thẻ tương ứng thì nhóm này đếm sai số dịch vụ. */
     serviceIds: ['services-hub','esxi','n8n','casaos','ssh','fortigate','asus','camera','rustdesk'] },
-  { id:'movi', icon:'🎬', name:'Service Movi', desc:'Văn phòng Movi · Meraki & Topology',    accent:'var(--violet)',
-    serviceIds: ['meraki','movi','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi','ssh-movi'] },
 ];
 
-/* Permission filter
-   - 'movi' card maps to 'topology' key (server-side matches this too)
-   - 'tool-movi' card is visible if user has ANY of the 4 sub-permissions
-*/
-var _permMap = { movi:'topology' };
-var _TOOL_MOVI_KEYS = ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'];
+/* Permission filter */
+var _permMap = {};
 /* Thẻ 'ssh' giờ là Terminal Home, gộp 3 công cụ → hiện nếu có BẤT KỲ quyền nào
    trong ba. Không có dòng này thì người chỉ được cấp 'console-serial' sẽ mất hẳn
    lối vào ở trang chính, dù server vẫn cho họ mở trang.
@@ -733,10 +711,6 @@ var SERVICES = __USER__.isAdmin
   : ALL_SERVICES_DEF.filter(function(s){
       // services-hub: shown only if user has the permission (page is server-gated)
       if (s.id === 'services-hub') return (__USER__.permissions['services-hub'] || 'none') !== 'none';
-      // tool-movi: show card if user has at least one sub-permission
-      if (s.id === 'tool-movi') {
-        return _TOOL_MOVI_KEYS.some(function(k){ return (__USER__.permissions[k] || 'none') !== 'none'; });
-      }
       // Terminal Home: hiện nếu có quyền của bất kỳ công cụ con nào trong 3
       if (s.id === 'ssh') {
         return _TERMINAL_KEYS.some(function(k){ return (__USER__.permissions[k] || 'none') !== 'none'; });
@@ -999,24 +973,6 @@ setInterval(function() {
 }, 1000);
 
 /* ═══════════════════════════════════════════════════════════════
-   MERAKI BADGE — fetch /api/meraki-clients for client count
-   ═══════════════════════════════════════════════════════════════ */
-function updateMerakiCard() {
-  fetch('/api/meraki-clients', { cache:'no-store' })
-    .then(function(r){ return r.ok ? r.json() : null; })
-    .then(function(d){
-      if (!d) return;
-      var total = d.total || (d.clients || []).length;
-      var row = document.getElementById('svc-row-meraki');
-      if (row) {
-        var statusCell = row.querySelectorAll('td')[2];
-        statusCell.innerHTML = '<span class="status-pip" style="--c:var(--ok)"><i></i><span>' + total + ' clients</span></span>';
-      }
-    })
-    .catch(function(){});
-}
-
-/* ═══════════════════════════════════════════════════════════════
    SPEED TEST
    ═══════════════════════════════════════════════════════════════ */
 window.addEventListener('DOMContentLoaded', function() {
@@ -1051,122 +1007,6 @@ function renderQAGrid() {
   }).join('');
   var qc = document.getElementById('qa-count');
   if (qc) qc.textContent = ALL_SERVICES_DEF.length + ' endpoints';
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   BLOCKED DEVICES
-   ═══════════════════════════════════════════════════════════════ */
-var _blockedList = [];
-var _clientPolicy = {};
-
-function timeAgoBlk(ts) {
-  if (!ts) return '—';
-  var m = Math.floor((Date.now() - ts) / 60000);
-  if (m < 1) return 'vừa xong';
-  if (m < 60) return m + 'ph trước';
-  var h = Math.floor(m / 60);
-  if (h < 24) return h + 'h trước';
-  return Math.floor(h / 24) + 'd trước';
-}
-
-function cliToast(msg, ok) {
-  var t = document.getElementById('cliToast');
-  if (!t) {
-    t = document.createElement('div'); t.id = 'cliToast';
-    t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99999;'
-      + 'padding:11px 22px;border-radius:9px;font-size:13px;font-weight:600;'
-      + 'box-shadow:0 8px 28px rgba(0,0,0,.45);transition:opacity .25s;opacity:0;max-width:90vw;text-align:center';
-    document.body.appendChild(t);
-  }
-  t.style.background = ok ? 'color-mix(in oklch,var(--ok) 15%,var(--card))' : 'color-mix(in oklch,var(--bad) 15%,var(--card))';
-  t.style.color = ok ? 'var(--ok)' : 'var(--bad)';
-  t.style.border = '1px solid ' + (ok ? 'color-mix(in oklch,var(--ok) 40%,transparent)' : 'color-mix(in oklch,var(--bad) 40%,transparent)');
-  t.textContent = msg; t.style.opacity = '1';
-  clearTimeout(window._cliToastT);
-  window._cliToastT = setTimeout(function(){ t.style.opacity = '0'; }, 3600);
-}
-
-function cliActHtml(mac, blocked, cName, cIp) {
-  // Dùng data-* thay vì nối chuỗi vào onclick để tránh XSS injection
-  var cls = blocked ? 'cli-act unblk' : 'cli-act blk';
-  var lbl = blocked ? '✅ Mở chặn' : '⛔ Chặn';
-  var pol = blocked ? 'Normal' : 'Blocked';
-  return '<button class="'+cls+'"'
-    +' data-mac="'+esc(mac)+'"'
-    +' data-policy="'+pol+'"'
-    +' data-name="'+esc(cName||'')+'"'
-    +' data-ip="'+esc(cIp||'')+'"'
-    +' onclick="cliPolicyClick(this)">'+lbl+'</button>';
-}
-
-function cliPolicyClick(btn) {
-  cliPolicy(btn, btn.dataset.mac, btn.dataset.policy, btn.dataset.name, btn.dataset.ip);
-}
-
-function cliPolicy(btn, mac, policy, clientName, clientIp) {
-  var blocking = policy === 'Blocked';
-  var label = clientName && clientName !== 'Không rõ' ? clientName + ' (' + mac + ')' : mac;
-  if (!confirm('Xác nhận ' + (blocking ? 'CHẶN' : 'MỞ CHẶN') + ' thiết bị ' + label + '?\n\n'
-    + (blocking ? 'Thiết bị sẽ KHÔNG truy cập mạng được nữa.' : 'Thiết bị sẽ được phép truy cập mạng trở lại.'))) return;
-  var cell = btn.parentNode;
-  cell.innerHTML = '<span class="cli-act-prog"><span class="cli-spin"></span>Đang ' + (blocking ? 'chặn' : 'mở') + '…</span>';
-  fetch('/api/meraki-client-policy', {
-    method: 'POST', cache: 'no-store',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mac: mac, policy: policy, name: clientName || mac, ip: clientIp || '—' })
-  }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, j: j }; }); })
-    .then(function(res) {
-      if (!res.ok || !res.j || res.j.success !== true) {
-        var em = (res.j && (res.j.error || res.j.detail)) || 'HTTP error';
-        cliToast('✗ Thất bại: ' + em, false);
-        cell.innerHTML = cliActHtml(mac, _clientPolicy[mac] === 'Blocked');
-        return;
-      }
-      _clientPolicy[mac] = policy;
-      cliToast(blocking ? ('⛔ Đã chặn ' + label) : ('✅ Đã mở chặn ' + label), true);
-      cell.innerHTML = cliActHtml(mac, blocking);
-      loadBlockedClients();
-    })
-    .catch(function(e) {
-      cliToast('✗ Lỗi: ' + e, false);
-      cell.innerHTML = cliActHtml(mac, _clientPolicy[mac] === 'Blocked');
-    });
-}
-
-function renderBlockedList() {
-  var el = document.getElementById('blocked-body');
-  var cnt = document.getElementById('blocked-count');
-  if (!el) return;
-  if (!_blockedList.length) {
-    if (cnt) cnt.textContent = '0 thiết bị';
-    el.innerHTML = '<tr><td colspan="5" style="padding:14px 16px;text-align:center;color:var(--ok)">✅ Không có thiết bị nào bị chặn</td></tr>';
-    return;
-  }
-  if (cnt) cnt.textContent = _blockedList.length + ' đã chặn';
-  el.innerHTML = _blockedList.map(function(b) {
-    var mac = (b.mac || '').toLowerCase();
-    return '<tr>'
-      + '<td class="mono" style="font-size:12px;font-weight:600">' + esc(b.name || b.mac) + '</td>'
-      + '<td class="mono" style="font-size:11px;color:var(--muted)">' + esc(b.mac) + '</td>'
-      + '<td class="mono" style="font-size:12px">' + esc(b.ip || '—') + '</td>'
-      + '<td style="font-size:11px;color:var(--muted)">' + timeAgoBlk(b.blockedAt) + (b.blockedBy ? ' · ' + esc(b.blockedBy) : '') + '</td>'
-      + '<td id="blka-' + mac.replace(/[^a-z0-9]/g, '') + '">' + cliActHtml(mac, true, b.name || b.mac, b.ip) + '</td>'
-      + '</tr>';
-  }).join('');
-}
-
-function loadBlockedClients() {
-  fetch('/api/meraki-blocked-clients', { cache: 'no-store' })
-    .then(function(r){ return r.ok ? r.json() : null; })
-    .then(function(d) {
-      _blockedList = (d && d.blocked) || [];
-      _blockedList.forEach(function(b){ _clientPolicy[(b.mac || '').toLowerCase()] = 'Blocked'; });
-      renderBlockedList();
-    })
-    .catch(function() {
-      var el = document.getElementById('blocked-body');
-      if (el) el.innerHTML = '<tr><td colspan="5" style="padding:14px 16px;text-align:center;color:var(--muted)">Không tải được</td></tr>';
-    });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1211,11 +1051,6 @@ function loadBlockedClients() {
     'force-logout-all':             { label:'Force logout', tone:'bad'  },
     'audit-purge':                  { label:'Audit purge',  tone:'warn' },
     'camera_alias_save':            { label:'Cam alias',    tone:'mute' },
-    'meraki-client-policy':         { label:'Meraki pol',   tone:'mute' },
-    'ssh-movi-token-issued':        { label:'SSH token',    tone:'ok'   },
-    'ssh-movi-token-verified':      { label:'SSH verify',   tone:'ok'   },
-    'tool-movi-block-user':         { label:'Block user',   tone:'bad'  },
-    'tool-movi-delete-user':        { label:'Delete user',  tone:'bad'  },
     'delegate-create-user':         { label:'Del create',   tone:'ok'   },
     'delegate-update-perm':         { label:'Del perm',     tone:'mute' },
     'delegate-create-policygroup':  { label:'Del grp',      tone:'ok'   },
@@ -1255,7 +1090,6 @@ function loadBlockedClients() {
 renderServices();
 renderQAGrid();
 runChecks();
-updateMerakiCard();
 </script>
 <script src="/service-home/_shared/chat.js"></script>
 </body>

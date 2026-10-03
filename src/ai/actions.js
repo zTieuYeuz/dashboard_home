@@ -8,8 +8,7 @@
    → user bị giới hạn gì thì AI cũng bị chặn (403 kèm lý do), và ghi audit.
    ═══════════════════════════════════════════════════════════════════ */
 import { json, getSession, logActivity, isAdminUser, computeEffectivePermissions } from '../core.js';
-import { handleFortigateReboot, handleVmwareHomePower, handleAsusReboot, handleCasaosAppState, handleMoviVmwarePower } from '../home-services.js';
-import { submitForm } from './movi.js';
+import { handleFortigateReboot, handleVmwareHomePower, handleAsusReboot, handleCasaosAppState } from '../home-services.js';
 import { pnetStartNode, pnetStopNode, pnetExportConfig } from '../pnetlab.js';
 
 /* danger: 'safe' = làm ngay | 'confirm' = phải xác nhận trong dashboard
@@ -59,17 +58,6 @@ export const ACTION_REGISTRY = [
       { name: 'action', desc: 'start | stop | restart', required: true },
     ],
   },
-  {
-    id: 'movi_vm_power',
-    label: 'Điều khiển nguồn máy ảo (ESXi Movi)',
-    perm: 'esxi', adminOnly: false, danger: 'confirm',
-    desc: 'Bật/tắt/khởi động lại một máy ảo trên host ESXi của Movi (host 1 hoặc 2).',
-    params: [
-      { name: 'host',   desc: 'Số host Movi: 1 hoặc 2', required: true },
-      { name: 'vmId',   desc: 'ID máy ảo', required: true },
-      { name: 'action', desc: 'powerOn | powerOff | reset | suspend | shutdownGuest | rebootGuest', required: true },
-    ],
-  },
   // ── PNETLab (lab mạng) — perm hub-pnetlab, đều cần xác nhận ──
   {
     id: 'pnetlab_start_node',
@@ -99,18 +87,6 @@ export const ACTION_REGISTRY = [
     params: [
       { name: 'lab',     desc: 'Path lab, vd /CCNA/lab1.unl', required: true },
       { name: 'node_id', desc: 'ID node (số) — bỏ trống để lưu TẤT CẢ node', required: false },
-    ],
-  },
-  {
-    id: 'form_submit',
-    label: 'Gửi biểu mẫu tới n8n (theo quy tắc định sẵn)',
-    // perm null: quyền/adminOnly được kiểm THEO TỪNG FORM ở server (submitForm) —
-    // vì mỗi biểu mẫu có yêu cầu quyền riêng.
-    perm: null, adminOnly: false, danger: 'confirm',
-    desc: 'Gửi 1 biểu mẫu nghiệp vụ (vd tạo user Movi) tới n8n. Dashboard validate đủ trường + đúng quy tắc rồi mới gửi. Lấy danh sách biểu mẫu + trường + quy tắc bằng tool list_dashboard_forms (hoặc GET /api/ai/forms).',
-    params: [
-      { name: 'form', desc: 'ID biểu mẫu (vd movi_create_user)', required: true },
-      { name: 'data', desc: 'Object dữ liệu các trường đã thu thập đủ theo quy tắc', required: true },
     ],
   },
 ];
@@ -180,22 +156,12 @@ export async function handleAiExec(request, env) {
         body: JSON.stringify({ id: params.id, action: params.action }),
       });
       resp = await handleCasaosAppState(req, env);
-    } else if (action.id === 'movi_vm_power') {
-      const host = String(params.host) === '2' ? 2 : 1;
-      const req = new Request('https://internal/ai-exec', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vmId: params.vmId, action: params.action }),
-      });
-      resp = await handleMoviVmwarePower(req, env, host);
     } else if (action.id === 'pnetlab_start_node') {
       resp = await pnetStartNode(env, params);
     } else if (action.id === 'pnetlab_stop_node') {
       resp = await pnetStopNode(env, params);
     } else if (action.id === 'pnetlab_export_config') {
       resp = await pnetExportConfig(env, params);
-    } else if (action.id === 'form_submit') {
-      // submitForm tự kiểm quyền theo form + validate + audit riêng (ai-form:*)
-      return await submitForm(env, session, params, ip);
     } else {
       return json({ ok: false, error: 'Hành động chưa được hỗ trợ thực thi' }, 501);
     }

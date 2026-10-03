@@ -136,14 +136,6 @@ select.inp{cursor:pointer}
 .editor-title{font-size:16px;font-weight:700}
 
 /* ── Permission Sections ── */
-/* Màn rộng: 2 khu vực (Service Home / Service Movi) xếp CẠNH NHAU thay vì chồng dọc,
-   tận dụng chiều ngang vừa mở rộng — bớt phải cuộn khi phân quyền. */
-@media(min-width:1500px){
-  #user-perm-editor,#grp-perm-editor{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
-  /* Mọi thứ KHÔNG phải khối service (cảnh báo, thông báo lỗi, trạng thái rỗng)
-     vẫn chiếm trọn bề ngang để không bị ép thành cột hẹp khó đọc. */
-  #user-perm-editor > :not(.svc-section),#grp-perm-editor > :not(.svc-section){grid-column:1 / -1}
-}
 .svc-section{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
 .svc-section-head{display:flex;align-items:center;justify-content:space-between;padding:.875rem 1rem;background:var(--surface-2);cursor:pointer;user-select:none;border-bottom:1px solid var(--border)}
 .svc-section-head:hover{background:color-mix(in oklch,var(--accent) 6%,var(--surface-2))}
@@ -1131,7 +1123,7 @@ select.inp{cursor:pointer}
           <label class="lbl" style="display:flex;align-items:center;gap:5px">
             <span class="chip-azure" style="font-size:10px">☁</span> Email Microsoft
           </label>
-          <input class="inp" id="um-ms-email" type="email" placeholder="vd: ngoc.plm@movi.vn" autocomplete="off"/>
+          <input class="inp" id="um-ms-email" type="email" placeholder="vd: ten.nguoidung@congty.vn" autocomplete="off"/>
           <div class="form-help" id="um-ms-help">Email Azure AD — username tự tạo từ email này</div>
         </div>
         <div class="form-row">
@@ -1221,12 +1213,12 @@ select.inp{cursor:pointer}
     <div class="form-grid">
       <div class="form-row">
         <label class="lbl">Tên nhóm</label>
-        <input class="inp" id="gm-name" placeholder="VD: movi-staff"/>
-        <div class="form-help">Dùng a-z, số, dấu - (VD: movi-staff, network-viewers)</div>
+        <input class="inp" id="gm-name" placeholder="VD: network-viewers"/>
+        <div class="form-help">Dùng a-z, số, dấu - (VD: network-viewers, it-staff)</div>
       </div>
       <div class="form-row">
         <label class="lbl">Mô tả (tuỳ chọn)</label>
-        <input class="inp" id="gm-desc" placeholder="VD: Nhân viên văn phòng Movi"/>
+        <input class="inp" id="gm-desc" placeholder="VD: Nhóm chỉ xem hạ tầng mạng"/>
       </div>
       <div class="form-row">
         <label class="lbl">Role của nhóm</label>

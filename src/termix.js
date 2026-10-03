@@ -78,105 +78,10 @@ export async function handleTermixLlm(request, env) {
   });
 }
 
-export async function handleSshMoviToken(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await hasPerm(env, session, 'ssh-movi'))) return json({ error: 'Không có quyền truy cập SSH Movi' }, 403);
-
-  const termixUrl = env.TERMIX_MOVI_URL;
-  if (!termixUrl) return json({ error: 'TERMIX_MOVI_URL chưa được cấu hình. Chạy: npx wrangler secret put TERMIX_MOVI_URL' }, 502);
-
-  // Generate a cryptographically random single-use token
-  const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
-  const ip    = request.headers.get('cf-connecting-ip') || 'unknown';
-  const ttl   = 600; // 10 minutes
-
-  await env.DASHBOARD_KV.put(
-    `ssh_movi_token:${token}`,
-    JSON.stringify({ username: session.username, ip, createdAt: Date.now() }),
-    { expirationTtl: ttl }
-  );
-
-  await logActivity(env, {
-    action: 'ssh-movi-token-issued',
-    username: session.username,
-    ip,
-    success: true,
-    detail: `Token issued for SSH Movi terminal`,
-  });
-
-  // Append token as query param — nginx on Movi server validates via auth_request
-  const iframeUrl = termixUrl.replace(/\/$/, '') + '/?t=' + token;
-  return json({ token, url: iframeUrl, expiresIn: ttl });
-}
-
-/**
- * GET /api/ssh-movi/verify?t=TOKEN
- * Called by nginx auth_request on Movi server — NO dashboard session required.
- * Validates token, deletes it (single-use), returns 200 or 403.
- * IMPORTANT: This endpoint is intentionally public but token is 64-char random hex
- * (2× UUID = 128-bit entropy each → brute-force infeasible within 10-min window).
- */
-export async function handleSshMoviVerify(request, env) {
-  // 1. Check session cookie first (subsequent requests)
-  const cookieHeader = request.headers.get('cookie') || '';
-  const sessionMatch = cookieHeader.match(/ts_movi=([a-f0-9]{64})/);
-  if (sessionMatch) {
-    const sessionKey = `ssh_movi_session:${sessionMatch[1]}`;
-    const sessionData = await env.DASHBOARD_KV.get(sessionKey, 'json');
-    if (sessionData) {
-      // Refresh session TTL
-      await env.DASHBOARD_KV.put(sessionKey, JSON.stringify(sessionData), { expirationTtl: 3600 });
-      return new Response('OK', {
-        status: 200,
-        headers: {
-          'X-Session-Cookie': `ts_movi=${sessionMatch[1]}; Path=/; Max-Age=3600; HttpOnly; Secure; SameSite=None`,
-          'Cache-Control': 'no-store',
-        },
-      });
-    }
-  }
-
-  // 2. No valid session — check URL token (initial request)
-  const url   = new URL(request.url);
-  const token = (url.searchParams.get('t') || '').replace(/[^a-f0-9]/gi, '');
-  if (!token || token.length < 32) return new Response('Forbidden', { status: 403 });
-
-  const kvKey = `ssh_movi_token:${token}`;
-  const data  = await env.DASHBOARD_KV.get(kvKey, 'json');
-  if (!data) return new Response('Forbidden', { status: 403 });
-
-  // Single-use: xóa token ngay để chống replay attack
-  await env.DASHBOARD_KV.delete(kvKey).catch(() => {});
-
-  // 3. Token valid — create a session
-  const sessionBytes = new Uint8Array(32);
-  crypto.getRandomValues(sessionBytes);
-  const sessionId = Array.from(sessionBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-  await env.DASHBOARD_KV.put(`ssh_movi_session:${sessionId}`, JSON.stringify({ username: data.username }), { expirationTtl: 3600 });
-
-  await logActivity(env, {
-    action: 'ssh-movi-token-verified',
-    username: data.username,
-    ip: request.headers.get('cf-connecting-ip') || data.ip,
-    success: true,
-    detail: `SSH Movi session started`,
-  });
-
-  return new Response('OK', {
-    status: 200,
-    headers: {
-      'X-Session-Cookie': `ts_movi=${sessionId}; Path=/; Max-Age=3600; HttpOnly; Secure; SameSite=None`,
-      'Cache-Control': 'no-store',
-    },
-  });
-}
-
 /* ═══════════════════════════════════════════════
-   Termix Movi — Worker Reverse Proxy
-   Proxies termix-movi.home-server.id.vn qua Worker,
-   thêm CF Service Token headers để bypass CF Access.
-   Yêu cầu: dashboard session + quyền ssh-movi.
+   Termix — Worker Reverse Proxy (dùng chung, hiện chỉ Termix Home)
+   Thêm CF Service Token headers để bypass CF Access.
+   Yêu cầu: dashboard session + quyền opts.perm.
    ═══════════════════════════════════════════════ */
 
 export async function handleTermixProxy(request, env, opts) {
@@ -234,7 +139,7 @@ export async function handleTermixProxy(request, env, opts) {
 
   // X-Forwarded-Host: needed so Termix generates + stores redirect_uri = https://<dashboard>/users/oidc/callback
   // for BOTH the authorization URL AND the code→token exchange (both must use the same redirect_uri).
-  // Without this, Termix stores redirect_uri=termix-movi.../callback but Microsoft issues code for
+  // Without this, Termix stores redirect_uri=<termix-origin>/callback but Microsoft issues code for
   // dashboard.../callback → mismatch → 400 on token exchange.
   // Post-login redirect (Termix → dashboard URL) is handled in the redirect handler below.
   const _dashFwdOrigin = new URL(request.url);
@@ -242,7 +147,7 @@ export async function handleTermixProxy(request, env, opts) {
   upHeaders.set('X-Forwarded-Proto', 'https');
 
   // Forward Termix session cookies, strip dashboard cookies
-  const fwdCookie = filterCookies(request.headers.get('cookie'), ['dh_session=', 'ts_movi=']);
+  const fwdCookie = filterCookies(request.headers.get('cookie'), ['dh_session=']);
   if (fwdCookie) upHeaders.set('Cookie', fwdCookie);
   // Forward Authorization header — Termix API uses Bearer token auth for protected endpoints
   const authHeader = request.headers.get('Authorization');
@@ -336,7 +241,7 @@ export async function handleTermixProxy(request, env, opts) {
   }
 
   // Handle 3xx redirects from Termix — rewrite Location headers before forwarding to browser.
-  // Without this, Termix's Location headers point to termix-movi.home-server.id.vn (blocked by CF Access).
+  // Without this, Termix's Location headers point to the Termix origin (blocked by CF Access).
   if (upstream.status >= 300 && upstream.status < 400) {
     const _loc    = upstream.headers.get('Location') || '';
     const _reqOri = new URL(request.url).origin;
@@ -492,7 +397,7 @@ export async function handleTermixProxy(request, env, opts) {
       return u.replace('https://'+O,B).replace('http://'+O,B);
     }
     // WebSocket. WSMODE='proxy' → giữ WS tới dashboard/proxy (worker proxy + thêm CF token).
-    //           WSMODE='direct' → DIRECT tới origin thật (strip base), browser tự nối (Movi).
+    //           WSMODE='direct' → DIRECT tới origin thật (strip base), browser tự nối.
     if(u.indexOf('wss://')===0||u.indexOf('ws://')===0){
       var si=u.indexOf('/',u.indexOf('//')+2);
       var path=si===-1?'/':u.slice(si);
@@ -823,19 +728,6 @@ export function _rewriteTermixCookie(sc, base) {
   }
   if (!/;\s*Secure/i.test(sc)) sc += '; Secure';
   return sc;
-}
-
-// Termix Movi — reverse proxy wrapper (CF Access service token + shared secret)
-export function handleTermixMoviProxy(request, env) {
-  return handleTermixProxy(request, env, {
-    origin:   cleanEnv(env.TERMIX_MOVI_URL) || 'https://termix-movi.home-server.id.vn',
-    base:     '/proxy/termix-movi',
-    perm:     'ssh-movi',
-    label:    'Termix Movi',
-    cfId:     cleanEnv(env.TERMIX_MOVI_CF_CLIENT_ID),
-    cfSecret: cleanEnv(env.TERMIX_MOVI_CF_CLIENT_SECRET),
-    secret:   cleanEnv(env.TERMIX_MOVI_SECRET),
-  });
 }
 
 // Termix Home — reverse proxy wrapper (mở top-level tab qua dashboard proxy)

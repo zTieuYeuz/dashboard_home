@@ -6,23 +6,16 @@
    chat.js gọi POST /api/ai/read bằng COOKIE user → handler tự kiểm quyền
    (getSession + hasPerm) → user không có quyền thì bị 403, AI cũng KHÔNG
    đọc được và phải báo user bị giới hạn. Không rò rỉ dữ liệu qua quyền.
-   Dùng cho dữ liệu nhạy cảm/đa-user (Movi/Meraki, FortiGate Movi…).
    ═══════════════════════════════════════════════════════════════════ */
 import { json, getSession, logActivity, isAdminUser, computeEffectivePermissions } from '../core.js';
-import {
-  handleMerakiClients, handleMerakiDevices, handleMerakiUplinks,
-  handleMerakiEvents, handleMerakiBlockedClients,
-} from '../meraki.js';
-import { handleMoviSystem } from '../movi-fortigate.js';
 import {
   handleFortigateWebhook, handleVmwareHome, handleAsusWebhook,
   handleAsusClients, handleCasaOS, handleRustdesk,
 } from '../home-services.js';
-import { MOVI_READS, summarizeMerakiClients, summarizeMerakiDevices, summarizeMerakiEvents } from './movi.js';
 import { pnetReadLabs, pnetReadTopology, pnetReadNodeConfig } from '../pnetlab.js';
 
 /* 2 loại nguồn:
-   - `handler(request,env)`  : TỰ kiểm quyền bên trong (Meraki/Movi — getSession+hasPerm).
+   - `handler(request,env)`  : TỰ kiểm quyền bên trong (getSession+hasPerm).
    - `homeHandler(env)`      : KHÔNG tự kiểm → bridge phải kiểm quyền `perm` theo user
                                TRƯỚC khi gọi (dịch vụ nhà). Nhờ vậy MỌI read đều
                                giới hạn theo quyền user, không còn đường coarse rò rỉ. */
@@ -41,20 +34,6 @@ export const READ_REGISTRY = [
   { id: 'rustdesk',       perm: 'rustdesk',  label: 'RustDesk (máy remote)',              homeHandler: handleRustdesk,
     desc: 'Danh sách máy RustDesk remote desktop: ID, tên, OS, online/offline.' },
 
-  // ── Văn phòng Movi — handler TỰ kiểm quyền ──
-  { id: 'meraki_clients',  perm: 'meraki',         label: 'Thiết bị đang kết nối mạng Meraki (Movi)', handler: handleMerakiClients, aiTransform: summarizeMerakiClients,
-    desc: 'Client đang kết nối Meraki, ĐÃ GOM SẴN: byAp (số client theo từng AP, vd byAp["F2-02"]), bySsid, tổng online/wired/wireless. Dùng cho câu "AP X có bao nhiêu client", "bao nhiêu người đang kết nối".' },
-  { id: 'meraki_devices',  perm: 'meraki',         label: 'Thiết bị hạ tầng Meraki (AP/Switch)',       handler: handleMerakiDevices, aiTransform: summarizeMerakiDevices,
-    desc: 'AP/Switch/Appliance Meraki (đã gom byType + tách thiết bị lỗi): model, serial, IP, firmware, trạng thái.' },
-  { id: 'meraki_uplinks',  perm: 'meraki',         label: 'WAN uplinks Meraki',                        handler: handleMerakiUplinks,
-    desc: 'Trạng thái các đường WAN uplink của Meraki (Movi).' },
-  { id: 'meraki_events',   perm: 'meraki',         label: 'Sự kiện mạng Meraki',                       handler: handleMerakiEvents, aiTransform: summarizeMerakiEvents,
-    desc: 'Sự kiện mạng gần đây trên Meraki (40 dòng gần nhất).' },
-  { id: 'meraki_blocked',  perm: 'meraki',         label: 'Thiết bị bị chặn (Meraki)',                 handler: handleMerakiBlockedClients,
-    desc: 'Danh sách client đang bị chặn trên Meraki.' },
-  { id: 'movi_fortigate',  perm: 'fortigate-movi', label: 'Trạng thái FortiGate Movi',                 handler: handleMoviSystem,
-    desc: 'Trạng thái FortiGate văn phòng Movi: CPU/RAM, phiên bản, uptime…' },
-
   // ── PNETLab (lab mạng) — homeHandler(env, params); bridge tự kiểm quyền hub-pnetlab ──
   { id: 'pnetlab_labs',    perm: 'hub-pnetlab', label: 'Danh sách lab PNETLab',           homeHandler: pnetReadLabs,
     desc: 'Cây folder + danh sách lab trên PNETLab (mỗi lab có "path"). Dùng path này cho các nguồn/hành động PNETLab khác.' },
@@ -62,9 +41,6 @@ export const READ_REGISTRY = [
     desc: 'Nodes (id, tên, template, trạng thái running/stopped) + kết nối mạng của 1 lab. THAM SỐ: lab (path lab, vd /CCNA/lab1.unl).' },
   { id: 'pnetlab_config',  perm: 'hub-pnetlab', label: 'Startup config 1 node PNETLab',   homeHandler: pnetReadNodeConfig, needsParams: true,
     desc: 'Startup config của 1 node router/switch. THAM SỐ: lab (path lab) + node_id (số, lấy từ pnetlab_topology).' },
-
-  // ── Movi network mở rộng + chẩn đoán + ESXi Movi (module riêng src/ai/movi.js) ──
-  ...MOVI_READS,
 ];
 
 const _byId = {};
@@ -112,7 +88,7 @@ export async function handleAiRead(request, env) {
       // homeHandler(env) hoặc homeHandler(env, params) — handler cũ bỏ qua tham số 2 (tương thích ngược)
       resp = await src.homeHandler(env, params);
     } else {
-      // Movi/Meraki: handler tự-gate bằng request giữ nguyên cookie user
+      // handler tự-gate bằng request giữ nguyên cookie user
       resp = await src.handler(proxied, env);
     }
   } catch (e) { return json({ ok: false, error: 'Lỗi đọc: ' + ((e && e.message) || e) }, 500); }

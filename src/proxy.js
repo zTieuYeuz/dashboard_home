@@ -147,10 +147,9 @@ export async function handleProxy(request, env) {
     `rồi dùng URL tunnel (VD: https://fortigate-ui.home-server.id.vn) thay vì IP local.`, target);
 
   // Whitelist: only allow proxying to our own trusted domains
-  const isTrustedDomain = h === 'home-server.id.vn' || h.endsWith('.home-server.id.vn')
-    || h === 'movi-finance.com' || h.endsWith('.movi-finance.com');
+  const isTrustedDomain = h === 'home-server.id.vn' || h.endsWith('.home-server.id.vn');
   if (!isTrustedDomain) return proxyErr(
-    `Proxy chỉ hỗ trợ các domain nội bộ (*.home-server.id.vn, *.movi-finance.com).\n` +
+    `Proxy chỉ hỗ trợ các domain nội bộ (*.home-server.id.vn).\n` +
     `Domain "${h}" không được phép.`, target);
 
   // Forward CF Access credentials ONLY to our own trusted domain
@@ -292,16 +291,3 @@ export async function handleOpenclawApp(request, env) {
   return new Response(upstream.body, { status: upstream.status, headers: rh });
 }
 
-/* ═══════════════════════════════════════════════
-   SSH Movi — Secure Terminal Token Flow
-   Bảo vệ bằng short-lived single-use token (KV)
-   Nginx trên Movi server gọi /api/ssh-movi/verify
-   để validate trước khi cho browser qua ttyd
-   ═══════════════════════════════════════════════ */
-
-/**
- * POST /api/ssh-movi/token
- * Requires: session + ssh-movi permission
- * Returns: { token, url, expiresIn }
- * Token TTL = 10 phút, single-use (bị xoá ngay sau verify)
- */

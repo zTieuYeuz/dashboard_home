@@ -14,7 +14,6 @@
 import { json, getSession, logActivity } from '../core.js';
 import { ACTION_REGISTRY } from './actions.js';
 import { READ_REGISTRY } from './reads.js';
-import { getForms } from './movi.js';
 import { runDailySelfReview } from './review.js';
 
 const MCP_PROTOCOL = '2024-11-05';
@@ -89,21 +88,6 @@ export const TOOL_CATALOG = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
-    name: 'list_dashboard_forms',
-    label: 'Danh sách biểu mẫu n8n',
-    dataDesc: 'các biểu mẫu nghiệp vụ (tạo user Movi…) + trường + quy tắc',
-    sensitive: false,
-    description:
-      'Liệt kê các BIỂU MẪU nghiệp vụ gửi tới n8n (vd tạo user Movi): id, TẤT CẢ các trường (cả BẮT BUỘC lẫn ' +
-      'TUỲ CHỌN), định dạng, quy tắc. Khi user yêu cầu một nghiệp vụ (tạo user, cấp phát…): gọi tool này lấy spec, ' +
-      'rồi HỎI USER LẦN LƯỢT ĐỦ MỌI TRƯỜNG trong "fields" — TUYỆT ĐỐI KHÔNG tự ý bỏ qua trường tuỳ chọn. ' +
-      'Nêu rõ trường nào bắt buộc, trường nào tuỳ chọn; với trường tuỳ chọn để user TỰ QUYẾT điền hay bỏ qua ' +
-      '(đừng tự lược bỏ giúp). Thu đủ → ĐỌC LẠI TOÀN BỘ dữ liệu cho user xác nhận → in khối ' +
-      '```dash-action {"action":"form_submit","params":{"form":"<id>","data":{...}}} — dashboard validate ' +
-      'lần cuối + hỏi user bấm Đồng ý mới gửi. Thiếu/sai trường bắt buộc là bị từ chối.',
-    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-  },
-  {
     name: 'list_dashboard_actions',
     label: 'Danh sách hành động',
     dataDesc: 'các việc AI có thể LÀM + quyền cần',
@@ -162,16 +146,6 @@ async function runTool(name, _args, env) {
     list.unshift({ id: 'i_' + newToken().slice(0, 8), title, insight, kind, time: Date.now() });
     await env.DASHBOARD_KV.put('ai_insights', JSON.stringify(list.slice(0, 200)));
     return { ok: true, saved: true, note: 'Đã ghi vào hàng chờ — admin duyệt xong bạn sẽ nhớ vĩnh viễn (kho 90-ai-tu-hoc).' };
-  }
-  if (name === 'list_dashboard_forms') {
-    const forms = await getForms(env);
-    return {
-      forms: forms.map(f => ({ id: f.id, label: f.label, desc: f.desc, perm: f.perm || null,
-        adminOnly: !!f.adminOnly, fields: f.fields || [], rules: f.rules || '' })),
-      howto: 'HỎI user LẦN LƯỢT TẤT CẢ trường trong "fields" của form — CẢ required LẪN tuỳ chọn. Nêu rõ ' +
-        'trường nào bắt buộc, trường nào tuỳ chọn; ĐỪNG bỏ sót trường tuỳ chọn (để user tự điền hoặc nói bỏ qua). ' +
-        'Thu đủ → đọc lại toàn bộ cho user xác nhận → in ```dash-action {"action":"form_submit","params":{"form":"<id>","data":{...}}}```.',
-    };
   }
   if (name === 'list_dashboard_reads') {
     return {
@@ -650,16 +624,6 @@ Bạn có tool \`save_insight\` để TỰ TÍCH LUỸ hiểu biết về hệ t
 - **Khi THẤY CƠ HỘI cải tiến dashboard** (câu hỏi lặp lại nhiều mà chưa có trang/tính năng; thao tác thủ công nên tự động hoá; dữ liệu nên hiển thị thêm; điểm gây nhầm lẫn cho user): gọi \`save_insight\` với kind="suggestion". CHỦ ĐỘNG đề xuất — đừng chờ được hỏi.
 - Viết insight **TỰ ĐỨNG ĐƯỢC** (người chưa đọc hội thoại vẫn hiểu). **KHÔNG** ghi mật khẩu/token/dữ liệu cá nhân.
 - Admin duyệt → nội dung vào kho kiến thức (thư mục \`90-ai-tu-hoc\`) → bạn **nhớ vĩnh viễn** ở mọi phiên sau. Kiến thức trong mục "Kiến thức do admin dạy" bên dưới chính là những gì đã được duyệt — ưu tiên áp dụng.
-
-## BIỂU MẪU NGHIỆP VỤ (form — vd tạo user Movi)
-Khi user muốn làm nghiệp vụ có biểu mẫu (tạo user, cấp phát…):
-1. Gọi \`list_dashboard_forms\` lấy spec form (danh sách **fields** + rules).
-2. **Trình bày ĐẦY ĐỦ MỌI trường** của form — CẢ **bắt buộc** LẪN **tuỳ chọn**. Đánh dấu rõ trường bắt buộc (⭐) và trường tuỳ chọn.
-3. **Hỏi user lần lượt TỪNG trường — TUYỆT ĐỐI không bỏ sót trường tuỳ chọn.** Với trường tuỳ chọn, để user tự quyết **điền hoặc nói bỏ qua** — bạn KHÔNG được tự ý lược bỏ.
-   - Nếu trường có **danh sách lựa chọn (\`enum\`)** → **LIỆT KÊ các lựa chọn đó** cho user chọn (như dropdown), ĐỪNG để user gõ tự do; giá trị gửi phải nằm trong danh sách.
-4. Thu đủ → **đọc lại TOÀN BỘ dữ liệu** để user xác nhận.
-5. Rồi in \`\`\`dash-action {"action":"form_submit","params":{"form":"<id>","data":{...}}}\`\`\` — dashboard validate + hỏi Đồng ý mới gửi.
-> Sai thường gặp cần TRÁNH: chỉ hỏi vài trường bắt buộc rồi gửi luôn, bỏ qua các trường tuỳ chọn (chức danh, phòng ban, điện thoại, quản lý…). PHẢI liệt kê hết cho user chọn.
 
 _(Tài liệu do dashboard tự sinh — cập nhật khi thêm trang/công cụ. Nạp lại bằng: curl .../api/ai/guide.)_
 `;

@@ -1,8 +1,7 @@
 /* ═══════════════════════════════════════════════
    camera-home.js — Camera Home (Frigate) handlers split out of worker.js
    (2026-07-11). Logic UNCHANGED — pure verbatim move, same as other
-   src/ modules. Camera Movi handlers (handleCameraToken, handleCamEmbed,
-   aliases) intentionally STAY in worker.js.
+   src/ modules.
    ═══════════════════════════════════════════════ */
 import {
   getSession, hasPerm, isAdminUser, cleanEnv, json, logActivity, DEFAULT_CAMERAS,

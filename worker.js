@@ -16,13 +16,12 @@
      src/permissions-registry.js   ⭐ KHAI BÁO QUYỀN — nguồn DUY NHẤT, thêm
                          service mới sửa ở đây (đọc chú thích đầu file đó trước)
      src/home-services.js   dịch vụ NHÀ: CasaOS, ESXi, FortiGate, ASUS, RustDesk
-     src/meraki.js · src/movi-fortigate.js · src/tool-movi.js   dịch vụ MOVI
      src/termix.js · src/pnetlab.js · src/proxy.js   các proxy (SSH/RDP, lab, Chrome Pool)
      src/console-serial.js · src/kb-network.js      Web Console + kho kiến thức mạng
      src/webauthn.js     đăng nhập bằng passkey
      src/n8n-ai.js · src/camera-home.js · src/net-topology.js
      src/ai/*.js         hệ AI: mcp.js (tool) · reads.js (đọc) · actions.js
-                         (hành động) · movi.js · review.js (tự rà soát hằng ngày)
+                         (hành động) · review.js (tự rà soát hằng ngày)
 
    ───────────────────────────────────────────────────────────────────────────
    MỤC LỤC worker.js (số dòng có thể trôi — tìm theo TÊN HÀM cho chắc)
@@ -43,11 +42,10 @@
 
      /api/auth/*        17   đăng nhập, đăng xuất, MFA, đổi mật khẩu, passkey
      /api/admin/*       17   quản trị user/nhóm/quyền/cấu hình/AI
-     /api/tool-movi/*   12   bộ công cụ Movi (tạo user, tra tài sản…)
      /api/ai/*           8   AI đọc dữ liệu + thực thi hành động
      /api/console-relay/* 7  chia sẻ phiên console hiện trường
      còn lại                 mỗi dịch vụ vài route: n8n, asus, fortigate,
-                             vmware, meraki, rustdesk, pnetlab, termix…
+                             vmware, rustdesk, pnetlab, termix…
 
    ───────────────────────────────────────────────────────────────────────────
    ⚠️ QUY TẮC BẮT BUỘC KHI SỬA FILE NÀY
@@ -67,8 +65,6 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 import {
   ALL_SERVICES,
-  DEFAULT_CAMERAS_MOVI,
-  MOVI_N8N_BASE,
   N8N_BASE,
   SESSION_COOKIE,
   _constEq,
@@ -104,48 +100,6 @@ import {
   verifyPw
 } from './src/core.js';
 import {
-  handleClearToolMoviHistory,
-  handleFgPolicyDone,
-  handleGetToolMoviHistory,
-  handleListFgPolicies,
-  handleSaveToolMoviHistory,
-  handleToolMoviAssetSearch,
-  handleToolMoviBlockUser,
-  handleToolMoviCheckAzureGroup,
-  handleToolMoviCheckEmail,
-  handleToolMoviCreateUser,
-  handleToolMoviDeleteUserAction,
-  handleToolMoviDeleteUserList,
-  handleToolMoviFgPolicy
-} from './src/tool-movi.js';
-import {
-  handleMerakiBlockedClients,
-  handleMerakiClientPolicy,
-  handleMerakiClients,
-  handleMerakiDeviceStatus,
-  handleMerakiDevices,
-  handleMerakiEvents,
-  handleMerakiL3Routing,
-  handleMerakiLinkAggregations,
-  handleMerakiSwitchPortConfigs,
-  handleMerakiSwitchPorts,
-  handleMerakiUplinks,
-  handleMoviSdwan,
-  handleMoviSdwanRules
-} from './src/meraki.js';
-import {
-  handleMoviDhcp,
-  handleMoviFirewallDeauth,
-  handleMoviFirewallUsers,
-  handleMoviFortiviewSource,
-  handleMoviInterfaces,
-  handleMoviLicense,
-  handleMoviPolicy,
-  handleMoviSslVpn,
-  handleMoviSystem,
-  handleMoviVpn
-} from './src/movi-fortigate.js';
-import {
   handleAsusBw,
   handleAsusClients,
   handleAsusReboot,
@@ -154,8 +108,6 @@ import {
   handleFortigateBW,
   handleFortigateReboot,
   handleFortigateWebhook,
-  handleMoviVmwareData,
-  handleMoviVmwarePower,
   handleRustdesk,
   handleVmwareHome,
   handleVmwareHomePower
@@ -169,10 +121,7 @@ import {
   handleProxy
 } from './src/proxy.js';
 import {
-  handleSshMoviToken,
-  handleSshMoviVerify,
   handleTermixHomeProxy,
-  handleTermixMoviProxy,
   handleTermixLlm
 } from './src/termix.js';
 import {
@@ -202,10 +151,6 @@ import {
   handleAiRead,
   handleAiReadsList,
 } from './src/ai/reads.js';
-import {
-  handleAiFormsList,
-  handleAdminAiForms,
-} from './src/ai/movi.js';
 import {
   handleCameraList,
   handleCameraRename,
@@ -1179,8 +1124,6 @@ async function handleBackup(request, env) {
     userGroupIds, userGroups,
     systemConfig:      await env.DASHBOARD_KV.get('system_config', 'json'),
     cameraList:        await env.DASHBOARD_KV.get('camera_list', 'json'),
-    cameraListMovi:    await env.DASHBOARD_KV.get('camera_list_movi', 'json'),
-    cameraAliasesMovi: await env.DASHBOARD_KV.get('camera_aliases_movi', 'json'),
   };
   await logActivity(env, { action: 'config-backup', username: session.username,
     ip: request.headers.get('CF-Connecting-IP') || '?', success: true, detail: `Exported ${userlist.length} users` });
@@ -1239,8 +1182,6 @@ async function handleRestore(request, env) {
   // System config + cameras
   if (body.systemConfig)      await env.DASHBOARD_KV.put('system_config', JSON.stringify(body.systemConfig));
   if (body.cameraList)        await env.DASHBOARD_KV.put('camera_list', JSON.stringify(body.cameraList));
-  if (body.cameraListMovi)    await env.DASHBOARD_KV.put('camera_list_movi', JSON.stringify(body.cameraListMovi));
-  if (body.cameraAliasesMovi) await env.DASHBOARD_KV.put('camera_aliases_movi', JSON.stringify(body.cameraAliasesMovi));
 
   _effCache.clear();        // drop all cached permissions
   _invalidateCfgCache();    // drop cached system config
@@ -1704,27 +1645,6 @@ async function handleUpdateUserPanels(request, env, username) {
   return json({ success: true, username, permissions: user.permissions, panels: user.panels, cameras: user.cameras });
 }
 
-
-async function handleMoviCameraList(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (request.method === 'GET') {
-    let list = await env.DASHBOARD_KV.get('camera_list_movi', 'json');
-    if (!Array.isArray(list)) {
-      list = DEFAULT_CAMERAS_MOVI;
-      await env.DASHBOARD_KV.put('camera_list_movi', JSON.stringify(list));
-    }
-    return json({ cameras: list });
-  }
-  if (request.method === 'PUT') {
-    if (!(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
-    let body; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-    const cameras = Array.isArray(body.cameras) ? body.cameras : [];
-    await env.DASHBOARD_KV.put('camera_list_movi', JSON.stringify(cameras));
-    return json({ success: true, cameras });
-  }
-  return json({ error: 'Method not allowed' }, 405);
-}
 
 /* ── Translate proxy (VI→EN) for AI semantic search ──
    Frigate's jinav1 embedding model only understands English, so Vietnamese
@@ -2531,7 +2451,7 @@ const WAYFIND_NAV = `<style>
 <div id="wf-fab" title="Chuyển trang nhanh (phím tắt: /)" onclick="window.__wfOpen&&window.__wfOpen()">
  <span class="wf-dot"></span></div>
 <div id="wf-hint"><span class="wf-x" title="Đóng" onclick="document.getElementById('wf-hint').classList.remove('on')">&#x2715;</span>
- &#x1F449; Bấm nút này (hoặc phím <b>/</b>) để nhảy thẳng giữa các trang — Meraki, FortiGate, ESXi, MOVI…</div>
+ &#x1F449; Bấm nút này (hoặc phím <b>/</b>) để nhảy thẳng giữa các trang — FortiGate, ESXi, Camera…</div>
 <div id="wf-ov"><div id="wf-panel">
  <input id="wf-search" placeholder="Tìm dịch vụ… (gõ để lọc, &#x2191;&#x2193; chọn, Enter mở)" autocomplete="off">
  <div id="wf-list"></div>
@@ -2541,7 +2461,6 @@ const WAYFIND_NAV = `<style>
  if(window.__wfNav)return; window.__wfNav=1;
  if(location.pathname==='/login.html')return;
  var U=(window.__USER__||{}), adm=!!U.isAdmin, P=U.permissions||{};
- var _TMK=['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'];
  /* Camera Home mở được bằng BẤT KỲ quyền camera con nào — phải khớp đúng _PAGE_PERM phía server,
     nếu không user chỉ có quyền Playback/Download sẽ vào được trang nhưng menu lại giấu link. */
  var _CAMK=['camera','camera_playback','camera_download','app_camera','camera_autoopen'];
@@ -2551,14 +2470,6 @@ const WAYFIND_NAV = `<style>
  function _hp(pk){if(!pk)return true;if(Array.isArray(pk))return pk.some(function(k){return(P[k]||'none')!=='none';});return(P[pk]||'none')!=='none';}
  var _ALL=[
   {i:'\\u2316',n:'Dashboard',d:'Trang chủ · tất cả dịch vụ',h:'/',p:null},
-  {i:'\\uD83C\\uDF10',n:'Meraki-Network',d:'Network client monitor · Cisco Meraki',h:'/service-movi/meraki.html',p:'meraki'},
-  {i:'\\uD83D\\uDDFA',n:'Movi Map Network',d:'Sơ đồ topology · route · dây switch',h:'/service-movi/topology.html',p:'topology'},
-  {i:'\\uD83D\\uDD25',n:'FortiGate Movi',d:'Firewall dashboard · bandwidth · interfaces live',h:'/service-movi/fortigate-movi.html',p:'fortigate-movi'},
-  {i:'\\uD83D\\uDCF9',n:'Camera Movi',d:'Camera live · go2rtc · RTSP streams',h:'/service-movi/camera-movi.html',p:'camera-movi'},
-  {i:'\\u26A1',n:'n8n Movi',d:'Workflow automation · Movi Finance',h:'/service-movi/n8n-movi.html',p:'n8n-movi'},
-  {i:'🛠',n:'Tool Movi',d:'Workflow triggers · n8n automation',h:'/service-movi/tool-movi.html',p:_TMK},
-  {i:'\uD83D\uDDA5',n:'VMware01 Movi',d:'ESXi host 01 · Movi Finance datacenter',h:'/service-movi/vmware01-movi.html',p:'vmware01-movi'},
-  {i:'\uD83D\uDDA5',n:'VMware02 Movi',d:'ESXi host 02 · Movi Finance datacenter',h:'/service-movi/vmware02-movi.html',p:'vmware02-movi'},
   {i:'\\uD83D\\uDD25',n:'FortiGate',d:'Firewall · security gateway',h:'/service-home/fortigate.html',p:'fortigate'},
   {i:'\\uD83D\\uDDA5',n:'VMware ESXi',d:'Hypervisor · bare metal',h:'/service-home/vmware-home.html',p:'esxi'},
   {i:'\\uD83C\\uDFE0',n:'CasaOS',d:'Home server OS',h:'/service-home/casaos.html',p:'casaos'},
@@ -2567,7 +2478,6 @@ const WAYFIND_NAV = `<style>
   {i:'\\uD83D\\uDCF7',n:'Camera',d:'Hệ thống camera · Frigate NVR',h:'/service-home/camera-home.html',p:_CAMK},
   {i:'\\uD83D\\uDDA7',n:'Terminal Home',d:'Termix · Web Console (Serial) · SSH Hiện trường · ConsolePi',h:'/service-home/ssh.html',p:_TERMK},
   {i:'\\uD83D\\uDDA5',n:'RustDesk',d:'Remote desktop · máy nhân viên',h:'/service-home/rustdesk.html',p:'rustdesk'},
-  {i:'\\uD83D\\uDDA7',n:'Termix Movi',d:'SSH Movi · token auth',h:'/service-movi/ssh-movi.html',p:'ssh-movi'},
   {i:'\\uD83C\\uDFE0',n:'ALL Service Home',d:'Chrome Pool · FortiGate · ESXi · NAS · n8n · Frigate…',h:'/service-home/services-embed.html',p:'services-hub'},
   {i:'\\uD83D\\uDD16',n:'Bookmarks',d:'Liên kết nhanh',h:'/bookmarks.html',p:null}
  ];
@@ -2656,15 +2566,6 @@ const DATA_REFRESH = `<style>
  if(window.__wfData)return;
  if(location.pathname==='/login.html')return;
  var MAP={'/':['runChecks'],'/index.html':['runChecks'],
-  '/service-movi/meraki.html':['loadAll'],
-  '/service-movi/topology.html':['loadData'],
-  '/service-movi/fortigate-movi.html':['loadAll'],
-  '/service-movi/camera-movi.html':['loadState'],
-  '/service-movi/n8n-movi.html':['loadData'],
-  '/service-movi/vmware01-movi.html':['loadData'],
-  '/service-movi/vmware02-movi.html':['loadData'],
-  '/service-movi/tool-movi.html':[],
-  '/service-movi/ssh-movi.html':[],
   '/service-home/fortigate.html':['load'],'/service-home/vmware-home.html':['loadData'],'/service-home/casaos.html':['loadData'],
   '/service-home/asus.html':['load'],'/service-home/n8n.html':['loadData'],
   '/service-home/camera-home.html':[],'/service-home/ssh.html':['loadData'],
@@ -2729,10 +2630,7 @@ const PANEL_REFRESH = `<style>
 </style>
 <script>(function(){
  if(window.__wfPanel)return; window.__wfPanel=1;
- var PMAP={'/service-movi/meraki.html':{
-   'panel-clients':'loadClients','panel-devices':'loadDevices','panel-status':'loadStatus',
-   'panel-events':'loadEvents','panel-uplinks':'loadUplinks','panel-vlans':'loadVlansRoutes',
-   'panel-routes':'loadVlansRoutes','panel-ports':'loadSwitchPorts'}};
+ var PMAP={};
  var cfg=PMAP[location.pathname]; if(!cfg)return;
  function wire(){
   Object.keys(cfg).forEach(function(pid){
@@ -2951,7 +2849,6 @@ a:hover{background:#4f46e5}</style></head>
         services: PERMISSION_REGISTRY,
         labels: buildPermLabels(),
         delegateHome: buildDelegateKeys('home'),
-        delegateMovi: buildDelegateKeys('movi'),
       })};</` + `script>`
     : '';
   /* ── Hạn chờ mạng cho MỌI trang (thêm 2026-08-28) ────────────────────────
@@ -3201,7 +3098,7 @@ a:hover{background:#4f46e5}</style></head>
         "img-src 'self' data: https:; " +
         "media-src 'self' blob:; " +
         // [M4] Whitelist only known domains instead of broad 'https: wss:'
-        // Covers: all homelab subdomains + movi-finance API/WebSocket
+        // Covers: all homelab subdomains
         // Cloudflare Access (mọi domain *.cloudflareaccess.com — team domain riêng mỗi tài khoản,
         // vd labserverhome.cloudflareaccess.com) tự chèn iframe/XHR ẩn để LÀM MỚI NGẦM JWT phiên
         // Access đang bảo vệ chính domain dashboard này — cơ chế có sẵn của Cloudflare, không phải
@@ -3217,13 +3114,13 @@ a:hover{background:#4f46e5}</style></head>
         // thì không, nên bị chặn "Refused to connect" dù mã ghép nối đúng.
         // Mở theo TỪNG TRANG, không mở cho cả dashboard: trang khác không có việc gì gọi vào
         // máy người dùng, để hở là mở thêm một mặt bị tấn công không cần thiết.
-        "connect-src 'self' https://*.home-server.id.vn wss://*.home-server.id.vn https://*.movi-finance.com wss://*.movi-finance.com https://speed.cloudflare.com https://*.cloudflareaccess.com" +
+        "connect-src 'self' https://*.home-server.id.vn wss://*.home-server.id.vn https://speed.cloudflare.com https://*.cloudflareaccess.com" +
         (url.pathname === '/service-home/ssh-field.html' ? ' http://127.0.0.1:* ws://127.0.0.1:*' : '') + "; " +
         // Google Fonts files + data URIs
         "font-src 'self' data: https://fonts.gstatic.com; " +
         // Allow camera (go2rtc), SSH terminal (termix) iframes, Microsoft OIDC silent renewal,
         // và Cloudflare Access silent-refresh iframe (xem ghi chú connect-src ở trên).
-        "frame-src 'self' https://*.home-server.id.vn https://cam.movi-finance.com https://termix.movi-finance.com https://login.microsoftonline.com https://*.cloudflareaccess.com; " +
+        "frame-src 'self' https://*.home-server.id.vn https://login.microsoftonline.com https://*.cloudflareaccess.com; " +
         "object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
     }
   });
@@ -3301,9 +3198,6 @@ async function handleServicesEmbedConfig(env, session) {
   return json({ tree: tree });
 }
 
-/* ── Movi n8n webhook basic-auth (credentials from Cloudflare secrets) ──
-   Set via:  wrangler secret put MOVI_N8N_USER  /  MOVI_N8N_PASS
-   Never hardcode credentials in source. */
 async function checkService(service) {
   if (!service.checkUrl) return { id: service.id, status: 'local', ping: null };
   const t0 = Date.now();
@@ -3452,130 +3346,8 @@ async function handleExecDetail(request, env) {
   }
 }
 
-/* ── Movi n8n API (direct API key auth) ──
-   Set via:  wrangler secret put MOVI_N8N_API_KEY */
-async function handleMoviN8n(env) {
-  const key = cleanEnv(env.MOVI_N8N_API_KEY);
-  if (!key) return json({ error: 'MOVI_N8N_API_KEY not configured' }, 500);
-
-  const h = { 'X-N8N-API-KEY': key, 'Accept': 'application/json' };
-  const opts = (extra = {}) => ({ headers: h, signal: AbortSignal.timeout(10000), ...extra });
-
-  try {
-    // Fetch running executions separately — n8n default list only returns finished ones
-    const [wfRes, exRes, exRunRes, credRes, varRes, tagRes] = await Promise.all([
-      fetch(`${MOVI_N8N_BASE}/workflows?limit=100`, opts()),
-      fetch(`${MOVI_N8N_BASE}/executions?limit=50&includeData=false`, opts()),
-      fetch(`${MOVI_N8N_BASE}/executions?limit=20&includeData=false&status=running`, opts()),
-      fetch(`${MOVI_N8N_BASE}/credentials`, opts()),
-      fetch(`${MOVI_N8N_BASE}/variables`, opts()),
-      fetch(`${MOVI_N8N_BASE}/tags?limit=100`, opts()),
-    ]);
-
-    const [wfData, exData, exRunData, credData, varData, tagData] = await Promise.all([
-      wfRes.json(),
-      exRes.json(),
-      exRunRes.ok ? exRunRes.json() : { data: [] },
-      credRes.json(),
-      varRes.json(),
-      tagRes.json(),
-    ]);
-
-    const workflows = (wfData.data || []).map(w => ({
-      id: w.id, name: w.name, active: w.active,
-      updatedAt: w.updatedAt, createdAt: w.createdAt,
-      triggerCount: w.triggerCount || 0,
-      tags: (w.tags || []).map(t => t.name || t),
-    }));
-
-    const wfNameMap = {};
-    workflows.forEach(w => { wfNameMap[w.id] = w.name; });
-
-    const seenIds = new Set();
-    const mergedRaw = [...(exRunData.data || []), ...(exData.data || [])].filter(e => {
-      if (seenIds.has(e.id)) return false;
-      seenIds.add(e.id);
-      return true;
-    });
-    mergedRaw.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
-
-    const executions = mergedRaw.map(e => ({
-      id: e.id,
-      workflowName: wfNameMap[e.workflowId] || e.workflowData?.name || '(không rõ)',
-      workflowId: e.workflowId,
-      status: e.status,
-      startedAt: e.startedAt,
-      stoppedAt: e.stoppedAt,
-      mode: e.mode,
-    }));
-
-    const credentials = (credData.data || []).map(c => ({
-      id: c.id, name: c.name, type: c.type,
-      createdAt: c.createdAt, updatedAt: c.updatedAt,
-    }));
-
-    const variables = (varData.data || []).map(v => ({
-      id: v.id, key: v.key, value: v.value, type: v.type,
-    }));
-
-    const tags = (tagData.data || []).map(t => ({
-      id: t.id, name: t.name, usageCount: t.usageCount || 0,
-    }));
-
-    const active   = workflows.filter(w => w.active).length;
-    const inactive = workflows.length - active;
-    const success  = executions.filter(e => e.status === 'success').length;
-    const failed   = executions.filter(e => e.status === 'error' || e.status === 'failed').length;
-    const running  = executions.filter(e => e.status === 'running').length;
-
-    const lastRun = {};
-    executions.forEach(e => {
-      if (!lastRun[e.workflowId] || new Date(e.startedAt) > new Date(lastRun[e.workflowId].startedAt)) {
-        lastRun[e.workflowId] = { status: e.status, startedAt: e.startedAt, execId: e.id };
-      }
-    });
-
-    return json({
-      workflows, executions, credentials, variables, tags, lastRun,
-      stats: { total: workflows.length, active, inactive, success, failed, running,
-               totalCreds: credentials.length, totalVars: variables.length },
-    });
-  } catch (e) {
-    return json({ error: e.message }, 502);
-  }
-}
-
-async function handleMoviN8nExecDetail(request, env) {
-  const key = cleanEnv(env.MOVI_N8N_API_KEY);
-  if (!key) return json({ error: 'MOVI_N8N_API_KEY not configured' }, 500);
-
-  const url = new URL(request.url);
-  const execId = url.searchParams.get('id');
-  if (!execId) return json({ error: 'Missing id' }, 400);
-
-  try {
-    const res = await fetch(`${MOVI_N8N_BASE}/executions/${execId}?includeData=true`, {
-      headers: { 'X-N8N-API-KEY': key, 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(12000),
-    });
-    const data = await res.json();
-    const err  = data.data?.resultData?.error || null;
-    const last = data.data?.resultData?.lastNodeExecuted || null;
-    return json({
-      id: data.id, status: data.status,
-      startedAt: data.startedAt, stoppedAt: data.stoppedAt,
-      mode: data.mode,
-      error: err ? { message: err.message, name: err.name, stack: err.stack, description: err.description } : null,
-      lastNodeExecuted: last,
-    });
-  } catch (e) {
-    return json({ error: e.message }, 502);
-  }
-}
-
 /* ═══════════════════════════════════════════════
-   Tool Movi — Workflow triggers via n8n webhook
-   Secret: MOVI_TOOL_CREATE_USER_WEBHOOK
+   Bookmarks — per-user, stored in KV
    ═══════════════════════════════════════════════ */
 async function handleGetBookmarks(request, env) {
   const session = await getSession(request, env);
@@ -3602,85 +3374,6 @@ async function handleSaveBookmarks(request, env) {
 }
 
 
-
-/* ── Meraki Devices Proxy ── */
-async function handleGetCameraAliases(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
-  const aliases = await env.DASHBOARD_KV.get('camera_aliases_movi', 'json') || {};
-  return json({ aliases });
-}
-async function handleSaveCameraAlias(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  if (!(await isAdminUser(env, session))) return json({ error: 'Admin required' }, 403);
-  const body = await request.json().catch(() => ({}));
-  const { camId, name } = body;
-  if (!camId) return json({ error: 'camId required' }, 400);
-  const aliases = await env.DASHBOARD_KV.get('camera_aliases_movi', 'json') || {};
-  const trimmed = (name || '').trim();
-  if (trimmed) aliases[camId] = trimmed;
-  else delete aliases[camId];
-  await env.DASHBOARD_KV.put('camera_aliases_movi', JSON.stringify(aliases));
-  await logActivity(env, { action: 'camera_alias_save', user: session.username,
-    detail: `cam=${camId} → ${trimmed || '(reset)'}`,
-    ip: request.headers.get('cf-connecting-ip') || '', success: true });
-  return json({ ok: true, aliases });
-}
-
-/* ── Camera Movi — Token ── */
-async function handleCameraToken(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return json({ error: 'Unauthorized' }, 401);
-  const url = env.MOVI_CAM_URL || '';
-  if (!url) return json({ error: 'Camera not configured' }, 503);
-
-  // Read actual camera list from KV (fallback to defaults)
-  let camList = await env.DASHBOARD_KV.get('camera_list_movi', 'json');
-  if (!camList || !camList.length) camList = DEFAULT_CAMERAS_MOVI;
-  const allCams = camList.filter(c => c.stream);
-  const allStreams = allCams.map(c => c.stream);
-  // Build labels: default names first, then overlay admin aliases
-  const labels = Object.fromEntries(allCams.map(c => [c.stream, c.name || c.id]));
-  // Stream → camId map (used by client for alias editing)
-  const streamToCamId = Object.fromEntries(allCams.map(c => [c.stream, c.id]));
-  // Apply admin-defined aliases
-  const aliases = await env.DASHBOARD_KV.get('camera_aliases_movi', 'json') || {};
-  allCams.forEach(c => { if (aliases[c.id]) labels[c.stream] = aliases[c.id]; });
-
-  // Permission check + camera filtering for non-admin users
-  // Re-check role from KV (handles promoted/demoted users whose session may be stale)
-  const sessionRole = session.role;
-  const effForRole  = sessionRole !== 'admin' ? await computeEffectivePermissions(env, session.username) : null;
-  const effectiveAdmin = sessionRole === 'admin' || (effForRole && effForRole.role === 'admin');
-
-  if (!effectiveAdmin) {
-    const eff = effForRole;
-    const perm = (eff && eff.permissions['camera-movi']) || 'none';
-    if (perm === 'none') return json({ error: 'Không có quyền truy cập Camera Movi' }, 403);
-
-    // Filter by assigned camera IDs (eff.cameras).
-    // Normalize IDs to handle legacy 'movi-camXX' → 'camX' migration.
-    const normalize = id => {
-      if (!id) return id;
-      const m = id.match(/^movi-cam(\d+)$/i);
-      return m ? 'cam' + parseInt(m[1], 10) : id;
-    };
-    const allowedIds = eff && Array.isArray(eff.cameras) && eff.cameras.length > 0 ? eff.cameras : null;
-    let streams;
-    if (allowedIds) {
-      const normalizedAllowed = allowedIds.map(normalize);
-      streams = allCams.filter(c => normalizedAllowed.includes(normalize(c.id))).map(c => c.stream);
-      // Graceful fallback: if stale/unknown IDs produced 0 results, show all cameras
-      if (streams.length === 0) streams = allStreams;
-    } else {
-      streams = allStreams;
-    }
-    return json({ url, streams, labels, streamToCamId, isAdmin: false });
-  }
-  return json({ url, streams: allStreams, labels, streamToCamId, isAdmin: true });
-}
 
 /* ── n8n Home — Reverse Proxy (HTTP + WebSocket) ── */
 // Proxies https://n8n-home.home-server.id.vn through /n8n-proxy/* so that n8n auth
@@ -3980,125 +3673,7 @@ setTimeout(_show,6000);
   return new Response(html, { status: upstream.status, headers: rh });
 }
 
-/* ── Camera Movi — Full Reverse Proxy (HTTP + WebSocket) ── */
-async function handleCamEmbed(request, env) {
-  const session = await getSession(request, env);
-  if (!session) return new Response('Unauthorized', { status: 401 });
-  if (!(await hasPerm(env, session, 'camera-movi'))) return new Response('Forbidden', { status: 403 });
-
-  const user   = cleanEnv(env.MOVI_CAM_USER);
-  const pass   = cleanEnv(env.MOVI_CAM_PASS);
-  const camUrl = cleanEnv(env.MOVI_CAM_URL);
-  if (!camUrl) return new Response('Camera not configured', { status: 503 });
-
-  const auth    = 'Basic ' + btoa(unescape(encodeURIComponent(`${user}:${pass}`)));
-  const reqUrl  = new URL(request.url);
-  const subPath = reqUrl.pathname.replace('/cam-embed', '') || '/';
-  const target  = `${camUrl}${subPath}${reqUrl.search}`;
-
-  // WebSocket proxy (for go2rtc MSE video stream)
-  // CF Workers fetch does NOT support wss:// — keep target as https://, Workers handles the upgrade
-  if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
-    let upstreamResp;
-    try {
-      upstreamResp = await fetch(target, {
-        headers: {
-          'Authorization':         auth,
-          'Upgrade':               'websocket',
-          'Connection':            'Upgrade',
-          'Sec-WebSocket-Version': '13',
-          'Sec-WebSocket-Key':     'dGhlIHNhbXBsZSBub25jZQ==',
-        },
-      });
-    } catch(e) {
-      return new Response('WebSocket upstream error: ' + e.message, { status: 502 });
-    }
-
-    const upstream = upstreamResp.webSocket;
-    if (!upstream) return new Response('WebSocket upstream failed (status ' + upstreamResp.status + ')', { status: 502 });
-
-    // Create browser-facing WebSocket pair
-    const { 0: client, 1: server } = new WebSocketPair();
-    server.accept();
-    upstream.accept();
-
-    // Bridge bidirectionally — helper dùng chung (src/core.js), kèm bản vá BẪY MÃ ĐÓNG 1006.
-    bridgeWebSocket(server, upstream);
-
-    return new Response(null, { status: 101, webSocket: client });
-  }
-
-  const isBodyMethod = request.method !== 'GET' && request.method !== 'HEAD';
-  const fwdHeaders = { 'Authorization': auth };
-  if (isBodyMethod) {
-    const clientCt = request.headers.get('Content-Type');
-    if (clientCt) fwdHeaders['Content-Type'] = clientCt;
-  }
-  const upstream = await fetch(target, {
-    method:  request.method,
-    headers: fwdHeaders,
-    ...(isBodyMethod ? { body: request.body } : {}),
-  });
-
-  const ct = upstream.headers.get('Content-Type') || 'application/octet-stream';
-
-  // Inject JS patch into HTML so go2rtc's stream.html routes API calls through proxy
-  if (ct.includes('text/html')) {
-    let html = await upstream.text();
-    const patch = `<script>
-(function(){
-  var PRX='/cam-embed';
-  var CAM='cam.movi-finance.com';
-  function rwHTTP(u){
-    if(typeof u!=='string'||!u)return u;
-    if(u.indexOf('https://'+CAM)===0)return PRX+u.slice(('https://'+CAM).length);
-    if(u.indexOf('http://'+CAM)===0)return PRX+u.slice(('http://'+CAM).length);
-    if(u.charAt(0)==='/'&&u.indexOf('/cam-embed')!==0)return PRX+u;
-    return u;
-  }
-  function rwWS(u){
-    if(typeof u!=='string'||!u)return u;
-    var h=window.location.host;
-    if(u.indexOf('wss://'+CAM)===0)return 'wss://'+h+PRX+u.slice(('wss://'+CAM).length);
-    if(u.indexOf('ws://'+CAM)===0)return 'wss://'+h+PRX+u.slice(('ws://'+CAM).length);
-    if(u.charAt(0)==='/'&&u.indexOf('/cam-embed')!==0)return 'wss://'+h+PRX+u;
-    return u;
-  }
-  var _W=window.WebSocket;
-  window.WebSocket=function(u,p){
-    u=rwWS(u);
-    return p!=null?new _W(u,p):new _W(u);
-  };
-  window.WebSocket.prototype=_W.prototype;
-  for(var k in _W)try{window.WebSocket[k]=_W[k];}catch(e){}
-  var _f=window.fetch;
-  window.fetch=function(){
-    var a=[].slice.call(arguments);
-    if(typeof a[0]==='string')a[0]=rwHTTP(a[0]);
-    return _f.apply(this,a);
-  };
-  var _xo=XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open=function(){
-    var a=[].slice.call(arguments);
-    if(typeof a[1]==='string')a[1]=rwHTTP(a[1]);
-    return _xo.apply(this,a);
-  };
-})();
-<\/script>`;
-    html = html.includes('</head>') ? html.replace('</head>', patch + '</head>') : patch + html;
-    return new Response(html, {
-      status: upstream.status,
-      headers: { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' },
-    });
-  }
-
-  return new Response(upstream.body, {
-    status: upstream.status,
-    headers: { 'Content-Type': ct, 'Cache-Control': 'no-cache' },
-  });
-}
-
-/* ── FortiGate Movi — Interfaces & Bandwidth ── */
+/* ── Activity log ── */
 async function handleGetActivity(request, env) {
   const session = await getSession(request, env);
   if (!session) return json({ error: 'Unauthorized' }, 401);
@@ -4281,9 +3856,6 @@ export default {
       });
     }
 
-    // ── SSH Movi verify — fully public, must be FIRST before any session middleware ──
-    if (p === '/api/ssh-movi/verify') return handleSshMoviVerify(request, env);
-
     // ── PNETLab AI proxy → 9Router: PUBLIC (gọi từ browser PNETLab, không có cookie dashboard).
     //    Tự bảo vệ bằng Origin allowlist + rate-limit trong handlePnetLlm. ──
     if (p === '/api/pnet-llm') return handlePnetLlm(request, env);
@@ -4332,7 +3904,6 @@ export default {
     if (p === '/api/ai/exec' && m === 'POST') return handleAiExec(request, env);
     if (p === '/api/ai/reads' && m === 'GET') return handleAiReadsList(request, env);
     if (p === '/api/ai/read' && m === 'POST') return handleAiRead(request, env);
-    if (p === '/api/ai/forms' && m === 'GET') return handleAiFormsList(request, env);
 
     // ── Auth API (public) ──
     if (p === '/api/auth/login')                   return handleLogin(request, env, ctx);
@@ -4375,11 +3946,10 @@ export default {
       if (request.method === 'POST') return handleCreateUser(request, env);
     }
     // ── AI / MCP admin (admin only) ──
-    if (p === '/api/admin/ai-config' || p === '/api/admin/ai-forms' || p.startsWith('/api/admin/mcp')) {
+    if (p === '/api/admin/ai-config' || p.startsWith('/api/admin/mcp')) {
       const _mcpSess = await getSession(request, env);
       if (!(await isAdminUser(env, _mcpSess))) return json({ error: 'Admin required' }, 403);
       if (p === '/api/admin/ai-config') return handleAdminAiConfig(request, env);
-      if (p === '/api/admin/ai-forms') return handleAdminAiForms(request, env);
       return handleAdminMcp(request, env);
     }
 
@@ -4445,7 +4015,6 @@ export default {
 
     // ── Camera list API ──
     if (p === '/api/admin/cameras') return handleCameraList(request, env);
-    if (p === '/api/admin/cameras/movi') return handleMoviCameraList(request, env);
     const camRename = p.match(/^\/api\/admin\/cameras\/([^/]+)\/rename$/);
     if (camRename && request.method === 'PATCH') return handleCameraRename(request, env, decodeURIComponent(camRename[1]));
 
@@ -4471,22 +4040,6 @@ export default {
       if (request.method === 'GET') return handleGetSystemConfig(request, env);
       if (request.method === 'POST') return handleSaveSystemConfig(request, env, ctx);
     }
-    if (p === '/api/meraki-clients')       return handleMerakiClients(request, env);
-    if (p === '/api/meraki-client-policy')    return handleMerakiClientPolicy(request, env);
-    if (p === '/api/meraki-blocked-clients')  return handleMerakiBlockedClients(request, env);
-    if (p === '/api/meraki-devices')       return handleMerakiDevices(request, env);
-    if (p === '/api/meraki-device-status') return handleMerakiDeviceStatus(request, env);
-    if (p === '/api/meraki-events')        return handleMerakiEvents(request, env);
-    if (p === '/api/meraki-switch-ports')       return handleMerakiSwitchPorts(request, env);
-    if (p === '/api/meraki-port-configs')       return handleMerakiSwitchPortConfigs(request, env);
-    if (p === '/api/meraki-link-aggregations')  return handleMerakiLinkAggregations(request, env);
-    if (p === '/api/meraki-uplinks')            return handleMerakiUplinks(request, env);
-    if (p === '/api/meraki-l3-routing')          return handleMerakiL3Routing(request, env);
-    if (p === '/api/movi-sdwan')                return handleMoviSdwan(request, env);
-    if (p === '/api/movi-sdwan-rules')          return handleMoviSdwanRules(request, env);
-    if (p === '/api/camera-token')               return handleCameraToken(request, env);
-    if (p === '/api/admin/camera-aliases-movi' && m === 'GET')  return handleGetCameraAliases(request, env);
-    if (p === '/api/admin/camera-aliases-movi' && m === 'PUT')  return handleSaveCameraAlias(request, env);
     if (p.startsWith('/cpai/'))                  return handleCpaiEmbed(request, env);
     if (p.startsWith('/n8n-proxy'))               return handleN8nHomeProxy(request, env);
     if (p.startsWith('/consolepi-proxy'))        return handleConsolePiProxy(request, env);
@@ -4497,9 +4050,6 @@ export default {
     if (p === '/api/fgt-pool/release')           return handleFgtPoolRelease(request, env);
     if (p.startsWith('/cam-test-live/'))         return handleCamTestLiveEmbed(request, env);
     if (p.startsWith('/cam-test-api/'))          return handleCamTestApiEmbed(request, env);
-    if (p.startsWith('/cam-embed/'))             return handleCamEmbed(request, env);
-    // ── Termix Movi proxy ──
-    if (p.startsWith('/proxy/termix-movi'))      return handleTermixMoviProxy(request, env);
     // ── Termix Home proxy (same-origin → OIDC login works in iframe) ──
     if (p.startsWith('/proxy/termix-home'))      return handleTermixHomeProxy(request, env);
     // ── PNETLab Home proxy (same-origin → session gates AI, CF Access blocks direct link) ──
@@ -4524,29 +4074,6 @@ export default {
     // prefix thô (không cần "/" theo sau — ký tự kế là "." của tên chunk). Chunk RIÊNG từng trang
     // (tên bắt đầu "./...") tự chuẩn hoá về /store/ nên không cần rule riêng.
     if (p.startsWith('/vendors~')) return handlePnetlabHomeProxy(request, env);
-    // ── SSH Movi token endpoint ──
-    if (p === '/api/ssh-movi/token')  return handleSshMoviToken(request, env);
-    // Note: /api/ssh-movi/verify is handled at the top of the router (before session middleware)
-    if (p === '/api/movi-interfaces')            return handleMoviInterfaces(request, env);
-    if (p === '/api/movi-system')               return handleMoviSystem(request, env);
-    if (p === '/api/movi-license')              return handleMoviLicense(request, env);
-    if (p === '/api/movi-vpn')                  return handleMoviVpn(request, env);
-    if (p === '/api/movi-ssl-vpn')              return handleMoviSslVpn(request, env);
-    if (p === '/api/movi-policy')               return handleMoviPolicy(request, env);
-    if (p === '/api/movi-dhcp')                 return handleMoviDhcp(request, env);
-    if (p === '/api/fortigate-movi/firewall-users') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      return handleMoviFirewallUsers(request, env);
-    }
-    if (p === '/api/fortigate-movi/fortiview-source') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      return handleMoviFortiviewSource(request, env);
-    }
-    if (p === '/api/fortigate-movi/firewall-deauth' && request.method === 'POST') {
-      return handleMoviFirewallDeauth(request, env);
-    }
 
     // ── Service endpoints — require session + permission ──
     if (p === '/api/status') {
@@ -4565,113 +4092,6 @@ export default {
       if (!_s) return json({ error: 'Unauthorized' }, 401);
       if (!(await hasPerm(env, _s, 'n8n'))) return json({ error: 'Không có quyền truy cập n8n' }, 403);
       return handleExecDetail(request, env);
-    }
-    if (p === '/api/n8n-movi') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'n8n-movi'))) return json({ error: 'Không có quyền truy cập n8n Movi' }, 403);
-      return handleMoviN8n(env);
-    }
-    if (p === '/api/n8n-movi/exec') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'n8n-movi'))) return json({ error: 'Không có quyền truy cập n8n Movi' }, 403);
-      return handleMoviN8nExecDetail(request, env);
-    }
-    if (p === '/api/tool-movi/create-user') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'tool-movi-create-user'))) return json({ error: 'Không có quyền sử dụng Tạo User Movi' }, 403);
-      return handleToolMoviCreateUser(request, env, _s, ctx);
-    }
-    if (p === '/api/tool-movi/block-user') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'tool-movi-block-user'))) return json({ error: 'Không có quyền sử dụng Block User Movi' }, 403);
-      return handleToolMoviBlockUser(request, env, _s);
-    }
-    if (p === '/api/tool-movi/asset-search') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'tool-movi-asset-search'))) return json({ error: 'Không có quyền sử dụng Tra Cứu Tài Sản' }, 403);
-      return handleToolMoviAssetSearch(request, env, _s);
-    }
-    if (p === '/api/tool-movi/check-email') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'tool-movi-check-email'))) return json({ error: 'Không có quyền sử dụng Kiểm Tra Email Azure' }, 403);
-      return handleToolMoviCheckEmail(request, env, _s);
-    }
-    if (p === '/api/tool-movi/check-azure-group') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'tool-movi-azure-group'))) return json({ error: 'Không có quyền sử dụng Tra Cứu Group Azure' }, 403);
-      return handleToolMoviCheckAzureGroup(request, env, _s);
-    }
-    if (p === '/api/tool-movi/fg-policy-lan') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'tool-movi-fg-policy-lan'))) return json({ error: 'Không có quyền tạo Policy LAN' }, 403);
-      return handleToolMoviFgPolicy(request, env, _s, 'lan', ctx);
-    }
-    if (p === '/api/tool-movi/fg-policy-wifi') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'tool-movi-fg-policy-wifi'))) return json({ error: 'Không có quyền tạo Policy WiFi' }, 403);
-      return handleToolMoviFgPolicy(request, env, _s, 'wifi', ctx);
-    }
-    if (p === '/api/tool-movi/fg-policies') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'tool-movi-fg-policy-lan')) && !(await hasPerm(env, _s, 'tool-movi-fg-policy-wifi')))
-        return json({ error: 'Không có quyền' }, 403);
-      return handleListFgPolicies(request, env, _s);
-    }
-    if (p === '/api/tool-movi/fg-policy-done') {
-      // n8n callback — no session required, verified by Basic auth
-      return handleFgPolicyDone(request, env);
-    }
-    if (p === '/api/tool-movi/delete-user') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'tool-movi-delete-user'))) return json({ error: 'Không có quyền sử dụng Xóa User Movi' }, 403);
-      return handleToolMoviDeleteUserList(request, env, _s);
-    }
-    if (p === '/api/tool-movi/delete-user-action') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'tool-movi-delete-user'))) return json({ error: 'Không có quyền sử dụng Xóa User Movi' }, 403);
-      return handleToolMoviDeleteUserAction(request, env, _s);
-    }
-    if (p === '/api/tool-movi/history') {
-      if (request.method === 'GET')    return handleGetToolMoviHistory(request, env);
-      if (request.method === 'POST')   return handleSaveToolMoviHistory(request, env);
-      if (request.method === 'DELETE') return handleClearToolMoviHistory(request, env);
-    }
-
-    if (p === '/api/vmware01-movi') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'vmware01-movi'))) return json({ error: 'Không có quyền truy cập VMware01 Movi' }, 403);
-      return handleMoviVmwareData(env, '1');
-    }
-    if (p === '/api/vmware02-movi') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'vmware02-movi'))) return json({ error: 'Không có quyền truy cập VMware02 Movi' }, 403);
-      return handleMoviVmwareData(env, '2');
-    }
-    if (p === '/api/vmware01-movi/power') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await isAdminUser(env, _s))) return json({ error: 'Admin required để thực hiện power action VMware01 Movi' }, 403);
-      return handleMoviVmwarePower(request, env, '1');
-    }
-    if (p === '/api/vmware02-movi/power') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await isAdminUser(env, _s))) return json({ error: 'Admin required để thực hiện power action VMware02 Movi' }, 403);
-      return handleMoviVmwarePower(request, env, '2');
     }
     if (p === '/api/casaos') {
       const _s = await getSession(request, env);

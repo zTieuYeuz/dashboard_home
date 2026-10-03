@@ -16,10 +16,6 @@ function loadCameras() {
     .then(function(r){return r.json();})
     .then(function(d){allCameras = d.cameras || [];})
     .catch(function(){});
-  fetch('/api/admin/cameras/movi',{cache:'no-store'})
-    .then(function(r){return r.json();})
-    .then(function(d){allCamerasMovi = d.cameras || [];})
-    .catch(function(){});
 }
 
 function renderGroupSidebar() {
@@ -354,12 +350,6 @@ function renderPermEditor(containerId, permissions, panels, cameras, pfx) {
     permissions, panels, cameras, pfx, 'home'
   ));
 
-  // Service Movi section
-  el.appendChild(buildServiceSection(
-    '🎬 Service Movi — Văn phòng Movi',
-    SERVICE_MOVI_PAGES,
-    permissions, panels, cameras, pfx, 'movi'
-  ));
 }
 
 function buildServiceSection(title, pages, permissions, panels, cameras, pfx, sectionId) {
@@ -530,7 +520,7 @@ function buildServiceSection(title, pages, permissions, panels, cameras, pfx, se
     permRow.innerHTML = icon+name+'<div class="perm-radios">'+radios+'</div>';
     body.appendChild(permRow);
 
-    // Panels sub-section (for Movi pages with panels)
+    // Panels sub-section (service có panels)
     if (page.panels) {
       var panelSec = document.createElement('div');
       panelSec.className = 'panels-section';
@@ -594,8 +584,7 @@ function buildServiceSection(title, pages, permissions, panels, cameras, pfx, se
       camSec.id = pfx+'-cams-'+page.id;
       camSec.style.display = (perm !== 'none') ? '' : 'none';
 
-      // Use separate lists: Movi section → allCamerasMovi (16 camera), Home section → allCameras
-      var pageCams = (sectionId === 'movi') ? allCamerasMovi : allCameras;
+      var pageCams = allCameras;
 
       pageCams.forEach(function(cam){
         var checked = cameras.indexOf(cam.id) >= 0;
@@ -735,11 +724,10 @@ function onCamHomeViewChange(pfx) {
    pfx = 'usr' for user editor, 'grp' for group editor.
    Camera queries are SCOPED to their own container (not document-wide) to prevent
    cross-contamination between user editor and group editor when both exist in the DOM.
-   Adding a new service: just add it to SERVICE_HOME_PAGES or SERVICE_MOVI_PAGES —
-   this function iterates both arrays dynamically, nothing else to change here.
+   Adding a new service: khai báo trong src/permissions-registry.js —
+   SERVICE_HOME_PAGES dựng từ đó, hàm này duyệt nó, không cần sửa gì thêm.
 ── */
-/* Thu quyền con dạng `features` (các mức trợ lý AI). Gọi cho CẢ hai khối Home và Movi
-   để sau này thêm service Movi có features cũng chạy sẵn, khỏi phải nhớ sửa lại.
+/* Thu quyền con dạng `features` (các mức trợ lý AI).
 
    ⚠️ PHẢI luôn ghi giá trị — kể cả khi trang bị tắt (ghi 'none'). Bỏ trống thì khoá đó
    biến mất khỏi object quyền gửi lên server, đúng cái đã làm 6 quyền AI bị xoá âm thầm
@@ -808,38 +796,6 @@ function collectPermissions(pfx) {
     var radio = document.querySelector('input[name="'+pfx+'-perm-'+page.id+'"]:checked');
     permissions[page.id] = radio ? radio.value : 'none';
     collectFeatures(page, permissions, pfx);
-    if (page.hasCameras && permissions[page.id] !== 'none') {
-      collectCamsFrom(pfx+'-cams-'+page.id);
-    }
-  });
-
-  // Service Movi
-  SERVICE_MOVI_PAGES.forEach(function(page){
-    if (page.type === 'group-header') return; // skip visual-only dividers
-    // Tool-group: collect each sub-tool individually; skip virtual parent key
-    if (page.type === 'tool-group' && page.tools) {
-      page.tools.forEach(function(tool) {
-        var cb = document.getElementById(pfx+'-tool-'+tool.id);
-        permissions[tool.id] = (cb && cb.checked) ? 'write' : 'none';
-      });
-      return;
-    }
-    var radio = document.querySelector('input[name="'+pfx+'-perm-'+page.id+'"]:checked');
-    permissions[page.id] = radio ? radio.value : 'none';
-    collectFeatures(page, permissions, pfx);
-    // Sub-panels (Meraki, Topology, FortiGate Movi…)
-    if (page.panels && permissions[page.id] !== 'none') {
-      page.panels.forEach(function(panel){
-        var visChk = document.getElementById(pfx+'-pvis-'+panel.id);
-        if (visChk && visChk.checked) {
-          var rwRadio = document.querySelector('input[name="'+pfx+'-prw-'+panel.id+'"]:checked');
-          panels[panel.id] = (rwRadio && rwRadio.value === 'write') ? 'write' : 'read';
-        } else {
-          panels[panel.id] = false;
-        }
-      });
-    }
-    // Cameras (scoped to container, not document-wide)
     if (page.hasCameras && permissions[page.id] !== 'none') {
       collectCamsFrom(pfx+'-cams-'+page.id);
     }

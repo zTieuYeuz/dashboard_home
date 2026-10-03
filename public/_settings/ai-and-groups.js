@@ -529,49 +529,13 @@ function renderTools(){
       +'<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:var(--surface-2);color:var(--muted)">quyền: '+esc(a.perm||'—')+'</span>'
       +'<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:color-mix(in oklch,var(--warn,#e0a000) 15%,transparent);color:var(--warn,#e0a000)">'+(a.danger==='confirm'?'xác nhận':'an toàn')+'</span></span></div>';
   }).join('')||'<div class="empty-state">Đang tải…</div>';
-  html+='<div style="font-size:11px;color:var(--muted);margin:12px 0 6px">📋 <b>BIỂU MẪU n8n (form_submit)</b> — AI thu thập theo quy tắc, dashboard validate + user xác nhận rồi mới gửi n8n. Sửa bằng nút bên dưới:</div>';
-  html+=(_aiFormsList||[]).map(function(f){
-    var req=(f.fields||[]).filter(function(x){return x.required;}).map(function(x){return x.name;}).join(', ');
-    return '<div class="panel-row" style="font-size:12px;align-items:flex-start"><div style="min-width:0"><b style="font-family:var(--font-mono)">'+esc(f.id)+'</b>'
-      +'<div style="font-size:11px;color:var(--muted)">'+esc(f.desc||f.label||'')+(req?' · bắt buộc: '+esc(req):'')+'</div></div>'
-      +'<span style="margin-left:auto;display:flex;gap:4px;flex-shrink:0">'
-      +(f.adminOnly?'<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:color-mix(in oklch,var(--bad,#d33) 12%,transparent);color:var(--bad,#d33)">chỉ admin</span>':'')
-      +'<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:var(--surface-2);color:var(--muted)">quyền: '+esc(f.perm||'—')+'</span></span></div>';
-  }).join('')||'<div class="empty-state">Chưa có biểu mẫu.</div>';
-  html+='<div style="margin-top:8px"><button class="btn btn-sm" onclick="openFormsEditor()">✏️ Sửa biểu mẫu (JSON)</button></div>';
   wrap.innerHTML=html;
 }
-/* Editor JSON biểu mẫu — admin chỉnh id/fields/pattern/rules/webhookEnv */
-function openFormsEditor(){
-  fetch('/api/admin/ai-forms',{credentials:'include'}).then(function(r){return r.json();}).then(function(d){
-    var cur=JSON.stringify(d.forms||[],null,2);
-    var ov=document.createElement('div');
-    ov.style.cssText='position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px';
-    ov.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;max-width:860px;width:100%;max-height:88vh;display:flex;flex-direction:column;padding:16px">'
-      +'<div style="font-weight:700;margin-bottom:6px">📋 Biểu mẫu n8n (JSON)'+(d.usingDefault?' <span style="font-size:11px;color:var(--warn,#e0a000)">— đang dùng mẫu mặc định, lưu sẽ ghi đè vào KV</span>':'')+'</div>'
-      +'<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Mỗi form: id, label, desc, perm, adminOnly, webhookEnv (tên secret chứa URL n8n), fields[{name,label,required,pattern,patternDesc,enum,example}], rules (quy tắc chữ cho AI).</div>'
-      +'<textarea id="forms-json" style="flex:1;min-height:340px;font-family:var(--font-mono);font-size:12px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;white-space:pre;overflow:auto"></textarea>'
-      +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn" id="forms-cancel">Huỷ</button><button class="btn btn-primary" id="forms-save">💾 Lưu</button></div></div>';
-    document.body.appendChild(ov);
-    ov.querySelector('#forms-json').value=cur;
-    ov.querySelector('#forms-cancel').onclick=function(){ov.remove();};
-    ov.querySelector('#forms-save').onclick=function(){
-      var v; try{ v=JSON.parse(ov.querySelector('#forms-json').value); }catch(e){ alert('JSON không hợp lệ: '+e.message); return; }
-      fetch('/api/admin/ai-forms',{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({forms:v})})
-        .then(function(r){return r.json();}).then(function(res){
-          if(res.ok){ toast&&toast('Đã lưu '+res.count+' biểu mẫu'); ov.remove(); loadAiToolLists(); }
-          else alert(res.error||'Lỗi lưu');
-        });
-    };
-  });
-}
-var _aiFormsList=null;
 function loadAiToolLists(){
   Promise.all([
     fetch('/api/ai/reads',{credentials:'include'}).then(function(r){return r.ok?r.json():{reads:[]};}).catch(function(){return {reads:[]};}),
     fetch('/api/ai/actions',{credentials:'include'}).then(function(r){return r.ok?r.json():{actions:[]};}).catch(function(){return {actions:[]};}),
-    fetch('/api/ai/forms',{credentials:'include'}).then(function(r){return r.ok?r.json():{forms:[]};}).catch(function(){return {forms:[]};}),
-  ]).then(function(rs){ _aiReadsList=rs[0].reads||[]; _aiActionsList=rs[1].actions||[]; _aiFormsList=rs[2].forms||[]; if(_mcp) renderTools(); });
+  ]).then(function(rs){ _aiReadsList=rs[0].reads||[]; _aiActionsList=rs[1].actions||[]; if(_mcp) renderTools(); });
 }
 function saveTools(){
   var boxes=document.querySelectorAll('#mcp-tools input[type="checkbox"]');

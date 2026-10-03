@@ -1,13 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    _shared/vmware.js — LOGIC CHUNG cho MỌI trang VMware ESXi
    ───────────────────────────────────────────────────────────────────────────
-   ⚠️ ĐỂ Ở public/_shared/ (gốc), CỐ Ý KHÔNG để trong service-home/ hay
-   service-movi/. Lý do: anh Thoại muốn hai mảng Home và Movi TÁCH BẠCH, có thể
-   xoá hẳn service-movi/ sau này mà Home vẫn chạy. Đặt file này bên trong một
-   trong hai mảng là tạo ràng buộc chéo — xoá mảng kia là mảng này gãy.
+   ⚠️ ĐỂ Ở public/_shared/ (gốc), CỐ Ý KHÔNG để trong service-home/. Trước đây
+   2 trang ESXi Movi cũng dùng chung file này; nhờ để ở gốc mà gỡ cả mảng Movi
+   (03/10/2026) trang Home vẫn chạy nguyên.
 
-   Dùng bởi: service-home/vmware-home.html · service-movi/vmware01-movi.html
-             · service-movi/vmware02-movi.html
+   Dùng bởi: service-home/vmware-home.html
 
    ───────────────────────────────────────────────────────────────────────────
    HỢP ĐỒNG — trang HTML phải khai TRƯỚC khi nạp file này:
@@ -23,7 +21,7 @@
 
    ───────────────────────────────────────────────────────────────────────────
    KHÔNG chứa phần theme/đồng hồ/thanh điều hướng — đó là "khung trang", do
-   _shared/common.js lo. Bản cũ (service-movi/_shared/vmware-movi.js) có nhét
+   _shared/common.js lo. Bản cũ (vmware-movi.js, đã gỡ cùng Movi) có nhét
    sẵn một đoạn tự gắn theme+clock; nếu để nguyên thì trang Home nạp vào sẽ có
    HAI trình xử lý cùng bấm một nút → bấm đổi giao diện hai lần → nhìn như không
    ăn gì. Đã cắt bỏ khi gom về đây (2026-08-20).
@@ -230,7 +228,7 @@ function loadData() {
 loadData();
 /* [2026-08-28] Ẩn tab thì bỏ nhịp này, không gọi máy chủ. Bọc một lớp mỏng thay
    vì sửa loadData() — hàm đó đang chạy tốt, không đụng vào. Lần tải đầu ở trên
-   vẫn chạy như cũ. Cùng cách với dinhKy() trong fortigate-movi.html. */
+   vẫn chạy như cũ. */
 setInterval(function(){ if (!document.hidden) loadData(); }, 300000);
 
 /* Hiện link Settings nếu người dùng là admin.

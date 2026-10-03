@@ -24,29 +24,12 @@ var DELEGATE_SVC_LABELS = _REG ? _REG.labels : {
   'services-hub':'Services Hub (Internal)',
   'hub-fortigate':'Hub · FortiGate','hub-asus':'Hub · Router Asus','hub-esxi':'Hub · VMware ESXi','hub-nas':'Hub · NAS','hub-casaos':'Hub · CasaOS','hub-kasm':'Hub · Kasm',
   'hub-openclaw':'Hub · OpenClaw','hub-n8n':'Hub · n8n','hub-frigate':'Hub · Frigate NVR','hub-camera-nvr':'Hub · Camera NVR','hub-pnetlab':'Hub · Pnetlab-network',
-  /* ── Service Movi ── */
-  'meraki':'Meraki Network','topology':'Movi Map Network',
-  'fortigate-movi':'FortiGate Movi','camera-movi':'Camera Movi',
-  'n8n-movi':'n8n Movi','vmware01-movi':'VMware01 Movi','vmware02-movi':'VMware02 Movi',
-  'tool-movi-create-user':'Tool: Tạo User','tool-movi-block-user':'Tool: Block User',
-  'tool-movi-delete-user':'Tool: Xóa User','tool-movi-asset-search':'Tool: Tra Cứu Tài Sản',
-  'tool-movi-check-email':'Tool: Check Email','tool-movi-azure-group':'Tool: Azure Group',
-  'tool-movi-fg-policy-lan':'Tool: FG Policy LAN','tool-movi-fg-policy-wifi':'Tool: FG Policy WiFi',
-  'ssh-movi':'Termix Movi',
 };
 var _DELEGATE_HOME = _REG ? _REG.delegateHome : ['esxi','n8n','casaos','fortigate','asus','ssh','console-serial','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','services-hub','hub-fortigate','hub-asus','hub-esxi','hub-nas','hub-casaos','hub-kasm','hub-openclaw','hub-n8n','hub-frigate','hub-camera-nvr','hub-pnetlab'];
-var _DELEGATE_MOVI = _REG ? _REG.delegateMovi : ['meraki','topology','fortigate-movi','camera-movi','n8n-movi','vmware01-movi','vmware02-movi','tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi','ssh-movi'];
-/* tool-movi sub-keys — needed to restore parent group visibility in delegate filter */
-var _TOOL_MOVI_SUB = ['tool-movi-create-user','tool-movi-block-user','tool-movi-delete-user','tool-movi-asset-search','tool-movi-check-email','tool-movi-azure-group','tool-movi-fg-policy-lan','tool-movi-fg-policy-wifi'];
-/* tool-movi virtual key kept for group-editor compatibility only, not shown in delegate list */
 var _delegateMode = false;   // true when current user is a delegated manager (not admin)
 var _delegateServices = [];  // services the current delegated user can manage
-/* Normalize delegate services: if any tool-movi sub-key present, add virtual parent for group editor */
 function _normalizeDelegateSvcs(arr) {
-  var list = (arr || []).slice();
-  var hasSub = _TOOL_MOVI_SUB.some(function(k){ return list.indexOf(k) >= 0; });
-  if (hasSub && list.indexOf('tool-movi') < 0) list.push('tool-movi');
-  return list;
+  return (arr || []).slice();
 }
 
 (function initUI() {
@@ -166,7 +149,7 @@ function closeModal(id){document.getElementById(id).classList.add('hidden');}
    PERMISSION STRUCTURE DEFINITIONS
    ─────────────────────────────────────────────────────────
    HOW TO ADD A NEW SERVICE:
-   1. Add an entry to SERVICE_HOME_PAGES or SERVICE_MOVI_PAGES below.
+   1. Khai báo trong src/permissions-registry.js (SERVICE_HOME_PAGES dựng từ đó).
    2. Fields:
       id        – matches the permission key in KV (e.g. 'my-service')
       name      – display name shown in the editor
@@ -182,7 +165,7 @@ function closeModal(id){document.getElementById(id).classList.add('hidden');}
 /* Chuyển 1 mục registry → dạng mà renderPermEditor/collectPermissions đang dùng.
    Nhờ vậy thêm service mới chỉ cần khai báo trong permissions-registry.js, KHÔNG
    phải sửa file này nữa. Các nhóm có giao diện riêng (Services Hub, Camera Home,
-   Tool Movi) giữ nguyên `type` cũ để tái dùng đúng code render đã chạy ổn định. */
+   tool-group) giữ nguyên `type` cũ để tái dùng đúng code render đã chạy ổn định. */
 function _regToPage(svc) {
   if (svc.customUI === 'camera-home-group') return { type:'camera-home-group', id:'camera-home-group', icon:svc.icon, name:svc.name };
   if (svc.featureGroups)                    return { type:'services-hub-group', id:'services-hub-group', icon:svc.icon, name:svc.name };
@@ -227,66 +210,6 @@ var SERVICE_HOME_PAGES = _REG ? _regPages('home') : [
   {type:'camera-home-group', id:'camera-home-group', icon:'📷', name:'Camera Home'}
 ];
 
-var SERVICE_MOVI_PAGES = _REG ? _regPages('movi') : [
-  {id:'meraki', name:'Meraki Network', icon:'🌐', perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'},
-   panels:[
-    {id:'meraki.clients',  name:'Clients đang kết nối + Thiết bị bị chặn'},
-    {id:'meraki.devices',  name:'Thiết bị Meraki (APs/Switches)'},
-    {id:'meraki.status',   name:'Device Status (Real-time)'},
-    {id:'meraki.events',   name:'Network Events'},
-    {id:'meraki.uplinks',  name:'WAN Uplinks'},
-    {id:'meraki.vlans',    name:'L3 Interface / SVI trên Switch'},
-    {id:'meraki.ports',    name:'Switch Ports'},
-   ]},
-  {id:'topology', name:'Network Topology (Movi Map)', icon:'🗺', perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'},
-   panels:[
-    {id:'topology.topo',   name:'Sơ đồ Topology'},
-    {id:'topology.route',  name:'Route Map'},
-    {id:'topology.wiring', name:'Sơ đồ dây switch (Wiring)'},
-   ]},
-  {id:'fortigate-movi', name:'FortiGate Movi', icon:'🔥', perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'},
-   panels:[
-    {id:'fortigate-movi.interfaces', name:'Interfaces + Bandwidth (đang chạy/dừng)'},
-    {id:'fortigate-movi.sdwan',      name:'SD-WAN Members & Rules'},
-    {id:'fortigate-movi.vpn',        name:'VPN IPSec + SSL VPN'},
-    {id:'fortigate-movi.policy',     name:'Firewall Policy'},
-    {id:'fortigate-movi.route',      name:'Route Table'},
-   ]},
-  {id:'camera-movi', name:'Camera Movi', icon:'📷', perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'},
-   hasCameras:true, camClass:'movi-cam-cb'},
-  {id:'n8n-movi', name:'n8n Movi Automation', icon:'⚡', perms:['none','read','write'],
-   panels:[
-    {id:'n8n-movi.workflows',  name:'Danh sách Workflows'},
-    {id:'n8n-movi.executions', name:'Execution History'},
-   ]},
-  {id:'vmware01-movi', name:'VMware ESXi 01 (Movi)', icon:'🖥', perms:['none','read','write'],
-   panels:[
-    {id:'vmware01-movi.vms',        name:'Danh sách Virtual Machines'},
-    {id:'vmware01-movi.datastores', name:'Datastores'},
-    {id:'vmware01-movi.hosts',      name:'Host System Info'},
-   ]},
-  {id:'vmware02-movi', name:'VMware ESXi 02 (Movi)', icon:'🖥', perms:['none','read','write'],
-   panels:[
-    {id:'vmware02-movi.vms',        name:'Danh sách Virtual Machines'},
-    {id:'vmware02-movi.datastores', name:'Datastores'},
-    {id:'vmware02-movi.hosts',      name:'Host System Info'},
-   ]},
-  {id:'ssh-movi', name:'Termix Movi', icon:'⌨', perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'}},
-  {id:'tool-movi', name:'Tool Movi — Quản lý tài khoản & tài sản', icon:'🔧',
-   type:'tool-group',
-   perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'},
-   tools:[
-     {id:'tool-movi-create-user',    name:'Tạo User Movi',    icon:'👤'},
-     {id:'tool-movi-block-user',     name:'Block User Movi',  icon:'🚫'},
-     {id:'tool-movi-delete-user',    name:'Xóa User Movi',    icon:'🗑️'},
-     {id:'tool-movi-asset-search',   name:'Tra Cứu Tài Sản',  icon:'🔍'},
-     {id:'tool-movi-check-email',    name:'Check Email Azure', icon:'📧'},
-     {id:'tool-movi-azure-group',    name:'Azure AD Group',    icon:'👥'},
-     {id:'tool-movi-fg-policy-lan',  name:'FG Policy LAN',     icon:'🔒'},
-     {id:'tool-movi-fg-policy-wifi', name:'FG Policy WiFi',    icon:'📶'},
-   ]},
-];
-
 var PERM_LABELS = {'none':'Không truy cập','read':'Chỉ xem','write':'Toàn quyền'};
 
 /* ═══════════════════════════════════════════════════════════
@@ -296,7 +219,6 @@ var allUsers = [];
 var allGroups = [];
 var allUserGroups = [];   // User Groups (gom users)
 var allCameras = [];      // Camera Home
-var allCamerasMovi = [];  // Camera Movi (16 camera riêng biệt)
 var allAuditLog = [];
 /* _delegateMode, _delegateServices, DELEGATE_SVC_LABELS declared before initUI() above */
 var currentGroupId = null;

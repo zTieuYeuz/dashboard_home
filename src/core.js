@@ -22,7 +22,7 @@ export function cleanEnv(v) { return (v || '').replace(/^﻿/, '').trim(); }
 /* ── Đọc secret webhook đã GỘP thành 1 JSON (2026-09-27) ──────────────────
    Cloudflare Workers Free giới hạn 64 biến (secret+var) mỗi Worker — dashboard
    đã chạm 105 vì mỗi webhook n8n từng là 1 secret riêng. Gộp nhiều webhook liên
-   quan (vd toàn bộ FortiGate Movi) thành 1 secret duy nhất chứa JSON, đọc bằng
+   quan (vd toàn bộ FortiGate Home) thành 1 secret duy nhất chứa JSON, đọc bằng
    hàm này thay vì env.TÊN_CŨ trực tiếp.
    legacyEnvKey: TÊN secret CŨ (đơn lẻ) — phương án lùi trong lúc chuyển tiếp. */
 export function whFrom(env, group, key, legacyEnvKey) {
@@ -58,7 +58,7 @@ export function getRawSetCookies(headers) {
    DÙNG CHUNG cho MỌI proxy — gửi cookie phiên dashboard sang dịch vụ ngoài là
    rò rỉ thông tin, dịch vụ đó cũng không cần tới.
    `stripPrefixes` khác nhau theo từng dịch vụ (ConsolePi/PNETLab lọc
-   'dh_session='+'dh_user=', Termix lọc 'dh_session='+'ts_movi=') nên vẫn nhận
+   'dh_session='+'dh_user=', Termix lọc 'dh_session=') nên vẫn nhận
    tham số — KHÔNG hardcode danh sách chung, dễ sai một dịch vụ có cookie riêng
    tên khác. */
 export function filterCookies(rawCookie, stripPrefixes) {
@@ -388,7 +388,7 @@ export async function computeEffectivePermissions(env, username) {
 
 /**
  * Quick permission gate: returns true if session user has any non-'none' value
- * for the given page key (e.g. 'meraki', 'fortigate-movi', 'camera-movi').
+ * for the given page key (e.g. 'fortigate', 'camera', 'esxi').
  * Admin role always passes. Non-admins have effective permissions computed.
  */
 export async function hasPerm(env, session, permKey) {
@@ -480,25 +480,6 @@ export const DEFAULT_CAMERAS = [
   { id: 'cam16', name: 'Camera 16', type: 'ip', stream: 'cam16_rec' },
 ];
 
-export const DEFAULT_CAMERAS_MOVI = [
-  { id: 'cam1',  name: 'Camera 1',  type: 'ip', stream: 'cam1'  },
-  { id: 'cam2',  name: 'Camera 2',  type: 'ip', stream: 'cam2'  },
-  { id: 'cam3',  name: 'Camera 3',  type: 'ip', stream: 'cam3'  },
-  { id: 'cam4',  name: 'Camera 4',  type: 'ip', stream: 'cam4'  },
-  { id: 'cam5',  name: 'Camera 5',  type: 'ip', stream: 'cam5'  },
-  { id: 'cam6',  name: 'Camera 6',  type: 'ip', stream: 'cam6'  },
-  { id: 'cam7',  name: 'Camera 7',  type: 'ip', stream: 'cam7'  },
-  { id: 'cam8',  name: 'Camera 8',  type: 'ip', stream: 'cam8'  },
-  { id: 'cam9',  name: 'Camera 9',  type: 'ip', stream: 'cam9'  },
-  { id: 'cam10', name: 'Camera 10', type: 'ip', stream: 'cam10' },
-  { id: 'cam11', name: 'Camera 11', type: 'ip', stream: 'cam11' },
-  { id: 'cam12', name: 'Camera 12', type: 'ip', stream: 'cam12' },
-  { id: 'cam13', name: 'Camera 13', type: 'ip', stream: 'cam13' },
-  { id: 'cam14', name: 'Camera 14', type: 'ip', stream: 'cam14' },
-  { id: 'cam15', name: 'Camera 15', type: 'ip', stream: 'cam15' },
-  { id: 'cam16', name: 'Camera 16', type: 'ip', stream: 'cam16' },
-];
-
 /* ── Activity Log ── */
 export async function logActivity(env, { action, username, ip, success, detail }) {
   try {
@@ -531,15 +512,7 @@ export function _escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</
 
 /* ── shared config + helpers (moved 2026-07-01) ── */
 export const N8N_BASE        = 'https://n8n-home.home-server.id.vn/api/v1';
-export const MOVI_N8N_BASE   = 'https://n8n.movi-finance.com/api/v1';
 export const RUSTDESK_BASE   = 'https://rustdesk.home-server.id.vn';
-
-export function moviN8nAuth(env) {
-  const u = cleanEnv(env.MOVI_N8N_USER);
-  const p = cleanEnv(env.MOVI_N8N_PASS);
-  if (!u || !p) throw new Error('MOVI_N8N_USER / MOVI_N8N_PASS not configured');
-  return 'Basic ' + btoa(unescape(encodeURIComponent(u + ':' + p)));
-}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    bridgeWebSocket — nối 2 chiều một cặp WebSocket trong CF Worker

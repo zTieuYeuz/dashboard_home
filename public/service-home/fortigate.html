@@ -630,7 +630,7 @@ window.addEventListener('load',()=>{
   loadAll();                          /* full load ngay khi mở */
   /* [2026-08-28] Ẩn tab thì bỏ nhịp, không gọi FortiGate. Bọc một lớp mỏng,
      KHÔNG đụng loadBW/loadAll — chúng đang chạy tốt. Lần tải đầu ngay trên vẫn
-     chạy như cũ. Cùng cách với dinhKy() trong fortigate-movi.html. */
+     chạy như cũ. */
   var _dinhKy = function(fn, ms){ setInterval(function(){ if (!document.hidden) fn(); }, ms); };
   _dinhKy(loadBW,30000);              /* bandwidth: cập nhật mỗi 30s */
   _dinhKy(loadAll,600000);            /* tất cả panels: cập nhật mỗi 10 phút */

@@ -12,7 +12,7 @@
    ───────────────────────────────────────────────────────────────────────────
    CÁCH THÊM 1 SERVICE MỚI  (bố cục anh Thoại chốt 2026-07-27)
 
-     { section:'home',                      // 'home' | 'movi'
+     { section:'home',                      // 'home'
        id:'trang-a',                        // = key quyền trong KV
        name:'Trang A', icon:'🅰️',
        page:'/service-home/trang-a.html',   // để gác server + link menu
@@ -144,72 +144,7 @@ const HOME = [
     ]},
 ];
 
-/* ── Service Movi ───────────────────────────────────────────────────────── */
-const MOVI = [
-  { section: 'movi', id: 'meraki', name: 'Meraki Network', icon: '🌐', page: '/service-movi/meraki.html', access: 'toggle',
-    panels: [
-      { id: 'meraki.clients', name: 'Clients đang kết nối + Thiết bị bị chặn' },
-      { id: 'meraki.devices', name: 'Thiết bị Meraki (APs/Switches)' },
-      { id: 'meraki.status', name: 'Device Status (Real-time)' },
-      { id: 'meraki.events', name: 'Network Events' },
-      { id: 'meraki.uplinks', name: 'WAN Uplinks' },
-      { id: 'meraki.vlans', name: 'L3 Interface / SVI trên Switch' },
-      { id: 'meraki.ports', name: 'Switch Ports' },
-    ]},
-  { section: 'movi', id: 'topology', name: 'Network Topology (Movi Map)', icon: '🗺', page: '/service-movi/topology.html', access: 'toggle',
-    panels: [
-      { id: 'topology.topo', name: 'Sơ đồ Topology' },
-      { id: 'topology.route', name: 'Route Map' },
-      { id: 'topology.wiring', name: 'Sơ đồ dây switch (Wiring)' },
-    ]},
-  { section: 'movi', id: 'fortigate-movi', name: 'FortiGate Movi', icon: '🔥', page: '/service-movi/fortigate-movi.html', access: 'toggle',
-    panels: [
-      { id: 'fortigate-movi.interfaces', name: 'Interfaces + Bandwidth (đang chạy/dừng)' },
-      { id: 'fortigate-movi.sdwan', name: 'SD-WAN Members & Rules' },
-      { id: 'fortigate-movi.vpn', name: 'VPN IPSec + SSL VPN' },
-      { id: 'fortigate-movi.policy', name: 'Firewall Policy' },
-      { id: 'fortigate-movi.route', name: 'Route Table' },
-    ]},
-  /* camClass phải giữ đúng chuỗi cũ 'movi-cam-cb' — CSS/JS chọn camera bám vào tên này. */
-  { section: 'movi', id: 'camera-movi', name: 'Camera Movi', icon: '📷', page: '/service-movi/camera-movi.html', access: 'toggle', hasCameras: true, camClass: 'movi-cam-cb' },
-  { section: 'movi', id: 'n8n-movi', name: 'n8n Movi Automation', icon: '⚡', page: '/service-movi/n8n-movi.html', access: 'rw',
-    panels: [
-      { id: 'n8n-movi.workflows', name: 'Danh sách Workflows' },
-      { id: 'n8n-movi.executions', name: 'Execution History' },
-    ]},
-  { section: 'movi', id: 'vmware01-movi', name: 'VMware ESXi 01 (Movi)', icon: '🖥', page: '/service-movi/vmware01-movi.html', access: 'rw',
-    panels: [
-      { id: 'vmware01-movi.vms', name: 'Danh sách Virtual Machines' },
-      { id: 'vmware01-movi.datastores', name: 'Datastores' },
-      { id: 'vmware01-movi.hosts', name: 'Host System Info' },
-    ]},
-  { section: 'movi', id: 'vmware02-movi', name: 'VMware ESXi 02 (Movi)', icon: '🖥', page: '/service-movi/vmware02-movi.html', access: 'rw',
-    panels: [
-      { id: 'vmware02-movi.vms', name: 'Danh sách Virtual Machines' },
-      { id: 'vmware02-movi.datastores', name: 'Datastores' },
-      { id: 'vmware02-movi.hosts', name: 'Host System Info' },
-    ]},
-  { section: 'movi', id: 'ssh-movi', name: 'Termix Movi', icon: '⌨', page: '/service-movi/ssh-movi.html', access: 'toggle' },
-
-  /* Tool Movi — trang gồm nhiều công cụ nhỏ, mỗi công cụ 1 quyền riêng.
-     Trang mở được nếu có BẤT KỲ công cụ nào → accessKeys = danh sách con. */
-  { section: 'movi', id: 'tool-movi', name: 'Tool Movi — Quản lý tài khoản & tài sản', icon: '🔧',
-    page: '/service-movi/tool-movi.html', access: 'toggle', customUI: 'tool-group', virtualParent: true,
-    /* labelName: tên ngắn dùng cho NHÃN quyền của từng công cụ ("Tool: Tạo User") */
-    labelName: 'Tool',
-    features: [
-      { id: 'tool-movi-create-user', name: 'Tạo User Movi', icon: '👤', label: 'Tạo User' },
-      { id: 'tool-movi-block-user', name: 'Block User Movi', icon: '🚫', label: 'Block User' },
-      { id: 'tool-movi-delete-user', name: 'Xóa User Movi', icon: '🗑️', label: 'Xóa User' },
-      { id: 'tool-movi-asset-search', name: 'Tra Cứu Tài Sản', icon: '🔍', label: 'Tra Cứu Tài Sản' },
-      { id: 'tool-movi-check-email', name: 'Check Email Azure', icon: '📧', label: 'Check Email' },
-      { id: 'tool-movi-azure-group', name: 'Azure AD Group', icon: '👥', label: 'Azure Group' },
-      { id: 'tool-movi-fg-policy-lan', name: 'FG Policy LAN', icon: '🔒', label: 'FG Policy LAN' },
-      { id: 'tool-movi-fg-policy-wifi', name: 'FG Policy WiFi', icon: '📶', label: 'FG Policy WiFi' },
-    ]},
-];
-
-export const PERMISSION_REGISTRY = [...HOME, ...MOVI];
+export const PERMISSION_REGISTRY = [...HOME];
 
 /* Key cũ không còn service nào đang dùng. CỐ Ý GIỮ trong ALL_SERVICES: user cũ
    có thể còn lưu các quyền này trong KV — bỏ ra khỏi whitelist sẽ khiến chúng bị
@@ -226,7 +161,7 @@ export const LEGACY_LABELLED = [
 /** Mọi key quyền của 1 service (chính nó + các dịch vụ con). */
 function keysOf(svc) {
   const out = [];
-  // Trang cha có key riêng, TRỪ khi nó chỉ là vỏ gom nhóm (tool-movi, camera-home)
+  // Trang cha có key riêng, TRỪ khi nó chỉ là vỏ gom nhóm (vd camera-home)
   if (!svc.virtualParent && !svc.accessKeys) out.push(svc.id);
   if (svc.accessKeys) out.push(...svc.accessKeys);
   (svc.features || []).forEach(f => { if (!out.includes(f.id)) out.push(f.id); });
@@ -250,7 +185,7 @@ export function buildPagePermMap() {
     if (!svc.page) return;
     /* pageKeys ≠ accessKeys — đừng lẫn:
        • accessKeys = "trang cha KHÔNG có quyền riêng, quyền nằm ở các mục con"
-         (camera-home, tool-movi). Dùng nhầm cho service có quyền riêng thì
+         (vd camera-home). Dùng nhầm cho service có quyền riêng thì
          chính quyền đó biến mất khỏi Settings — đã dính lúc gộp trang terminal.
        • pageKeys  = "trang cha VẪN có quyền riêng, nhưng còn mở được bằng vài
          quyền khác nữa" (Terminal Home: quyền 'ssh' của mình + 'console-serial'

@@ -576,7 +576,7 @@ function _renderDelegatePermEditor(u) {
   el.appendChild(wrapper);
 }
 
-/* Render the delegation section (admin view only): checkboxes grouped by Home / Movi */
+/* Render the delegation section (admin view only): checkboxes grouped by section */
 function _renderDelegateSvcSection(u) {
   var el = document.getElementById('user-perm-delegate-list');
   if (!el) return;
@@ -631,7 +631,6 @@ function _renderDelegateSvcSection(u) {
 
   el.innerHTML =
     renderGroup('home','🏠','Service Home',_DELEGATE_HOME) +
-    renderGroup('movi','🏢','Service Movi',_DELEGATE_MOVI) +
     sysSection;
 }
 
