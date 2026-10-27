@@ -124,7 +124,7 @@ export async function handleConsoleSerialLlm(request, env) {
    Console Relay — "🙋 Nhờ hỗ trợ" (2026-07-25)
    -------------------------------------------------------------------
    Vì sao cần: người hiện trường có thể là NGƯỜI NGOÀI (chỉ mở link web,
-   không có RustDesk/phần mềm cài sẵn). Web Serial là phần cứng LOCAL —
+   không có phần mềm remote cài sẵn). Web Serial là phần cứng LOCAL —
    2 trình duyệt ở 2 nơi không tự "thấy" nhau — nên cần relay qua KV để
    anh Thoại xem output + gõ lệnh từ xa vào ĐÚNG phiên console của họ.
 

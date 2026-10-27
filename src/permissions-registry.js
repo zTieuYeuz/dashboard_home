@@ -100,7 +100,6 @@ const HOME = [
       { id: 'ssh-field-ai-agent',  name: 'AI · Agent (chèn lệnh, phải xác nhận từng lệnh)' },
       { id: 'ssh-field-ai-bypass', name: 'AI · ByPass (AI TỰ CHẠY lệnh — cấp rất hạn chế)' },
     ] },
-  { section: 'home', id: 'rustdesk', name: 'RustDesk Remote', icon: '🖥', page: '/service-home/rustdesk.html', access: 'toggle-read' },
   { section: 'home', id: 'fortigate', name: 'FortiGate', icon: '🛡', page: '/service-home/fortigate.html', access: 'rw' },
   { section: 'home', id: 'asus', name: 'ASUS Router', icon: '📡', page: '/service-home/asus.html', access: 'rw' },
 

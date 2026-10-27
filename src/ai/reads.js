@@ -10,7 +10,7 @@
 import { json, getSession, logActivity, isAdminUser, computeEffectivePermissions } from '../core.js';
 import {
   handleFortigateWebhook, handleVmwareHome, handleAsusWebhook,
-  handleAsusClients, handleCasaOS, handleRustdesk,
+  handleAsusClients, handleCasaOS,
 } from '../home-services.js';
 import { pnetReadLabs, pnetReadTopology, pnetReadNodeConfig } from '../pnetlab.js';
 
@@ -31,8 +31,6 @@ export const READ_REGISTRY = [
     desc: 'Danh sách thiết bị đang kết nối router nhà (tên, IP, MAC, 2.4G/5G, online).' },
   { id: 'casaos',         perm: 'casaos',    label: 'CasaOS (home server)',               homeHandler: handleCasaOS,
     desc: 'Home server: CPU/RAM/ổ đĩa, danh sách app/container Docker (running/stopped).' },
-  { id: 'rustdesk',       perm: 'rustdesk',  label: 'RustDesk (máy remote)',              homeHandler: handleRustdesk,
-    desc: 'Danh sách máy RustDesk remote desktop: ID, tên, OS, online/offline.' },
 
   // ── PNETLab (lab mạng) — homeHandler(env, params); bridge tự kiểm quyền hub-pnetlab ──
   { id: 'pnetlab_labs',    perm: 'hub-pnetlab', label: 'Danh sách lab PNETLab',           homeHandler: pnetReadLabs,

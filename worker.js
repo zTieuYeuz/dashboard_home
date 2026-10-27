@@ -15,7 +15,7 @@
                          rate-limit, ghi log, bridgeWebSocket, swKillSwitch
      src/permissions-registry.js   ⭐ KHAI BÁO QUYỀN — nguồn DUY NHẤT, thêm
                          service mới sửa ở đây (đọc chú thích đầu file đó trước)
-     src/home-services.js   dịch vụ NHÀ: CasaOS, ESXi, FortiGate, ASUS, RustDesk
+     src/home-services.js   dịch vụ NHÀ: CasaOS, ESXi, FortiGate, ASUS
      src/termix.js · src/pnetlab.js · src/proxy.js   các proxy (SSH/RDP, lab, Chrome Pool)
      src/console-serial.js · src/kb-network.js      Web Console + kho kiến thức mạng
      src/webauthn.js     đăng nhập bằng passkey
@@ -45,7 +45,7 @@
      /api/ai/*           8   AI đọc dữ liệu + thực thi hành động
      /api/console-relay/* 7  chia sẻ phiên console hiện trường
      còn lại                 mỗi dịch vụ vài route: n8n, asus, fortigate,
-                             vmware, rustdesk, pnetlab, termix…
+                             vmware, pnetlab, termix…
 
    ───────────────────────────────────────────────────────────────────────────
    ⚠️ QUY TẮC BẮT BUỘC KHI SỬA FILE NÀY
@@ -108,7 +108,6 @@ import {
   handleFortigateBW,
   handleFortigateReboot,
   handleFortigateWebhook,
-  handleRustdesk,
   handleVmwareHome,
   handleVmwareHomePower
 } from './src/home-services.js';
@@ -2477,7 +2476,6 @@ const WAYFIND_NAV = `<style>
   {i:'\\u26A1',n:'n8n Automation',d:'Workflow & bot automation',h:'/service-home/n8n.html',p:'n8n'},
   {i:'\\uD83D\\uDCF7',n:'Camera',d:'Hệ thống camera · Frigate NVR',h:'/service-home/camera-home.html',p:_CAMK},
   {i:'\\uD83D\\uDDA7',n:'Terminal Home',d:'Termix · Web Console (Serial) · SSH Hiện trường · ConsolePi',h:'/service-home/ssh.html',p:_TERMK},
-  {i:'\\uD83D\\uDDA5',n:'RustDesk',d:'Remote desktop · máy nhân viên',h:'/service-home/rustdesk.html',p:'rustdesk'},
   {i:'\\uD83C\\uDFE0',n:'ALL Service Home',d:'Chrome Pool · FortiGate · ESXi · NAS · n8n · Frigate…',h:'/service-home/services-embed.html',p:'services-hub'},
   {i:'\\uD83D\\uDD16',n:'Bookmarks',d:'Liên kết nhanh',h:'/bookmarks.html',p:null}
  ];
@@ -2571,7 +2569,6 @@ const DATA_REFRESH = `<style>
   '/service-home/camera-home.html':[],'/service-home/ssh.html':['loadData'],
   '/service-home/console-serial.html':[],
   '/service-home/ssh-field.html':[],
-  '/service-home/rustdesk.html':['loadDevices'],
   '/bookmarks.html':['loadData'],'/settings.html':['loadSettings']};
  var path=location.pathname.replace(/\\/index\\.html$/,'/');
  var fns=MAP[path]||MAP[location.pathname];
@@ -3136,7 +3133,6 @@ const SERVICES = [
   { id: 'fortigate',   name: 'FortiGate',      checkUrl: null },
   { id: 'asus',        name: 'ASUS Router',    checkUrl: null },
   { id: 'camera',      name: 'Camera',         checkUrl: 'https://camera.home-server.id.vn' },
-  { id: 'rustdesk',    name: 'RustDesk',       checkUrl: 'https://rustdesk.home-server.id.vn' },
 ];
 
 
@@ -4098,12 +4094,6 @@ export default {
       if (!_s) return json({ error: 'Unauthorized' }, 401);
       if (!(await hasPerm(env, _s, 'casaos'))) return json({ error: 'Không có quyền truy cập CasaOS' }, 403);
       return handleCasaOS(env);
-    }
-    if (p === '/api/rustdesk') {
-      const _s = await getSession(request, env);
-      if (!_s) return json({ error: 'Unauthorized' }, 401);
-      if (!(await hasPerm(env, _s, 'rustdesk'))) return json({ error: 'Không có quyền truy cập RustDesk' }, 403);
-      return handleRustdesk(env);
     }
     if (p === '/api/services-embed-config') {
       const _s = await getSession(request, env);

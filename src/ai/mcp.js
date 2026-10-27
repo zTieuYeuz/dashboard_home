@@ -20,7 +20,7 @@ const MCP_PROTOCOL = '2024-11-05';
 const SERVER_INFO  = { name: 'dashboard-mcp', version: '1.0.0' };
 
 /* ── Tool catalog (metadata for the admin UI + the MCP tool list) ──
-   LƯU Ý: các tool ĐỌC dữ liệu dịch vụ (fortigate/vmware/asus/casaos/rustdesk…)
+   LƯU Ý: các tool ĐỌC dữ liệu dịch vụ (fortigate/vmware/asus/casaos…)
    ĐÃ CHUYỂN sang cơ chế per-user `dash-read` (src/ai/reads.js) để giới hạn theo
    quyền user. MCP chỉ còn tool meta (pages/actions/log) không lộ dữ liệu nhạy cảm. */
 export const TOOL_CATALOG = [
@@ -115,7 +115,6 @@ export const PAGE_CATALOG = [
   { id: 'asus',      name: 'ASUS Router',     url: '/service-home/asus.html',           perm: 'asus',      desc: 'Router mạng nhà' },
   { id: 'n8n',       name: 'n8n Automation',  url: '/service-home/n8n.html',            perm: 'n8n',       desc: 'Workflow automation' },
   { id: 'ssh',       name: 'SSH Terminal',    url: '/service-home/ssh.html',            perm: 'ssh',       desc: 'Web SSH (Termix)' },
-  { id: 'rustdesk',  name: 'RustDesk',        url: '/service-home/rustdesk.html',       perm: 'rustdesk',  desc: 'Remote desktop máy nhân viên' },
   { id: 'settings',  name: 'Cài đặt',         url: '/settings.html',                    perm: null,        desc: 'Tài khoản, MFA; quản trị (chỉ admin)' },
 ];
 
@@ -239,7 +238,7 @@ function jsonResp(obj, status = 200) {
 const TOMBSTONE_READS = {
   get_fortigate_home: 'fortigate_home', get_vmware_home: 'vmware_home',
   get_asus_router: 'asus_router', get_asus_clients: 'asus_clients',
-  get_casaos: 'casaos', get_rustdesk: 'rustdesk',
+  get_casaos: 'casaos',
 };
 
 async function handleMessage(msg, ctx) {

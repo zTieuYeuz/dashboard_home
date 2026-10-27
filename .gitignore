@@ -37,7 +37,6 @@ TEST_PLAN_Movi_Dashboard.xlsx
 generate_test_xlsx.py
 frigate-config.yml
 frigate-config-ai.yml
-RUSTDESK-GUIDE.md
 scrypted-docker-compose.yaml
 docker/
 n8n/

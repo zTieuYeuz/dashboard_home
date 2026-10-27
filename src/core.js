@@ -512,7 +512,6 @@ export function _escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</
 
 /* ── shared config + helpers (moved 2026-07-01) ── */
 export const N8N_BASE        = 'https://n8n-home.home-server.id.vn/api/v1';
-export const RUSTDESK_BASE   = 'https://rustdesk.home-server.id.vn';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    bridgeWebSocket — nối 2 chiều một cặp WebSocket trong CF Worker

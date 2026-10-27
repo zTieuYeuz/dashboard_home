@@ -19,13 +19,13 @@ var DELEGATE_SVC_LABELS = _REG ? _REG.labels : {
   /* ── Service Home ── */
   'esxi':'VMware ESXi','n8n':'n8n Automation','casaos':'CasaOS',
   'fortigate':'FortiGate','asus':'ASUS Router',
-  'ssh':'SSH Terminal','console-serial':'Web Console (Serial)','camera':'Camera Home · Live','camera_playback':'Camera Home · Playback','camera_download':'Camera Home · Tải video','app_camera':'Camera Home · Mở thẳng camera khi login','camera_autoopen':'Camera Home · Tự động mở tất cả camera','rustdesk':'RustDesk Remote',
+  'ssh':'SSH Terminal','console-serial':'Web Console (Serial)','camera':'Camera Home · Live','camera_playback':'Camera Home · Playback','camera_download':'Camera Home · Tải video','app_camera':'Camera Home · Mở thẳng camera khi login','camera_autoopen':'Camera Home · Tự động mở tất cả camera',
 
   'services-hub':'Services Hub (Internal)',
   'hub-fortigate':'Hub · FortiGate','hub-asus':'Hub · Router Asus','hub-esxi':'Hub · VMware ESXi','hub-nas':'Hub · NAS','hub-casaos':'Hub · CasaOS','hub-kasm':'Hub · Kasm',
   'hub-openclaw':'Hub · OpenClaw','hub-n8n':'Hub · n8n','hub-frigate':'Hub · Frigate NVR','hub-camera-nvr':'Hub · Camera NVR','hub-pnetlab':'Hub · Pnetlab-network',
 };
-var _DELEGATE_HOME = _REG ? _REG.delegateHome : ['esxi','n8n','casaos','fortigate','asus','ssh','console-serial','camera','camera_playback','camera_download','app_camera','camera_autoopen','rustdesk','services-hub','hub-fortigate','hub-asus','hub-esxi','hub-nas','hub-casaos','hub-kasm','hub-openclaw','hub-n8n','hub-frigate','hub-camera-nvr','hub-pnetlab'];
+var _DELEGATE_HOME = _REG ? _REG.delegateHome : ['esxi','n8n','casaos','fortigate','asus','ssh','console-serial','camera','camera_playback','camera_download','app_camera','camera_autoopen','services-hub','hub-fortigate','hub-asus','hub-esxi','hub-nas','hub-casaos','hub-kasm','hub-openclaw','hub-n8n','hub-frigate','hub-camera-nvr','hub-pnetlab'];
 var _delegateMode = false;   // true when current user is a delegated manager (not admin)
 var _delegateServices = [];  // services the current delegated user can manage
 function _normalizeDelegateSvcs(arr) {
@@ -202,7 +202,6 @@ var SERVICE_HOME_PAGES = _REG ? _regPages('home') : [
   {id:'casaos',      name:'CasaOS',         icon:'🏠', perms:['none','read','write']},
   {id:'ssh',         name:'SSH Terminal',   icon:'⌨',  perms:['none','write'],  permLabels:{'none':'Không truy cập','write':'Truy cập'}},
   {id:'console-serial', name:'Web Console (Serial)', icon:'🔌', perms:['none','write'], permLabels:{'none':'Không truy cập','write':'Truy cập'}},
-  {id:'rustdesk',    name:'RustDesk Remote',icon:'🖥', perms:['none','read'],   permLabels:{'none':'Không truy cập','read':'Truy cập'}},
   {id:'fortigate',   name:'FortiGate',      icon:'🛡', perms:['none','read','write']},
 
   {id:'asus',        name:'ASUS Router',    icon:'📡', perms:['none','read','write']},
